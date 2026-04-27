@@ -16,6 +16,7 @@
 - 2026-04-27 [USER] Goal update: publish this implemented project to a new public GitHub repository; repo name delegated to Codex.
 - 2026-04-27 [TOOL] Public GitHub repository created at `https://github.com/romanr111/spendee-ledger-ios`.
 - 2026-04-27T09:51:14Z [TOOL] `main` created from `codex/plan-md-v1` commit `d3e480de725db3a1c5205e7791b4453c0962bfce`, pushed to origin, and set as the GitHub default branch.
+- 2026-04-27T09:55:04Z [TOOL] `AGENTS.md` added to `main`; local/remote `main` and `codex/plan-md-v1` were fast-forwarded to the same synced head.
 
 ## Done (recent)
 - 2026-04-26 [CODE] Reworked CSV import so it validates rows first, appends transactions in 500-row batches without per-row aggregate/FTS churn, then marks month ranges dirty and rebuilds aggregates + FTS at finalization; failed imports now mark `import_jobs.status = failed`.
@@ -29,6 +30,7 @@
 - 2026-04-26 [CODE] Added regression coverage for `timelineSnapshot`, `overviewSnapshot`, and category-management counts/reorder persistence.
 - 2026-04-27 [CODE] Converted `Vendor/GRDB.swift` from an embedded clone into plain vendored source before staging so the public repo is complete from a normal clone.
 - 2026-04-27T09:51:14Z [TOOL] Published `origin/main` at the implemented MVP commit and switched `romanr111/spendee-ledger-ios` default branch from `codex/plan-md-v1` to `main`.
+- 2026-04-27T09:55:04Z [CODE] Added repo-local `AGENTS.md` iOS agent rules and pushed them to the public remote.
 - 2026-04-26 [TOOL] `swift test` passed with 19 tests across 2 suites after the UI realignment pass.
 - 2026-04-26 [TOOL] `xcodebuild -project SpendeeLedger.xcodeproj -scheme SpendeeLedger -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17' build` succeeded after the UI realignment pass.
 - 2026-04-26 [CODE] Implemented the core schema, repositories, aggregates, recurrence engine, CSV import/export, SQLCipher database setup, app lock store, and synthetic fixture generator under `Sources/LedgerCore/` and mirrored package sources under `Modules/LedgerCorePackage/Sources/LedgerCore/`.
@@ -65,3 +67,4 @@
 - 2026-04-27 [TOOL] `gh repo create romanr111/spendee-ledger-ios --public` -> `https://github.com/romanr111/spendee-ledger-ios`
 - 2026-04-27T09:51:14Z [TOOL] `git branch main d3e480de725db3a1c5205e7791b4453c0962bfce && git push -u origin main` -> `origin/main` created and tracking configured.
 - 2026-04-27T09:51:14Z [TOOL] `gh repo edit romanr111/spendee-ledger-ios --default-branch main`; verified with `gh repo view` and `git remote show origin`.
+- 2026-04-27T09:55:04Z [TOOL] `git push origin main` and `git push origin codex/plan-md-v1`; verified both remote heads at `27fc99513e958ac91d4ea4e63bf61e6adad4306a`.
