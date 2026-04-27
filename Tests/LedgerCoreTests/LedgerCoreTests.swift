@@ -3,6 +3,7 @@ import GRDB
 import Testing
 @testable import LedgerCore
 
+@Suite(.serialized)
 struct LedgerCoreTests {
     @Test func parsesMoneyIntoMinorUnits() throws {
         #expect(try MoneyFormatter.parseMinorUnits("123,45") == 12_345)
@@ -248,13 +249,17 @@ struct LedgerCoreTests {
         #expect(snapshot.sections.first?.items.contains(where: { $0.merchant == "Coffee" }) == true)
     }
 
-    @Test func overviewSnapshotSeparatesExpenseAndIncomeCategories() throws {
+    @Test func overviewSnapshotSeparatesExpenseIncomeAndLabels() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
         let walletID = try #require(try repository.wallets().first?.id)
         let expenseCategory = try #require(try repository.categories(kind: .expense).first?.id)
         let incomeCategory = try #require(try repository.categories(kind: .income).first?.id)
+        let diningLabel = Label(id: UUID(), name: "Dining", colorHex: "#1CC389", createdAt: .now, updatedAt: .now)
+        let payrollLabel = Label(id: UUID(), name: "Payroll", colorHex: "#60788A", createdAt: .now, updatedAt: .now)
         let monthKey = DateKeys.monthKey(for: .now)
+        try repository.saveLabel(diningLabel)
+        try repository.saveLabel(payrollLabel)
 
         try repository.saveTransaction(
             TransactionDraft(
@@ -263,6 +268,7 @@ struct LedgerCoreTests {
                 amountMinor: 9_900,
                 occurredAt: .now,
                 categoryID: expenseCategory,
+                labelIDs: [diningLabel.id],
                 merchant: "Lunch",
                 note: ""
             )
@@ -274,6 +280,7 @@ struct LedgerCoreTests {
                 amountMinor: 80_000,
                 occurredAt: .now,
                 categoryID: incomeCategory,
+                labelIDs: [payrollLabel.id],
                 merchant: "Payroll",
                 note: ""
             )
@@ -285,6 +292,14 @@ struct LedgerCoreTests {
         #expect(snapshot.monthIncomeMinor == 80_000)
         #expect(snapshot.categories.contains(where: { $0.kind == .expense && $0.amountMinor == 9_900 }))
         #expect(snapshot.categories.contains(where: { $0.kind == .income && $0.amountMinor == 80_000 }))
+        let expenseLabel = try #require(snapshot.labels.first(where: { $0.kind == .expense && $0.labelID == diningLabel.id }))
+        #expect(expenseLabel.amountMinor == 9_900)
+        #expect(expenseLabel.transactionCount == 1)
+        #expect(expenseLabel.percentage == 1)
+        let incomeLabel = try #require(snapshot.labels.first(where: { $0.kind == .income && $0.labelID == payrollLabel.id }))
+        #expect(incomeLabel.amountMinor == 80_000)
+        #expect(incomeLabel.transactionCount == 1)
+        #expect(incomeLabel.percentage == 1)
     }
 
     @Test func categoryManagementCountsAndOrderingPersist() throws {
@@ -400,7 +415,115 @@ struct LedgerCoreTests {
         #expect(searchResults.first?.source == .importCSV)
         try TestSupport.assertCategoryTruth(repository)
         let exported = try service.exportCSV(query: .init(searchText: "Silp"))
-        #expect(exported.contains("import_csv"))
+        #expect(exported.split(separator: "\n").first == "Date,Wallet,Type,Category name,Amount,Currency,Note,Labels,Author")
+        #expect(exported.contains("\"Expense\""))
+        #expect(exported.contains("\"-123.45\""))
+    }
+
+    @Test func spendeeWalletCSVFormatImportsSignedRowsAndExportsRoundTrippableFile() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        let wallet = try #require(try repository.wallets().first)
+        let label = Label(id: UUID(), name: "Trip", colorHex: "#1CC389", createdAt: .now, updatedAt: .now)
+        try repository.saveLabel(label)
+        let service = CSVService(repository: repository)
+        let csv = """
+        Date,Wallet,Type,Category name,Amount,Currency,Note,Labels,Author
+        2026-04-20T12:30:00Z,\(wallet.name),Expense,Groceries,-123.45,UAH,"weekly, groceries",Trip,ignored@example.com
+        2026-04-21T08:00:00Z,\(wallet.name),Income,Salary,400.00,UAH,Monthly salary,,ignored@example.com
+        """
+
+        let preview = try service.preview(data: Data(csv.utf8))
+        #expect(service.detectPreset(headers: preview.headers) == .spendeeWallet)
+        let result = try service.importCSV(
+            data: Data(csv.utf8),
+            fileName: "wallet.csv",
+            mapping: TestSupport.spendeeWalletMapping(walletID: wallet.id)
+        )
+
+        #expect(result.insertedTransactions == 2)
+        #expect(result.rowErrors.isEmpty)
+        let imported = try repository.transactions()
+        #expect(imported.filter { $0.kind == .expense }.count == 1)
+        #expect(imported.filter { $0.kind == .income }.count == 1)
+        #expect(imported.contains { $0.kind == .expense && $0.amountMinor == -12_345 && $0.categoryName == "Groceries" && $0.labels.map(\.id).contains(label.id) })
+        #expect(imported.contains { $0.kind == .income && $0.amountMinor == 40_000 && $0.categoryName == "Salary" })
+        #expect(try repository.transactions(query: .init(searchText: "weekly")).count == 1)
+        try TestSupport.assertWalletTruth(repository)
+        try TestSupport.assertCategoryTruth(repository)
+
+        let exported = try service.exportCSV()
+        #expect(exported.split(separator: "\n").first == "Date,Wallet,Type,Category name,Amount,Currency,Note,Labels,Author")
+        #expect(exported.contains("\"Expense\",\"Groceries\",\"-123.45\""))
+        #expect(exported.contains("\"Income\",\"Salary\",\"400.00\""))
+
+        let roundTripRepository = try TestSupport.makeRepository()
+        try roundTripRepository.seedIfNeeded()
+        try roundTripRepository.saveLabel(label)
+        let roundTripService = CSVService(repository: roundTripRepository)
+        let roundTripWalletID = try #require(try roundTripRepository.wallets().first?.id)
+        let roundTrip = try roundTripService.importCSV(
+            data: Data(exported.utf8),
+            fileName: "wallet-roundtrip.csv",
+            mapping: TestSupport.spendeeWalletMapping(walletID: roundTripWalletID)
+        )
+
+        #expect(roundTrip.insertedTransactions == 2)
+        try TestSupport.assertTypeMonthCategoryAndLabelTotalsMatch(repository, roundTripRepository)
+    }
+
+    @Test func attachedWalletCSVFixtureImportsWithoutRowLossWhenPresent() throws {
+        let fixtureURL = URL(fileURLWithPath: "/Users/roman/Downloads/transactions_export_2026-04-27_wallet.csv")
+        guard FileManager.default.fileExists(atPath: fixtureURL.path) else {
+            return
+        }
+
+        let data = try Data(contentsOf: fixtureURL)
+        let fixture = try TestSupport.walletCSVFixtureFacts(data: data)
+        #expect(fixture.rowCount == 13_896)
+        #expect(fixture.expenseCount == 13_627)
+        #expect(fixture.incomeCount == 269)
+        #expect(fixture.currencyCodes == ["UAH"])
+        #expect(fixture.distinctWalletCount == 1)
+
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        for labelName in fixture.labelNames {
+            try repository.saveLabel(Label(id: UUID(), name: labelName, colorHex: "#60788A", createdAt: .now, updatedAt: .now))
+        }
+
+        let service = CSVService(repository: repository)
+        let walletID = try #require(try repository.wallets().first?.id)
+        let clock = ContinuousClock()
+        var importOutcome: Result<CSVImportResult, any Error>?
+        let elapsed = clock.measure {
+            importOutcome = Result {
+                try service.importCSV(
+                    data: data,
+                    fileName: fixtureURL.lastPathComponent,
+                    mapping: TestSupport.spendeeWalletMapping(walletID: walletID)
+                )
+            }
+        }
+        let result = try #require(importOutcome).get()
+
+        #expect(result.insertedTransactions == fixture.rowCount)
+        #expect(result.rowErrors.isEmpty)
+        #expect(TestSupport.seconds(elapsed) < 30)
+        try TestSupport.assertWalletTruth(repository)
+        try TestSupport.assertCategoryTruth(repository)
+
+        let truth = try TestSupport.transactionTruth(repository)
+        #expect(truth.expenseCount == fixture.expenseCount)
+        #expect(truth.incomeCount == fixture.incomeCount)
+        #expect(truth.sourceImportCount == fixture.rowCount)
+        #expect(truth.ftsRowCount == fixture.rowCount)
+        #expect(truth.monthCount > 0)
+        #expect(truth.labelLinkCount == fixture.labeledRowCount)
+
+        let exported = try service.exportCSV()
+        #expect(exported.split(separator: "\n").first == "Date,Wallet,Type,Category name,Amount,Currency,Note,Labels,Author")
+        #expect(TestSupport.csvRowCount(exported) == fixture.rowCount + 1)
     }
 
     @Test func randomizedMutationSequencePreservesTruth() throws {
@@ -441,6 +564,25 @@ struct LedgerCoreTests {
 }
 
 private enum TestSupport {
+    struct WalletCSVFixtureFacts {
+        var rowCount: Int
+        var expenseCount: Int
+        var incomeCount: Int
+        var distinctWalletCount: Int
+        var currencyCodes: Set<String>
+        var labelNames: Set<String>
+        var labeledRowCount: Int
+    }
+
+    struct TransactionTruth {
+        var expenseCount: Int
+        var incomeCount: Int
+        var sourceImportCount: Int
+        var ftsRowCount: Int
+        var monthCount: Int
+        var labelLinkCount: Int
+    }
+
     static func makeRepository() throws -> LedgerRepository {
         LedgerRepository(databaseManager: try DatabaseManager(locationProvider: makeLocation()))
     }
@@ -454,6 +596,179 @@ private enum TestSupport {
             databaseURLOverride: baseURL.appendingPathComponent("ledger.sqlite"),
             directoryName: UUID().uuidString
         )
+    }
+
+    static func spendeeWalletMapping(walletID: UUID) -> CSVImportMapping {
+        CSVImportMapping(
+            dateColumn: "Date",
+            amountColumn: "Amount",
+            debitColumn: nil,
+            creditColumn: nil,
+            merchantColumn: nil,
+            noteColumn: "Note",
+            categoryColumn: "Category name",
+            labelsColumn: "Labels",
+            walletID: walletID,
+            defaultKind: .expense,
+            typeColumn: "Type",
+            walletColumn: "Wallet",
+            currencyColumn: "Currency",
+            authorColumn: "Author"
+        )
+    }
+
+    static func seconds(_ duration: Duration) -> Double {
+        let components = duration.components
+        return Double(components.seconds) + Double(components.attoseconds) / 1_000_000_000_000_000_000
+    }
+
+    static func walletCSVFixtureFacts(data: Data) throws -> WalletCSVFixtureFacts {
+        guard let text = String(data: data, encoding: .utf8) else {
+            throw LedgerError.validation("Fixture is not UTF-8.")
+        }
+        let rows = parseCSVRows(text)
+        guard let headers = rows.first else {
+            throw LedgerError.validation("Fixture is empty.")
+        }
+        let index = Dictionary(uniqueKeysWithValues: headers.enumerated().map { ($1, $0) })
+        guard
+            let typeIndex = index["Type"],
+            let walletIndex = index["Wallet"],
+            let currencyIndex = index["Currency"],
+            let labelsIndex = index["Labels"]
+        else {
+            throw LedgerError.validation("Fixture headers do not match wallet CSV format.")
+        }
+
+        var expenseCount = 0
+        var incomeCount = 0
+        var wallets = Set<String>()
+        var currencies = Set<String>()
+        var labels = Set<String>()
+        var labeledRowCount = 0
+        for row in rows.dropFirst() {
+            let type = row.indices.contains(typeIndex) ? row[typeIndex] : ""
+            if type == "Expense" {
+                expenseCount += 1
+            } else if type == "Income" {
+                incomeCount += 1
+            }
+            if row.indices.contains(walletIndex), !row[walletIndex].isEmpty {
+                wallets.insert(row[walletIndex])
+            }
+            if row.indices.contains(currencyIndex), !row[currencyIndex].isEmpty {
+                currencies.insert(row[currencyIndex])
+            }
+            if row.indices.contains(labelsIndex), !row[labelsIndex].isEmpty {
+                labeledRowCount += 1
+                labels.insert(row[labelsIndex])
+            }
+        }
+        return WalletCSVFixtureFacts(
+            rowCount: rows.count - 1,
+            expenseCount: expenseCount,
+            incomeCount: incomeCount,
+            distinctWalletCount: wallets.count,
+            currencyCodes: currencies,
+            labelNames: labels,
+            labeledRowCount: labeledRowCount
+        )
+    }
+
+    static func csvRowCount(_ text: String) -> Int {
+        parseCSVRows(text).count
+    }
+
+    static func transactionTruth(_ repository: LedgerRepository) throws -> TransactionTruth {
+        try repository.databaseManager.dbQueue.read { db in
+            TransactionTruth(
+                expenseCount: try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM transactions WHERE type = 'expense'") ?? 0,
+                incomeCount: try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM transactions WHERE type = 'income'") ?? 0,
+                sourceImportCount: try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM transactions WHERE source = 'import_csv'") ?? 0,
+                ftsRowCount: try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM transaction_search") ?? 0,
+                monthCount: try Int.fetchOne(db, sql: "SELECT COUNT(DISTINCT local_month_key) FROM transactions") ?? 0,
+                labelLinkCount: try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM transaction_labels") ?? 0
+            )
+        }
+    }
+
+    static func assertTypeMonthCategoryAndLabelTotalsMatch(_ lhs: LedgerRepository, _ rhs: LedgerRepository) throws {
+        let lhsTypeMonth = try groupedTotals(lhs, sql: "SELECT type || '|' || local_month_key AS key, SUM(amount_minor) AS total, COUNT(*) AS count FROM transactions GROUP BY type, local_month_key")
+        let rhsTypeMonth = try groupedTotals(rhs, sql: "SELECT type || '|' || local_month_key AS key, SUM(amount_minor) AS total, COUNT(*) AS count FROM transactions GROUP BY type, local_month_key")
+        #expect(lhsTypeMonth == rhsTypeMonth)
+
+        let lhsCategory = try groupedTotals(lhs, sql: "SELECT type || '|' || COALESCE(category_id, '') AS key, SUM(amount_minor) AS total, COUNT(*) AS count FROM transactions GROUP BY type, category_id")
+        let rhsCategory = try groupedTotals(rhs, sql: "SELECT type || '|' || COALESCE(category_id, '') AS key, SUM(amount_minor) AS total, COUNT(*) AS count FROM transactions GROUP BY type, category_id")
+        #expect(lhsCategory == rhsCategory)
+
+        let lhsLabels = try groupedTotals(lhs, sql: "SELECT tl.label_id || '|' || t.type AS key, SUM(t.amount_minor) AS total, COUNT(*) AS count FROM transaction_labels tl JOIN transactions t ON t.id = tl.transaction_id GROUP BY tl.label_id, t.type")
+        let rhsLabels = try groupedTotals(rhs, sql: "SELECT tl.label_id || '|' || t.type AS key, SUM(t.amount_minor) AS total, COUNT(*) AS count FROM transaction_labels tl JOIN transactions t ON t.id = tl.transaction_id GROUP BY tl.label_id, t.type")
+        #expect(lhsLabels == rhsLabels)
+    }
+
+    private static func groupedTotals(_ repository: LedgerRepository, sql: String) throws -> [String: String] {
+        try repository.databaseManager.dbQueue.read { db in
+            let rows = try Row.fetchAll(db, sql: sql)
+            return Dictionary(uniqueKeysWithValues: rows.map { row in
+                let key = row["key"] as String
+                let total = row["total"] as Int64
+                let count = row["count"] as Int
+                return (key, "\(total)|\(count)")
+            })
+        }
+    }
+
+    private static func parseCSVRows(_ text: String) -> [[String]] {
+        var rows: [[String]] = []
+        var row: [String] = []
+        var field = ""
+        var isQuoted = false
+        var index = text.startIndex
+
+        func appendField() {
+            row.append(field.trimmingCharacters(in: .whitespaces))
+            field = ""
+        }
+
+        func appendRowIfNeeded() {
+            if !row.isEmpty || !field.isEmpty {
+                appendField()
+                rows.append(row)
+                row = []
+            }
+        }
+
+        while index < text.endIndex {
+            let character = text[index]
+            let nextIndex = text.index(after: index)
+            if character == "\"" {
+                if isQuoted, nextIndex < text.endIndex, text[nextIndex] == "\"" {
+                    field.append(character)
+                    index = text.index(after: nextIndex)
+                } else {
+                    isQuoted.toggle()
+                    index = nextIndex
+                }
+            } else if character == ",", !isQuoted {
+                appendField()
+                index = nextIndex
+            } else if character == "\n", !isQuoted {
+                appendRowIfNeeded()
+                index = nextIndex
+            } else if character == "\r", !isQuoted {
+                appendRowIfNeeded()
+                if nextIndex < text.endIndex, text[nextIndex] == "\n" {
+                    index = text.index(after: nextIndex)
+                } else {
+                    index = nextIndex
+                }
+            } else {
+                field.append(character)
+                index = nextIndex
+            }
+        }
+        appendRowIfNeeded()
+        return rows
     }
 
     static func assertWalletTruth(_ repository: LedgerRepository) throws {

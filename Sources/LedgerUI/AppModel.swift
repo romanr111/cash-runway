@@ -33,7 +33,6 @@ public final class LedgerAppModel {
     public var isLocked = false
     public var lockMessage: String?
     public var errorMessage: String?
-    public var successMessage: String?
 
     public init(
         repository: LedgerRepository = LedgerRepository(),
@@ -94,7 +93,7 @@ public final class LedgerAppModel {
     public func enableLock(pin: String, biometrics: Bool) {
         do {
             try lockStore.save(pin: pin, biometrics: biometrics, backgroundLockSeconds: 15)
-            successMessage = "App lock updated."
+            errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -105,7 +104,7 @@ public final class LedgerAppModel {
     }
 
     public func saveTransaction(_ draft: TransactionDraft, recurringTemplate: RecurringTemplate?) {
-        runMutation(success: "Transaction saved.") {
+        runMutation {
             try repository.saveTransaction(draft)
             if let recurringTemplate {
                 try repository.saveRecurringTemplate(recurringTemplate)
@@ -114,31 +113,31 @@ public final class LedgerAppModel {
     }
 
     public func deleteTransaction(id: UUID) {
-        runMutation(success: "Transaction deleted.") {
+        runMutation {
             try repository.deleteTransaction(id: id)
         }
     }
 
     public func saveWallet(_ wallet: Wallet) {
-        runMutation(success: "Wallet saved.") {
+        runMutation {
             try repository.saveWallet(wallet)
         }
     }
 
     public func saveCategory(_ category: LedgerCategory) {
-        runMutation(success: "Category saved.") {
+        runMutation {
             try repository.saveCategory(category)
         }
     }
 
     public func saveLabel(_ label: LedgerLabel) {
-        runMutation(success: "Label saved.") {
+        runMutation {
             try repository.saveLabel(label)
         }
     }
 
     public func saveBudget(_ budget: Budget) {
-        runMutation(success: "Budget saved.") {
+        runMutation {
             try repository.saveBudget(budget)
         }
     }
@@ -151,32 +150,32 @@ public final class LedgerAppModel {
     }
 
     public func saveTemplate(_ template: RecurringTemplate) {
-        runMutation(success: "Recurring template saved.") {
+        runMutation {
             try repository.saveRecurringTemplate(template)
         }
     }
 
     public func saveInstance(_ instance: RecurringInstance) {
-        runMutation(success: "Occurrence updated.") {
+        runMutation {
             try repository.saveRecurringInstance(instance)
             try repository.refreshRecurringInstances()
         }
     }
 
     public func postInstance(_ instance: RecurringInstance) {
-        runMutation(success: "Occurrence posted.") {
+        runMutation {
             try repository.postRecurringInstance(id: instance.id)
         }
     }
 
     public func skipInstance(_ instance: RecurringInstance) {
-        runMutation(success: "Occurrence skipped.") {
+        runMutation {
             try repository.skipRecurringInstance(id: instance.id)
         }
     }
 
     public func mergeCategory(oldCategoryID: UUID, into newCategoryID: UUID) {
-        runMutation(success: "Categories merged.") {
+        runMutation {
             try repository.mergeCategory(oldCategoryID: oldCategoryID, into: newCategoryID)
         }
     }
@@ -193,23 +192,15 @@ public final class LedgerAppModel {
     }
 
     public func reorderCategories(kind: CategoryKind, orderedCategoryIDs: [UUID]) {
-        runMutation(success: "Categories reordered.") {
+        runMutation {
             try repository.reorderCategories(kind: kind, orderedCategoryIDs: orderedCategoryIDs)
         }
     }
 
     public func importCSV(data: Data, fileName: String, mapping: CSVImportMapping) {
         do {
-            let result = try csvService.importCSV(data: data, fileName: fileName, mapping: mapping)
+            _ = try csvService.importCSV(data: data, fileName: fileName, mapping: mapping)
             try reloadAll()
-            if result.rowErrors.isEmpty {
-                successMessage = "CSV imported. Added \(result.insertedTransactions) transactions."
-            } else {
-                let details = result.rowErrors.prefix(3)
-                    .map { "row \($0.rowNumber): \($0.message)" }
-                    .joined(separator: "; ")
-                successMessage = "CSV imported. Added \(result.insertedTransactions) transactions, skipped \(result.job.invalidRows). \(details)"
-            }
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
@@ -239,11 +230,10 @@ public final class LedgerAppModel {
         }
     }
 
-    private func runMutation(success message: String, _ mutation: () throws -> Void) {
+    private func runMutation(_ mutation: () throws -> Void) {
         do {
             try mutation()
             try reloadAll()
-            successMessage = message
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription

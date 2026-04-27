@@ -1,4 +1,5 @@
 import Charts
+import Foundation
 import SwiftUI
 #if canImport(LedgerCore)
 import LedgerCore
@@ -167,12 +168,24 @@ struct DashboardView: View {
                 }
             }
             .chartYAxis {
-                AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { _ in
+                AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
                     AxisGridLine(stroke: StrokeStyle(lineWidth: 1, dash: [3, 4]))
                         .foregroundStyle(LedgerTheme.chartGrid)
-                    AxisValueLabel()
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(LedgerTheme.textMuted)
+                    AxisValueLabel {
+                        if let amount = value.as(Int64.self) {
+                            Text(OverviewDisplayFormatter.compactMoney(from: amount))
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(LedgerTheme.textMuted)
+                        } else if let amount = value.as(Int.self) {
+                            Text(OverviewDisplayFormatter.compactMoney(from: Int64(amount)))
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(LedgerTheme.textMuted)
+                        } else if let amount = value.as(Double.self) {
+                            Text(OverviewDisplayFormatter.compactMoney(from: Int64(amount)))
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(LedgerTheme.textMuted)
+                        }
+                    }
                 }
             }
             .chartLegend(.hidden)
@@ -269,6 +282,36 @@ private enum OverviewChartMetric: String, CaseIterable {
     case cashFlow = "Monthly Cash Flow"
 }
 
+private enum OverviewDisplayFormatter {
+    static func compactMoney(from minorUnits: Int64) -> String {
+        let sign = minorUnits < 0 ? "-" : ""
+        let value = Double(abs(minorUnits)) / 100
+        if value >= 1_000_000 {
+            return "\(sign)₴\(trimmed(value / 1_000_000))M"
+        }
+        if value >= 1_000 {
+            return "\(sign)₴\(trimmed(value / 1_000))k"
+        }
+        return "\(sign)₴\(trimmed(value))"
+    }
+
+    static func percentage(_ value: Double) -> String {
+        let percent = value * 100
+        if percent > 0, percent < 1 {
+            return "<1%"
+        }
+        return "\(Int(percent.rounded()))%"
+    }
+
+    private static func trimmed(_ value: Double) -> String {
+        let rounded = (value * 10).rounded() / 10
+        if rounded.rounded() == rounded {
+            return "\(Int(rounded))"
+        }
+        return String(format: "%.1f", rounded)
+    }
+}
+
 private struct TimelineOverviewView: View {
     @Bindable var model: LedgerAppModel
     @State private var chartMetric = OverviewChartMetric.wealth
@@ -284,6 +327,7 @@ private struct TimelineOverviewView: View {
                 metricPicker
                 overviewChart
                 categoriesCard
+                labelsCard
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 16)
@@ -414,12 +458,24 @@ private struct TimelineOverviewView: View {
                 }
             }
             .chartYAxis {
-                AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { _ in
+                AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
                     AxisGridLine(stroke: StrokeStyle(lineWidth: 1, dash: [3, 4]))
                         .foregroundStyle(LedgerTheme.chartGrid)
-                    AxisValueLabel()
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(LedgerTheme.textMuted)
+                    AxisValueLabel {
+                        if let amount = value.as(Int64.self) {
+                            Text(OverviewDisplayFormatter.compactMoney(from: amount))
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(LedgerTheme.textMuted)
+                        } else if let amount = value.as(Int.self) {
+                            Text(OverviewDisplayFormatter.compactMoney(from: Int64(amount)))
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(LedgerTheme.textMuted)
+                        } else if let amount = value.as(Double.self) {
+                            Text(OverviewDisplayFormatter.compactMoney(from: Int64(amount)))
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(LedgerTheme.textMuted)
+                        }
+                    }
                 }
             }
             .chartLegend(.hidden)
@@ -442,28 +498,29 @@ private struct TimelineOverviewView: View {
                     .font(.system(size: 15))
                     .foregroundStyle(LedgerTheme.textSecondary)
             } else {
-                Chart(categories.prefix(5)) { item in
-                    SectorMark(angle: .value("Amount", item.amountMinor), innerRadius: .ratio(0.58))
-                        .foregroundStyle(LedgerTheme.categoryColor(item.colorHex))
-                }
-                .frame(height: 220)
-
-                ForEach(Array(categories.prefix(5))) { item in
-                    HStack(spacing: 14) {
-                        CategoryGlyph(iconName: item.iconName, colorHex: item.colorHex, size: 46)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(item.name)
-                                .font(.system(size: 17, weight: .semibold))
-                                .foregroundStyle(LedgerTheme.textPrimary)
-                            Text("\(item.transactionCount) transactions · \(Int(item.percentage * 100))%")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundStyle(LedgerTheme.textSecondary)
-                        }
-                        Spacer()
-                        Text(MoneyFormatter.string(from: categoryKind == .expense ? -item.amountMinor : item.amountMinor))
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(categoryKind == .expense ? LedgerTheme.negative : LedgerTheme.positive)
+                ZStack {
+                    Chart(categories) { item in
+                        SectorMark(angle: .value("Amount", item.amountMinor), innerRadius: .ratio(0.58))
+                            .foregroundStyle(LedgerTheme.categoryColor(item.colorHex))
                     }
+                    .chartLegend(.hidden)
+                    .frame(height: 220)
+
+                    VStack(spacing: 4) {
+                        Text(categoryKind == .expense ? MoneyFormatter.string(from: -(model.overviewSnapshot?.monthExpenseMinor ?? 0)) : MoneyFormatter.string(from: model.overviewSnapshot?.monthIncomeMinor ?? 0))
+                            .font(.system(size: 17, weight: .bold, design: .rounded))
+                            .foregroundStyle(LedgerTheme.textPrimary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.65)
+                        Text(categoryKind == .expense ? "Expenses" : "Income")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(LedgerTheme.textSecondary)
+                    }
+                    .frame(width: 116)
+                }
+
+                ForEach(categories) { item in
+                    categoryLegendRow(item)
                 }
             }
 
@@ -486,6 +543,76 @@ private struct TimelineOverviewView: View {
         .padding(20)
         .background(LedgerTheme.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(LedgerTheme.line, lineWidth: 1))
+    }
+
+    private var labelsCard: some View {
+        let labels = (model.overviewSnapshot?.labels ?? []).filter { $0.kind == categoryKind }
+        return VStack(alignment: .leading, spacing: 16) {
+            Text("Labels")
+                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .foregroundStyle(LedgerTheme.textPrimary)
+
+            if labels.isEmpty {
+                Text("No label totals for this month.")
+                    .font(.system(size: 15))
+                    .foregroundStyle(LedgerTheme.textSecondary)
+            } else {
+                ForEach(labels) { item in
+                    labelLegendRow(item)
+                }
+            }
+        }
+        .padding(20)
+        .background(LedgerTheme.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(LedgerTheme.line, lineWidth: 1))
+    }
+
+    private func categoryLegendRow(_ item: OverviewCategoryRow) -> some View {
+        HStack(spacing: 14) {
+            CategoryGlyph(iconName: item.iconName, colorHex: item.colorHex, size: 46)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(item.name)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(LedgerTheme.textPrimary)
+                Text("\(transactionCountText(item.transactionCount)) · \(OverviewDisplayFormatter.percentage(item.percentage))")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(LedgerTheme.textSecondary)
+            }
+            Spacer()
+            Text(MoneyFormatter.string(from: signedAmount(item.amountMinor)))
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(categoryKind == .expense ? LedgerTheme.negative : LedgerTheme.positive)
+        }
+    }
+
+    private func labelLegendRow(_ item: OverviewLabelRow) -> some View {
+        HStack(spacing: 14) {
+            Circle()
+                .fill(LedgerTheme.categoryColor(item.colorHex))
+                .frame(width: 18, height: 18)
+                .frame(width: 46, height: 46)
+                .background(LedgerTheme.pill, in: Circle())
+            VStack(alignment: .leading, spacing: 3) {
+                Text(item.name)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(LedgerTheme.textPrimary)
+                Text("\(transactionCountText(item.transactionCount)) · \(OverviewDisplayFormatter.percentage(item.percentage))")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(LedgerTheme.textSecondary)
+            }
+            Spacer()
+            Text(MoneyFormatter.string(from: signedAmount(item.amountMinor)))
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(categoryKind == .expense ? LedgerTheme.negative : LedgerTheme.positive)
+        }
+    }
+
+    private func signedAmount(_ amountMinor: Int64) -> Int64 {
+        categoryKind == .expense ? -amountMinor : amountMinor
+    }
+
+    private func transactionCountText(_ count: Int) -> String {
+        count == 1 ? "1 transaction" : "\(count) transactions"
     }
 
     private func chartValue(for metric: OverviewChartMetric) -> String {

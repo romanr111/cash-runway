@@ -3,6 +3,7 @@ import GRDB
 import Testing
 @testable import LedgerCore
 
+@Suite(.serialized)
 struct LedgerPerformanceTests {
     @Test func benchmarkScenariosMatchPlanCounts() {
         #expect(BenchmarkScenario.allCases.map(\.transactionCount) == [1_000, 10_000, 50_000, 150_000])
@@ -29,7 +30,7 @@ struct LedgerPerformanceTests {
         #expect(try repository.recurringInstances().isEmpty == false)
     }
 
-    @Test func dashboardTimingScaffold() throws {
+    @Test func dashboardLoadTimingGate() throws {
         let repository = try makeRepository()
         let generator = FixtureGenerator(repository: repository)
         try generator.populate(scenario: .medium)
@@ -39,10 +40,22 @@ struct LedgerPerformanceTests {
         let elapsed = clock.measure {
             _ = try? repository.dashboard(monthKey: monthKey)
         }
-        #expect(elapsed.components.seconds >= 0)
+        #expect(seconds(elapsed) < 2)
     }
 
-    @Test func searchTimingScaffold() throws {
+    @Test func transactionQueryTimingGate() throws {
+        let repository = try makeRepository()
+        let generator = FixtureGenerator(repository: repository)
+        try generator.populate(scenario: .medium)
+        let clock = ContinuousClock()
+
+        let elapsed = clock.measure {
+            _ = try? repository.transactions(query: .init())
+        }
+        #expect(seconds(elapsed) < 2)
+    }
+
+    @Test func searchTimingGate() throws {
         let repository = try makeRepository()
         let generator = FixtureGenerator(repository: repository)
         try generator.populate(seed: BenchmarkScenario.medium.seed, transactionCount: BenchmarkScenario.medium.transactionCount)
@@ -51,7 +64,54 @@ struct LedgerPerformanceTests {
         let elapsed = clock.measure {
             _ = try? repository.transactions(query: .init(searchText: "Synthetic"))
         }
-        #expect(elapsed.components.seconds >= 0)
+        #expect(seconds(elapsed) < 2)
+    }
+
+    @Test func importBatchAndAggregateRebuildTimingGate() throws {
+        let repository = try makeRepository()
+        try repository.seedIfNeeded()
+        let walletID = try #require(try repository.wallets().first?.id)
+        let walletName = try #require(try repository.wallets().first?.name)
+        let service = CSVService(repository: repository)
+        var lines = ["Date,Wallet,Type,Category name,Amount,Currency,Note,Labels,Author"]
+        for index in 0..<BenchmarkScenario.small.transactionCount {
+            let type = index % 10 == 0 ? "Income" : "Expense"
+            let category = type == "Income" ? "Salary" : "Groceries"
+            let amount = type == "Income" ? "1000.00" : "-12.34"
+            lines.append("2026-04-\(String(format: "%02d", (index % 28) + 1))T10:00:00Z,\(walletName),\(type),\(category),\(amount),UAH,,,")
+        }
+        let data = Data(lines.joined(separator: "\n").utf8)
+        let clock = ContinuousClock()
+
+        var importOutcome: Result<CSVImportResult, any Error>?
+        let elapsed = clock.measure {
+            importOutcome = Result {
+                try service.importCSV(
+                    data: data,
+                    fileName: "synthetic-wallet.csv",
+                    mapping: CSVImportMapping(
+                        dateColumn: "Date",
+                        amountColumn: "Amount",
+                        debitColumn: nil,
+                        creditColumn: nil,
+                        merchantColumn: nil,
+                        noteColumn: "Note",
+                        categoryColumn: "Category name",
+                        labelsColumn: "Labels",
+                        walletID: walletID,
+                        defaultKind: .expense,
+                        typeColumn: "Type",
+                        walletColumn: "Wallet",
+                        currencyColumn: "Currency",
+                        authorColumn: "Author"
+                    )
+                )
+            }
+        }
+
+        let result = try #require(importOutcome).get()
+        #expect(result.insertedTransactions == BenchmarkScenario.small.transactionCount)
+        #expect(seconds(elapsed) < 5)
     }
 
     private func makeRepository() throws -> LedgerRepository {
@@ -64,5 +124,10 @@ struct LedgerPerformanceTests {
             directoryName: UUID().uuidString
         )
         return LedgerRepository(databaseManager: try DatabaseManager(locationProvider: location))
+    }
+
+    private func seconds(_ duration: Duration) -> Double {
+        let components = duration.components
+        return Double(components.seconds) + Double(components.attoseconds) / 1_000_000_000_000_000_000
     }
 }

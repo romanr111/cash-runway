@@ -205,10 +205,14 @@ struct SettingsView: View {
         let amountColumn = header(named: ["Сума в грн", "Amount", "amount", "sum"], in: headers)
         let debitColumn = header(named: ["Debit", "debit", "Витрати"], in: headers)
         let creditColumn = header(named: ["Credit", "credit", "Надходження"], in: headers)
+        let typeColumn = header(named: ["Type", "type"], in: headers)
+        let walletColumn = header(named: ["Wallet", "wallet"], in: headers)
+        let currencyColumn = header(named: ["Currency", "currency"], in: headers)
         let merchantColumn = header(named: ["Description", "description", "Merchant", "merchant", "Призначення"], in: headers)
         let noteColumn = header(named: ["Comment", "comment", "Note", "note"], in: headers)
-        let categoryColumn = header(named: ["Category", "category"], in: headers)
+        let categoryColumn = header(named: ["Category", "category", "Category name", "category name"], in: headers)
         let labelsColumn = header(named: ["Labels", "labels", "Tags"], in: headers)
+        let authorColumn = header(named: ["Author", "author"], in: headers)
 
         return CSVImportMapping(
             dateColumn: dateColumn,
@@ -220,7 +224,11 @@ struct SettingsView: View {
             categoryColumn: categoryColumn,
             labelsColumn: labelsColumn,
             walletID: walletID,
-            defaultKind: .expense
+            defaultKind: .expense,
+            typeColumn: typeColumn,
+            walletColumn: walletColumn,
+            currencyColumn: currencyColumn,
+            authorColumn: authorColumn
         )
     }
 
@@ -477,6 +485,9 @@ private struct CSVImportWizardView: View {
                             if $0 != nil { mapping.amountColumn = nil }
                         }
                     ))
+                    optionalPicker("Type", selection: $mapping.typeColumn)
+                    optionalPicker("Wallet", selection: $mapping.walletColumn)
+                    optionalPicker("Currency", selection: $mapping.currencyColumn)
                     optionalPicker("Merchant", selection: $mapping.merchantColumn)
                     optionalPicker("Note", selection: $mapping.noteColumn)
                     optionalPicker("Category", selection: $mapping.categoryColumn)

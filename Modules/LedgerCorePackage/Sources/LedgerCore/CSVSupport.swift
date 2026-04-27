@@ -2,6 +2,7 @@ import Foundation
 import GRDB
 
 public enum CSVPreset: String, CaseIterable, Sendable {
+    case spendeeWallet = "Spendee Wallet"
     case privatBank = "PrivatBank"
     case monobank = "Monobank"
     case generic = "Generic CSV"
@@ -23,6 +24,9 @@ public final class CSVService: @unchecked Sendable {
 
     public func detectPreset(headers: [String]) -> CSVPreset {
         let lowercased = Set(headers.map { $0.lowercased() })
+        if lowercased.isSuperset(of: ["date", "wallet", "type", "category name", "amount", "currency", "note", "labels", "author"]) {
+            return .spendeeWallet
+        }
         if lowercased.contains("дата операції") || lowercased.contains("сума в грн") {
             return .privatBank
         }
@@ -42,18 +46,30 @@ public final class CSVService: @unchecked Sendable {
         var validDrafts: [TransactionDraft] = []
         var invalidRows = 0
         var rowErrors: [CSVRowError] = []
+        let wallets = try repository.wallets()
+        let expenseCategories = try repository.categories(kind: .expense)
+        let incomeCategories = try repository.categories(kind: .income)
+        let availableLabels = try repository.labels()
 
         for (offset, row) in rows.dropFirst().enumerated() {
             do {
                 let date = try parseDate(from: cell(row, mapping.dateColumn, headerIndex))
-                let amount = try parseAmount(row: row, mapping: mapping, headerIndex: headerIndex)
-                let categoryID = try parseCategoryID(row: row, mapping: mapping, headerIndex: headerIndex)
-                let labels = parseLabels(row: row, mapping: mapping, headerIndex: headerIndex)
+                try validateCurrency(row: row, mapping: mapping, headerIndex: headerIndex)
+                let signedAmount = try parseAmount(row: row, mapping: mapping, headerIndex: headerIndex)
+                let kind = parseKind(row: row, mapping: mapping, headerIndex: headerIndex, signedAmount: signedAmount)
+                let categoryID = parseCategoryID(
+                    row: row,
+                    mapping: mapping,
+                    headerIndex: headerIndex,
+                    kind: kind,
+                    categories: kind == .income ? incomeCategories : expenseCategories
+                )
+                let labels = parseLabels(row: row, mapping: mapping, headerIndex: headerIndex, availableLabels: availableLabels)
                 validDrafts.append(
                     TransactionDraft(
-                        kind: mapping.defaultKind,
-                        walletID: mapping.walletID,
-                        amountMinor: amount,
+                        kind: kind,
+                        walletID: parseWalletID(row: row, mapping: mapping, headerIndex: headerIndex, wallets: wallets),
+                        amountMinor: abs(signedAmount),
                         occurredAt: date,
                         categoryID: categoryID,
                         labelIDs: labels,
@@ -119,19 +135,20 @@ public final class CSVService: @unchecked Sendable {
     }
 
     public func exportCSV(query: TransactionQuery = .init()) throws -> String {
-        let transactions = try repository.transactions(query: query)
-        let header = ["date", "wallet", "type", "amount", "category", "labels", "merchant", "note", "source"]
+        let transactions = try repository.transactions(query: query, limit: nil)
+        let header = ["Date", "Wallet", "Type", "Category name", "Amount", "Currency", "Note", "Labels", "Author"]
+        let dateFormatter = ISO8601DateFormatter()
         let lines = transactions.map { item in
             [
-                item.occurredAt.formatted(.iso8601.year().month().day()),
+                dateFormatter.string(from: item.occurredAt),
                 item.walletName,
-                item.kind.rawValue,
-                MoneyFormatter.plainString(from: item.amountMinor),
+                item.kind.rawValue.capitalized,
                 item.categoryName ?? "",
-                item.labels.map(\.name).joined(separator: "|"),
-                item.merchant,
+                MoneyFormatter.plainString(from: item.amountMinor),
+                "UAH",
                 item.note,
-                item.source.rawValue,
+                item.labels.map(\.name).joined(separator: "|"),
+                "",
             ].map(escape).joined(separator: ",")
         }
         return ([header.joined(separator: ",")] + lines).joined(separator: "\n")
@@ -150,17 +167,88 @@ public final class CSVService: @unchecked Sendable {
 
     private func parseRows(_ text: String) -> [[String]] {
         let delimiter = detectDelimiter(in: text)
-        return text
-            .split(whereSeparator: \.isNewline)
-            .map { line in line.split(separator: Character(delimiter), omittingEmptySubsequences: false).map { String($0).trimmingCharacters(in: .whitespaces) } }
+        var rows: [[String]] = []
+        var row: [String] = []
+        var field = ""
+        var isQuoted = false
+        var index = text.startIndex
+
+        func appendField() {
+            row.append(field.trimmingCharacters(in: .whitespaces))
+            field = ""
+        }
+
+        func appendRowIfNeeded() {
+            if !row.isEmpty || !field.isEmpty {
+                appendField()
+                rows.append(row)
+                row = []
+            }
+        }
+
+        while index < text.endIndex {
+            let character = text[index]
+            let nextIndex = text.index(after: index)
+            if character == "\"" {
+                if isQuoted, nextIndex < text.endIndex, text[nextIndex] == "\"" {
+                    field.append(character)
+                    index = text.index(after: nextIndex)
+                } else {
+                    isQuoted.toggle()
+                    index = nextIndex
+                }
+            } else if String(character) == delimiter, !isQuoted {
+                appendField()
+                index = nextIndex
+            } else if character == "\n", !isQuoted {
+                appendRowIfNeeded()
+                index = nextIndex
+            } else if character == "\r", !isQuoted {
+                appendRowIfNeeded()
+                if nextIndex < text.endIndex, text[nextIndex] == "\n" {
+                    index = text.index(after: nextIndex)
+                } else {
+                    index = nextIndex
+                }
+            } else {
+                field.append(character)
+                index = nextIndex
+            }
+        }
+        appendRowIfNeeded()
+        return rows
     }
 
     private func detectDelimiter(in text: String) -> String {
         let sample = text.split(whereSeparator: \.isNewline).prefix(3).joined(separator: "\n")
         let candidates = [",", ";", "\t"]
         return candidates.max { lhs, rhs in
-            sample.components(separatedBy: lhs).count < sample.components(separatedBy: rhs).count
+            delimiterCount(lhs, in: sample) < delimiterCount(rhs, in: sample)
         } ?? ","
+    }
+
+    private func delimiterCount(_ delimiter: String, in text: String) -> Int {
+        var count = 0
+        var isQuoted = false
+        var index = text.startIndex
+        while index < text.endIndex {
+            let character = text[index]
+            let nextIndex = text.index(after: index)
+            if character == "\"" {
+                if isQuoted, nextIndex < text.endIndex, text[nextIndex] == "\"" {
+                    index = text.index(after: nextIndex)
+                } else {
+                    isQuoted.toggle()
+                    index = nextIndex
+                }
+            } else {
+                if String(character) == delimiter, !isQuoted {
+                    count += 1
+                }
+                index = nextIndex
+            }
+        }
+        return count
     }
 
     private func cell(_ row: [String], _ header: String?, _ headerIndex: [String: Int]) -> String {
@@ -176,6 +264,14 @@ public final class CSVService: @unchecked Sendable {
         }
         if let iso = ISO8601DateFormatter().date(from: input) {
             return iso
+        }
+        let isoLikeFormatter = DateFormatter()
+        isoLikeFormatter.locale = Locale(identifier: "en_US_POSIX")
+        for format in ["yyyy-MM-dd'T'HH:mm:ss.SSSXXXXX", "yyyy-MM-dd'T'HH:mm:ssXXXXX", "yyyy-MM-dd'T'HH:mm:ss"] {
+            isoLikeFormatter.dateFormat = format
+            if let date = isoLikeFormatter.date(from: input) {
+                return date
+            }
         }
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "uk_UA")
@@ -193,23 +289,57 @@ public final class CSVService: @unchecked Sendable {
 
     private func parseAmount(row: [String], mapping: CSVImportMapping, headerIndex: [String: Int]) throws -> Int64 {
         if let amountColumn = mapping.amountColumn {
-            return try abs(MoneyFormatter.parseMinorUnits(cell(row, amountColumn, headerIndex)))
+            return try MoneyFormatter.parseMinorUnits(cell(row, amountColumn, headerIndex))
         }
         let debit = try? MoneyFormatter.parseMinorUnits(cell(row, mapping.debitColumn, headerIndex))
         let credit = try? MoneyFormatter.parseMinorUnits(cell(row, mapping.creditColumn, headerIndex))
-        if let debit, debit != 0 { return abs(debit) }
+        if let debit, debit != 0 { return -abs(debit) }
         if let credit, credit != 0 { return abs(credit) }
         throw LedgerError.validation("Could not parse amount.")
     }
 
-    private func parseCategoryID(row: [String], mapping: CSVImportMapping, headerIndex: [String: Int]) throws -> UUID? {
-        let categories = try repository.categories(kind: mapping.defaultKind == .income ? .income : .expense)
+    private func parseKind(row: [String], mapping: CSVImportMapping, headerIndex: [String: Int], signedAmount: Int64) -> TransactionDraft.Kind {
+        let raw = cell(row, mapping.typeColumn, headerIndex).lowercased()
+        if raw == "income" || raw == "inflow" || raw == "credit" {
+            return .income
+        }
+        if raw == "expense" || raw == "outflow" || raw == "debit" {
+            return .expense
+        }
+        if raw == "transfer" {
+            return .transfer
+        }
+        if signedAmount < 0 {
+            return .expense
+        }
+        if signedAmount > 0, mapping.typeColumn != nil {
+            return .income
+        }
+        return mapping.defaultKind
+    }
+
+    private func parseWalletID(row: [String], mapping: CSVImportMapping, headerIndex: [String: Int], wallets: [Wallet]) -> UUID {
+        let raw = cell(row, mapping.walletColumn, headerIndex)
+        guard !raw.isEmpty else { return mapping.walletID }
+        return wallets.first(where: { $0.name.caseInsensitiveCompare(raw) == .orderedSame })?.id ?? mapping.walletID
+    }
+
+    private func validateCurrency(row: [String], mapping: CSVImportMapping, headerIndex: [String: Int]) throws {
+        let raw = cell(row, mapping.currencyColumn, headerIndex)
+        guard !raw.isEmpty else { return }
+        let normalized = raw.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard normalized == "UAH" || normalized == "₴" || normalized == "ГРН" else {
+            throw LedgerError.validation("Unsupported currency.")
+        }
+    }
+
+    private func parseCategoryID(row: [String], mapping: CSVImportMapping, headerIndex: [String: Int], kind: TransactionDraft.Kind, categories: [Category]) -> UUID? {
         let raw = cell(row, mapping.categoryColumn, headerIndex)
         if raw.isEmpty {
-            return fallbackCategoryID(in: categories, for: mapping.defaultKind)
+            return fallbackCategoryID(in: categories, for: kind)
         }
         return categories.first(where: { $0.name.caseInsensitiveCompare(raw) == .orderedSame })?.id
-            ?? fallbackCategoryID(in: categories, for: mapping.defaultKind)
+            ?? fallbackCategoryID(in: categories, for: kind)
     }
 
     private func fallbackCategoryID(in categories: [Category], for kind: TransactionDraft.Kind) -> UUID? {
@@ -217,11 +347,21 @@ public final class CSVService: @unchecked Sendable {
         return categories.first(where: { $0.name == fallbackName })?.id ?? categories.first?.id
     }
 
-    private func parseLabels(row: [String], mapping: CSVImportMapping, headerIndex: [String: Int]) -> [UUID] {
+    private func parseLabels(row: [String], mapping: CSVImportMapping, headerIndex: [String: Int], availableLabels: [Label]) -> [UUID] {
         let raw = cell(row, mapping.labelsColumn, headerIndex)
         guard !raw.isEmpty else { return [] }
-        let names = raw.split(separator: "|").map { $0.trimmingCharacters(in: .whitespaces) }
-        let availableLabels = (try? repository.labels()) ?? []
+        let separator: Character? = if raw.contains("|") {
+            "|"
+        } else if raw.contains(";") {
+            ";"
+        } else {
+            nil
+        }
+        let names = if let separator {
+            raw.split(separator: separator).map { $0.trimmingCharacters(in: .whitespaces) }
+        } else {
+            [raw.trimmingCharacters(in: .whitespaces)]
+        }
         return names.compactMap { name in availableLabels.first(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame })?.id }
     }
 
