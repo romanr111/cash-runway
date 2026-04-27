@@ -548,6 +548,40 @@ public final class LedgerRepository: @unchecked Sendable {
                 )
             }
 
+            let labelRows = try Row.fetchAll(
+                db,
+                sql: """
+                SELECT l.id, l.name, l.color_hex,
+                       CASE t.type WHEN 'income' THEN 'income' ELSE 'expense' END AS kind,
+                       COALESCE(SUM(t.amount_minor), 0) AS label_minor,
+                       COUNT(DISTINCT t.id) AS txn_count
+                FROM labels l
+                JOIN transaction_labels tl ON tl.label_id = l.id
+                JOIN transactions t ON t.id = tl.transaction_id
+                WHERE t.is_deleted = 0
+                  AND t.type IN ('expense', 'income')
+                  AND t.local_month_key = ?
+                  \(walletID == nil ? "" : "AND t.wallet_id = ?")
+                GROUP BY l.id, kind
+                HAVING label_minor > 0
+                ORDER BY kind, label_minor DESC, l.name
+                """,
+                arguments: walletID == nil ? [monthKey] : [monthKey, walletID!.uuidString]
+            )
+            let labels = labelRows.map { row in
+                let amountMinor: Int64 = row["label_minor"]
+                let kind = CategoryKind(rawValue: row["kind"]) ?? .expense
+                return OverviewLabelRow(
+                    labelID: UUID(uuidString: row["id"])!,
+                    name: row["name"],
+                    kind: kind,
+                    colorHex: row["color_hex"],
+                    amountMinor: amountMinor,
+                    transactionCount: row["txn_count"],
+                    percentage: Double(amountMinor) / Double(kind == .expense ? totalExpense : totalIncome)
+                )
+            }
+
             return OverviewSnapshot(
                 selectedMonthKey: monthKey,
                 walletFilterID: walletID,
@@ -556,7 +590,8 @@ public final class LedgerRepository: @unchecked Sendable {
                 monthCashFlowMinor: selectedPoint.cashFlowMinor,
                 monthIncomeMinor: selectedPoint.incomeMinor,
                 monthExpenseMinor: selectedPoint.expenseMinor,
-                categories: categories
+                categories: categories,
+                labels: labels
             )
         }
     }
@@ -602,9 +637,9 @@ public final class LedgerRepository: @unchecked Sendable {
         }
     }
 
-    public func transactions(query: TransactionQuery = .init()) throws -> [TransactionListItem] {
+    public func transactions(query: TransactionQuery = .init(), limit: Int? = 300) throws -> [TransactionListItem] {
         try databaseManager.dbQueue.read { db in
-            try listTransactions(db, query: query)
+            try listTransactions(db, query: query, limit: limit)
         }
     }
 
@@ -1129,7 +1164,7 @@ public final class LedgerRepository: @unchecked Sendable {
         }
     }
 
-    private func listTransactions(_ db: Database, query: TransactionQuery) throws -> [TransactionListItem] {
+    private func listTransactions(_ db: Database, query: TransactionQuery, limit: Int? = 300) throws -> [TransactionListItem] {
         var conditions = ["t.is_deleted = 0", "t.type != 'transfer_in'"]
         var arguments: [String: any DatabaseValueConvertible] = [:]
 
@@ -1179,7 +1214,7 @@ public final class LedgerRepository: @unchecked Sendable {
         LEFT JOIN categories c ON c.id = t.category_id
         WHERE \(conditions.joined(separator: " AND "))
         ORDER BY t.occurred_at DESC, t.created_at DESC
-        LIMIT 300
+        \(limit.map { "LIMIT \($0)" } ?? "")
         """
 
         return try Row.fetchAll(db, sql: sql, arguments: StatementArguments(arguments)).map { row in

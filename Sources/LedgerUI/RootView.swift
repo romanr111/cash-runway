@@ -56,11 +56,6 @@ public struct LedgerRootView: View {
         } message: {
             Text(model.errorMessage ?? "")
         }
-        .alert("Updated", isPresented: Binding(get: { model.successMessage != nil }, set: { _ in model.successMessage = nil })) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(model.successMessage ?? "")
-        }
     }
 
     private var lockView: some View {

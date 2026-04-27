@@ -23,6 +23,9 @@ struct TransactionEditorView: View {
     @State private var recurringInterval = 1
     @State private var recurringDayOfMonth = 1
     @State private var recurringWeekday = 1
+    @State private var focusAmountAfterCategorySheet = false
+    @State private var openCategoryManagementAfterCategorySheet = false
+    @FocusState private var amountFieldFocused: Bool
 
     var body: some View {
         NavigationStack {
@@ -40,7 +43,12 @@ struct TransactionEditorView: View {
                     model: model,
                     draft: $draft,
                     composerState: $composerState,
-                    showsCategoryManagement: $showsCategoryManagement
+                    onCategorySelected: {
+                        focusAmountAfterCategorySheet = true
+                    },
+                    onOpenManagement: {
+                        openCategoryManagementAfterCategorySheet = true
+                    }
                 )
                 .presentationDetents([.fraction(0.54), .large])
                 .presentationDragIndicator(.visible)
@@ -78,6 +86,20 @@ struct TransactionEditorView: View {
             }
             .sheet(isPresented: $showsCategoryManagement) {
                 CategoryManagementView(model: model, initialKind: draft.kind == .income ? .income : .expense)
+            }
+            .onChange(of: showsCategorySheet) { _, isPresented in
+                guard !isPresented else { return }
+                let shouldOpenManagement = openCategoryManagementAfterCategorySheet
+                let shouldFocusAmount = focusAmountAfterCategorySheet
+                openCategoryManagementAfterCategorySheet = false
+                focusAmountAfterCategorySheet = false
+                DispatchQueue.main.async {
+                    if shouldOpenManagement {
+                        showsCategoryManagement = true
+                    } else if shouldFocusAmount {
+                        amountFieldFocused = true
+                    }
+                }
             }
             .onAppear {
                 composerState = TransactionComposerState(
@@ -157,6 +179,7 @@ struct TransactionEditorView: View {
                     HStack(spacing: 10) {
                         TextField("0.00", text: $composerState.amountText)
                             .keyboardType(.decimalPad)
+                            .focused($amountFieldFocused)
                             .multilineTextAlignment(.trailing)
                             .font(.system(size: 42, weight: .bold, design: .rounded))
                             .foregroundStyle(LedgerTheme.textPrimary)
@@ -209,21 +232,24 @@ struct TransactionEditorView: View {
                         Spacer()
                         DatePicker("", selection: $draft.occurredAt, displayedComponents: [.date])
                             .labelsHidden()
+                            .datePickerStyle(.compact)
                             .tint(LedgerTheme.accentDark)
                     }
 
-                    HStack {
+                    HStack(spacing: 4) {
                         Spacer()
-                        Button(composerState.quickDateLabel ?? "Yesterday?") {
-                            if let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: .now) {
-                                draft.occurredAt = yesterday
+                        HStack(spacing: 4) {
+                            dateShortcutButton("Today", isSelected: Calendar.current.isDateInToday(draft.occurredAt)) {
+                                draft.occurredAt = .now
+                            }
+                            dateShortcutButton("Yesterday", isSelected: Calendar.current.isDateInYesterday(draft.occurredAt)) {
+                                if let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: .now) {
+                                    draft.occurredAt = yesterday
+                                }
                             }
                         }
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(LedgerTheme.accentDark)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(LedgerTheme.accentMuted, in: Capsule())
+                        .padding(4)
+                        .background(LedgerTheme.pill, in: Capsule())
                     }
                 }
                 .padding(.vertical, 18)
@@ -231,8 +257,6 @@ struct TransactionEditorView: View {
                 divider
 
                 VStack(spacing: 0) {
-                    textFieldRow(title: "Merchant", text: $draft.merchant, placeholder: draft.kind == .transfer ? "Transfer note" : "Where did you spend?")
-                    divider
                     textFieldRow(title: "Note", text: $draft.note, placeholder: "Add a note")
                     divider
                     Button {
@@ -472,6 +496,18 @@ struct TransactionEditorView: View {
         }
         .padding(.vertical, 18)
     }
+
+    private func dateShortcutButton(_ title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(isSelected ? LedgerTheme.accentDark : LedgerTheme.textSecondary)
+                .frame(width: 96)
+                .padding(.vertical, 8)
+                .background(isSelected ? LedgerTheme.accentMuted : Color.clear, in: Capsule())
+        }
+        .buttonStyle(.plain)
+    }
 }
 
 private struct TransactionCategorySheet: View {
@@ -479,7 +515,8 @@ private struct TransactionCategorySheet: View {
     @Bindable var model: LedgerAppModel
     @Binding var draft: TransactionDraft
     @Binding var composerState: TransactionComposerState
-    @Binding var showsCategoryManagement: Bool
+    let onCategorySelected: () -> Void
+    let onOpenManagement: () -> Void
 
     var body: some View {
         NavigationStack {
@@ -524,16 +561,20 @@ private struct TransactionCategorySheet: View {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 18)], spacing: 18) {
                             ForEach(availableCategories) { category in
                                 Button {
+                                    draft.kind = composerState.selectedKind
                                     composerState.selectedCategoryID = category.id
                                     draft.categoryID = category.id
+                                    onCategorySelected()
+                                    dismiss()
                                 } label: {
                                     VStack(spacing: 10) {
-                                        CategoryGlyph(iconName: category.iconName, colorHex: category.colorHex, size: 62)
-                                            .overlay {
-                                                Circle()
-                                                    .stroke(composerState.selectedCategoryID == category.id ? LedgerTheme.textPrimary : .clear, lineWidth: 2)
-                                                    .padding(-4)
-                                            }
+                                        ZStack {
+                                            Circle()
+                                                .stroke(composerState.selectedCategoryID == category.id ? LedgerTheme.textPrimary : .clear, lineWidth: 2)
+                                                .frame(width: 76, height: 76)
+                                            CategoryGlyph(iconName: category.iconName, colorHex: category.colorHex, size: 62)
+                                        }
+                                        .frame(width: 80, height: 80)
                                         Text(category.name)
                                             .font(.system(size: 13, weight: .semibold))
                                             .foregroundStyle(LedgerTheme.textPrimary)
@@ -554,7 +595,8 @@ private struct TransactionCategorySheet: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
-                        showsCategoryManagement = true
+                        onOpenManagement()
+                        dismiss()
                     } label: {
                         Image(systemName: "gearshape")
                     }

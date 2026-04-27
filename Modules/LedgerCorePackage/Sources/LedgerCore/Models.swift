@@ -442,6 +442,17 @@ public struct OverviewCategoryRow: Identifiable, Hashable, Sendable {
     public var percentage: Double
 }
 
+public struct OverviewLabelRow: Identifiable, Hashable, Sendable {
+    public var id: String { "\(labelID.uuidString)-\(kind.rawValue)" }
+    public var labelID: UUID
+    public var name: String
+    public var kind: CategoryKind
+    public var colorHex: String?
+    public var amountMinor: Int64
+    public var transactionCount: Int
+    public var percentage: Double
+}
+
 public struct OverviewSnapshot: Sendable {
     public var selectedMonthKey: Int
     public var walletFilterID: UUID?
@@ -451,6 +462,7 @@ public struct OverviewSnapshot: Sendable {
     public var monthIncomeMinor: Int64
     public var monthExpenseMinor: Int64
     public var categories: [OverviewCategoryRow]
+    public var labels: [OverviewLabelRow]
 }
 
 public struct BalancePoint: Identifiable, Hashable, Sendable {
@@ -508,12 +520,48 @@ public struct CSVImportMapping: Sendable {
     public var amountColumn: String?
     public var debitColumn: String?
     public var creditColumn: String?
+    public var typeColumn: String?
+    public var walletColumn: String?
+    public var currencyColumn: String?
     public var merchantColumn: String?
     public var noteColumn: String?
     public var categoryColumn: String?
     public var labelsColumn: String?
+    public var authorColumn: String?
     public var walletID: UUID
     public var defaultKind: TransactionDraft.Kind
+
+    public init(
+        dateColumn: String,
+        amountColumn: String?,
+        debitColumn: String?,
+        creditColumn: String?,
+        merchantColumn: String?,
+        noteColumn: String?,
+        categoryColumn: String?,
+        labelsColumn: String?,
+        walletID: UUID,
+        defaultKind: TransactionDraft.Kind,
+        typeColumn: String? = nil,
+        walletColumn: String? = nil,
+        currencyColumn: String? = nil,
+        authorColumn: String? = nil
+    ) {
+        self.dateColumn = dateColumn
+        self.amountColumn = amountColumn
+        self.debitColumn = debitColumn
+        self.creditColumn = creditColumn
+        self.typeColumn = typeColumn
+        self.walletColumn = walletColumn
+        self.currencyColumn = currencyColumn
+        self.merchantColumn = merchantColumn
+        self.noteColumn = noteColumn
+        self.categoryColumn = categoryColumn
+        self.labelsColumn = labelsColumn
+        self.authorColumn = authorColumn
+        self.walletID = walletID
+        self.defaultKind = defaultKind
+    }
 }
 
 public struct CSVImportResult: Sendable {
