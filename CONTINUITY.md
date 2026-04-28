@@ -18,7 +18,7 @@
 - 2026-04-28T23:14:00+03:00 [CODE] Renamed app/project identifiers to Cash Runway/CashRunway/cash-runway, including Xcode project, target, bundle id, SwiftPM package/module/test names, app display name, source folders, and debug self-test names.
 - 2026-04-28T23:14:00+03:00 [TOOL] GitHub repo renamed to `romanr111/cash-runway`; `origin` now points at `https://github.com/romanr111/cash-runway.git`.
 - 2026-04-28T23:19:30+03:00 [TOOL] Primary local checkout folder renamed to `/Users/roman/Documents/Development/Cash Runway`; branch is `codex/cash-runway-rename`.
-- 2026-04-28T23:23:00+03:00 [TOOL] Commit `4aa1fef92e6accf8dbaadcf34de1393ddd3399d8` pushed to both `origin/codex/cash-runway-rename` and `origin/main`; GitHub default branch now points at the Cash Runway rename.
+- 2026-04-28T23:23:00+03:00 [TOOL] Commit `4d83b5eb5bfe862d8e33997eb6b2719414a3114b` pushed to both `origin/codex/cash-runway-rename` and `origin/main`; GitHub default branch now points at the Cash Runway rename.
 
 ## Done (recent)
 - 2026-04-27 [MILESTONE] Core MVP, transaction/category UI, overview labels, wallet CSV import/export, and timing gates completed; see prior continuity/branch notes.
@@ -63,4 +63,4 @@
 - 2026-04-28T23:18:41+03:00 [TOOL] After local folder rename, `xcodebuild -project CashRunway.xcodeproj -scheme CashRunway ... name=iPhone 17 ... clean build` -> `** BUILD SUCCEEDED **`.
 - 2026-04-28T23:19:15+03:00 [TOOL] After local folder rename, app-process CSV import self-test -> `PASS inserted=13896 file=transactions_export_2026-04-27_wallet.csv`.
 - 2026-04-28T23:19:30+03:00 [TOOL] Final renamed app boot check on iPhone 17 simulator -> app active as pid `62611`; filtered logs had no app error/fatal/crash/exception/not-entitled/permission entries.
-- 2026-04-28T23:23:00+03:00 [TOOL] `git ls-remote --heads origin main codex/cash-runway-rename` -> both refs at `4aa1fef92e6accf8dbaadcf34de1393ddd3399d8`.
+- 2026-04-28T23:23:00+03:00 [TOOL] `git ls-remote --heads origin main codex/cash-runway-rename` -> both refs at `4d83b5eb5bfe862d8e33997eb6b2719414a3114b`.
