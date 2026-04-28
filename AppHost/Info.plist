@@ -5,7 +5,7 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleDisplayName</key>
-    <string>Spendee Ledger</string>
+    <string>Cash Runway</string>
     <key>CFBundleExecutable</key>
     <string>$(EXECUTABLE_NAME)</string>
     <key>CFBundleIdentifier</key>
@@ -21,10 +21,10 @@
     <key>CFBundleVersion</key>
     <string>1</string>
 	<key>NSFaceIDUsageDescription</key>
-	<string>Use Face ID to unlock your encrypted finance ledger.</string>
+	<string>Use Face ID to unlock Cash Runway.</string>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
-		<string>dev.roman.spendee-ledger.maintenance</string>
+		<string>dev.roman.cash-runway.maintenance</string>
 	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>

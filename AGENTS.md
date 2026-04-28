@@ -1,3 +1,6 @@
+## Agent-specific behavioral guidelines
+- **Kimi / Kimi-based LLMs only:** Also apply `.kimi/AGENTS.md` project-wide for behavioral, git safety, continuity ledger, and workflow rules.
+
 ## iOS agent rules
 
 ### Preserve existing structure
@@ -46,11 +49,12 @@ Every iOS task must pass ALL gates before being marked done, in this order:
 
 1. `swift test` → all tests pass.
 2. `xcodebuild -scheme <scheme> -sdk iphonesimulator \
-     -destination 'platform=iOS Simulator,name=iPhone 16' \
+     -destination 'platform=iOS Simulator,name=iPhone 17' \
      clean build 2>&1 | tail -5`
    → last line must be `** BUILD SUCCEEDED **`.
+   If `iPhone 17` is unavailable on the local machine, use the newest available
+   iPhone simulator as the primary destination and record the exact name.
 3. Boot check (must be last):
    - App launches successfully on simulator
    - No runtime crashes or warnings in Xcode console
    - Core features accessible within 3 seconds of launch
-

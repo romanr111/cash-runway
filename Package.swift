@@ -3,20 +3,20 @@
 import PackageDescription
 
 let package = Package(
-    name: "SpendeeLedgerWorkspace",
+    name: "CashRunwayWorkspace",
     platforms: [
         .macOS(.v15),
     ],
     dependencies: [
-        .package(path: "Modules/LedgerCorePackage"),
+        .package(path: "Modules/CashRunwayCorePackage"),
     ],
     targets: [
         .testTarget(
-            name: "LedgerCoreTests",
+            name: "CashRunwayCoreTests",
             dependencies: [
-                .product(name: "LedgerCore", package: "LedgerCorePackage"),
+                .product(name: "CashRunwayCore", package: "CashRunwayCorePackage"),
             ],
-            path: "Tests/LedgerCoreTests"
+            path: "Tests/CashRunwayCoreTests"
         ),
     ]
 )

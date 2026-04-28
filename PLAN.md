@@ -1,8 +1,8 @@
-# PLAN.md — Spendee-like iOS App V1 MVP Implementation Plan
+# PLAN.md — Cash Runway iOS App V1 MVP Implementation Plan
 
 ## 1. Document purpose
 
-This document is the **implementation contract** for an autonomous coding agent building the **first minimally working iOS MVP** of a Spendee-like personal finance app.
+This document is the **implementation contract** for an autonomous coding agent building the **first minimally working iOS MVP** of a Cash Runway personal finance app.
 
 The goal of V1 is **not** to clone the full product. The goal is to ship a **fast, correct, offline-first iOS app** that allows a user to:
 
@@ -914,7 +914,7 @@ Recommended folder/module layout:
 
 ```text
 App/
-  SpendeeCloneApp.swift
+  CashRunwayApp.swift
   AppCoordinator.swift
   DependencyContainer.swift
 
