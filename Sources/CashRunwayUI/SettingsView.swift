@@ -420,6 +420,15 @@ private struct WalletManagementView: View {
                         walletDraft = wallet
                         isEditorPresented = true
                     }
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        if model.wallets.count > 1 {
+                            Button(role: .destructive) {
+                                model.deleteWallet(id: wallet.id)
+                            } label: {
+                                SwiftUI.Label("Delete", systemImage: "trash")
+                            }
+                        }
+                    }
                 }
             }
             .navigationTitle("Manual Wallets")

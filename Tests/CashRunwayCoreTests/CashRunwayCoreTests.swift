@@ -831,6 +831,40 @@ struct CashRunwayCoreTests {
         try TestSupport.assertCategoryTruth(repository)
     }
 
+    @Test func walletDeletionCleansUpLinkedTransfersInOtherWallets() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        let wallets = try repository.wallets()
+        #expect(wallets.count >= 2)
+        let sourceWallet = wallets[0]
+        let destinationWallet = wallets[1]
+
+        try repository.saveTransaction(
+            TransactionDraft(
+                kind: .transfer,
+                walletID: sourceWallet.id,
+                destinationWalletID: destinationWallet.id,
+                amountMinor: 3_000,
+                occurredAt: .now,
+                merchant: "Move",
+                note: ""
+            )
+        )
+
+        let preDeleteTxCount = try repository.transactions(query: .init(kinds: [.transfer])).count
+        #expect(preDeleteTxCount == 1)
+
+        try repository.deleteWallet(id: destinationWallet.id)
+
+        let postDeleteWallets = try repository.wallets()
+        #expect(postDeleteWallets.contains(where: { $0.id == destinationWallet.id }) == false)
+
+        let remainingTransferTxs = try repository.transactions(query: .init(kinds: [.transfer]))
+        #expect(remainingTransferTxs.isEmpty)
+
+        try TestSupport.assertWalletTruth(repository)
+    }
+
     @Test func cannotDeleteLastActiveWallet() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()

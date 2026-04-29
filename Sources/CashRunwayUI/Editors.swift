@@ -839,6 +839,7 @@ struct WalletEditorView: View {
     @Bindable var model: CashRunwayAppModel
     @Binding var wallet: Wallet
     @State private var balanceText = ""
+    @State private var showsDeleteConfirmation = false
 
     var body: some View {
         NavigationStack {
@@ -851,6 +852,17 @@ struct WalletEditorView: View {
                 }
                 TextField("Starting Balance", text: $balanceText)
                     .keyboardType(.decimalPad)
+
+                if model.wallets.count > 1 {
+                    Section {
+                        Button(role: .destructive) {
+                            showsDeleteConfirmation = true
+                        } label: {
+                            Text("Delete Wallet")
+                                .frame(maxWidth: .infinity)
+                        }
+                    }
+                }
             }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { Button("Cancel") { dismiss() } }
@@ -864,6 +876,15 @@ struct WalletEditorView: View {
                         dismiss()
                     }
                 }
+            }
+            .alert("Delete Wallet?", isPresented: $showsDeleteConfirmation) {
+                Button("Cancel", role: .cancel) {}
+                Button("Delete", role: .destructive) {
+                    model.deleteWallet(id: wallet.id)
+                    dismiss()
+                }
+            } message: {
+                Text("This will permanently remove the wallet and all of its transactions.")
             }
         }
         .onAppear {

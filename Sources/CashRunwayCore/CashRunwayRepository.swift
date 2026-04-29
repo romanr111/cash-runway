@@ -200,12 +200,29 @@ public final class CashRunwayRepository: @unchecked Sendable {
         }
 
         let txIDs = try databaseManager.dbQueue.read { db in
-            try Row.fetchAll(db, sql: "SELECT id FROM transactions WHERE wallet_id = ?", arguments: [id.uuidString])
-                .compactMap { UUID(uuidString: $0["id"]) }
+            let rows = try Row.fetchAll(
+                db,
+                sql: "SELECT id, linked_transfer_id FROM transactions WHERE wallet_id = ?",
+                arguments: [id.uuidString]
+            )
+            var ids = Set<UUID>()
+            for row in rows {
+                if let txID = UUID(uuidString: row["id"]) {
+                    ids.insert(txID)
+                }
+                if let linkedID = (row["linked_transfer_id"] as String?).flatMap(UUID.init) {
+                    ids.insert(linkedID)
+                }
+            }
+            return Array(ids)
         }
 
         for txID in txIDs {
-            try deleteTransaction(id: txID)
+            do {
+                try deleteTransaction(id: txID)
+            } catch CashRunwayError.notFound {
+                // Already deleted as a linked transfer; safe to ignore.
+            }
         }
 
         try databaseManager.dbQueue.write { db in
