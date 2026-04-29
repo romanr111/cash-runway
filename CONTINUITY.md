@@ -26,6 +26,10 @@
 - 2026-04-29T19:12:00+03:00 [CODE] Implementation is in worktree `/Users/roman/.codex/worktrees/cash-runway-app-switch-freeze-fix` on branch `codex/app-switch-freeze-fix`.
 - 2026-04-29T19:12:00+03:00 [CODE] Foreground resume no longer runs maintenance, recurring refresh, and full model reload synchronously on the main actor; it loads a snapshot on a utility task and applies it only if the current filters still match.
 - 2026-04-29T19:17:00+03:00 [TOOL] Branch `codex/app-switch-freeze-fix` was committed as `9eaa45e`, fast-forward merged into primary `main`, and pushed to PR branch `codex/cash-runway-overview-timeline-fixes`.
+- 2026-04-29T23:02:00+03:00 [USER] Goal update: implement wallet removal with a minimum-one active wallet constraint.
+- 2026-04-29T23:39:00+03:00 [CODE] Added `deleteWallet(id:)` to repository and AppModel; UI supports swipe-to-delete in wallet list and delete button in wallet editor with confirmation.
+- 2026-04-29T23:39:00+03:00 [CODE] Added tests for wallet deletion (cascade removes transactions/transfers) and last-wallet guard.
+- 2026-04-29T23:39:00+03:00 [TOOL] `swift test` → 33 tests in 2 suites passed; xcodebuild iPhone 17 simulator clean build → ** BUILD SUCCEEDED **; app launched without crashes.
 
 ## Done (recent)
 - 2026-04-27 [MILESTONE] Core MVP, transaction/category UI, overview labels, wallet CSV import/export, and timing gates completed.
@@ -76,3 +80,10 @@
 - 2026-04-29T18:58:20+03:00 [TOOL] Final verification from primary checkout: `swift test` -> 27 tests in 2 suites passed after 69s.
 - 2026-04-29T18:58:20+03:00 [TOOL] Final verification: `xcodebuild -scheme CashRunway -sdk iphonesimulator -destination 'name=iPhone 17' clean build` -> `** BUILD SUCCEEDED **`.
 - 2026-04-29T18:58:20+03:00 [TOOL] Final boot check on iPhone 17 simulator -> `dev.roman.cashrunway: 9806`; fatal/crash/exception/not-entitled log filter empty.
+- 2026-04-29T23:31:00+03:00 [USER] Goal update: replace Dashboard "By months" dropdown with Period Size selector (Day/Week/Month/Year); chart and transaction feed must adapt to selected period.
+- 2026-04-29T23:31:00+03:00 [CODE] DateKeys extended with weekKey, yearKey, periodKey, periodLabel, and weekDateRange helpers.
+- 2026-04-29T23:31:00+03:00 [CODE] Models generalized: TimelinePeriod enum added; TimelineBarPoint uses periodKey/xLabel; TransactionDaySection renamed to TimelineSection with periodLabel.
+- 2026-04-29T23:31:00+03:00 [CODE] Repository timelineSnapshot now accepts a period parameter and generates daily/weekly/monthly/yearly bars plus appropriately-grouped sections.
+- 2026-04-29T23:31:00+03:00 [CODE] Dashboard filters replaced month-list dropdown with Period Size selector; prev/next arrow buttons navigate months; chart uses xLabel; feed uses periodLabel.
+- 2026-04-29T23:31:00+03:00 [CODE] 33 tests pass including new DateKeys round-trip, period label, and timeline snapshot grouping tests for all periods.
+- 2026-04-29T23:31:00+03:00 [TOOL] `swift test` -> 33 tests passed; `xcodebuild` -> BUILD SUCCEEDED; iPhone 17 simulator boot check -> `dev.roman.cashrunway: 24558`; no fatal/crash/exception entries.
