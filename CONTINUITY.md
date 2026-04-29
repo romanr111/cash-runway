@@ -25,6 +25,7 @@
 - 2026-04-29T19:12:00+03:00 [USER] Goal update: investigate and fix a brief freeze when switching between iOS apps.
 - 2026-04-29T19:12:00+03:00 [CODE] Implementation is in worktree `/Users/roman/.codex/worktrees/cash-runway-app-switch-freeze-fix` on branch `codex/app-switch-freeze-fix`.
 - 2026-04-29T19:12:00+03:00 [CODE] Foreground resume no longer runs maintenance, recurring refresh, and full model reload synchronously on the main actor; it loads a snapshot on a utility task and applies it only if the current filters still match.
+- 2026-04-29T19:17:00+03:00 [TOOL] Branch `codex/app-switch-freeze-fix` was committed as `9eaa45e`, fast-forward merged into primary `main`, and pushed to PR branch `codex/cash-runway-overview-timeline-fixes`.
 
 ## Done (recent)
 - 2026-04-27 [MILESTONE] Core MVP, transaction/category UI, overview labels, wallet CSV import/export, and timing gates completed.
@@ -69,3 +70,9 @@
 - 2026-04-29T19:09:18+03:00 [TOOL] `swift test` in `codex/app-switch-freeze-fix` -> 27 tests in 2 suites passed after 85.059s.
 - 2026-04-29T19:11:10+03:00 [TOOL] `xcodebuild -project CashRunway.xcodeproj -scheme CashRunway -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' clean build` in `codex/app-switch-freeze-fix` -> `** BUILD SUCCEEDED **`.
 - 2026-04-29T19:11:45+03:00 [TOOL] iPhone 17 simulator install/launch plus app-switch smoke check -> `dev.roman.cashrunway: 96309`; fatal/crash/exception/not-entitled log filter empty.
+- 2026-04-29T19:13:44+03:00 [TOOL] Post-merge `swift test` from primary `main` -> 27 tests in 2 suites passed after 90.488s.
+- 2026-04-29T19:15:37+03:00 [TOOL] Post-merge `xcodebuild -project CashRunway.xcodeproj -scheme CashRunway -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' clean build` -> `** BUILD SUCCEEDED **`.
+- 2026-04-29T19:16:10+03:00 [TOOL] Post-merge iPhone 17 simulator install/launch plus app-switch smoke check -> `dev.roman.cashrunway: 3069`; fatal/crash/exception/not-entitled log filter empty.
+- 2026-04-29T18:58:20+03:00 [TOOL] Final verification from primary checkout: `swift test` -> 27 tests in 2 suites passed after 69s.
+- 2026-04-29T18:58:20+03:00 [TOOL] Final verification: `xcodebuild -scheme CashRunway -sdk iphonesimulator -destination 'name=iPhone 17' clean build` -> `** BUILD SUCCEEDED **`.
+- 2026-04-29T18:58:20+03:00 [TOOL] Final boot check on iPhone 17 simulator -> `dev.roman.cashrunway: 9806`; fatal/crash/exception/not-entitled log filter empty.
