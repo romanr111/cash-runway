@@ -122,15 +122,39 @@ struct DashboardView: View {
                 pillLabel(text: model.selectedWalletID.flatMap(walletName(for:)) ?? "All Wallets", systemImage: "chevron.down")
             }
 
+            Button {
+                guard let newDate = DateKeys.calendar.date(byAdding: .month, value: -1, to: DateKeys.startOfMonth(for: model.selectedMonthKey)) else { return }
+                model.selectedMonthKey = DateKeys.monthKey(for: newDate)
+                try? model.reloadAll()
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(CashRunwayTheme.textPrimary)
+                    .frame(width: 36, height: 36)
+                    .background(CashRunwayTheme.pill, in: Circle())
+            }
+
             Menu {
-                ForEach(monthOptions, id: \.self) { monthKey in
-                    Button(DateKeys.label(for: monthKey)) {
-                        model.selectedMonthKey = monthKey
+                ForEach(TimelinePeriod.allCases, id: \.self) { period in
+                    Button(period.displayName) {
+                        model.selectedTimelinePeriod = period
                         try? model.reloadAll()
                     }
                 }
             } label: {
-                pillLabel(text: "By months", systemImage: "chevron.down")
+                pillLabel(text: model.selectedTimelinePeriod.displayName, systemImage: "chevron.down")
+            }
+
+            Button {
+                guard let newDate = DateKeys.calendar.date(byAdding: .month, value: 1, to: DateKeys.startOfMonth(for: model.selectedMonthKey)) else { return }
+                model.selectedMonthKey = DateKeys.monthKey(for: newDate)
+                try? model.reloadAll()
+            } label: {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(CashRunwayTheme.textPrimary)
+                    .frame(width: 36, height: 36)
+                    .background(CashRunwayTheme.pill, in: Circle())
             }
         }
         .frame(maxWidth: .infinity, alignment: .center)
@@ -138,9 +162,9 @@ struct DashboardView: View {
 
     private var chartCard: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Chart(model.timelineSnapshot?.monthlyBars ?? []) { point in
+            Chart(model.timelineSnapshot?.bars ?? []) { point in
                 BarMark(
-                    x: .value("Month", CashRunwayTheme.monthAbbreviation(for: point.monthKey)),
+                    x: .value("Period", point.xLabel),
                     y: .value("Income", point.incomeBarMinor)
                 )
                 .foregroundStyle(CashRunwayTheme.accent.gradient)
@@ -148,7 +172,7 @@ struct DashboardView: View {
                 .cornerRadius(7)
 
                 BarMark(
-                    x: .value("Month", CashRunwayTheme.monthAbbreviation(for: point.monthKey)),
+                    x: .value("Period", point.xLabel),
                     y: .value("Expense", point.expenseBarMinor)
                 )
                 .foregroundStyle(CashRunwayTheme.negative.opacity(0.9))
@@ -221,7 +245,7 @@ struct DashboardView: View {
                 ForEach(sections) { section in
                     VStack(alignment: .leading, spacing: 12) {
                         HStack(alignment: .firstTextBaseline) {
-                            Text(CashRunwayTheme.dayHeader(for: section.dayKey))
+                            Text(section.periodLabel)
                                 .font(.system(size: 16, weight: .bold))
                                 .foregroundStyle(CashRunwayTheme.textPrimary)
                             Spacer()
@@ -266,10 +290,6 @@ struct DashboardView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .background(CashRunwayTheme.pill, in: Capsule())
-    }
-
-    private var monthOptions: [Int] {
-        model.timelineSnapshot?.monthlyBars.map(\.monthKey) ?? [model.selectedMonthKey]
     }
 
     private func walletName(for id: UUID) -> String? {

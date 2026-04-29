@@ -29,6 +29,7 @@ public final class CashRunwayAppModel {
 
     public var selectedMonthKey = DateKeys.monthKey(for: .now)
     public var selectedWalletID: UUID?
+    public var selectedTimelinePeriod: TimelinePeriod = .day
     public var transactionQuery = TransactionQuery()
     public var isLocked = false
     public var lockMessage: String?
@@ -66,6 +67,7 @@ public final class CashRunwayAppModel {
                 repository: repository,
                 selectedMonthKey: selectedMonthKey,
                 selectedWalletID: selectedWalletID,
+                selectedTimelinePeriod: selectedTimelinePeriod,
                 transactionQuery: transactionQuery
             )
         )
@@ -120,6 +122,16 @@ public final class CashRunwayAppModel {
     public func saveWallet(_ wallet: Wallet) {
         runMutation {
             try repository.saveWallet(wallet)
+        }
+    }
+
+    public func deleteWallet(id: UUID) {
+        guard wallets.count > 1 else {
+            errorMessage = "At least one active wallet must remain."
+            return
+        }
+        runMutation {
+            try repository.deleteWallet(id: id)
         }
     }
 
@@ -232,6 +244,7 @@ public final class CashRunwayAppModel {
         let repository = repository
         let selectedMonthKey = selectedMonthKey
         let selectedWalletID = selectedWalletID
+        let selectedTimelinePeriod = selectedTimelinePeriod
         let transactionQuery = transactionQuery
         foregroundRefreshTask = Task { [weak self] in
             defer {
@@ -245,12 +258,13 @@ public final class CashRunwayAppModel {
                         repository: repository,
                         selectedMonthKey: selectedMonthKey,
                         selectedWalletID: selectedWalletID,
+                        selectedTimelinePeriod: selectedTimelinePeriod,
                         transactionQuery: transactionQuery
                     )
                 }.value
                 guard !Task.isCancelled else { return }
                 guard let self else { return }
-                guard self.currentRefreshScopeMatches(monthKey: selectedMonthKey, walletID: selectedWalletID, query: transactionQuery) else {
+                guard self.currentRefreshScopeMatches(monthKey: selectedMonthKey, walletID: selectedWalletID, period: selectedTimelinePeriod, query: transactionQuery) else {
                     return
                 }
                 self.apply(snapshot)
@@ -281,6 +295,7 @@ public final class CashRunwayAppModel {
         repository: CashRunwayRepository,
         selectedMonthKey: Int,
         selectedWalletID: UUID?,
+        selectedTimelinePeriod: TimelinePeriod,
         transactionQuery: TransactionQuery
     ) throws -> AppModelSnapshot {
         var query = transactionQuery
@@ -295,7 +310,7 @@ public final class CashRunwayAppModel {
             budgets: try repository.budgets(monthKey: selectedMonthKey),
             transactions: try repository.transactions(query: query),
             dashboardSnapshot: try repository.dashboard(monthKey: selectedMonthKey, walletID: selectedWalletID),
-            timelineSnapshot: try repository.timelineSnapshot(monthKey: selectedMonthKey, walletID: selectedWalletID, query: query),
+            timelineSnapshot: try repository.timelineSnapshot(monthKey: selectedMonthKey, walletID: selectedWalletID, query: query, period: selectedTimelinePeriod),
             overviewSnapshot: try repository.overviewSnapshot(monthKey: selectedMonthKey, walletID: selectedWalletID),
             transactionQuery: query
         )
@@ -316,12 +331,12 @@ public final class CashRunwayAppModel {
         transactionQuery = snapshot.transactionQuery
     }
 
-    private func currentRefreshScopeMatches(monthKey: Int, walletID: UUID?, query: TransactionQuery) -> Bool {
+    private func currentRefreshScopeMatches(monthKey: Int, walletID: UUID?, period: TimelinePeriod, query: TransactionQuery) -> Bool {
         var currentQuery = transactionQuery
         currentQuery.walletID = selectedWalletID
         var capturedQuery = query
         capturedQuery.walletID = walletID
-        return selectedMonthKey == monthKey && selectedWalletID == walletID && currentQuery == capturedQuery
+        return selectedMonthKey == monthKey && selectedWalletID == walletID && selectedTimelinePeriod == period && currentQuery == capturedQuery
     }
 }
 

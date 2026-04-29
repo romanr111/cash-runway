@@ -17,6 +17,77 @@ struct CashRunwayCoreTests {
         #expect(DateKeys.monthKey(for: date) == 202604)
     }
 
+    @Test func weekAndYearKeysAreStable() {
+        let calendar = Calendar(identifier: .gregorian)
+        let date = calendar.date(from: DateComponents(year: 2025, month: 4, day: 7))!
+        #expect(DateKeys.yearKey(for: date) == 2025)
+        let week = DateKeys.weekKey(for: date)
+        #expect(week / 1_000 == 2025)
+        #expect(week % 1_000 > 0)
+        #expect(week % 1_000 <= 53)
+    }
+
+    @Test func periodLabelsAreFormatted() {
+        let calendar = Calendar(identifier: .gregorian)
+        let date = calendar.date(from: DateComponents(year: 2025, month: 4, day: 7))!
+        let dayKey = DateKeys.dayKey(for: date)
+        let weekKey = DateKeys.weekKey(for: date)
+        let monthKey = DateKeys.monthKey(for: date)
+        let yearKey = DateKeys.yearKey(for: date)
+
+        #expect(DateKeys.periodLabel(periodKey: dayKey, period: .day).contains("7 Apr"))
+        #expect(DateKeys.periodLabel(periodKey: weekKey, period: .week).contains("–"))
+        #expect(DateKeys.periodLabel(periodKey: monthKey, period: .month).contains("April"))
+        #expect(DateKeys.periodLabel(periodKey: yearKey, period: .year) == "2025")
+    }
+
+    @Test func timelineSnapshotGroupsByPeriod() throws {
+        let location = TestSupport.makeLocation()
+        let manager = try DatabaseManager(locationProvider: location)
+        let repository = CashRunwayRepository(databaseManager: manager)
+        try repository.seedIfNeeded()
+        let wallets = try repository.wallets()
+        #expect(wallets.count >= 2)
+        let wallet = wallets[0]
+        let categories = try repository.categories(kind: .expense)
+        #expect(categories.count >= 1)
+        let category = categories[0]
+
+        let calendar = Calendar(identifier: .gregorian)
+        let base = calendar.date(from: DateComponents(year: 2025, month: 4, day: 15))!
+        let days = [0, 1, 2, 3, 10, 11, 12]
+        for (index, offset) in days.enumerated() {
+            let date = calendar.date(byAdding: .day, value: offset, to: base)!
+            let draft = TransactionDraft(
+                kind: .expense,
+                walletID: wallet.id,
+                amountMinor: Int64(100 * (index + 1)),
+                occurredAt: date,
+                categoryID: category.id,
+                merchant: "Test \(offset)"
+            )
+            try repository.saveTransaction(draft)
+        }
+
+        let monthKey = DateKeys.monthKey(for: base)
+        let daySnapshot = try repository.timelineSnapshot(monthKey: monthKey, walletID: wallet.id, period: .day)
+        #expect(daySnapshot.period == .day)
+        #expect(daySnapshot.bars.count > 0)
+        #expect(daySnapshot.sections.count > 0)
+
+        let weekSnapshot = try repository.timelineSnapshot(monthKey: monthKey, walletID: wallet.id, period: .week)
+        #expect(weekSnapshot.period == .week)
+        #expect(weekSnapshot.sections.count > 0)
+
+        let monthSnapshot = try repository.timelineSnapshot(monthKey: monthKey, walletID: wallet.id, period: .month)
+        #expect(monthSnapshot.period == .month)
+        #expect(monthSnapshot.bars.count > 0)
+
+        let yearSnapshot = try repository.timelineSnapshot(monthKey: monthKey, walletID: wallet.id, period: .year)
+        #expect(yearSnapshot.period == .year)
+        #expect(yearSnapshot.sections.count > 0)
+    }
+
     @Test func migrationReopensExistingDatabase() throws {
         let location = TestSupport.makeLocation()
         var manager: DatabaseManager? = try DatabaseManager(locationProvider: location)
@@ -242,10 +313,10 @@ struct CashRunwayCoreTests {
             )
         )
 
-        let snapshot = try repository.timelineSnapshot(monthKey: monthKey)
-        #expect(snapshot.monthlyBars.count == 6)
+        let snapshot = try repository.timelineSnapshot(monthKey: monthKey, period: .month)
+        #expect(snapshot.bars.count == 6)
         #expect(snapshot.heroCashFlowMinor == 37_700)
-        let currentBar = try #require(snapshot.monthlyBars.first(where: { $0.monthKey == monthKey }))
+        let currentBar = try #require(snapshot.bars.first(where: { $0.periodKey == monthKey }))
         #expect(currentBar.incomeBarMinor == 50_000)
         #expect(currentBar.expenseBarMinor == 12_300)
         #expect(snapshot.sections.isEmpty == false)
@@ -712,6 +783,65 @@ struct CashRunwayCoreTests {
             }
             try TestSupport.assertWalletTruth(repository)
             try TestSupport.assertCategoryTruth(repository)
+        }
+    }
+
+    @Test func walletDeletionRemovesWalletAndTransactions() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        let wallets = try repository.wallets()
+        #expect(wallets.count >= 2)
+        let firstWallet = wallets[0]
+        let secondWallet = wallets[1]
+        let expenseCategory = try #require(try repository.categories(kind: .expense).first)
+
+        try repository.saveTransaction(
+            TransactionDraft(
+                kind: .expense,
+                walletID: firstWallet.id,
+                amountMinor: 5_000,
+                occurredAt: .now,
+                categoryID: expenseCategory.id,
+                merchant: "Coffee",
+                note: ""
+            )
+        )
+        try repository.saveTransaction(
+            TransactionDraft(
+                kind: .transfer,
+                walletID: firstWallet.id,
+                destinationWalletID: secondWallet.id,
+                amountMinor: 3_000,
+                occurredAt: .now,
+                merchant: "Move",
+                note: ""
+            )
+        )
+
+        let preDeleteCount = try repository.wallets().count
+        try repository.deleteWallet(id: firstWallet.id)
+        let postDeleteWallets = try repository.wallets()
+        #expect(postDeleteWallets.count == preDeleteCount - 1)
+        #expect(postDeleteWallets.contains(where: { $0.id == firstWallet.id }) == false)
+
+        let remainingTxs = try repository.transactions()
+        #expect(remainingTxs.contains(where: { $0.walletName == firstWallet.name }) == false)
+
+        try TestSupport.assertWalletTruth(repository)
+        try TestSupport.assertCategoryTruth(repository)
+    }
+
+    @Test func cannotDeleteLastActiveWallet() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        var wallets = try repository.wallets()
+        while wallets.count > 1 {
+            try repository.deleteWallet(id: wallets[0].id)
+            wallets = try repository.wallets()
+        }
+        #expect(wallets.count == 1)
+        #expect(throws: CashRunwayError.validation("At least one active wallet must remain.")) {
+            try repository.deleteWallet(id: wallets[0].id)
         }
     }
 }

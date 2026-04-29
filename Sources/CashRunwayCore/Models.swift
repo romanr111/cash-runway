@@ -67,6 +67,19 @@ public enum ImportJobStatus: String, CaseIterable, Codable, Sendable {
     case cancelled
 }
 
+public enum TimelinePeriod: String, CaseIterable, Sendable {
+    case day, week, month, year
+
+    public var displayName: String {
+        switch self {
+        case .day: return "By Day"
+        case .week: return "By Week"
+        case .month: return "By Month"
+        case .year: return "By Year"
+        }
+    }
+}
+
 public struct Wallet: Identifiable, Codable, Hashable, Sendable {
     public var id: UUID
     public var name: String
@@ -408,27 +421,30 @@ public struct DashboardSnapshot: Sendable {
 }
 
 public struct TimelineBarPoint: Identifiable, Hashable, Sendable {
-    public var id: Int { monthKey }
-    public var monthKey: Int
+    public var id: Int { periodKey }
+    public var periodKey: Int
     public var incomeMinor: Int64
     public var expenseMinor: Int64
     public var incomeBarMinor: Int64 { incomeMinor }
     public var expenseBarMinor: Int64 { expenseMinor }
+    public var xLabel: String
 }
 
-public struct TransactionDaySection: Identifiable, Hashable, Sendable {
-    public var id: Int { dayKey }
-    public var dayKey: Int
+public struct TimelineSection: Identifiable, Hashable, Sendable {
+    public var id: Int { periodKey }
+    public var periodKey: Int
+    public var periodLabel: String
     public var totalMinor: Int64
     public var items: [TransactionListItem]
 }
 
 public struct TimelineSnapshot: Sendable {
-    public var monthKey: Int
+    public var anchorMonthKey: Int
     public var walletFilterID: UUID?
     public var heroCashFlowMinor: Int64
-    public var monthlyBars: [TimelineBarPoint]
-    public var sections: [TransactionDaySection]
+    public var bars: [TimelineBarPoint]
+    public var sections: [TimelineSection]
+    public var period: TimelinePeriod
 }
 
 public struct OverviewMonthPoint: Identifiable, Hashable, Sendable {
