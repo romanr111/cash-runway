@@ -118,7 +118,7 @@ struct TransactionRow: View {
         HStack(spacing: 14) {
             CategoryGlyph(iconName: item.categoryIconName ?? fallbackIcon, colorHex: item.categoryColorHex ?? fallbackColor, size: 52)
             VStack(alignment: .leading, spacing: 3) {
-                Text(item.merchant)
+                Text(item.displayTitle)
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(CashRunwayTheme.textPrimary)
                 Text(item.walletName)
@@ -145,7 +145,7 @@ struct TransactionRow: View {
         }
         .padding(.vertical, 6)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(item.merchant), \(MoneyFormatter.string(from: item.amountMinor)), \(item.walletName)")
+        .accessibilityLabel("\(item.displayTitle), \(MoneyFormatter.string(from: item.amountMinor)), \(item.walletName)")
     }
 
     private var fallbackColor: String {

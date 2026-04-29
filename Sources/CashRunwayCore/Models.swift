@@ -376,6 +376,13 @@ public struct TransactionListItem: Identifiable, Hashable, Sendable {
     public var source: TransactionSource
     public var labels: [Label]
     public var dayKey: Int
+
+    public var displayTitle: String {
+        if let categoryName, !categoryName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return categoryName
+        }
+        return merchant
+    }
 }
 
 public struct DashboardCategorySlice: Identifiable, Hashable, Sendable {

@@ -364,13 +364,14 @@ public final class CSVService: @unchecked Sendable {
     private func createImportedCategory(named name: String, kind: TransactionDraft.Kind, existingCategories: [Category]) throws -> Category {
         let fallbackName = kind == .income ? "Other Income" : "Other Expense"
         let fallback = existingCategories.first(where: { $0.name == fallbackName }) ?? existingCategories.first
+        let appearance = importedCategoryAppearance(for: name, kind: kind)
         let now = Date()
         let category = Category(
             id: UUID(),
             name: name,
             kind: kind == .income ? .income : .expense,
-            iconName: fallback?.iconName,
-            colorHex: fallback?.colorHex,
+            iconName: appearance?.iconName ?? fallback?.iconName,
+            colorHex: appearance?.colorHex ?? fallback?.colorHex,
             parentID: nil,
             isSystem: false,
             isArchived: false,
@@ -382,6 +383,23 @@ public final class CSVService: @unchecked Sendable {
         return category
     }
 
+    private func importedCategoryAppearance(for name: String, kind: TransactionDraft.Kind) -> ImportedCategoryAppearance? {
+        let normalizedName = normalizedKeywordText(name)
+        let rules = kind == .income ? Self.incomeAppearanceRules : Self.expenseAppearanceRules
+        return rules.first { rule in
+            rule.keywords.contains { normalizedName.contains($0) }
+        }.map { ImportedCategoryAppearance(iconName: $0.iconName, colorHex: $0.colorHex) }
+    }
+
+    private func normalizedKeywordText(_ input: String) -> String {
+        input
+            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "uk_UA"))
+            .lowercased()
+            .replacingOccurrences(of: "&", with: " ")
+            .replacingOccurrences(of: "-", with: " ")
+            .replacingOccurrences(of: "_", with: " ")
+    }
+
     private func normalizedCategoryName(_ input: String) -> String? {
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
@@ -391,6 +409,41 @@ public final class CSVService: @unchecked Sendable {
         let fallbackName = kind == .income ? "Other Income" : "Other Expense"
         return categories.first(where: { $0.name == fallbackName })?.id ?? categories.first?.id
     }
+
+    private struct ImportedCategoryAppearance {
+        var iconName: String
+        var colorHex: String
+    }
+
+    private struct ImportedCategoryAppearanceRule {
+        var keywords: [String]
+        var iconName: String
+        var colorHex: String
+    }
+
+    private static let expenseAppearanceRules: [ImportedCategoryAppearanceRule] = [
+        .init(keywords: ["relationship", "dating", "romance", "love", "отношен", "стосунк", "кохан"], iconName: "heart.fill", colorHex: "#FF5E57"),
+        .init(keywords: ["food", "drink", "grocer", "product", "supermarket", "продукт", "еда", "їжа", "харч", "напит", "напій"], iconName: "fork.knife", colorHex: "#B78B4A"),
+        .init(keywords: ["restaurant", "cafe", "coffee", "ресторан", "кафе", "кофе", "кава"], iconName: "cup.and.saucer.fill", colorHex: "#64D1D5"),
+        .init(keywords: ["transport", "taxi", "metro", "bus", "tram", "транспорт", "такси", "таксі", "метро", "автобус", "проезд", "проїзд"], iconName: "tram.fill", colorHex: "#FFC400"),
+        .init(keywords: ["rent", "housing", "home", "apartment", "аренд", "оренд", "жиль", "житл", "квартир"], iconName: "house.fill", colorHex: "#E5862F"),
+        .init(keywords: ["bill", "utilit", "electric", "water", "gas", "internet", "счет", "счёт", "рахунк", "коммун", "комун", "свет", "світло", "вода", "газ", "інтернет"], iconName: "bolt.fill", colorHex: "#6FD03B"),
+        .init(keywords: ["health", "doctor", "pharmacy", "clinic", "мед", "врач", "лікар", "аптек", "здоров"], iconName: "cross.case.fill", colorHex: "#E96176"),
+        .init(keywords: ["shopping", "clothes", "market", "покуп", "магазин", "одеж", "одяг"], iconName: "bag.fill", colorHex: "#5FD4BF"),
+        .init(keywords: ["entertain", "movie", "cinema", "game", "развлеч", "кіно", "кино", "ігри", "игры"], iconName: "theatermasks.fill", colorHex: "#FFA600"),
+        .init(keywords: ["education", "school", "course", "book", "обуч", "образов", "освіт", "навчан", "курс", "книг"], iconName: "graduationcap.fill", colorHex: "#4A80C1"),
+        .init(keywords: ["travel", "flight", "hotel", "trip", "поезд", "подорож", "путеше", "отель", "готел", "авиа", "авіа"], iconName: "airplane", colorHex: "#EE5DA7"),
+        .init(keywords: ["gift", "present", "подар"], iconName: "gift.fill", colorHex: "#FF5E57"),
+        .init(keywords: ["pet", "cat", "dog", "animal", "питом", "живот", "тварин", "кіт", "кот", "собак"], iconName: "pawprint.fill", colorHex: "#B78B4A"),
+    ]
+
+    private static let incomeAppearanceRules: [ImportedCategoryAppearanceRule] = [
+        .init(keywords: ["salary", "wage", "payroll", "зарплат", "заробіт", "заробот"], iconName: "banknote.fill", colorHex: "#2AAAD2"),
+        .init(keywords: ["bonus", "бонус", "прем"], iconName: "crown.fill", colorHex: "#F7A72A"),
+        .init(keywords: ["gift", "present", "подар"], iconName: "gift.fill", colorHex: "#FF5E57"),
+        .init(keywords: ["refund", "cashback", "reimbursement", "возврат", "поверн", "кешбек"], iconName: "arrow.uturn.backward.circle.fill", colorHex: "#16C790"),
+        .init(keywords: ["freelance", "project", "side", "contract", "фриланс", "проект", "контракт"], iconName: "briefcase.fill", colorHex: "#2AAAD2"),
+    ]
 
     private func parseLabels(row: [String], mapping: CSVImportMapping, headerIndex: [String: Int], availableLabels: [Label]) -> [UUID] {
         let raw = cell(row, mapping.labelsColumn, headerIndex)

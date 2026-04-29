@@ -499,9 +499,35 @@ struct CashRunwayCoreTests {
         #expect(expenseCategory.isSystem == false)
         #expect(incomeCategory.isSystem == false)
         let imported = try repository.transactions(query: .init(), limit: nil)
-        #expect(imported.contains { $0.kind == .expense && $0.categoryName == "Pet Supplies" })
-        #expect(imported.contains { $0.kind == .income && $0.categoryName == "Side Project" })
+        #expect(imported.contains { $0.kind == .expense && $0.categoryName == "Pet Supplies" && $0.displayTitle == "Pet Supplies" })
+        #expect(imported.contains { $0.kind == .income && $0.categoryName == "Side Project" && $0.displayTitle == "Side Project" })
         try TestSupport.assertCategoryTruth(repository)
+    }
+
+    @Test func csvImportAssignsContextualIconsToLocalizedCreatedCategories() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        let wallet = try #require(try repository.wallets().first)
+        let service = CSVService(repository: repository)
+        let csv = """
+        Date,Wallet,Type,Category name,Amount,Currency,Note,Labels,Author
+        2026-04-20T12:30:00Z,\(wallet.name),Expense,Food & Drink,-123.45,UAH,Lunch,,ignored@example.com
+        2026-04-21T08:00:00Z,\(wallet.name),Expense,Отношения,-50.00,UAH,Flowers,,ignored@example.com
+        2026-04-22T09:00:00Z,\(wallet.name),Expense,Оренда,-300.00,UAH,Flat,,ignored@example.com
+        2026-04-23T10:00:00Z,\(wallet.name),Income,Фриланс,400.00,UAH,Invoice,,ignored@example.com
+        """
+
+        let result = try service.importCSV(
+            data: Data(csv.utf8),
+            fileName: "wallet.csv",
+            mapping: TestSupport.cashRunwayWalletMapping(walletID: wallet.id)
+        )
+
+        #expect(result.insertedTransactions == 4)
+        #expect(try repository.categories(kind: .expense).first(where: { $0.name == "Food & Drink" })?.iconName == "fork.knife")
+        #expect(try repository.categories(kind: .expense).first(where: { $0.name == "Отношения" })?.iconName == "heart.fill")
+        #expect(try repository.categories(kind: .expense).first(where: { $0.name == "Оренда" })?.iconName == "house.fill")
+        #expect(try repository.categories(kind: .income).first(where: { $0.name == "Фриланс" })?.iconName == "briefcase.fill")
     }
 
     @Test func csvImportMatchesExistingCategoriesCaseInsensitivelyWithoutDuplicates() throws {

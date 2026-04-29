@@ -17,6 +17,9 @@
 - 2026-04-29T10:05:57+03:00 [CODE] Overview category rows now navigate to a category detail screen with wallet/month filters, total, per-day bar chart, and tappable filtered transaction rows.
 - 2026-04-29T10:21:14+03:00 [TOOL] Double-check before merge: feature branch retested, rebuilt, and relaunched on iPhone 17 simulator successfully.
 - 2026-04-29T10:25:19+03:00 [TOOL] Branch `codex/overview-import-category-fixes` was committed as `5a82e18`, fast-forward merged into primary `main`, and verified from `/Users/roman/Documents/Development/Cash Runway`.
+- 2026-04-29T10:47:00+03:00 [USER] Goal update: Timeline rows must show imported category names instead of generic `Expense`, and CSV-created categories should get approximate icons from English/Russian/Ukrainian category context.
+- 2026-04-29T10:47:00+03:00 [CODE] Implementation is in worktree `/Users/roman/.codex/worktrees/cash-runway-timeline-category-icons` on branch `codex/timeline-category-icons`.
+- 2026-04-29T10:47:00+03:00 [CODE] Timeline transaction rows now use category-first `displayTitle`; CSV-created categories keep exact-name creation/matching but choose icon/color by deterministic localized keyword rules when possible.
 
 ## Done (recent)
 - 2026-04-27 [MILESTONE] Core MVP, transaction/category UI, overview labels, wallet CSV import/export, and timing gates completed.
@@ -25,6 +28,7 @@
 - 2026-04-28T22:53:00+03:00 [CODE] Added CSV preparation progress UI and clearer detected Type/Wallet copy.
 - 2026-04-28T23:14:00+03:00 [CODE] Renamed project and app branding to Cash Runway across local code, project files, and GitHub repo metadata.
 - 2026-04-29T10:05:57+03:00 [CODE] Added CSV category auto-create tests, exact-match/no-duplicate tests, and positive bar-facing assertions.
+- 2026-04-29T10:47:00+03:00 [CODE] Added tests for Timeline category-first titles and localized contextual icons for CSV-created categories.
 
 ## Working set
 - `/Users/roman/Documents/Development/Cash Runway/CONTINUITY.md`
@@ -49,3 +53,6 @@
 - 2026-04-29T10:22:51+03:00 [TOOL] Post-merge `swift test` from primary `main` -> 26 tests in 2 suites passed after 85.939s.
 - 2026-04-29T10:24:47+03:00 [TOOL] Post-merge `xcodebuild -project CashRunway.xcodeproj -scheme CashRunway -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' clean build` -> `** BUILD SUCCEEDED **`.
 - 2026-04-29T10:25:00+03:00 [TOOL] Post-merge iPhone 17 simulator install/launch from primary checkout -> `dev.roman.cashrunway: 96224`; filtered logs had no fatal/crash/exception/not-entitled entries.
+- 2026-04-29T10:43:41+03:00 [TOOL] `swift test` in `codex/timeline-category-icons` -> 27 tests in 2 suites passed after 74.068s.
+- 2026-04-29T10:45:20+03:00 [TOOL] `xcodebuild -project CashRunway.xcodeproj -scheme CashRunway -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' clean build` in `codex/timeline-category-icons` -> `** BUILD SUCCEEDED **`.
+- 2026-04-29T10:46:50+03:00 [TOOL] iPhone 17 simulator install/launch in `codex/timeline-category-icons` -> `dev.roman.cashrunway: 35648`; filtered app logs had no fatal/crash/exception/not-entitled/permission/error entries.
