@@ -21,6 +21,7 @@
 - 2026-04-29T10:47:00+03:00 [CODE] Implementation is in worktree `/Users/roman/.codex/worktrees/cash-runway-timeline-category-icons` on branch `codex/timeline-category-icons`.
 - 2026-04-29T10:47:00+03:00 [CODE] Timeline transaction rows now use category-first `displayTitle`; CSV-created categories keep exact-name creation/matching but choose icon/color by deterministic localized keyword rules when possible.
 - 2026-04-29T10:51:00+03:00 [TOOL] Branch `codex/timeline-category-icons` was committed as `b25ae9d`, fast-forward merged into primary `main`, and verified from `/Users/roman/Documents/Development/Cash Runway`.
+- 2026-04-29T11:05:00+03:00 [TOOL] Draft PR `https://github.com/romanr111/cash-runway/pull/2` was opened from `codex/cash-runway-overview-timeline-fixes` into `main`.
 
 ## Done (recent)
 - 2026-04-27 [MILESTONE] Core MVP, transaction/category UI, overview labels, wallet CSV import/export, and timing gates completed.
