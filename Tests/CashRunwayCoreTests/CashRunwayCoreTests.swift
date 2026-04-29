@@ -504,6 +504,37 @@ struct CashRunwayCoreTests {
         try TestSupport.assertCategoryTruth(repository)
     }
 
+    @Test func csvImportCreatesMissingLabelsFromMappedColumn() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        let wallet = try #require(try repository.wallets().first)
+        let service = CSVService(repository: repository)
+        let csv = """
+        Date,Wallet,Type,Category name,Amount,Currency,Note,Labels,Author
+        2026-04-20T12:30:00Z,\(wallet.name),Expense,Groceries,-123.45,UAH,Weekly shopping,Trip;Work,ignored@example.com
+        2026-04-21T08:00:00Z,\(wallet.name),Expense,Groceries,-50.00,UAH,Quick run,Trip,ignored@example.com
+        2026-04-22T09:00:00Z,\(wallet.name),Income,Salary,400.00,UAH,Monthly pay,Work,ignored@example.com
+        """
+
+        #expect(try repository.labels().isEmpty)
+
+        let result = try service.importCSV(
+            data: Data(csv.utf8),
+            fileName: "wallet.csv",
+            mapping: TestSupport.cashRunwayWalletMapping(walletID: wallet.id)
+        )
+
+        #expect(result.insertedTransactions == 3)
+        let labels = try repository.labels()
+        #expect(labels.count == 2)
+        #expect(labels.contains { $0.name == "Trip" })
+        #expect(labels.contains { $0.name == "Work" })
+
+        let imported = try repository.transactions(query: .init(), limit: nil)
+        #expect(imported.filter { $0.labels.map(\.name).contains("Trip") }.count == 2)
+        #expect(imported.filter { $0.labels.map(\.name).contains("Work") }.count == 2)
+    }
+
     @Test func csvImportAssignsContextualIconsToLocalizedCreatedCategories() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()

@@ -49,7 +49,7 @@ public final class CSVService: @unchecked Sendable {
         let wallets = try repository.wallets()
         var expenseCategories = try repository.categories(kind: .expense)
         var incomeCategories = try repository.categories(kind: .income)
-        let availableLabels = try repository.labels()
+        var availableLabels = try repository.labels()
 
         for (offset, row) in rows.dropFirst().enumerated() {
             do {
@@ -65,7 +65,7 @@ public final class CSVService: @unchecked Sendable {
                     expenseCategories: &expenseCategories,
                     incomeCategories: &incomeCategories
                 )
-                let labels = parseLabels(row: row, mapping: mapping, headerIndex: headerIndex, availableLabels: availableLabels)
+                let labels = parseLabels(row: row, mapping: mapping, headerIndex: headerIndex, availableLabels: &availableLabels)
                 validDrafts.append(
                     TransactionDraft(
                         kind: kind,
@@ -445,7 +445,7 @@ public final class CSVService: @unchecked Sendable {
         .init(keywords: ["freelance", "project", "side", "contract", "фриланс", "проект", "контракт"], iconName: "briefcase.fill", colorHex: "#2AAAD2"),
     ]
 
-    private func parseLabels(row: [String], mapping: CSVImportMapping, headerIndex: [String: Int], availableLabels: [Label]) -> [UUID] {
+    private func parseLabels(row: [String], mapping: CSVImportMapping, headerIndex: [String: Int], availableLabels: inout [Label]) -> [UUID] {
         let raw = cell(row, mapping.labelsColumn, headerIndex)
         guard !raw.isEmpty else { return [] }
         let separator: Character? = if raw.contains("|") {
@@ -460,7 +460,29 @@ public final class CSVService: @unchecked Sendable {
         } else {
             [raw.trimmingCharacters(in: .whitespaces)]
         }
-        return names.compactMap { name in availableLabels.first(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame })?.id }
+        return names.compactMap { name in
+            if let existing = availableLabels.first(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }) {
+                return existing.id
+            }
+            let created = try? createImportedLabel(named: name)
+            if let created {
+                availableLabels.append(created)
+            }
+            return created?.id
+        }
+    }
+
+    private func createImportedLabel(named name: String) throws -> Label {
+        let now = Date()
+        let label = Label(
+            id: UUID(),
+            name: name,
+            colorHex: "#60788A",
+            createdAt: now,
+            updatedAt: now
+        )
+        try repository.saveLabel(label)
+        return label
     }
 
     private func escape(_ value: String) -> String {
