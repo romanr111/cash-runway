@@ -334,7 +334,7 @@ public struct TransactionDraft: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
-public struct TransactionQuery: Sendable {
+public struct TransactionQuery: Sendable, Equatable {
     public var walletID: UUID?
     public var categoryID: UUID?
     public var labelID: UUID?

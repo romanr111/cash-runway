@@ -33,6 +33,9 @@ public final class CashRunwayAppModel {
     public var isLocked = false
     public var lockMessage: String?
     public var errorMessage: String?
+    private var foregroundRefreshTask: Task<Void, Never>?
+    private var lastForegroundRefreshAt: Date?
+    private let foregroundRefreshMinimumInterval: TimeInterval = 10
 
     public init(
         repository: CashRunwayRepository = CashRunwayRepository(),
@@ -58,18 +61,14 @@ public final class CashRunwayAppModel {
     }
 
     public func reloadAll() throws {
-        wallets = try repository.wallets()
-        expenseCategories = try repository.categories(kind: .expense)
-        incomeCategories = try repository.categories(kind: .income)
-        labels = try repository.labels()
-        templates = try repository.recurringTemplates()
-        instances = try repository.recurringInstances()
-        budgets = try repository.budgets(monthKey: selectedMonthKey)
-        transactionQuery.walletID = selectedWalletID
-        transactions = try repository.transactions(query: transactionQuery)
-        dashboardSnapshot = try repository.dashboard(monthKey: selectedMonthKey, walletID: selectedWalletID)
-        timelineSnapshot = try repository.timelineSnapshot(monthKey: selectedMonthKey, walletID: selectedWalletID, query: transactionQuery)
-        overviewSnapshot = try repository.overviewSnapshot(monthKey: selectedMonthKey, walletID: selectedWalletID)
+        apply(
+            try Self.loadSnapshot(
+                repository: repository,
+                selectedMonthKey: selectedMonthKey,
+                selectedWalletID: selectedWalletID,
+                transactionQuery: transactionQuery
+            )
+        )
     }
 
     public func unlock(pin: String) {
@@ -223,25 +222,122 @@ public final class CashRunwayAppModel {
     }
 
     public func handleForegroundResume() {
+        guard !isLocked else { return }
+        let now = Date()
+        if let lastForegroundRefreshAt, now.timeIntervalSince(lastForegroundRefreshAt) < foregroundRefreshMinimumInterval {
+            return
+        }
+        guard foregroundRefreshTask == nil else { return }
+
+        let repository = repository
+        let selectedMonthKey = selectedMonthKey
+        let selectedWalletID = selectedWalletID
+        let transactionQuery = transactionQuery
+        foregroundRefreshTask = Task { [weak self] in
+            defer {
+                self?.foregroundRefreshTask = nil
+            }
+            do {
+                let snapshot = try await Task.detached(priority: .utility) {
+                    try repository.runMaintenance()
+                    try repository.refreshRecurringInstances()
+                    return try Self.loadSnapshot(
+                        repository: repository,
+                        selectedMonthKey: selectedMonthKey,
+                        selectedWalletID: selectedWalletID,
+                        transactionQuery: transactionQuery
+                    )
+                }.value
+                guard !Task.isCancelled else { return }
+                guard let self else { return }
+                guard self.currentRefreshScopeMatches(monthKey: selectedMonthKey, walletID: selectedWalletID, query: transactionQuery) else {
+                    return
+                }
+                self.apply(snapshot)
+                self.lastForegroundRefreshAt = Date()
+                self.errorMessage = nil
+            } catch is CancellationError {
+                // The next foreground resume can schedule a fresh refresh.
+            } catch {
+                self?.errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private func runMutation(_ mutation: () throws -> Void) {
+        foregroundRefreshTask?.cancel()
+        foregroundRefreshTask = nil
         do {
-            try repository.runMaintenance()
-            try repository.refreshRecurringInstances()
+            try mutation()
             try reloadAll()
+            lastForegroundRefreshAt = Date()
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
         }
     }
 
-    private func runMutation(_ mutation: () throws -> Void) {
-        do {
-            try mutation()
-            try reloadAll()
-            errorMessage = nil
-        } catch {
-            errorMessage = error.localizedDescription
-        }
+    private nonisolated static func loadSnapshot(
+        repository: CashRunwayRepository,
+        selectedMonthKey: Int,
+        selectedWalletID: UUID?,
+        transactionQuery: TransactionQuery
+    ) throws -> AppModelSnapshot {
+        var query = transactionQuery
+        query.walletID = selectedWalletID
+        return AppModelSnapshot(
+            wallets: try repository.wallets(),
+            expenseCategories: try repository.categories(kind: .expense),
+            incomeCategories: try repository.categories(kind: .income),
+            labels: try repository.labels(),
+            templates: try repository.recurringTemplates(),
+            instances: try repository.recurringInstances(),
+            budgets: try repository.budgets(monthKey: selectedMonthKey),
+            transactions: try repository.transactions(query: query),
+            dashboardSnapshot: try repository.dashboard(monthKey: selectedMonthKey, walletID: selectedWalletID),
+            timelineSnapshot: try repository.timelineSnapshot(monthKey: selectedMonthKey, walletID: selectedWalletID, query: query),
+            overviewSnapshot: try repository.overviewSnapshot(monthKey: selectedMonthKey, walletID: selectedWalletID),
+            transactionQuery: query
+        )
     }
+
+    private func apply(_ snapshot: AppModelSnapshot) {
+        wallets = snapshot.wallets
+        expenseCategories = snapshot.expenseCategories
+        incomeCategories = snapshot.incomeCategories
+        labels = snapshot.labels
+        templates = snapshot.templates
+        instances = snapshot.instances
+        budgets = snapshot.budgets
+        transactions = snapshot.transactions
+        dashboardSnapshot = snapshot.dashboardSnapshot
+        timelineSnapshot = snapshot.timelineSnapshot
+        overviewSnapshot = snapshot.overviewSnapshot
+        transactionQuery = snapshot.transactionQuery
+    }
+
+    private func currentRefreshScopeMatches(monthKey: Int, walletID: UUID?, query: TransactionQuery) -> Bool {
+        var currentQuery = transactionQuery
+        currentQuery.walletID = selectedWalletID
+        var capturedQuery = query
+        capturedQuery.walletID = walletID
+        return selectedMonthKey == monthKey && selectedWalletID == walletID && currentQuery == capturedQuery
+    }
+}
+
+private struct AppModelSnapshot: Sendable {
+    var wallets: [Wallet]
+    var expenseCategories: [CashRunwayCategory]
+    var incomeCategories: [CashRunwayCategory]
+    var labels: [CashRunwayLabel]
+    var templates: [RecurringTemplate]
+    var instances: [RecurringInstance]
+    var budgets: [BudgetProgress]
+    var transactions: [TransactionListItem]
+    var dashboardSnapshot: DashboardSnapshot?
+    var timelineSnapshot: TimelineSnapshot?
+    var overviewSnapshot: OverviewSnapshot?
+    var transactionQuery: TransactionQuery
 }
 
 enum CSVImportFileReader {
