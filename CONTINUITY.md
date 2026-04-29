@@ -20,6 +20,7 @@
 - 2026-04-29T10:47:00+03:00 [USER] Goal update: Timeline rows must show imported category names instead of generic `Expense`, and CSV-created categories should get approximate icons from English/Russian/Ukrainian category context.
 - 2026-04-29T10:47:00+03:00 [CODE] Implementation is in worktree `/Users/roman/.codex/worktrees/cash-runway-timeline-category-icons` on branch `codex/timeline-category-icons`.
 - 2026-04-29T10:47:00+03:00 [CODE] Timeline transaction rows now use category-first `displayTitle`; CSV-created categories keep exact-name creation/matching but choose icon/color by deterministic localized keyword rules when possible.
+- 2026-04-29T10:51:00+03:00 [TOOL] Branch `codex/timeline-category-icons` was committed as `b25ae9d`, fast-forward merged into primary `main`, and verified from `/Users/roman/Documents/Development/Cash Runway`.
 
 ## Done (recent)
 - 2026-04-27 [MILESTONE] Core MVP, transaction/category UI, overview labels, wallet CSV import/export, and timing gates completed.
@@ -56,3 +57,6 @@
 - 2026-04-29T10:43:41+03:00 [TOOL] `swift test` in `codex/timeline-category-icons` -> 27 tests in 2 suites passed after 74.068s.
 - 2026-04-29T10:45:20+03:00 [TOOL] `xcodebuild -project CashRunway.xcodeproj -scheme CashRunway -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' clean build` in `codex/timeline-category-icons` -> `** BUILD SUCCEEDED **`.
 - 2026-04-29T10:46:50+03:00 [TOOL] iPhone 17 simulator install/launch in `codex/timeline-category-icons` -> `dev.roman.cashrunway: 35648`; filtered app logs had no fatal/crash/exception/not-entitled/permission/error entries.
+- 2026-04-29T10:47:46+03:00 [TOOL] Post-merge `swift test` from primary `main` -> 27 tests in 2 suites passed after 82.483s.
+- 2026-04-29T10:49:41+03:00 [TOOL] Post-merge `xcodebuild -project CashRunway.xcodeproj -scheme CashRunway -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' clean build` -> `** BUILD SUCCEEDED **`.
+- 2026-04-29T10:50:20+03:00 [TOOL] Post-merge iPhone 17 simulator install/launch from primary checkout -> `dev.roman.cashrunway: 42199`; filtered app logs had no fatal/crash/exception/not-entitled/permission/error entries.
