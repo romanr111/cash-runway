@@ -141,7 +141,7 @@ struct DashboardView: View {
             Chart(model.timelineSnapshot?.monthlyBars ?? []) { point in
                 BarMark(
                     x: .value("Month", CashRunwayTheme.monthAbbreviation(for: point.monthKey)),
-                    y: .value("Income", point.incomeMinor)
+                    y: .value("Income", point.incomeBarMinor)
                 )
                 .foregroundStyle(CashRunwayTheme.accent.gradient)
                 .position(by: .value("Series", "Income"))
@@ -149,7 +149,7 @@ struct DashboardView: View {
 
                 BarMark(
                     x: .value("Month", CashRunwayTheme.monthAbbreviation(for: point.monthKey)),
-                    y: .value("Expense", -point.expenseMinor)
+                    y: .value("Expense", point.expenseBarMinor)
                 )
                 .foregroundStyle(CashRunwayTheme.negative.opacity(0.9))
                 .position(by: .value("Series", "Expense"))
@@ -317,6 +317,7 @@ private struct TimelineOverviewView: View {
     @State private var chartMetric = OverviewChartMetric.wealth
     @State private var categoryKind: CategoryKind = .expense
     @State private var showsCategoryManagement = false
+    @State private var selectedCategory: OverviewCategoryRow?
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -343,6 +344,14 @@ private struct TimelineOverviewView: View {
         }
         .sheet(isPresented: $showsCategoryManagement) {
             CategoryManagementView(model: model, initialKind: categoryKind)
+        }
+        .navigationDestination(item: $selectedCategory) { category in
+            CategoryDetailOverviewView(
+                model: model,
+                category: category,
+                monthKey: model.selectedMonthKey,
+                walletID: model.selectedWalletID
+            )
         }
     }
 
@@ -520,7 +529,12 @@ private struct TimelineOverviewView: View {
                 }
 
                 ForEach(categories) { item in
-                    categoryLegendRow(item)
+                    Button {
+                        selectedCategory = item
+                    } label: {
+                        categoryLegendRow(item)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
 
@@ -685,6 +699,266 @@ private struct TimelineOverviewView: View {
     private func walletName(for id: UUID) -> String? {
         model.wallets.first(where: { $0.id == id })?.name
     }
+}
+
+private struct CategoryDetailOverviewView: View {
+    @Bindable var model: CashRunwayAppModel
+    let category: OverviewCategoryRow
+    @State private var selectedMonthKey: Int
+    @State private var selectedWalletID: UUID?
+    @State private var selectedItem: TransactionListItem?
+    @State private var isComposerPresented = false
+    @State private var draft: TransactionDraft
+
+    init(model: CashRunwayAppModel, category: OverviewCategoryRow, monthKey: Int, walletID: UUID?) {
+        self.model = model
+        self.category = category
+        _selectedMonthKey = State(initialValue: monthKey)
+        _selectedWalletID = State(initialValue: walletID)
+        _draft = State(initialValue: TransactionDraft(
+            kind: category.kind == .income ? .income : .expense,
+            walletID: model.wallets.first?.id ?? UUID(),
+            amountMinor: 0,
+            occurredAt: .now,
+            categoryID: category.id
+        ))
+    }
+
+    var body: some View {
+        let items = transactions
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 22) {
+                filters
+                totalHeader(totalMinor: totalMinor(in: items))
+                dayChart(items: items)
+                transactionList(items: items)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+            .padding(.bottom, 80)
+        }
+        .background(CashRunwayTheme.background)
+        .navigationTitle(category.name)
+        .navigationBarTitleDisplayMode(.inline)
+        .sheet(item: $selectedItem) { item in
+            TransactionDetailsView(
+                item: item,
+                model: model,
+                onEdit: {
+                    if let loadedDraft = try? model.repository.transactionDraft(id: item.id) {
+                        draft = loadedDraft
+                        selectedItem = nil
+                        isComposerPresented = true
+                    }
+                }
+            )
+        }
+        .fullScreenCover(isPresented: $isComposerPresented) {
+            TransactionEditorView(model: model, draft: $draft)
+        }
+    }
+
+    private var filters: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 12) {
+                Menu {
+                    Button("All Wallets") {
+                        selectedWalletID = nil
+                    }
+                    ForEach(model.wallets) { wallet in
+                        Button(wallet.name) {
+                            selectedWalletID = wallet.id
+                        }
+                    }
+                } label: {
+                    pill(selectedWalletID.flatMap(walletName(for:)) ?? "All Wallets")
+                }
+                pill("By months")
+            }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(monthOptions, id: \.self) { monthKey in
+                        Button {
+                            selectedMonthKey = monthKey
+                        } label: {
+                            Text(CashRunwayTheme.monthAbbreviation(for: monthKey))
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(monthKey == selectedMonthKey ? .white : CashRunwayTheme.textSecondary)
+                                .frame(width: 52, height: 40)
+                                .background(
+                                    Capsule()
+                                        .fill(monthKey == selectedMonthKey ? CashRunwayTheme.textPrimary : CashRunwayTheme.surface)
+                                )
+                                .overlay(
+                                    Capsule()
+                                        .stroke(monthKey == selectedMonthKey ? .clear : CashRunwayTheme.line, lineWidth: 1)
+                                )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func totalHeader(totalMinor: Int64) -> some View {
+        VStack(spacing: 8) {
+            CategoryGlyph(iconName: category.iconName, colorHex: category.colorHex, size: 58)
+            Text(MoneyFormatter.string(from: signedTotal(totalMinor)))
+                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .foregroundStyle(category.kind == .expense ? CashRunwayTheme.negative : CashRunwayTheme.positive)
+            Text("Total")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(CashRunwayTheme.textSecondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+    }
+
+    private func dayChart(items: [TransactionListItem]) -> some View {
+        let points = dayPoints(from: items)
+        return VStack(alignment: .leading, spacing: 12) {
+            Chart(points) { point in
+                BarMark(
+                    x: .value("Day", dayLabel(for: point.dayKey)),
+                    y: .value("Amount", point.amountMinor)
+                )
+                .foregroundStyle(CashRunwayTheme.categoryColor(category.colorHex))
+                .cornerRadius(6)
+            }
+            .chartXAxis {
+                AxisMarks(values: .automatic) { value in
+                    AxisGridLine(stroke: StrokeStyle(lineWidth: 0))
+                    AxisValueLabel {
+                        if let label = value.as(String.self) {
+                            Text(label)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(CashRunwayTheme.textMuted)
+                        }
+                    }
+                }
+            }
+            .chartYAxis {
+                AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
+                    AxisGridLine(stroke: StrokeStyle(lineWidth: 1, dash: [3, 4]))
+                        .foregroundStyle(CashRunwayTheme.chartGrid)
+                    AxisValueLabel {
+                        if let amount = value.as(Int64.self) {
+                            Text(OverviewDisplayFormatter.compactMoney(from: amount))
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(CashRunwayTheme.textMuted)
+                        } else if let amount = value.as(Int.self) {
+                            Text(OverviewDisplayFormatter.compactMoney(from: Int64(amount)))
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(CashRunwayTheme.textMuted)
+                        } else if let amount = value.as(Double.self) {
+                            Text(OverviewDisplayFormatter.compactMoney(from: Int64(amount)))
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(CashRunwayTheme.textMuted)
+                        }
+                    }
+                }
+            }
+            .chartLegend(.hidden)
+            .frame(height: 250)
+        }
+    }
+
+    private func transactionList(items: [TransactionListItem]) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Transactions")
+                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .foregroundStyle(CashRunwayTheme.textPrimary)
+
+            if items.isEmpty {
+                Text("No transactions for this category and month.")
+                    .font(.system(size: 15))
+                    .foregroundStyle(CashRunwayTheme.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 20)
+            } else {
+                ForEach(items) { item in
+                    Button {
+                        selectedItem = item
+                    } label: {
+                        TransactionRow(item: item)
+                    }
+                    .buttonStyle(.plain)
+                    if item.id != items.last?.id {
+                        Divider()
+                            .overlay(CashRunwayTheme.line)
+                    }
+                }
+            }
+        }
+    }
+
+    private var transactions: [TransactionListItem] {
+        (try? model.repository.transactions(query: transactionQuery, limit: nil)) ?? []
+    }
+
+    private var transactionQuery: TransactionQuery {
+        TransactionQuery(
+            walletID: selectedWalletID,
+            categoryID: category.id,
+            startDate: DateKeys.startOfMonth(for: selectedMonthKey),
+            endDate: monthEnd(for: selectedMonthKey),
+            kinds: Set([category.kind == .income ? TransactionDraft.Kind.income : .expense])
+        )
+    }
+
+    private var monthOptions: [Int] {
+        model.overviewSnapshot?.months.map(\.monthKey) ?? [selectedMonthKey]
+    }
+
+    private func totalMinor(in items: [TransactionListItem]) -> Int64 {
+        items.reduce(into: Int64.zero) { total, item in
+            total += abs(item.amountMinor)
+        }
+    }
+
+    private func signedTotal(_ totalMinor: Int64) -> Int64 {
+        category.kind == .expense ? -totalMinor : totalMinor
+    }
+
+    private func dayPoints(from items: [TransactionListItem]) -> [CategoryDayPoint] {
+        Dictionary(grouping: items, by: \.dayKey)
+            .map { dayKey, values in
+                CategoryDayPoint(
+                    dayKey: dayKey,
+                    amountMinor: values.reduce(into: Int64.zero) { $0 += abs($1.amountMinor) }
+                )
+            }
+            .sorted { $0.dayKey < $1.dayKey }
+    }
+
+    private func monthEnd(for monthKey: Int) -> Date {
+        let start = DateKeys.startOfMonth(for: monthKey)
+        return DateKeys.calendar.date(byAdding: .month, value: 1, to: start)?.addingTimeInterval(-0.001) ?? start
+    }
+
+    private func dayLabel(for dayKey: Int) -> String {
+        "\(dayKey % 100)"
+    }
+
+    private func walletName(for id: UUID) -> String? {
+        model.wallets.first(where: { $0.id == id })?.name
+    }
+
+    private func pill(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(CashRunwayTheme.textPrimary)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(CashRunwayTheme.pill, in: Capsule())
+    }
+}
+
+private struct CategoryDayPoint: Identifiable, Hashable {
+    var id: Int { dayKey }
+    var dayKey: Int
+    var amountMinor: Int64
 }
 
 private struct TimelineSearchSheet: View {

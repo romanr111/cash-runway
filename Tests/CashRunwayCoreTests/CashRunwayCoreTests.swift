@@ -245,6 +245,9 @@ struct CashRunwayCoreTests {
         let snapshot = try repository.timelineSnapshot(monthKey: monthKey)
         #expect(snapshot.monthlyBars.count == 6)
         #expect(snapshot.heroCashFlowMinor == 37_700)
+        let currentBar = try #require(snapshot.monthlyBars.first(where: { $0.monthKey == monthKey }))
+        #expect(currentBar.incomeBarMinor == 50_000)
+        #expect(currentBar.expenseBarMinor == 12_300)
         #expect(snapshot.sections.isEmpty == false)
         #expect(snapshot.sections.first?.items.contains(where: { $0.merchant == "Coffee" }) == true)
     }
@@ -471,6 +474,61 @@ struct CashRunwayCoreTests {
 
         #expect(roundTrip.insertedTransactions == 2)
         try TestSupport.assertTypeMonthCategoryAndLabelTotalsMatch(repository, roundTripRepository)
+    }
+
+    @Test func csvImportCreatesMissingCategoriesFromMappedColumn() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        let wallet = try #require(try repository.wallets().first)
+        let service = CSVService(repository: repository)
+        let csv = """
+        Date,Wallet,Type,Category name,Amount,Currency,Note,Labels,Author
+        2026-04-20T12:30:00Z,\(wallet.name),Expense,Pet Supplies,-123.45,UAH,Kibble,,ignored@example.com
+        2026-04-21T08:00:00Z,\(wallet.name),Income,Side Project,400.00,UAH,Invoice,,ignored@example.com
+        """
+
+        let result = try service.importCSV(
+            data: Data(csv.utf8),
+            fileName: "wallet.csv",
+            mapping: TestSupport.cashRunwayWalletMapping(walletID: wallet.id)
+        )
+
+        #expect(result.insertedTransactions == 2)
+        let expenseCategory = try #require(try repository.categories(kind: .expense).first(where: { $0.name == "Pet Supplies" }))
+        let incomeCategory = try #require(try repository.categories(kind: .income).first(where: { $0.name == "Side Project" }))
+        #expect(expenseCategory.isSystem == false)
+        #expect(incomeCategory.isSystem == false)
+        let imported = try repository.transactions(query: .init(), limit: nil)
+        #expect(imported.contains { $0.kind == .expense && $0.categoryName == "Pet Supplies" })
+        #expect(imported.contains { $0.kind == .income && $0.categoryName == "Side Project" })
+        try TestSupport.assertCategoryTruth(repository)
+    }
+
+    @Test func csvImportMatchesExistingCategoriesCaseInsensitivelyWithoutDuplicates() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        let wallet = try #require(try repository.wallets().first)
+        let service = CSVService(repository: repository)
+        let expenseCountBefore = try repository.categories(kind: .expense).count
+        let incomeCountBefore = try repository.categories(kind: .income).count
+        let csv = """
+        Date,Wallet,Type,Category name,Amount,Currency,Note,Labels,Author
+        2026-04-20T12:30:00Z,\(wallet.name),Expense,groceries,-123.45,UAH,Weekly,,ignored@example.com
+        2026-04-21T08:00:00Z,\(wallet.name),Income,SALARY,400.00,UAH,Monthly,,ignored@example.com
+        """
+
+        let result = try service.importCSV(
+            data: Data(csv.utf8),
+            fileName: "wallet.csv",
+            mapping: TestSupport.cashRunwayWalletMapping(walletID: wallet.id)
+        )
+
+        #expect(result.insertedTransactions == 2)
+        #expect(try repository.categories(kind: .expense).count == expenseCountBefore)
+        #expect(try repository.categories(kind: .income).count == incomeCountBefore)
+        let imported = try repository.transactions(query: .init(), limit: nil)
+        #expect(imported.contains { $0.kind == .expense && $0.categoryName == "Groceries" })
+        #expect(imported.contains { $0.kind == .income && $0.categoryName == "Salary" })
     }
 
     @Test func csvPreviewCountsRowsAndImportResultReportsSkippedRows() throws {

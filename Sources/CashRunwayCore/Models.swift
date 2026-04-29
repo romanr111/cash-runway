@@ -405,6 +405,8 @@ public struct TimelineBarPoint: Identifiable, Hashable, Sendable {
     public var monthKey: Int
     public var incomeMinor: Int64
     public var expenseMinor: Int64
+    public var incomeBarMinor: Int64 { incomeMinor }
+    public var expenseBarMinor: Int64 { expenseMinor }
 }
 
 public struct TransactionDaySection: Identifiable, Hashable, Sendable {

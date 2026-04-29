@@ -617,7 +617,7 @@ private struct CSVImportReviewView: View {
                         Section("Detected") {
                             summaryRow("Income / Expense", value: typeSummary)
                             summaryRow("Wallet", value: walletSummary)
-                            summaryRow("Categories", value: mapping.categoryColumn == nil ? "Fallback category" : "Matched to existing names")
+                            summaryRow("Categories", value: mapping.categoryColumn == nil ? "Fallback category" : "Matched or created from CSV names")
                             summaryRow("Labels", value: mapping.labelsColumn == nil ? "Not imported" : "Matched to existing names")
                         }
 

@@ -47,8 +47,8 @@ public final class CSVService: @unchecked Sendable {
         var invalidRows = 0
         var rowErrors: [CSVRowError] = []
         let wallets = try repository.wallets()
-        let expenseCategories = try repository.categories(kind: .expense)
-        let incomeCategories = try repository.categories(kind: .income)
+        var expenseCategories = try repository.categories(kind: .expense)
+        var incomeCategories = try repository.categories(kind: .income)
         let availableLabels = try repository.labels()
 
         for (offset, row) in rows.dropFirst().enumerated() {
@@ -57,12 +57,13 @@ public final class CSVService: @unchecked Sendable {
                 try validateCurrency(row: row, mapping: mapping, headerIndex: headerIndex)
                 let signedAmount = try parseAmount(row: row, mapping: mapping, headerIndex: headerIndex)
                 let kind = parseKind(row: row, mapping: mapping, headerIndex: headerIndex, signedAmount: signedAmount)
-                let categoryID = parseCategoryID(
+                let categoryID = try resolveCategoryID(
                     row: row,
                     mapping: mapping,
                     headerIndex: headerIndex,
                     kind: kind,
-                    categories: kind == .income ? incomeCategories : expenseCategories
+                    expenseCategories: &expenseCategories,
+                    incomeCategories: &incomeCategories
                 )
                 let labels = parseLabels(row: row, mapping: mapping, headerIndex: headerIndex, availableLabels: availableLabels)
                 validDrafts.append(
@@ -333,13 +334,57 @@ public final class CSVService: @unchecked Sendable {
         }
     }
 
-    private func parseCategoryID(row: [String], mapping: CSVImportMapping, headerIndex: [String: Int], kind: TransactionDraft.Kind, categories: [Category]) -> UUID? {
-        let raw = cell(row, mapping.categoryColumn, headerIndex)
-        if raw.isEmpty {
+    private func resolveCategoryID(
+        row: [String],
+        mapping: CSVImportMapping,
+        headerIndex: [String: Int],
+        kind: TransactionDraft.Kind,
+        expenseCategories: inout [Category],
+        incomeCategories: inout [Category]
+    ) throws -> UUID? {
+        guard kind != .transfer else { return nil }
+        let categoryName = normalizedCategoryName(cell(row, mapping.categoryColumn, headerIndex))
+        let categories = kind == .income ? incomeCategories : expenseCategories
+        guard let categoryName else {
             return fallbackCategoryID(in: categories, for: kind)
         }
-        return categories.first(where: { $0.name.caseInsensitiveCompare(raw) == .orderedSame })?.id
-            ?? fallbackCategoryID(in: categories, for: kind)
+        if let existing = categories.first(where: { normalizedCategoryName($0.name)?.caseInsensitiveCompare(categoryName) == .orderedSame }) {
+            return existing.id
+        }
+
+        let createdCategory = try createImportedCategory(named: categoryName, kind: kind, existingCategories: categories)
+        if kind == .income {
+            incomeCategories.append(createdCategory)
+        } else {
+            expenseCategories.append(createdCategory)
+        }
+        return createdCategory.id
+    }
+
+    private func createImportedCategory(named name: String, kind: TransactionDraft.Kind, existingCategories: [Category]) throws -> Category {
+        let fallbackName = kind == .income ? "Other Income" : "Other Expense"
+        let fallback = existingCategories.first(where: { $0.name == fallbackName }) ?? existingCategories.first
+        let now = Date()
+        let category = Category(
+            id: UUID(),
+            name: name,
+            kind: kind == .income ? .income : .expense,
+            iconName: fallback?.iconName,
+            colorHex: fallback?.colorHex,
+            parentID: nil,
+            isSystem: false,
+            isArchived: false,
+            sortOrder: (existingCategories.map(\.sortOrder).max() ?? 0) + 1,
+            createdAt: now,
+            updatedAt: now
+        )
+        try repository.saveCategory(category)
+        return category
+    }
+
+    private func normalizedCategoryName(_ input: String) -> String? {
+        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     private func fallbackCategoryID(in categories: [Category], for kind: TransactionDraft.Kind) -> UUID? {
