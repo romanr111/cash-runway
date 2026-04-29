@@ -11,11 +11,12 @@
 - 2026-04-28T21:56:01+03:00 [OPEN] UNCONFIRMED manual import on a physical device because validation used simulator app-process e2e import plus generic `iphoneos` build, not an attached real-device picker run.
 - 2026-04-28T23:23:00+03:00 [TOOL] Cash Runway rename was pushed to both `origin/codex/cash-runway-rename` and `origin/main`; GitHub default branch points at the renamed app code.
 - 2026-04-29T10:05:57+03:00 [USER] Goal update: fix Timeline monthly bar direction, create/match CSV categories on import, and make Overview category rows drill into category transaction details.
-- 2026-04-29T10:05:57+03:00 [CODE] Implementation lives in worktree `/Users/roman/.codex/worktrees/cash-runway-overview-import-category-fixes` on branch `codex/overview-import-category-fixes`.
+- 2026-04-29T10:05:57+03:00 [CODE] Implementation was developed in worktree `/Users/roman/.codex/worktrees/cash-runway-overview-import-category-fixes` on branch `codex/overview-import-category-fixes`.
 - 2026-04-29T10:05:57+03:00 [CODE] Timeline income and expense bars now both plot positive magnitudes; cash-flow totals remain signed as income minus expenses.
 - 2026-04-29T10:05:57+03:00 [CODE] CSV import now trims/case-insensitively matches category names by transaction kind and creates missing non-system categories using `Other Expense` / `Other Income` icon-color defaults.
 - 2026-04-29T10:05:57+03:00 [CODE] Overview category rows now navigate to a category detail screen with wallet/month filters, total, per-day bar chart, and tappable filtered transaction rows.
 - 2026-04-29T10:21:14+03:00 [TOOL] Double-check before merge: feature branch retested, rebuilt, and relaunched on iPhone 17 simulator successfully.
+- 2026-04-29T10:25:19+03:00 [TOOL] Branch `codex/overview-import-category-fixes` was committed as `5a82e18`, fast-forward merged into primary `main`, and verified from `/Users/roman/Documents/Development/Cash Runway`.
 
 ## Done (recent)
 - 2026-04-27 [MILESTONE] Core MVP, transaction/category UI, overview labels, wallet CSV import/export, and timing gates completed.
@@ -26,14 +27,14 @@
 - 2026-04-29T10:05:57+03:00 [CODE] Added CSV category auto-create tests, exact-match/no-duplicate tests, and positive bar-facing assertions.
 
 ## Working set
-- `/Users/roman/.codex/worktrees/cash-runway-overview-import-category-fixes/CONTINUITY.md`
-- `/Users/roman/.codex/worktrees/cash-runway-overview-import-category-fixes/Sources/CashRunwayCore/CSVSupport.swift`
-- `/Users/roman/.codex/worktrees/cash-runway-overview-import-category-fixes/Modules/CashRunwayCorePackage/Sources/CashRunwayCore/CSVSupport.swift`
-- `/Users/roman/.codex/worktrees/cash-runway-overview-import-category-fixes/Sources/CashRunwayCore/Models.swift`
-- `/Users/roman/.codex/worktrees/cash-runway-overview-import-category-fixes/Modules/CashRunwayCorePackage/Sources/CashRunwayCore/Models.swift`
-- `/Users/roman/.codex/worktrees/cash-runway-overview-import-category-fixes/Sources/CashRunwayUI/DashboardView.swift`
-- `/Users/roman/.codex/worktrees/cash-runway-overview-import-category-fixes/Sources/CashRunwayUI/SettingsView.swift`
-- `/Users/roman/.codex/worktrees/cash-runway-overview-import-category-fixes/Tests/CashRunwayCoreTests/CashRunwayCoreTests.swift`
+- `/Users/roman/Documents/Development/Cash Runway/CONTINUITY.md`
+- `/Users/roman/Documents/Development/Cash Runway/Sources/CashRunwayCore/CSVSupport.swift`
+- `/Users/roman/Documents/Development/Cash Runway/Modules/CashRunwayCorePackage/Sources/CashRunwayCore/CSVSupport.swift`
+- `/Users/roman/Documents/Development/Cash Runway/Sources/CashRunwayCore/Models.swift`
+- `/Users/roman/Documents/Development/Cash Runway/Modules/CashRunwayCorePackage/Sources/CashRunwayCore/Models.swift`
+- `/Users/roman/Documents/Development/Cash Runway/Sources/CashRunwayUI/DashboardView.swift`
+- `/Users/roman/Documents/Development/Cash Runway/Sources/CashRunwayUI/SettingsView.swift`
+- `/Users/roman/Documents/Development/Cash Runway/Tests/CashRunwayCoreTests/CashRunwayCoreTests.swift`
 
 ## Receipts
 - 2026-04-28T23:17:00+03:00 [TOOL] After local folder rename and clearing stale SwiftPM `.build`, `swift test` -> 24 tests in 2 suites passed after 74.153s.
@@ -45,3 +46,6 @@
 - 2026-04-29T10:19:00+03:00 [TOOL] Double-check `swift test` in `codex/overview-import-category-fixes` -> 26 tests in 2 suites passed after 87.695s.
 - 2026-04-29T10:19:17+03:00 [TOOL] Double-check `xcodebuild -project CashRunway.xcodeproj -scheme CashRunway -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' clean build` -> `** BUILD SUCCEEDED **`.
 - 2026-04-29T10:20:52+03:00 [TOOL] Double-check iPhone 17 simulator boot/install/launch -> `dev.roman.cashrunway: 85949`; filtered logs had no fatal/crash/exception/not-entitled entries.
+- 2026-04-29T10:22:51+03:00 [TOOL] Post-merge `swift test` from primary `main` -> 26 tests in 2 suites passed after 85.939s.
+- 2026-04-29T10:24:47+03:00 [TOOL] Post-merge `xcodebuild -project CashRunway.xcodeproj -scheme CashRunway -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' clean build` -> `** BUILD SUCCEEDED **`.
+- 2026-04-29T10:25:00+03:00 [TOOL] Post-merge iPhone 17 simulator install/launch from primary checkout -> `dev.roman.cashrunway: 96224`; filtered logs had no fatal/crash/exception/not-entitled entries.
