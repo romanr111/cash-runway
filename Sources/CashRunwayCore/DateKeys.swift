@@ -64,6 +64,17 @@ public enum DateKeys {
         return (start, end)
     }
 
+    public static func dayLabel(for dayKey: Int) -> String {
+        let year = dayKey / 10_000
+        let month = (dayKey / 100) % 100
+        let day = dayKey % 100
+        let date = calendar.date(from: DateComponents(year: year, month: month, day: day)) ?? .now
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "EEEE, d MMM"
+        return formatter.string(from: date)
+    }
+
     public static func periodLabel(periodKey: Int, period: TimelinePeriod) -> String {
         switch period {
         case .month:

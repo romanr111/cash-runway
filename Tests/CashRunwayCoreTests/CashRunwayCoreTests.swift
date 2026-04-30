@@ -65,12 +65,14 @@ struct CashRunwayCoreTests {
         let monthSnapshot = try repository.timelineSnapshot(monthKey: monthKey, walletID: wallet.id, period: .month)
         #expect(monthSnapshot.period == .month)
         #expect(monthSnapshot.bars.count > 0)
-        #expect(monthSnapshot.sections.allSatisfy { $0.periodKey == monthKey })
+        #expect(monthSnapshot.sections.count > 0)
+        #expect(monthSnapshot.sections.allSatisfy { $0.periodKey >= monthKey * 100 + 1 && $0.periodKey <= monthKey * 100 + 31 })
+        #expect(monthSnapshot.sections.allSatisfy { $0.periodLabel.contains("Apr") })
 
         let yearSnapshot = try repository.timelineSnapshot(monthKey: monthKey, walletID: wallet.id, period: .year)
         #expect(yearSnapshot.period == .year)
         #expect(yearSnapshot.sections.count > 0)
-        #expect(yearSnapshot.sections.allSatisfy { $0.periodKey == 2025 })
+        #expect(yearSnapshot.sections.allSatisfy { $0.periodKey / 10_000 == 2025 })
         #expect(TimelinePeriod.allCases == [.month, .year])
     }
 

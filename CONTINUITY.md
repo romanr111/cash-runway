@@ -30,6 +30,11 @@
 - 2026-04-29T23:39:00+03:00 [CODE] Added `deleteWallet(id:)` to repository and AppModel; UI supports swipe-to-delete in wallet list and delete button in wallet editor with confirmation.
 - 2026-04-29T23:39:00+03:00 [CODE] Added tests for wallet deletion (cascade removes transactions/transfers) and last-wallet guard.
 - 2026-04-29T23:39:00+03:00 [TOOL] `swift test` → 33 tests in 2 suites passed; xcodebuild iPhone 17 simulator clean build → ** BUILD SUCCEEDED **; app launched without crashes.
+- 2026-04-29T23:53:00+03:00 [CODE] Self-review fix: `deleteWallet` now collects linked_transfer_ids to prevent orphaned `transfer_out` transactions when deleting a destination wallet; added `walletDeletionCleansUpLinkedTransfersInOtherWallets` test.
+- 2026-04-29T23:53:00+03:00 [TOOL] `swift test` → 34 tests in 2 suites passed; xcodebuild iPhone 17 simulator clean build → ** BUILD SUCCEEDED **; app launched as `dev.roman.cashrunway: 51603` with no crash/fatal/exception logs.
+- 2026-04-29T23:53:00+03:00 [TOOL] Committed as `f7cb9bc` on `main`.
+- 2026-04-30T12:14:00+03:00 [USER] Goal update: Timeline should only offer Month/Year grouping for MVP, and the feed must show only transactions from the selected period instead of all transactions.
+- 2026-04-30T12:22:00+03:00 [CODE] Reviewed and merged `codex/timeline-period-filter` into `main` as `c52df9a`; TimelinePeriod is Month/Year only, default Timeline is Month, and `timelineSnapshot` scopes feed transactions to the selected anchor month/year.
 
 ## Done (recent)
 - 2026-04-27 [MILESTONE] Core MVP, transaction/category UI, overview labels, wallet CSV import/export, and timing gates completed.
@@ -40,6 +45,7 @@
 - 2026-04-29T10:05:57+03:00 [CODE] Added CSV category auto-create tests, exact-match/no-duplicate tests, and positive bar-facing assertions.
 - 2026-04-29T10:47:00+03:00 [CODE] Added tests for Timeline category-first titles and localized contextual icons for CSV-created categories.
 - 2026-04-29T19:12:00+03:00 [CODE] Added `TransactionQuery: Equatable` so async foreground refreshes can avoid applying stale snapshots after filter changes.
+- 2026-04-30T12:22:00+03:00 [CODE] Added tests that Timeline periods are Month/Year only and that monthly feed excludes previous-month transactions.
 
 ## Working set
 - `/Users/roman/Documents/Development/Cash Runway/CONTINUITY.md`
@@ -87,3 +93,6 @@
 - 2026-04-29T23:31:00+03:00 [CODE] Dashboard filters replaced month-list dropdown with Period Size selector; prev/next arrow buttons navigate months; chart uses xLabel; feed uses periodLabel.
 - 2026-04-29T23:31:00+03:00 [CODE] 33 tests pass including new DateKeys round-trip, period label, and timeline snapshot grouping tests for all periods.
 - 2026-04-29T23:31:00+03:00 [TOOL] `swift test` -> 33 tests passed; `xcodebuild` -> BUILD SUCCEEDED; iPhone 17 simulator boot check -> `dev.roman.cashrunway: 24558`; no fatal/crash/exception entries.
+- 2026-04-30T12:39:30+03:00 [TOOL] Post-merge `swift test` from primary `main` -> 34 tests in 2 suites passed after 82.646s.
+- 2026-04-30T12:41:00+03:00 [TOOL] Post-merge `xcodebuild -project CashRunway.xcodeproj -scheme CashRunway -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' clean build` -> `** BUILD SUCCEEDED **`.
+- 2026-04-30T12:42:00+03:00 [TOOL] Post-merge iPhone 17 simulator install/launch -> `dev.roman.cashrunway: 88796`; app error/fault/crash/fatal/exception log filter empty.

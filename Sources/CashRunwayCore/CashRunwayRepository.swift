@@ -463,11 +463,11 @@ public final class CashRunwayRepository: @unchecked Sendable {
             scopedQuery.walletID = effectiveWalletID
             Self.applyPeriodScope(&scopedQuery, period: period, periodKey: anchorPeriodKey)
             let items = try listTransactions(db, query: scopedQuery, limit: nil)
-            let sections = Dictionary(grouping: items) { DateKeys.periodKey(for: $0.occurredAt, period: period) }
+            let sections = Dictionary(grouping: items, by: \.dayKey)
                 .map { key, values in
                     TimelineSection(
                         periodKey: key,
-                        periodLabel: DateKeys.periodLabel(periodKey: key, period: period),
+                        periodLabel: DateKeys.dayLabel(for: key),
                         totalMinor: values.reduce(into: Int64.zero) { $0 += $1.amountMinor },
                         items: values
                     )
