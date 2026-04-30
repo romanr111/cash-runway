@@ -40,6 +40,8 @@ public final class CashRunwayAppModel {
     private var lastForegroundRefreshAt: Date?
     private let foregroundRefreshMinimumInterval: TimeInterval = 10
     private var overviewSnapshotCache: [String: OverviewSnapshot] = [:]
+    private var overviewSnapshotCacheOrder: [String] = []
+    private let overviewSnapshotCacheLimit = 12
 
     public var maxMonthKey: Int {
         max(DateKeys.monthKey(for: .now), latestTransactionMonthKey ?? 0)
@@ -81,7 +83,7 @@ public final class CashRunwayAppModel {
         apply(snapshot)
         latestTransactionMonthKey = try? repository.latestTransactionMonthKey()
         if let overview = snapshot.overviewSnapshot {
-            overviewSnapshotCache[overviewCacheKey(monthKey: overview.selectedMonthKey, walletID: overview.walletFilterID)] = overview
+            setCachedOverview(overview, monthKey: overview.selectedMonthKey, walletID: overview.walletFilterID)
         }
     }
 
@@ -108,7 +110,38 @@ public final class CashRunwayAppModel {
         overviewSnapshot = mutable.overviewSnapshot
         transactionQuery = mutable.transactionQuery
         latestTransactionMonthKey = try? repository.latestTransactionMonthKey()
-        overviewSnapshotCache[overviewCacheKey(monthKey: selectedMonthKey, walletID: selectedWalletID)] = mutable.overviewSnapshot
+        if let overview = mutable.overviewSnapshot {
+            setCachedOverview(overview, monthKey: selectedMonthKey, walletID: selectedWalletID)
+        }
+    }
+
+    /// Loads only the overview snapshot asynchronously. Used for Overview page month navigation.
+    public func reloadOverview() async {
+        let cacheKey = overviewCacheKey(monthKey: selectedMonthKey, walletID: selectedWalletID)
+        if let cached = overviewSnapshotCache[cacheKey] {
+            overviewSnapshot = cached
+            preloadAdjacentOverviewSnapshots()
+            return
+        }
+        isLoading = true
+        defer {
+            isLoading = false
+            preloadAdjacentOverviewSnapshots()
+        }
+        do {
+            let repository = self.repository
+            let selectedMonthKey = self.selectedMonthKey
+            let selectedWalletID = self.selectedWalletID
+            let overview = try await Task.detached(priority: .userInitiated) {
+                try repository.overviewSnapshot(monthKey: selectedMonthKey, walletID: selectedWalletID)
+            }.value
+            overviewSnapshot = overview
+            latestTransactionMonthKey = try? repository.latestTransactionMonthKey()
+            setCachedOverview(overview, monthKey: selectedMonthKey, walletID: selectedWalletID)
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     public func navigateMonth(by offset: Int) {
@@ -116,10 +149,40 @@ public final class CashRunwayAppModel {
         let newMonthKey = DateKeys.monthKey(for: newDate)
         guard newMonthKey <= maxMonthKey else { return }
         selectedMonthKey = newMonthKey
-        do {
-            try reloadSnapshots()
-        } catch {
-            errorMessage = error.localizedDescription
+        Task {
+            await reloadOverview()
+        }
+    }
+
+    private func setCachedOverview(_ overview: OverviewSnapshot, monthKey: Int, walletID: UUID?) {
+        let key = overviewCacheKey(monthKey: monthKey, walletID: walletID)
+        overviewSnapshotCache[key] = overview
+        overviewSnapshotCacheOrder.removeAll { $0 == key }
+        overviewSnapshotCacheOrder.append(key)
+        while overviewSnapshotCacheOrder.count > overviewSnapshotCacheLimit {
+            let oldest = overviewSnapshotCacheOrder.removeFirst()
+            overviewSnapshotCache.removeValue(forKey: oldest)
+        }
+    }
+
+    private func preloadAdjacentOverviewSnapshots() {
+        Task {
+            let repository = self.repository
+            let selectedMonthKey = self.selectedMonthKey
+            let selectedWalletID = self.selectedWalletID
+            let maxMonthKey = self.maxMonthKey
+            for offset in [-1, 1] {
+                guard let date = DateKeys.calendar.date(byAdding: .month, value: offset, to: DateKeys.startOfMonth(for: selectedMonthKey)) else { continue }
+                let monthKey = DateKeys.monthKey(for: date)
+                guard monthKey <= maxMonthKey else { continue }
+                let key = self.overviewCacheKey(monthKey: monthKey, walletID: selectedWalletID)
+                guard self.overviewSnapshotCache[key] == nil else { continue }
+                let task = Task.detached(priority: .background) {
+                    try repository.overviewSnapshot(monthKey: monthKey, walletID: selectedWalletID)
+                }
+                guard let snapshot = try? await task.value else { continue }
+                self.setCachedOverview(snapshot, monthKey: monthKey, walletID: selectedWalletID)
+            }
         }
     }
 
@@ -320,7 +383,7 @@ public final class CashRunwayAppModel {
                 self.apply(snapshot)
                 self.latestTransactionMonthKey = try? self.repository.latestTransactionMonthKey()
                 if let overview = snapshot.overviewSnapshot {
-                    self.overviewSnapshotCache[self.overviewCacheKey(monthKey: overview.selectedMonthKey, walletID: overview.walletFilterID)] = overview
+                    self.setCachedOverview(overview, monthKey: overview.selectedMonthKey, walletID: overview.walletFilterID)
                 }
                 self.lastForegroundRefreshAt = Date()
                 self.errorMessage = nil

@@ -357,6 +357,19 @@ private struct TimelineOverviewView: View {
                 walletID: model.selectedWalletID
             )
         }
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 20, coordinateSpace: .local)
+                .onEnded { value in
+                    let horizontal = abs(value.translation.width) > abs(value.translation.height)
+                    guard horizontal else { return }
+                    let threshold: CGFloat = 50
+                    if value.translation.width < -threshold {
+                        model.navigateMonth(by: 1)
+                    } else if value.translation.width > threshold {
+                        model.navigateMonth(by: -1)
+                    }
+                }
+        )
     }
 
     private var header: some View {
@@ -386,58 +399,78 @@ private struct TimelineOverviewView: View {
     }
 
     private var monthStrip: some View {
-        let months = model.overviewSnapshot?.months.map(\.monthKey) ?? [model.selectedMonthKey]
-        return ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 24) {
-                    ForEach(months, id: \.self) { monthKey in
-                        Button {
-                            guard monthKey != model.selectedMonthKey else { return }
-                            model.selectedMonthKey = monthKey
-                            try? model.reloadSnapshots()
-                        } label: {
-                            VStack(spacing: 6) {
-                                Text(CashRunwayTheme.monthFullLabel(for: monthKey))
-                                    .font(.system(size: 14, weight: monthKey == model.selectedMonthKey ? .bold : .medium))
-                                    .foregroundStyle(monthKey == model.selectedMonthKey ? CashRunwayTheme.textPrimary : CashRunwayTheme.textMuted)
-                                if monthKey == model.selectedMonthKey {
-                                    Capsule()
-                                        .fill(CashRunwayTheme.accent)
-                                        .frame(width: 20, height: 3)
-                                } else {
-                                    Color.clear.frame(width: 20, height: 3)
-                                }
-                            }
-                            .frame(minWidth: 80)
-                            .padding(.vertical, 4)
-                        }
-                        .buttonStyle(.plain)
-                        .id(monthKey)
-                    }
+        let calendar = DateKeys.calendar
+        let prevMonthKey = calendar.date(byAdding: .month, value: -1, to: DateKeys.startOfMonth(for: model.selectedMonthKey)).map(DateKeys.monthKey(for:))
+        let nextMonthKey = calendar.date(byAdding: .month, value: 1, to: DateKeys.startOfMonth(for: model.selectedMonthKey)).map(DateKeys.monthKey(for:))
+        let hasNext = (nextMonthKey ?? 0) <= model.maxMonthKey
+
+        return HStack(spacing: 0) {
+            Button {
+                model.navigateMonth(by: -1)
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(prevMonthKey != nil ? CashRunwayTheme.textPrimary : CashRunwayTheme.textMuted.opacity(0.3))
+                    .frame(width: 44, height: 44)
+            }
+            .disabled(prevMonthKey == nil)
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            if let prevMonthKey {
+                monthButton(monthKey: prevMonthKey, isSelected: false)
+            } else {
+                Color.clear.frame(width: 80)
+            }
+
+            monthButton(monthKey: model.selectedMonthKey, isSelected: true)
+
+            if let nextMonthKey, hasNext {
+                monthButton(monthKey: nextMonthKey, isSelected: false)
+            } else {
+                Color.clear.frame(width: 80)
+            }
+
+            Spacer()
+
+            Button {
+                if hasNext {
+                    model.navigateMonth(by: 1)
                 }
-                .padding(.horizontal, 20)
+            } label: {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(hasNext ? CashRunwayTheme.textPrimary : CashRunwayTheme.textMuted.opacity(0.3))
+                    .frame(width: 44, height: 44)
             }
-            .contentShape(Rectangle())
-            .highPriorityGesture(
-                DragGesture(minimumDistance: 20)
-                    .onEnded { value in
-                        let threshold: CGFloat = 40
-                        if value.translation.width < -threshold {
-                            model.navigateMonth(by: 1)
-                        } else if value.translation.width > threshold {
-                            model.navigateMonth(by: -1)
-                        }
-                    }
-            )
-            .onChange(of: model.selectedMonthKey) { _, new in
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    proxy.scrollTo(new, anchor: .center)
-                }
-            }
-            .onAppear {
-                proxy.scrollTo(model.selectedMonthKey, anchor: .center)
-            }
+            .disabled(!hasNext)
+            .buttonStyle(.plain)
         }
+    }
+
+    private func monthButton(monthKey: Int, isSelected: Bool) -> some View {
+        Button {
+            guard !isSelected else { return }
+            model.selectedMonthKey = monthKey
+            Task { await model.reloadOverview() }
+        } label: {
+            VStack(spacing: 6) {
+                Text(CashRunwayTheme.monthFullLabel(for: monthKey))
+                    .font(.system(size: 14, weight: isSelected ? .bold : .medium))
+                    .foregroundStyle(isSelected ? CashRunwayTheme.textPrimary : CashRunwayTheme.textMuted)
+                if isSelected {
+                    Capsule()
+                        .fill(CashRunwayTheme.accent)
+                        .frame(width: 20, height: 3)
+                } else {
+                    Color.clear.frame(width: 20, height: 3)
+                }
+            }
+            .frame(minWidth: 90)
+            .padding(.vertical, 4)
+        }
+        .buttonStyle(.plain)
     }
 
     private var metricPicker: some View {
@@ -789,6 +822,19 @@ private struct CategoryDetailOverviewView: View {
         .fullScreenCover(isPresented: $isComposerPresented) {
             TransactionEditorView(model: model, draft: $draft)
         }
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 20, coordinateSpace: .local)
+                .onEnded { value in
+                    let horizontal = abs(value.translation.width) > abs(value.translation.height)
+                    guard horizontal else { return }
+                    let threshold: CGFloat = 50
+                    if value.translation.width < -threshold {
+                        navigateMonth(by: 1)
+                    } else if value.translation.width > threshold {
+                        navigateMonth(by: -1)
+                    }
+                }
+        )
     }
 
     private var filters: some View {
@@ -809,55 +855,48 @@ private struct CategoryDetailOverviewView: View {
                 pill("By months")
             }
 
-            ScrollViewReader { proxy in
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 24) {
-                        ForEach(monthOptions, id: \.self) { monthKey in
-                            Button {
-                                guard monthKey != selectedMonthKey else { return }
-                                selectedMonthKey = monthKey
-                            } label: {
-                                VStack(spacing: 6) {
-                                    Text(CashRunwayTheme.monthFullLabel(for: monthKey))
-                                        .font(.system(size: 14, weight: monthKey == selectedMonthKey ? .bold : .medium))
-                                        .foregroundStyle(monthKey == selectedMonthKey ? CashRunwayTheme.textPrimary : CashRunwayTheme.textMuted)
-                                    if monthKey == selectedMonthKey {
-                                        Capsule()
-                                            .fill(CashRunwayTheme.accent)
-                                            .frame(width: 20, height: 3)
-                                    } else {
-                                        Color.clear.frame(width: 20, height: 3)
-                                    }
-                                }
-                                .frame(minWidth: 80)
-                                .padding(.vertical, 4)
-                            }
-                            .buttonStyle(.plain)
-                            .id(monthKey)
-                        }
+            HStack(spacing: 0) {
+                Button {
+                    navigateMonth(by: -1)
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(hasPrevMonth ? CashRunwayTheme.textPrimary : CashRunwayTheme.textMuted.opacity(0.3))
+                        .frame(width: 44, height: 44)
+                }
+                .disabled(!hasPrevMonth)
+                .buttonStyle(.plain)
+
+                Spacer()
+
+                if let prev = prevMonthKey {
+                    categoryMonthButton(monthKey: prev, isSelected: false)
+                } else {
+                    Color.clear.frame(width: 90)
+                }
+
+                categoryMonthButton(monthKey: selectedMonthKey, isSelected: true)
+
+                if let next = nextMonthKey, hasNextMonth {
+                    categoryMonthButton(monthKey: next, isSelected: false)
+                } else {
+                    Color.clear.frame(width: 90)
+                }
+
+                Spacer()
+
+                Button {
+                    if hasNextMonth {
+                        navigateMonth(by: 1)
                     }
-                    .padding(.horizontal, 20)
+                } label: {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(hasNextMonth ? CashRunwayTheme.textPrimary : CashRunwayTheme.textMuted.opacity(0.3))
+                        .frame(width: 44, height: 44)
                 }
-                .contentShape(Rectangle())
-                .highPriorityGesture(
-                    DragGesture(minimumDistance: 20)
-                        .onEnded { value in
-                            let threshold: CGFloat = 40
-                            if value.translation.width < -threshold {
-                                navigateMonth(by: 1)
-                            } else if value.translation.width > threshold {
-                                navigateMonth(by: -1)
-                            }
-                        }
-                )
-                .onChange(of: selectedMonthKey) { _, new in
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        proxy.scrollTo(new, anchor: .center)
-                    }
-                }
-                .onAppear {
-                    proxy.scrollTo(selectedMonthKey, anchor: .center)
-                }
+                .disabled(!hasNextMonth)
+                .buttonStyle(.plain)
             }
         }
     }
@@ -968,8 +1007,20 @@ private struct CategoryDetailOverviewView: View {
         )
     }
 
-    private var monthOptions: [Int] {
-        model.overviewSnapshot?.months.map(\.monthKey) ?? [selectedMonthKey]
+    private var prevMonthKey: Int? {
+        DateKeys.calendar.date(byAdding: .month, value: -1, to: DateKeys.startOfMonth(for: selectedMonthKey)).map(DateKeys.monthKey(for:))
+    }
+
+    private var nextMonthKey: Int? {
+        DateKeys.calendar.date(byAdding: .month, value: 1, to: DateKeys.startOfMonth(for: selectedMonthKey)).map(DateKeys.monthKey(for:))
+    }
+
+    private var hasPrevMonth: Bool {
+        prevMonthKey != nil
+    }
+
+    private var hasNextMonth: Bool {
+        (nextMonthKey ?? 0) <= model.maxMonthKey
     }
 
     private func navigateMonth(by offset: Int) {
@@ -977,6 +1028,29 @@ private struct CategoryDetailOverviewView: View {
         let newMonthKey = DateKeys.monthKey(for: newDate)
         guard newMonthKey <= model.maxMonthKey else { return }
         selectedMonthKey = newMonthKey
+    }
+
+    private func categoryMonthButton(monthKey: Int, isSelected: Bool) -> some View {
+        Button {
+            guard !isSelected else { return }
+            selectedMonthKey = monthKey
+        } label: {
+            VStack(spacing: 6) {
+                Text(CashRunwayTheme.monthFullLabel(for: monthKey))
+                    .font(.system(size: 14, weight: isSelected ? .bold : .medium))
+                    .foregroundStyle(isSelected ? CashRunwayTheme.textPrimary : CashRunwayTheme.textMuted)
+                if isSelected {
+                    Capsule()
+                        .fill(CashRunwayTheme.accent)
+                        .frame(width: 20, height: 3)
+                } else {
+                    Color.clear.frame(width: 20, height: 3)
+                }
+            }
+            .frame(minWidth: 90)
+            .padding(.vertical, 4)
+        }
+        .buttonStyle(.plain)
     }
 
     private func totalMinor(in items: [TransactionListItem]) -> Int64 {
