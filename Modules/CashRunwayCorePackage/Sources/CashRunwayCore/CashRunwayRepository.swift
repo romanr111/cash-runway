@@ -536,12 +536,12 @@ public final class CashRunwayRepository: @unchecked Sendable {
                     periodKey: month,
                     incomeMinor: row["income_minor"],
                     expenseMinor: row["expense_minor"],
-                    xLabel: monthAbbreviation(for: month)
+                    xLabel: monthLabel(for: month)
                 )
             )
         })
         return months.map { month in
-            byMonth[month] ?? TimelineBarPoint(periodKey: month, incomeMinor: 0, expenseMinor: 0, xLabel: monthAbbreviation(for: month))
+            byMonth[month] ?? TimelineBarPoint(periodKey: month, incomeMinor: 0, expenseMinor: 0, xLabel: monthLabel(for: month))
         }
     }
 
@@ -589,6 +589,142 @@ public final class CashRunwayRepository: @unchecked Sendable {
         }
     }
 
+    public func allBars(walletID: UUID? = nil, period: TimelinePeriod = .month) throws -> [TimelineBarPoint] {
+        try databaseManager.dbQueue.read { db in
+            switch period {
+            case .month:
+                return try Self.loadAllMonthlyBars(db, walletID: walletID)
+            case .year:
+                return try Self.loadAllYearlyBars(db, walletID: walletID)
+            }
+        }
+    }
+
+    private static func loadAllMonthlyBars(_ db: Database, walletID: UUID?) throws -> [TimelineBarPoint] {
+        var conditions: [String] = []
+        var arguments: [any DatabaseValueConvertible] = []
+        if let walletID {
+            conditions.append("wallet_id = ?")
+            arguments.append(walletID.uuidString)
+        }
+        let whereClause = conditions.isEmpty ? "" : "WHERE \(conditions.joined(separator: " AND "))"
+
+        let minMaxRow = try Row.fetchOne(db, sql: """
+            SELECT MIN(month_key) as min_month, MAX(month_key) as max_month
+            FROM monthly_wallet_cashflow
+            \(whereClause)
+            """, arguments: StatementArguments(arguments))
+
+        guard let minMonth: Int = minMaxRow?["min_month"],
+              let maxMonth: Int = minMaxRow?["max_month"] else {
+            return []
+        }
+
+        var months: [Int] = []
+        var current = minMonth
+        while current <= maxMonth {
+            months.append(current)
+            if let nextDate = DateKeys.calendar.date(byAdding: .month, value: 1, to: DateKeys.startOfMonth(for: current)) {
+                current = DateKeys.monthKey(for: nextDate)
+            } else {
+                break
+            }
+        }
+
+        var dataConditions = ["month_key BETWEEN ? AND ?"]
+        var dataArguments: [any DatabaseValueConvertible] = [minMonth, maxMonth]
+        if let walletID {
+            dataConditions.append("wallet_id = ?")
+            dataArguments.append(walletID.uuidString)
+        }
+        let dataRows = try Row.fetchAll(
+            db,
+            sql: """
+            SELECT month_key,
+                   COALESCE(SUM(income_minor), 0) AS income_minor,
+                   COALESCE(SUM(expense_minor), 0) AS expense_minor
+            FROM monthly_wallet_cashflow
+            WHERE \(dataConditions.joined(separator: " AND "))
+            GROUP BY month_key
+            ORDER BY month_key
+            """,
+            arguments: StatementArguments(dataArguments)
+        )
+        let byMonth = Dictionary(uniqueKeysWithValues: dataRows.map { row in
+            let month: Int = row["month_key"]
+            return (
+                month,
+                TimelineBarPoint(
+                    periodKey: month,
+                    incomeMinor: row["income_minor"],
+                    expenseMinor: row["expense_minor"],
+                    xLabel: monthLabel(for: month)
+                )
+            )
+        })
+        return months.map { month in
+            byMonth[month] ?? TimelineBarPoint(periodKey: month, incomeMinor: 0, expenseMinor: 0, xLabel: monthLabel(for: month))
+        }
+    }
+
+    private static func loadAllYearlyBars(_ db: Database, walletID: UUID?) throws -> [TimelineBarPoint] {
+        var conditions: [String] = []
+        var arguments: [any DatabaseValueConvertible] = []
+        if let walletID {
+            conditions.append("wallet_id = ?")
+            arguments.append(walletID.uuidString)
+        }
+        let whereClause = conditions.isEmpty ? "" : "WHERE \(conditions.joined(separator: " AND "))"
+
+        let minMaxRow = try Row.fetchOne(db, sql: """
+            SELECT MIN(month_key / 100) as min_year, MAX(month_key / 100) as max_year
+            FROM monthly_wallet_cashflow
+            \(whereClause)
+            """, arguments: StatementArguments(arguments))
+
+        guard let minYear: Int = minMaxRow?["min_year"],
+              let maxYear: Int = minMaxRow?["max_year"] else {
+            return []
+        }
+
+        let years = Array(minYear...maxYear)
+
+        var dataConditions = ["month_key / 100 BETWEEN ? AND ?"]
+        var dataArguments: [any DatabaseValueConvertible] = [minYear, maxYear]
+        if let walletID {
+            dataConditions.append("wallet_id = ?")
+            dataArguments.append(walletID.uuidString)
+        }
+        let dataRows = try Row.fetchAll(
+            db,
+            sql: """
+            SELECT month_key / 100 as year,
+                   COALESCE(SUM(income_minor), 0) AS income_minor,
+                   COALESCE(SUM(expense_minor), 0) AS expense_minor
+            FROM monthly_wallet_cashflow
+            WHERE \(dataConditions.joined(separator: " AND "))
+            GROUP BY year
+            ORDER BY year
+            """,
+            arguments: StatementArguments(dataArguments)
+        )
+        let byYear = Dictionary(uniqueKeysWithValues: dataRows.map { row in
+            let year: Int = row["year"]
+            return (
+                year,
+                TimelineBarPoint(
+                    periodKey: year,
+                    incomeMinor: row["income_minor"],
+                    expenseMinor: row["expense_minor"],
+                    xLabel: "\(year)"
+                )
+            )
+        })
+        return years.map { year in
+            byYear[year] ?? TimelineBarPoint(periodKey: year, incomeMinor: 0, expenseMinor: 0, xLabel: "\(year)")
+        }
+    }
+
     private static func applyPeriodScope(_ query: inout TransactionQuery, period: TimelinePeriod, periodKey: Int) {
         let bounds = periodDateBounds(period: period, periodKey: periodKey)
         if let startDate = query.startDate {
@@ -619,6 +755,12 @@ public final class CashRunwayRepository: @unchecked Sendable {
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "MMM"
         return formatter.string(from: DateKeys.startOfMonth(for: monthKey))
+    }
+
+    private static func monthLabel(for monthKey: Int) -> String {
+        let abbreviation = monthAbbreviation(for: monthKey)
+        let year = monthKey / 100
+        return "\(abbreviation)\n\(year)"
     }
 
     public func overviewSnapshot(monthKey: Int, walletID: UUID? = nil) throws -> OverviewSnapshot {

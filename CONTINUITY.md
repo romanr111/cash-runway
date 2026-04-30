@@ -46,6 +46,13 @@
 - 2026-04-29T10:47:00+03:00 [CODE] Added tests for Timeline category-first titles and localized contextual icons for CSV-created categories.
 - 2026-04-29T19:12:00+03:00 [CODE] Added `TransactionQuery: Equatable` so async foreground refreshes can avoid applying stale snapshots after filter changes.
 - 2026-04-30T12:22:00+03:00 [CODE] Added tests that Timeline periods are Month/Year only and that monthly feed excludes previous-month transactions.
+- 2026-04-30T23:05:00+03:00 [CODE] Added `monthKey(fromPeriodKey:period:)` reverse-conversion helper and `periodKeyRoundTripsToMonthKey` test for month/year periods.
+- 2026-04-30T23:05:00+03:00 [CODE] Added tappable chart bars with `chartXSelection`, `RuleMark` highlight, and period navigation in DashboardView.
+- 2026-04-30T23:42:00+03:00 [CODE] Polished chart visual design: two-line X-axis labels, currency-free Y-axis, removed card border, RectangleMark selection highlight, smooth bar animations, empty state, and chart-card-only swipe navigation with haptic feedback.
+- 2026-04-30T23:55:00+03:00 [CODE] Made chart highlight persistent based on `selectedMonthKey` so the active period is always indicated.
+- 2026-04-30T23:55:00+03:00 [CODE] Moved timeline snapshot reloading off the main thread during period navigation for smoother swipe/tap interactions.
+- 2026-05-01T00:30:00+03:00 [CODE] Replaced Swift Charts timeline chart with custom `ScrollView(.horizontal)` + `LazyHStack` + `MonthChartColumn` for smooth scrolling, tap selection, and persistent highlight.
+- 2026-05-01T00:30:00+03:00 [CODE] Added repository `allBars` query for complete month/year history; AppModel preloads and caches bars; hero cash flow computes instantly from cached bars.
 
 ## Working set
 - `/Users/roman/Documents/Development/Cash Runway/CONTINUITY.md`
@@ -100,3 +107,24 @@
 - 2026-04-30T12:39:30+03:00 [TOOL] Post-merge `swift test` from primary `main` -> 34 tests in 2 suites passed after 82.646s.
 - 2026-04-30T12:41:00+03:00 [TOOL] Post-merge `xcodebuild -project CashRunway.xcodeproj -scheme CashRunway -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' clean build` -> `** BUILD SUCCEEDED **`.
 - 2026-04-30T12:42:00+03:00 [TOOL] Post-merge iPhone 17 simulator install/launch -> `dev.roman.cashrunway: 88796`; app error/fault/crash/fatal/exception log filter empty.
+- 2026-04-30T23:05:00+03:00 [USER] Goal update: make timeline chart bars tappable to navigate between periods, with a visual highlight behind the selected bar.
+- 2026-04-30T23:05:00+03:00 [CODE] DashboardView chart uses `.chartXSelection(value:)` binding to `selectedXLabel`; tapping a bar maps xLabel -> periodKey -> monthKey via `DateKeys.monthKey(fromPeriodKey:period:)`, updates `model.selectedMonthKey`, and reloads the snapshot.
+- 2026-04-30T23:05:00+03:00 [CODE] `RuleMark` vertical highlight renders behind the selected period bar with accent color at 25% opacity and rounded 28pt line width.
+- 2026-04-30T23:05:00+03:00 [DECISION] D007 ACTIVE: `let` declarations inside `some View` computed properties can break Swift opaque return type inference when the body contains complex Chart closures; place such declarations inside the VStack/ViewBuilder closure instead.
+- 2026-04-30T23:05:00+03:00 [TOOL] `swift test` -> 40 tests passed; `xcodebuild` -> BUILD SUCCEEDED; iPhone 17 simulator boot check -> `dev.roman.cashrunway: 93132`; no fatal/crash/exception entries.
+- 2026-04-30T23:42:00+03:00 [USER] Goal update: polish chart to production quality and add swipe left/right navigation on the chart card.
+- 2026-04-30T23:42:00+03:00 [CODE] Chart card: removed stroke border; Y-axis now uses `compactNumber` without currency symbol; X-axis month labels are two-line (`"Apr\n2026"`); selection highlight changed from `RuleMark` line to `RectangleMark` soft column at 6% accent opacity; added `.animation(.smooth, value: bars)`; added `ContentUnavailableView("No Data")` empty state.
+- 2026-04-30T23:42:00+03:00 [CODE] Chart card swipe: `.simultaneousGesture(DragGesture)` with horizontal-only detection (50pt threshold) triggers `model.navigatePeriod(by:)`, which advances by month or year depending on `selectedTimelinePeriod` and reloads snapshots. Light haptic feedback on both tap and swipe.
+- 2026-04-30T23:42:00+03:00 [CODE] `selectedXLabel` is cleared via `.onChange(of: model.selectedMonthKey)` to prevent stale highlight after period navigation.
+- 2026-04-30T23:42:00+03:00 [TOOL] `swift test` -> 40 tests passed; `xcodebuild` -> BUILD SUCCEEDED; iPhone 17 simulator install/launch -> `dev.roman.cashrunway: 7771`; empty chart state renders correctly; no fatal/crash/exception entries.
+- 2026-04-30T23:55:00+03:00 [USER] Goal update: selected section should always be highlighted; swipe/tap navigation must feel smooth.
+- 2026-04-30T23:55:00+03:00 [CODE] Chart highlight is now persistent: `RectangleMark` derives the highlighted bar from `model.selectedMonthKey` (and `model.selectedTimelinePeriod`), so the currently viewed period is always visually indicated regardless of how navigation occurred.
+- 2026-04-30T23:55:00+03:00 [CODE] Performance fix: `navigatePeriod(by:)` and tap handler now call `reloadTimeline()` which dispatches `reloadSnapshotsAsync()` on a detached `.userInitiated` task. Database queries run off the main thread; results are applied on MainActor only if the filters haven't changed. No more full-screen `isLoading` overlay during swipe navigation.
+- 2026-04-30T23:55:00+03:00 [TOOL] `swift test` -> 40 tests passed; `xcodebuild` -> BUILD SUCCEEDED; iPhone 17 simulator install/launch -> `dev.roman.cashrunway: 10575`; no fatal/crash/exception entries.
+- 2026-05-01T00:30:00+03:00 [USER] Goal update: replace Swift Charts with a horizontally scrollable custom chart (Spendee-style monthly columns); fix performance by precomputing all bars and moving snapshot reloads off main thread.
+- 2026-05-01T00:30:00+03:00 [CODE] Repository: added `allBars(walletID:period:)` with `loadAllMonthlyBars` and `loadAllYearlyBars` — loads every month/year from first transaction to current, aggregating across wallets when unfiltered.
+- 2026-05-01T00:30:00+03:00 [CODE] AppModel: added `allBars: [TimelineBarPoint]` loaded once during `bootstrap`/`reloadAll`; added `currentCashFlowMinor` computed property for instant hero updates on selection without waiting for async snapshot reload.
+- 2026-05-01T00:30:00+03:00 [CODE] DashboardView chartCard: replaced Swift Charts `BarMark`/`RectangleMark` with `ScrollView(.horizontal)` + `LazyHStack` + custom `MonthChartColumn` views. Each column shows income/expense bars, two-line month label, and soft accent background when selected. `ScrollViewReader` auto-scrolls selected month to center. Tap gestures select; ScrollView handles drag natively — no gesture conflicts.
+- 2026-05-01T00:30:00+03:00 [CODE] Removed `selectedXLabel` state, `.chartXSelection`, `.simultaneousGesture(DragGesture)`, and `RuleMark`/`RectangleMark` chart overlays.
+- 2026-05-01T00:30:00+03:00 [CODE] Performance: `navigatePeriod` and tap handler use `reloadTimeline()` → `reloadSnapshotsAsync()` on detached `.userInitiated` task. Guard check discards stale results if user navigated again before completion.
+- 2026-05-01T00:30:00+03:00 [TOOL] `swift test` -> 40 tests passed; `xcodebuild` -> BUILD SUCCEEDED; iPhone 17 simulator install/launch -> `dev.roman.cashrunway: 14408`; empty state renders correctly; no fatal/crash/exception entries.

@@ -39,6 +39,15 @@ public enum DateKeys {
         }
     }
 
+    public static func monthKey(fromPeriodKey periodKey: Int, period: TimelinePeriod) -> Int {
+        switch period {
+        case .month:
+            return periodKey
+        case .year:
+            return periodKey * 100 + 1
+        }
+    }
+
     public static func startOfMonth(for monthKey: Int) -> Date {
         let year = monthKey / 100
         let month = monthKey % 100
@@ -80,7 +89,6 @@ public enum DateKeys {
         case .month:
             let date = startOfMonth(for: periodKey)
             return date.formatted(.dateTime.month(.wide).year())
-
         case .year:
             return "\(periodKey)"
         }
