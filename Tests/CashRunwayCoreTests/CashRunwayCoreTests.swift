@@ -17,31 +17,23 @@ struct CashRunwayCoreTests {
         #expect(DateKeys.monthKey(for: date) == 202604)
     }
 
-    @Test func weekAndYearKeysAreStable() {
+    @Test func yearKeysAreStable() {
         let calendar = Calendar(identifier: .gregorian)
         let date = calendar.date(from: DateComponents(year: 2025, month: 4, day: 7))!
         #expect(DateKeys.yearKey(for: date) == 2025)
-        let week = DateKeys.weekKey(for: date)
-        #expect(week / 1_000 == 2025)
-        #expect(week % 1_000 > 0)
-        #expect(week % 1_000 <= 53)
     }
 
     @Test func periodLabelsAreFormatted() {
         let calendar = Calendar(identifier: .gregorian)
         let date = calendar.date(from: DateComponents(year: 2025, month: 4, day: 7))!
-        let dayKey = DateKeys.dayKey(for: date)
-        let weekKey = DateKeys.weekKey(for: date)
         let monthKey = DateKeys.monthKey(for: date)
         let yearKey = DateKeys.yearKey(for: date)
 
-        #expect(DateKeys.periodLabel(periodKey: dayKey, period: .day).contains("7 Apr"))
-        #expect(DateKeys.periodLabel(periodKey: weekKey, period: .week).contains("–"))
         #expect(DateKeys.periodLabel(periodKey: monthKey, period: .month).contains("April"))
         #expect(DateKeys.periodLabel(periodKey: yearKey, period: .year) == "2025")
     }
 
-    @Test func timelineSnapshotGroupsByPeriod() throws {
+    @Test func timelineSnapshotGroupsByMonthAndYearOnly() throws {
         let location = TestSupport.makeLocation()
         let manager = try DatabaseManager(locationProvider: location)
         let repository = CashRunwayRepository(databaseManager: manager)
@@ -70,22 +62,16 @@ struct CashRunwayCoreTests {
         }
 
         let monthKey = DateKeys.monthKey(for: base)
-        let daySnapshot = try repository.timelineSnapshot(monthKey: monthKey, walletID: wallet.id, period: .day)
-        #expect(daySnapshot.period == .day)
-        #expect(daySnapshot.bars.count > 0)
-        #expect(daySnapshot.sections.count > 0)
-
-        let weekSnapshot = try repository.timelineSnapshot(monthKey: monthKey, walletID: wallet.id, period: .week)
-        #expect(weekSnapshot.period == .week)
-        #expect(weekSnapshot.sections.count > 0)
-
         let monthSnapshot = try repository.timelineSnapshot(monthKey: monthKey, walletID: wallet.id, period: .month)
         #expect(monthSnapshot.period == .month)
         #expect(monthSnapshot.bars.count > 0)
+        #expect(monthSnapshot.sections.allSatisfy { $0.periodKey == monthKey })
 
         let yearSnapshot = try repository.timelineSnapshot(monthKey: monthKey, walletID: wallet.id, period: .year)
         #expect(yearSnapshot.period == .year)
         #expect(yearSnapshot.sections.count > 0)
+        #expect(yearSnapshot.sections.allSatisfy { $0.periodKey == 2025 })
+        #expect(TimelinePeriod.allCases == [.month, .year])
     }
 
     @Test func migrationReopensExistingDatabase() throws {
@@ -321,6 +307,7 @@ struct CashRunwayCoreTests {
         #expect(currentBar.expenseBarMinor == 12_300)
         #expect(snapshot.sections.isEmpty == false)
         #expect(snapshot.sections.first?.items.contains(where: { $0.merchant == "Coffee" }) == true)
+        #expect(snapshot.sections.flatMap(\.items).contains(where: { $0.merchant == "Taxi" }) == false)
     }
 
     @Test func overviewSnapshotSeparatesExpenseIncomeAndLabels() throws {

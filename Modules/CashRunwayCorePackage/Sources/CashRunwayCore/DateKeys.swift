@@ -32,10 +32,6 @@ public enum DateKeys {
 
     public static func periodKey(for date: Date, period: TimelinePeriod) -> Int {
         switch period {
-        case .day:
-            return dayKey(for: date)
-        case .week:
-            return weekKey(for: date)
         case .month:
             return monthKey(for: date)
         case .year:
@@ -70,25 +66,6 @@ public enum DateKeys {
 
     public static func periodLabel(periodKey: Int, period: TimelinePeriod) -> String {
         switch period {
-        case .day:
-            let year = periodKey / 10_000
-            let month = (periodKey / 100) % 100
-            let day = periodKey % 100
-            let date = calendar.date(from: DateComponents(year: year, month: month, day: day)) ?? .now
-            let formatter = DateFormatter()
-            formatter.locale = Locale(identifier: "en_US_POSIX")
-            formatter.dateFormat = "EEEE, d MMM"
-            return formatter.string(from: date)
-
-        case .week:
-            let range = weekDateRange(for: periodKey)
-            let formatter = DateFormatter()
-            formatter.locale = Locale(identifier: "en_US_POSIX")
-            formatter.dateFormat = "d MMM"
-            let start = formatter.string(from: range.start)
-            let end = formatter.string(from: range.end)
-            return "\(start) – \(end)"
-
         case .month:
             let date = startOfMonth(for: periodKey)
             return date.formatted(.dateTime.month(.wide).year())

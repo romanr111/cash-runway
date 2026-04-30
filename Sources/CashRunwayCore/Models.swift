@@ -68,14 +68,12 @@ public enum ImportJobStatus: String, CaseIterable, Codable, Sendable {
 }
 
 public enum TimelinePeriod: String, CaseIterable, Sendable {
-    case day, week, month, year
+    case month, year
 
     public var displayName: String {
         switch self {
-        case .day: return "By Day"
-        case .week: return "By Week"
-        case .month: return "By Month"
-        case .year: return "By Year"
+        case .month: return "By months"
+        case .year: return "By years"
         }
     }
 }

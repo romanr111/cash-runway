@@ -29,7 +29,7 @@ public final class CashRunwayAppModel {
 
     public var selectedMonthKey = DateKeys.monthKey(for: .now)
     public var selectedWalletID: UUID?
-    public var selectedTimelinePeriod: TimelinePeriod = .day
+    public var selectedTimelinePeriod: TimelinePeriod = .month
     public var transactionQuery = TransactionQuery()
     public var isLocked = false
     public var lockMessage: String?

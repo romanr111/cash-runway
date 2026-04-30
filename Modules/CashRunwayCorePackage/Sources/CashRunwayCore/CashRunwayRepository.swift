@@ -453,14 +453,16 @@ public final class CashRunwayRepository: @unchecked Sendable {
         }
     }
 
-    public func timelineSnapshot(monthKey: Int, walletID: UUID? = nil, query: TransactionQuery = .init(), period: TimelinePeriod = .day) throws -> TimelineSnapshot {
+    public func timelineSnapshot(monthKey: Int, walletID: UUID? = nil, query: TransactionQuery = .init(), period: TimelinePeriod = .month) throws -> TimelineSnapshot {
         try databaseManager.dbQueue.read { db in
             let effectiveWalletID = walletID ?? query.walletID
             let bars = try Self.loadBars(db, monthKey: monthKey, walletID: effectiveWalletID, period: period)
+            let anchorPeriodKey = Self.anchorPeriodKey(monthKey: monthKey, period: period)
 
             var scopedQuery = query
             scopedQuery.walletID = effectiveWalletID
-            let items = try listTransactions(db, query: scopedQuery)
+            Self.applyPeriodScope(&scopedQuery, period: period, periodKey: anchorPeriodKey)
+            let items = try listTransactions(db, query: scopedQuery, limit: nil)
             let sections = Dictionary(grouping: items) { DateKeys.periodKey(for: $0.occurredAt, period: period) }
                 .map { key, values in
                     TimelineSection(
@@ -472,7 +474,6 @@ public final class CashRunwayRepository: @unchecked Sendable {
                 }
                 .sorted { $0.periodKey > $1.periodKey }
 
-            let anchorPeriodKey = Self.anchorPeriodKey(monthKey: monthKey, period: period)
             let selectedBar = bars.first(where: { $0.periodKey == anchorPeriodKey }) ?? bars.last
             let heroCashFlow = selectedBar.map { $0.incomeMinor - $0.expenseMinor } ?? 0
             return TimelineSnapshot(
@@ -493,112 +494,10 @@ public final class CashRunwayRepository: @unchecked Sendable {
 
     private static func loadBars(_ db: Database, monthKey: Int, walletID: UUID?, period: TimelinePeriod) throws -> [TimelineBarPoint] {
         switch period {
-        case .day:
-            return try loadDailyBars(db, monthKey: monthKey, walletID: walletID)
-        case .week:
-            return try loadWeeklyBars(db, monthKey: monthKey, walletID: walletID)
         case .month:
             return try loadMonthlyBars(db, monthKey: monthKey, walletID: walletID)
         case .year:
             return try loadYearlyBars(db, monthKey: monthKey, walletID: walletID)
-        }
-    }
-
-    private static func loadDailyBars(_ db: Database, monthKey: Int, walletID: UUID?) throws -> [TimelineBarPoint] {
-        let startDay = monthKey * 100 + 1
-        let endDay = monthKey * 100 + 31
-        var conditions = ["local_day_key BETWEEN ? AND ?", "is_deleted = 0", "type IN ('income', 'expense')"]
-        var arguments: [any DatabaseValueConvertible] = [startDay, endDay]
-        if let walletID {
-            conditions.append("wallet_id = ?")
-            arguments.append(walletID.uuidString)
-        }
-        let rows = try Row.fetchAll(
-            db,
-            sql: """
-            SELECT local_day_key, type, SUM(amount_minor) as total
-            FROM transactions
-            WHERE \(conditions.joined(separator: " AND "))
-            GROUP BY local_day_key, type
-            ORDER BY local_day_key
-            """,
-            arguments: StatementArguments(arguments)
-        )
-        var byDay: [Int: (income: Int64, expense: Int64)] = [:]
-        for row in rows {
-            let day: Int = row["local_day_key"]
-            let type: String = row["type"]
-            let total: Int64 = row["total"]
-            var current = byDay[day] ?? (0, 0)
-            if type == TransactionKind.income.rawValue {
-                current.income += total
-            } else {
-                current.expense += total
-            }
-            byDay[day] = current
-        }
-        return byDay.keys.sorted().map { day in
-            let values = byDay[day]!
-            return TimelineBarPoint(
-                periodKey: day,
-                incomeMinor: values.income,
-                expenseMinor: values.expense,
-                xLabel: "\(day % 100)"
-            )
-        }
-    }
-
-    private static func loadWeeklyBars(_ db: Database, monthKey: Int, walletID: UUID?) throws -> [TimelineBarPoint] {
-        let startOfMonth = DateKeys.startOfMonth(for: monthKey)
-        let endOfMonth = Self.endOfMonth(for: monthKey)
-        let startDate = DateKeys.calendar.date(byAdding: .day, value: -70, to: startOfMonth) ?? startOfMonth
-        let startDay = DateKeys.dayKey(for: startDate)
-        let endDay = DateKeys.dayKey(for: endOfMonth)
-
-        var conditions = ["local_day_key BETWEEN ? AND ?", "is_deleted = 0", "type IN ('income', 'expense')"]
-        var arguments: [any DatabaseValueConvertible] = [startDay, endDay]
-        if let walletID {
-            conditions.append("wallet_id = ?")
-            arguments.append(walletID.uuidString)
-        }
-        let rows = try Row.fetchAll(
-            db,
-            sql: """
-            SELECT occurred_at, type, amount_minor
-            FROM transactions
-            WHERE \(conditions.joined(separator: " AND "))
-            ORDER BY occurred_at
-            """,
-            arguments: StatementArguments(arguments)
-        )
-        var byWeek: [Int: (income: Int64, expense: Int64)] = [:]
-        for row in rows {
-            let occurredAt: Date = row["occurred_at"]
-            let type: String = row["type"]
-            let amount: Int64 = row["amount_minor"]
-            let week = DateKeys.weekKey(for: occurredAt)
-            var current = byWeek[week] ?? (0, 0)
-            if type == TransactionKind.income.rawValue {
-                current.income += amount
-            } else {
-                current.expense += amount
-            }
-            byWeek[week] = current
-        }
-        return byWeek.keys.sorted().map { week in
-            let values = byWeek[week]!
-            let range = DateKeys.weekDateRange(for: week)
-            let formatter = DateFormatter()
-            formatter.locale = Locale(identifier: "en_US_POSIX")
-            formatter.dateFormat = "d MMM"
-            let startLabel = formatter.string(from: range.start)
-            let endLabel = formatter.string(from: range.end)
-            return TimelineBarPoint(
-                periodKey: week,
-                incomeMinor: values.income,
-                expenseMinor: values.expense,
-                xLabel: "\(startLabel) – \(endLabel)"
-            )
         }
     }
 
@@ -642,7 +541,8 @@ public final class CashRunwayRepository: @unchecked Sendable {
 
     private static func loadYearlyBars(_ db: Database, monthKey: Int, walletID: UUID?) throws -> [TimelineBarPoint] {
         let year = monthKey / 100
-        let startMonth = (year - 4) * 100 + 1
+        let years = Self.yearWindow(endingAt: year, count: 6)
+        let startMonth = (year - 5) * 100 + 1
         let endMonth = year * 100 + 12
         var conditions = ["month_key BETWEEN ? AND ?"]
         var arguments: [any DatabaseValueConvertible] = [startMonth, endMonth]
@@ -672,14 +572,39 @@ public final class CashRunwayRepository: @unchecked Sendable {
             current.expense += row["expense_minor"]
             byYear[y] = current
         }
-        return byYear.keys.sorted().map { y in
-            let values = byYear[y]!
+        return years.map { y in
+            let values = byYear[y] ?? (0, 0)
             return TimelineBarPoint(
                 periodKey: y,
                 incomeMinor: values.income,
                 expenseMinor: values.expense,
                 xLabel: "\(y)"
             )
+        }
+    }
+
+    private static func applyPeriodScope(_ query: inout TransactionQuery, period: TimelinePeriod, periodKey: Int) {
+        let bounds = periodDateBounds(period: period, periodKey: periodKey)
+        if let startDate = query.startDate {
+            query.startDate = max(startDate, bounds.start)
+        } else {
+            query.startDate = bounds.start
+        }
+        if let endDate = query.endDate {
+            query.endDate = min(endDate, bounds.end)
+        } else {
+            query.endDate = bounds.end
+        }
+    }
+
+    private static func periodDateBounds(period: TimelinePeriod, periodKey: Int) -> (start: Date, end: Date) {
+        switch period {
+        case .month:
+            return (DateKeys.startOfMonth(for: periodKey), endOfMonth(for: periodKey))
+        case .year:
+            let startMonthKey = periodKey * 100 + 1
+            let endMonthKey = periodKey * 100 + 12
+            return (DateKeys.startOfMonth(for: startMonthKey), endOfMonth(for: endMonthKey))
         }
     }
 
@@ -1684,6 +1609,10 @@ public final class CashRunwayRepository: @unchecked Sendable {
         return (0..<count).compactMap { offset in
             DateKeys.calendar.date(byAdding: .month, value: offset - (count - 1), to: start)
         }.map(DateKeys.monthKey(for:))
+    }
+
+    private static func yearWindow(endingAt year: Int, count: Int) -> [Int] {
+        (0..<count).map { year + $0 - (count - 1) }
     }
 
     private static func endOfMonth(for monthKey: Int) -> Date {
