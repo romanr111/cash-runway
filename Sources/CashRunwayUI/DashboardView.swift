@@ -29,6 +29,14 @@ struct DashboardView: View {
             }
             .background(CashRunwayTheme.background)
             .toolbar(.hidden, for: .navigationBar)
+            .overlay {
+                if model.isLoading {
+                    ProgressView()
+                        .scaleEffect(1.2)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(CashRunwayTheme.background.opacity(0.72))
+                }
+            }
             .overlay(alignment: .bottomTrailing) {
                 Button {
                     draft = TransactionDraft(
@@ -122,18 +130,6 @@ struct DashboardView: View {
                 pillLabel(text: model.selectedWalletID.flatMap(walletName(for:)) ?? "All Wallets", systemImage: "chevron.down")
             }
 
-            Button {
-                guard let newDate = DateKeys.calendar.date(byAdding: .month, value: -1, to: DateKeys.startOfMonth(for: model.selectedMonthKey)) else { return }
-                model.selectedMonthKey = DateKeys.monthKey(for: newDate)
-                try? model.reloadAll()
-            } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(CashRunwayTheme.textPrimary)
-                    .frame(width: 36, height: 36)
-                    .background(CashRunwayTheme.pill, in: Circle())
-            }
-
             Menu {
                 ForEach(TimelinePeriod.allCases, id: \.self) { period in
                     Button(period.displayName) {
@@ -143,18 +139,6 @@ struct DashboardView: View {
                 }
             } label: {
                 pillLabel(text: model.selectedTimelinePeriod.displayName, systemImage: "chevron.down")
-            }
-
-            Button {
-                guard let newDate = DateKeys.calendar.date(byAdding: .month, value: 1, to: DateKeys.startOfMonth(for: model.selectedMonthKey)) else { return }
-                model.selectedMonthKey = DateKeys.monthKey(for: newDate)
-                try? model.reloadAll()
-            } label: {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(CashRunwayTheme.textPrimary)
-                    .frame(width: 36, height: 36)
-                    .background(CashRunwayTheme.pill, in: Circle())
             }
         }
         .frame(maxWidth: .infinity, alignment: .center)

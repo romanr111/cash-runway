@@ -1561,11 +1561,13 @@ public final class CashRunwayRepository: @unchecked Sendable {
                 match = calendar.dateComponents([.day], from: template.startDate, to: cursor).day! % (7 * template.ruleInterval) == 0
             case .monthly:
                 let comps = calendar.dateComponents([.day], from: cursor)
-                match = comps.day == template.dayOfMonth
+                let monthsFromStart = calendar.dateComponents([.month], from: template.startDate, to: cursor).month ?? 0
+                match = comps.day == template.dayOfMonth && monthsFromStart % template.ruleInterval == 0
             case .yearly:
                 let current = calendar.dateComponents([.month, .day], from: cursor)
                 let startComps = calendar.dateComponents([.month, .day], from: template.startDate)
-                match = current.month == startComps.month && current.day == (template.dayOfMonth ?? startComps.day)
+                let yearsFromStart = calendar.dateComponents([.year], from: template.startDate, to: cursor).year ?? 0
+                match = current.month == startComps.month && current.day == (template.dayOfMonth ?? startComps.day) && yearsFromStart % template.ruleInterval == 0
             }
             if match {
                 dates.append(cursor)

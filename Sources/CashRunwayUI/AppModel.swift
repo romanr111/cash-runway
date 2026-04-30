@@ -34,6 +34,7 @@ public final class CashRunwayAppModel {
     public var isLocked = false
     public var lockMessage: String?
     public var errorMessage: String?
+    public var isLoading = false
     private var foregroundRefreshTask: Task<Void, Never>?
     private var lastForegroundRefreshAt: Date?
     private let foregroundRefreshMinimumInterval: TimeInterval = 10
@@ -62,6 +63,8 @@ public final class CashRunwayAppModel {
     }
 
     public func reloadAll() throws {
+        isLoading = true
+        defer { isLoading = false }
         apply(
             try Self.loadSnapshot(
                 repository: repository,

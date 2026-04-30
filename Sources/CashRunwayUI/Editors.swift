@@ -14,7 +14,7 @@ struct TransactionEditorView: View {
         quickDateLabel: "Yesterday?",
         selectedLabelIDs: []
     )
-    @State private var showsCategorySheet = true
+    @State private var showsCategorySheet = false
     @State private var showsLabelsSheet = false
     @State private var showsRecurringSheet = false
     @State private var showsCategoryManagement = false
@@ -27,6 +27,8 @@ struct TransactionEditorView: View {
     @State private var openCategoryManagementAfterCategorySheet = false
     @FocusState private var amountFieldFocused: Bool
 
+    @State private var amountError: String?
+
     var body: some View {
         NavigationStack {
             ZStack(alignment: .top) {
@@ -38,6 +40,9 @@ struct TransactionEditorView: View {
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
+            .onAppear {
+                showsCategorySheet = draft.id == nil
+            }
             .sheet(isPresented: $showsCategorySheet) {
                 TransactionCategorySheet(
                     model: model,
@@ -137,7 +142,7 @@ struct TransactionEditorView: View {
 
                 Spacer()
 
-                Text("Add a Transaction")
+                Text(draft.id == nil ? "Add a Transaction" : "Edit Transaction")
                     .font(.system(size: 18, weight: .bold))
                     .foregroundStyle(CashRunwayTheme.textPrimary)
 
@@ -184,6 +189,16 @@ struct TransactionEditorView: View {
                             .font(.system(size: 42, weight: .bold, design: .rounded))
                             .foregroundStyle(CashRunwayTheme.textPrimary)
                             .frame(minWidth: 140)
+                            .toolbar {
+                                ToolbarItemGroup(placement: .keyboard) {
+                                    Spacer()
+                                    Button("Done") {
+                                        amountFieldFocused = false
+                                    }
+                                    .font(.system(size: 17, weight: .semibold))
+                                    .foregroundStyle(CashRunwayTheme.accent)
+                                }
+                            }
                         Text("UAH")
                             .font(.system(size: 14, weight: .bold))
                             .foregroundStyle(CashRunwayTheme.textPrimary)
@@ -328,10 +343,15 @@ struct TransactionEditorView: View {
                 .padding(.top, 20)
 
                 Button {
+                    amountError = nil
+                    guard let parsed = try? MoneyFormatter.parseMinorUnits(composerState.amountText), parsed > 0 else {
+                        amountError = "Enter a valid amount greater than zero."
+                        return
+                    }
                     draft.kind = composerState.selectedKind
                     draft.categoryID = composerState.selectedCategoryID
                     draft.labelIDs = composerState.selectedLabelIDs
-                    draft.amountMinor = (try? MoneyFormatter.parseMinorUnits(composerState.amountText)) ?? 0
+                    draft.amountMinor = parsed
                     model.saveTransaction(draft, recurringTemplate: recurringTemplate)
                     dismiss()
                 } label: {
@@ -343,7 +363,16 @@ struct TransactionEditorView: View {
                         .background(CashRunwayTheme.accentDark, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
                 }
                 .padding(.top, 20)
-                .padding(.bottom, 32)
+
+                if let amountError {
+                    Text(amountError)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(CashRunwayTheme.negative)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.top, 8)
+                }
+
+                Spacer().frame(height: 32)
             }
             .padding(.horizontal, 20)
             .padding(.top, 18)
