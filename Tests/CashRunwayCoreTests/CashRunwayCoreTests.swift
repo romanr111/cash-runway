@@ -132,6 +132,68 @@ struct CashRunwayCoreTests {
         #expect(DateKeys.dayKey(for: dates[1]) == 20260215)
     }
 
+    @Test func recurringGenerationRespectsMonthlyInterval() {
+        let template = RecurringTemplate(
+            id: UUID(),
+            kind: .expense,
+            walletID: UUID(),
+            counterpartyWalletID: nil,
+            amountMinor: 100,
+            categoryID: UUID(),
+            merchant: nil,
+            note: nil,
+            ruleType: .monthly,
+            ruleInterval: 3,
+            dayOfMonth: 15,
+            weekday: nil,
+            startDate: DateKeys.startOfMonth(for: 202601),
+            endDate: nil,
+            isActive: true,
+            createdAt: .now,
+            updatedAt: .now
+        )
+        let dates = CashRunwayRepository.generatedDates(
+            for: template,
+            start: DateKeys.startOfMonth(for: 202601),
+            end: DateKeys.startOfMonth(for: 202611)
+        )
+        #expect(dates.count == 4)
+        #expect(DateKeys.dayKey(for: dates[0]) == 20260115)
+        #expect(DateKeys.dayKey(for: dates[1]) == 20260415)
+        #expect(DateKeys.dayKey(for: dates[2]) == 20260715)
+        #expect(DateKeys.dayKey(for: dates[3]) == 20261015)
+    }
+
+    @Test func recurringGenerationRespectsYearlyInterval() {
+        let template = RecurringTemplate(
+            id: UUID(),
+            kind: .expense,
+            walletID: UUID(),
+            counterpartyWalletID: nil,
+            amountMinor: 100,
+            categoryID: UUID(),
+            merchant: nil,
+            note: nil,
+            ruleType: .yearly,
+            ruleInterval: 2,
+            dayOfMonth: 15,
+            weekday: nil,
+            startDate: DateKeys.startOfMonth(for: 202601),
+            endDate: nil,
+            isActive: true,
+            createdAt: .now,
+            updatedAt: .now
+        )
+        let dates = CashRunwayRepository.generatedDates(
+            for: template,
+            start: DateKeys.startOfMonth(for: 202601),
+            end: DateKeys.startOfMonth(for: 202802)
+        )
+        #expect(dates.count == 2)
+        #expect(DateKeys.dayKey(for: dates[0]) == 20260115)
+        #expect(DateKeys.dayKey(for: dates[1]) == 20280115)
+    }
+
     @Test func transactionMutationsKeepAggregatesCorrect() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
@@ -363,6 +425,65 @@ struct CashRunwayCoreTests {
         #expect(incomeLabel.amountMinor == 80_000)
         #expect(incomeLabel.transactionCount == 1)
         #expect(incomeLabel.percentage == 1)
+    }
+
+    @Test func overviewSnapshotBatchBalancesMatchCumulativeTruth() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        let walletID = try #require(try repository.wallets().first?.id)
+        let expenseCategory = try #require(try repository.categories(kind: .expense).first?.id)
+        let calendar = Calendar(identifier: .gregorian)
+        let base = calendar.date(from: DateComponents(year: 2025, month: 1, day: 15))!
+
+        for monthOffset in 0..<4 {
+            let date = calendar.date(byAdding: .month, value: monthOffset, to: base)!
+            try repository.saveTransaction(
+                TransactionDraft(
+                    kind: .expense,
+                    walletID: walletID,
+                    amountMinor: Int64(10_000 * (monthOffset + 1)),
+                    occurredAt: date,
+                    categoryID: expenseCategory,
+                    merchant: "Month \(monthOffset)",
+                    note: ""
+                )
+            )
+        }
+
+        let lastMonthKey = DateKeys.monthKey(for: calendar.date(byAdding: .month, value: 3, to: base)!)
+        let snapshot = try repository.overviewSnapshot(monthKey: lastMonthKey)
+        #expect(snapshot.months.count == 6)
+
+        let nonEmptyMonths = snapshot.months.filter { $0.expenseMinor > 0 || $0.incomeMinor > 0 }
+        #expect(nonEmptyMonths.count == 4)
+
+        let dashboardAllWallets = try repository.dashboard(monthKey: lastMonthKey, walletID: nil)
+        let lastMonthPoint = try #require(snapshot.months.first(where: { $0.monthKey == lastMonthKey }))
+        #expect(lastMonthPoint.totalWealthMinor == dashboardAllWallets.totalBalanceMinor)
+    }
+
+    @Test func latestTransactionMonthKeyReflectsActualData() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        let walletID = try #require(try repository.wallets().first?.id)
+        let expenseCategory = try #require(try repository.categories(kind: .expense).first?.id)
+
+        #expect(try repository.latestTransactionMonthKey() == nil)
+
+        let pastDate = Calendar.current.date(byAdding: .month, value: -2, to: .now)!
+        try repository.saveTransaction(
+            TransactionDraft(
+                kind: .expense,
+                walletID: walletID,
+                amountMinor: 1_000,
+                occurredAt: pastDate,
+                categoryID: expenseCategory,
+                merchant: "Past",
+                note: ""
+            )
+        )
+
+        #expect(try repository.latestTransactionMonthKey() == DateKeys.monthKey(for: pastDate))
     }
 
     @Test func categoryManagementCountsAndOrderingPersist() throws {

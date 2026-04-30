@@ -165,6 +165,12 @@ public final class CashRunwayRepository: @unchecked Sendable {
         }
     }
 
+    public func latestTransactionMonthKey() throws -> Int? {
+        try databaseManager.dbQueue.read { db in
+            try Int.fetchOne(db, sql: "SELECT MAX(local_month_key) FROM transactions WHERE is_deleted = 0")
+        }
+    }
+
     public func saveWallet(_ wallet: Wallet) throws {
         try databaseManager.dbQueue.write { db in
             try db.execute(

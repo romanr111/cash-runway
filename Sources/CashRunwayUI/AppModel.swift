@@ -35,10 +35,15 @@ public final class CashRunwayAppModel {
     public var lockMessage: String?
     public var errorMessage: String?
     public var isLoading = false
+    public private(set) var latestTransactionMonthKey: Int?
     private var foregroundRefreshTask: Task<Void, Never>?
     private var lastForegroundRefreshAt: Date?
     private let foregroundRefreshMinimumInterval: TimeInterval = 10
     private var overviewSnapshotCache: [String: OverviewSnapshot] = [:]
+
+    public var maxMonthKey: Int {
+        max(DateKeys.monthKey(for: .now), latestTransactionMonthKey ?? 0)
+    }
 
     public init(
         repository: CashRunwayRepository = CashRunwayRepository(),
@@ -74,6 +79,7 @@ public final class CashRunwayAppModel {
             transactionQuery: transactionQuery
         )
         apply(snapshot)
+        latestTransactionMonthKey = try? repository.latestTransactionMonthKey()
         if let overview = snapshot.overviewSnapshot {
             overviewSnapshotCache[overviewCacheKey(monthKey: overview.selectedMonthKey, walletID: overview.walletFilterID)] = overview
         }
@@ -101,12 +107,14 @@ public final class CashRunwayAppModel {
         timelineSnapshot = mutable.timelineSnapshot
         overviewSnapshot = mutable.overviewSnapshot
         transactionQuery = mutable.transactionQuery
+        latestTransactionMonthKey = try? repository.latestTransactionMonthKey()
         overviewSnapshotCache[overviewCacheKey(monthKey: selectedMonthKey, walletID: selectedWalletID)] = mutable.overviewSnapshot
     }
 
     public func navigateMonth(by offset: Int) {
         guard let newDate = DateKeys.calendar.date(byAdding: .month, value: offset, to: DateKeys.startOfMonth(for: selectedMonthKey)) else { return }
         let newMonthKey = DateKeys.monthKey(for: newDate)
+        guard newMonthKey <= maxMonthKey else { return }
         selectedMonthKey = newMonthKey
         do {
             try reloadSnapshots()
@@ -310,6 +318,7 @@ public final class CashRunwayAppModel {
                     return
                 }
                 self.apply(snapshot)
+                self.latestTransactionMonthKey = try? self.repository.latestTransactionMonthKey()
                 if let overview = snapshot.overviewSnapshot {
                     self.overviewSnapshotCache[self.overviewCacheKey(monthKey: overview.selectedMonthKey, walletID: overview.walletFilterID)] = overview
                 }
