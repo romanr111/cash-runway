@@ -639,11 +639,13 @@ public final class CashRunwayRepository: @unchecked Sendable {
                 return (month, (income: row["income_minor"] as Int64, expense: row["expense_minor"] as Int64))
             })
 
-            let monthPoints = try months.map { month in
+            let balances = try self.monthEndBalances(for: months + [monthKey], walletID: walletID, db: db)
+
+            let monthPoints = months.map { month in
                 let values = cashflowByMonth[month] ?? (income: Int64.zero, expense: Int64.zero)
                 return OverviewMonthPoint(
                     monthKey: month,
-                    totalWealthMinor: try self.balance(atEndOfMonth: month, walletID: walletID, db: db),
+                    totalWealthMinor: balances[month] ?? 0,
                     cashFlowMinor: values.income - values.expense,
                     incomeMinor: values.income,
                     expenseMinor: values.expense
@@ -656,7 +658,7 @@ public final class CashRunwayRepository: @unchecked Sendable {
             } else {
                 selectedPoint = OverviewMonthPoint(
                     monthKey: monthKey,
-                    totalWealthMinor: try balance(atEndOfMonth: monthKey, walletID: walletID, db: db),
+                    totalWealthMinor: balances[monthKey] ?? 0,
                     cashFlowMinor: 0,
                     incomeMinor: 0,
                     expenseMinor: 0
@@ -1448,6 +1450,57 @@ public final class CashRunwayRepository: @unchecked Sendable {
             arguments: [monthEnd]
         ) ?? 0
         return startingBalance + netDelta
+    }
+
+    /// Computes ending balances for multiple months in a single pass using the aggregate table.
+    /// This is O(1) per month after the initial query, vs. O(n) per month when summing all transactions.
+    private func monthEndBalances(for months: [Int], walletID: UUID?, db: Database) throws -> [Int: Int64] {
+        guard !months.isEmpty else { return [:] }
+        let sortedMonths = Set(months).sorted()
+        let earliest = sortedMonths.first!
+        let latest = sortedMonths.last!
+
+        let startingBalance: Int64
+        if let walletID {
+            startingBalance = try Int64.fetchOne(
+                db,
+                sql: "SELECT COALESCE(starting_balance_minor, 0) FROM wallets WHERE id = ?",
+                arguments: [walletID.uuidString]
+            ) ?? 0
+        } else {
+            startingBalance = try Int64.fetchOne(
+                db,
+                sql: "SELECT COALESCE(SUM(starting_balance_minor), 0) FROM wallets WHERE is_archived = 0"
+            ) ?? 0
+        }
+
+        let rows = try Row.fetchAll(
+            db,
+            sql: """
+            SELECT month_key,
+                   COALESCE(SUM(income_minor - expense_minor + transfer_in_minor - transfer_out_minor), 0) AS net_delta
+            FROM monthly_wallet_cashflow
+            WHERE month_key BETWEEN ? AND ?
+            \(walletID == nil ? "" : "AND wallet_id = ?")
+            GROUP BY month_key
+            ORDER BY month_key
+            """,
+            arguments: walletID == nil
+                ? [earliest, latest]
+                : [earliest, latest, walletID!.uuidString]
+        )
+
+        var cumulative = startingBalance
+        var balances: [Int: Int64] = [:]
+        var rowIndex = 0
+        for month in sortedMonths {
+            while rowIndex < rows.count, (rows[rowIndex]["month_key"] as Int) <= month {
+                cumulative += rows[rowIndex]["net_delta"] as Int64
+                rowIndex += 1
+            }
+            balances[month] = cumulative
+        }
+        return balances
     }
 
     private func syncSearch(_ db: Database, transaction: CashRunwayTransaction) throws {

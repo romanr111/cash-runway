@@ -35,6 +35,13 @@ public enum CashRunwayTheme {
         return formatter.string(from: DateKeys.startOfMonth(for: monthKey))
     }
 
+    public static func monthFullLabel(for monthKey: Int) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale.current
+        formatter.dateFormat = "MMMM yyyy"
+        return formatter.string(from: DateKeys.startOfMonth(for: monthKey))
+    }
+
     public static func dayHeader(for dayKey: Int) -> String {
         let year = dayKey / 10_000
         let month = (dayKey / 100) % 100

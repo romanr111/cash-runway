@@ -38,6 +38,7 @@ public final class CashRunwayAppModel {
     private var foregroundRefreshTask: Task<Void, Never>?
     private var lastForegroundRefreshAt: Date?
     private let foregroundRefreshMinimumInterval: TimeInterval = 10
+    private var overviewSnapshotCache: [String: OverviewSnapshot] = [:]
 
     public init(
         repository: CashRunwayRepository = CashRunwayRepository(),
@@ -65,15 +66,53 @@ public final class CashRunwayAppModel {
     public func reloadAll() throws {
         isLoading = true
         defer { isLoading = false }
-        apply(
-            try Self.loadSnapshot(
-                repository: repository,
-                selectedMonthKey: selectedMonthKey,
-                selectedWalletID: selectedWalletID,
-                selectedTimelinePeriod: selectedTimelinePeriod,
-                transactionQuery: transactionQuery
-            )
+        let snapshot = try Self.loadSnapshot(
+            repository: repository,
+            selectedMonthKey: selectedMonthKey,
+            selectedWalletID: selectedWalletID,
+            selectedTimelinePeriod: selectedTimelinePeriod,
+            transactionQuery: transactionQuery
         )
+        apply(snapshot)
+        if let overview = snapshot.overviewSnapshot {
+            overviewSnapshotCache[overviewCacheKey(monthKey: overview.selectedMonthKey, walletID: overview.walletFilterID)] = overview
+        }
+    }
+
+    /// Reloads only the mutable snapshots (dashboard, timeline, overview) without re-fetching
+    /// static metadata like categories, wallets, or labels. Used for month navigation.
+    public func reloadSnapshots() throws {
+        let cacheKey = overviewCacheKey(monthKey: selectedMonthKey, walletID: selectedWalletID)
+        if let cached = overviewSnapshotCache[cacheKey] {
+            overviewSnapshot = cached
+        }
+        isLoading = true
+        defer { isLoading = false }
+        let mutable = try Self.loadMutableSnapshots(
+            repository: repository,
+            selectedMonthKey: selectedMonthKey,
+            selectedWalletID: selectedWalletID,
+            selectedTimelinePeriod: selectedTimelinePeriod,
+            transactionQuery: transactionQuery
+        )
+        budgets = mutable.budgets
+        transactions = mutable.transactions
+        dashboardSnapshot = mutable.dashboardSnapshot
+        timelineSnapshot = mutable.timelineSnapshot
+        overviewSnapshot = mutable.overviewSnapshot
+        transactionQuery = mutable.transactionQuery
+        overviewSnapshotCache[overviewCacheKey(monthKey: selectedMonthKey, walletID: selectedWalletID)] = mutable.overviewSnapshot
+    }
+
+    public func navigateMonth(by offset: Int) {
+        guard let newDate = DateKeys.calendar.date(byAdding: .month, value: offset, to: DateKeys.startOfMonth(for: selectedMonthKey)) else { return }
+        let newMonthKey = DateKeys.monthKey(for: newDate)
+        selectedMonthKey = newMonthKey
+        do {
+            try reloadSnapshots()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     public func unlock(pin: String) {
@@ -271,6 +310,9 @@ public final class CashRunwayAppModel {
                     return
                 }
                 self.apply(snapshot)
+                if let overview = snapshot.overviewSnapshot {
+                    self.overviewSnapshotCache[self.overviewCacheKey(monthKey: overview.selectedMonthKey, walletID: overview.walletFilterID)] = overview
+                }
                 self.lastForegroundRefreshAt = Date()
                 self.errorMessage = nil
             } catch is CancellationError {
@@ -286,6 +328,7 @@ public final class CashRunwayAppModel {
         foregroundRefreshTask = nil
         do {
             try mutation()
+            overviewSnapshotCache.removeAll()
             try reloadAll()
             lastForegroundRefreshAt = Date()
             errorMessage = nil
@@ -319,6 +362,29 @@ public final class CashRunwayAppModel {
         )
     }
 
+    private nonisolated static func loadMutableSnapshots(
+        repository: CashRunwayRepository,
+        selectedMonthKey: Int,
+        selectedWalletID: UUID?,
+        selectedTimelinePeriod: TimelinePeriod,
+        transactionQuery: TransactionQuery
+    ) throws -> MutableSnapshots {
+        var query = transactionQuery
+        query.walletID = selectedWalletID
+        return MutableSnapshots(
+            budgets: try repository.budgets(monthKey: selectedMonthKey),
+            transactions: try repository.transactions(query: query),
+            dashboardSnapshot: try repository.dashboard(monthKey: selectedMonthKey, walletID: selectedWalletID),
+            timelineSnapshot: try repository.timelineSnapshot(monthKey: selectedMonthKey, walletID: selectedWalletID, query: query, period: selectedTimelinePeriod),
+            overviewSnapshot: try repository.overviewSnapshot(monthKey: selectedMonthKey, walletID: selectedWalletID),
+            transactionQuery: query
+        )
+    }
+
+    private func overviewCacheKey(monthKey: Int, walletID: UUID?) -> String {
+        "\(monthKey)-\(walletID?.uuidString ?? "all")"
+    }
+
     private func apply(_ snapshot: AppModelSnapshot) {
         wallets = snapshot.wallets
         expenseCategories = snapshot.expenseCategories
@@ -350,6 +416,15 @@ private struct AppModelSnapshot: Sendable {
     var labels: [CashRunwayLabel]
     var templates: [RecurringTemplate]
     var instances: [RecurringInstance]
+    var budgets: [BudgetProgress]
+    var transactions: [TransactionListItem]
+    var dashboardSnapshot: DashboardSnapshot?
+    var timelineSnapshot: TimelineSnapshot?
+    var overviewSnapshot: OverviewSnapshot?
+    var transactionQuery: TransactionQuery
+}
+
+private struct MutableSnapshots: Sendable {
     var budgets: [BudgetProgress]
     var transactions: [TransactionListItem]
     var dashboardSnapshot: DashboardSnapshot?
