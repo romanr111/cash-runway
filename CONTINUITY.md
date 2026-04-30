@@ -93,6 +93,10 @@
 - 2026-04-29T23:31:00+03:00 [CODE] Dashboard filters replaced month-list dropdown with Period Size selector; prev/next arrow buttons navigate months; chart uses xLabel; feed uses periodLabel.
 - 2026-04-29T23:31:00+03:00 [CODE] 33 tests pass including new DateKeys round-trip, period label, and timeline snapshot grouping tests for all periods.
 - 2026-04-29T23:31:00+03:00 [TOOL] `swift test` -> 33 tests passed; `xcodebuild` -> BUILD SUCCEEDED; iPhone 17 simulator boot check -> `dev.roman.cashrunway: 24558`; no fatal/crash/exception entries.
+- 2026-04-30T12:38:47+03:00 [USER] Goal update: timeline feed should group transactions by day INSIDE the scoped month/year period, not flat by period.
+- 2026-04-30T12:38:47+03:00 [CODE] Period selector scope narrowed to Month/Year only; Day/Week removed; `applyPeriodScope` limits transaction queries to selected period.
+- 2026-04-30T12:38:47+03:00 [CODE] Timeline feed now groups by `dayKey` within the scoped period, showing day headers like "Tuesday, 29 Apr" inside Month/Year views.
+- 2026-04-30T12:38:47+03:00 [TOOL] `swift test` -> 34 tests passed; `xcodebuild` -> BUILD SUCCEEDED; iPhone 17 simulator boot check -> `dev.roman.cashrunway: 98554`; no fatal/crash/exception entries.
 - 2026-04-30T12:39:30+03:00 [TOOL] Post-merge `swift test` from primary `main` -> 34 tests in 2 suites passed after 82.646s.
 - 2026-04-30T12:41:00+03:00 [TOOL] Post-merge `xcodebuild -project CashRunway.xcodeproj -scheme CashRunway -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' clean build` -> `** BUILD SUCCEEDED **`.
 - 2026-04-30T12:42:00+03:00 [TOOL] Post-merge iPhone 17 simulator install/launch -> `dev.roman.cashrunway: 88796`; app error/fault/crash/fatal/exception log filter empty.
