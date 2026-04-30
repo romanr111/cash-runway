@@ -100,10 +100,11 @@ struct DashboardView: View {
             }
 
             VStack(spacing: 6) {
-                Text(MoneyFormatter.string(from: model.timelineSnapshot?.heroCashFlowMinor ?? 0))
+                Text(MoneyFormatter.string(from: model.currentCashFlowMinor))
                     .font(.system(size: 42, weight: .bold, design: .rounded))
                     .foregroundStyle(CashRunwayTheme.textPrimary)
                     .multilineTextAlignment(.center)
+                    .animation(.smooth, value: model.currentCashFlowMinor)
                 Text("Cash Flow")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(CashRunwayTheme.textMuted)
@@ -145,63 +146,61 @@ struct DashboardView: View {
     }
 
     private var chartCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Chart(model.timelineSnapshot?.bars ?? []) { point in
-                BarMark(
-                    x: .value("Period", point.xLabel),
-                    y: .value("Income", point.incomeBarMinor)
-                )
-                .foregroundStyle(CashRunwayTheme.accent.gradient)
-                .position(by: .value("Series", "Income"))
-                .cornerRadius(7)
+        let bars = model.allBars
+        let maxValue = bars.map { max($0.incomeBarMinor, $0.expenseBarMinor) }.max() ?? 0
+        let selectedPeriodKey = switch model.selectedTimelinePeriod {
+        case .month: model.selectedMonthKey
+        case .year: model.selectedMonthKey / 100
+        }
 
-                BarMark(
-                    x: .value("Period", point.xLabel),
-                    y: .value("Expense", point.expenseBarMinor)
-                )
-                .foregroundStyle(CashRunwayTheme.negative.opacity(0.9))
-                .position(by: .value("Series", "Expense"))
-                .cornerRadius(7)
-            }
-            .chartXAxis {
-                AxisMarks(values: .automatic) { value in
-                    AxisGridLine(stroke: StrokeStyle(lineWidth: 0))
-                    AxisValueLabel {
-                        if let label = value.as(String.self) {
-                            Text(label)
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(CashRunwayTheme.textMuted)
+        return VStack(alignment: .leading, spacing: 16) {
+            if bars.isEmpty {
+                ContentUnavailableView("No Data", systemImage: "chart.bar")
+                    .frame(height: 210)
+            } else {
+                ScrollViewReader { proxy in
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        LazyHStack(alignment: .bottom, spacing: 16) {
+                            ForEach(bars) { bar in
+                                let isSelected = bar.periodKey == selectedPeriodKey
+                                MonthChartColumn(
+                                    bar: bar,
+                                    isSelected: isSelected,
+                                    maxValue: maxValue
+                                )
+                                .id(bar.periodKey)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    guard !isSelected else { return }
+                                    let impact = UIImpactFeedbackGenerator(style: .light)
+                                    impact.impactOccurred()
+                                    let newMonthKey = DateKeys.monthKey(fromPeriodKey: bar.periodKey, period: model.selectedTimelinePeriod)
+                                    guard newMonthKey != model.selectedMonthKey else { return }
+                                    model.selectedMonthKey = newMonthKey
+                                    model.reloadTimeline()
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                    }
+                    .frame(height: 210)
+                    .onAppear {
+                        proxy.scrollTo(selectedPeriodKey, anchor: .center)
+                    }
+                    .onChange(of: model.selectedMonthKey) { _, _ in
+                        let target = switch model.selectedTimelinePeriod {
+                        case .month: model.selectedMonthKey
+                        case .year: model.selectedMonthKey / 100
+                        }
+                        withAnimation(.smooth) {
+                            proxy.scrollTo(target, anchor: .center)
                         }
                     }
                 }
             }
-            .chartYAxis {
-                AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
-                    AxisGridLine(stroke: StrokeStyle(lineWidth: 1, dash: [3, 4]))
-                        .foregroundStyle(CashRunwayTheme.chartGrid)
-                    AxisValueLabel {
-                        if let amount = value.as(Int64.self) {
-                            Text(OverviewDisplayFormatter.compactMoney(from: amount))
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(CashRunwayTheme.textMuted)
-                        } else if let amount = value.as(Int.self) {
-                            Text(OverviewDisplayFormatter.compactMoney(from: Int64(amount)))
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(CashRunwayTheme.textMuted)
-                        } else if let amount = value.as(Double.self) {
-                            Text(OverviewDisplayFormatter.compactMoney(from: Int64(amount)))
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(CashRunwayTheme.textMuted)
-                        }
-                    }
-                }
-            }
-            .chartLegend(.hidden)
-            .frame(height: 210)
         }
         .padding(20)
         .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
     }
 
     private var overviewButton: some View {
@@ -281,6 +280,53 @@ struct DashboardView: View {
     }
 }
 
+private struct MonthChartColumn: View {
+    let bar: TimelineBarPoint
+    let isSelected: Bool
+    let maxValue: Int64
+
+    private var incomeHeight: CGFloat {
+        barHeight(for: bar.incomeBarMinor)
+    }
+
+    private var expenseHeight: CGFloat {
+        barHeight(for: bar.expenseBarMinor)
+    }
+
+    private func barHeight(for value: Int64) -> CGFloat {
+        guard maxValue > 0 else { return 4 }
+        let height = CGFloat(value) / CGFloat(maxValue) * 140
+        return max(height, 4)
+    }
+
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack(alignment: .bottom, spacing: 5) {
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(CashRunwayTheme.accent.opacity(isSelected ? 1.0 : 0.75))
+                    .frame(width: 16, height: incomeHeight)
+
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(CashRunwayTheme.negative.opacity(isSelected ? 0.95 : 0.7))
+                    .frame(width: 16, height: expenseHeight)
+            }
+
+            Text(bar.xLabel)
+                .font(.system(size: isSelected ? 12 : 11, weight: isSelected ? .bold : .medium))
+                .foregroundStyle(isSelected ? CashRunwayTheme.textPrimary : CashRunwayTheme.textMuted)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .frame(width: 50)
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(isSelected ? CashRunwayTheme.accent.opacity(0.08) : Color.clear)
+        )
+    }
+}
+
 private enum OverviewChartMetric: String, CaseIterable {
     case wealth = "Total Wealth"
     case cashFlow = "Monthly Cash Flow"
@@ -297,6 +343,17 @@ private enum OverviewDisplayFormatter {
             return "\(sign)₴\(trimmed(value / 1_000))k"
         }
         return "\(sign)₴\(trimmed(value))"
+    }
+
+    static func compactNumber(from minorUnits: Int64) -> String {
+        let value = Double(abs(minorUnits)) / 100
+        if value >= 1_000_000 {
+            return "\(trimmed(value / 1_000_000))M"
+        }
+        if value >= 1_000 {
+            return "\(trimmed(value / 1_000))k"
+        }
+        return trimmed(value)
     }
 
     static func percentage(_ value: Double) -> String {

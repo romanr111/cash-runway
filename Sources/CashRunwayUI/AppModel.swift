@@ -26,6 +26,7 @@ public final class CashRunwayAppModel {
     public var dashboardSnapshot: DashboardSnapshot?
     public var timelineSnapshot: TimelineSnapshot?
     public var overviewSnapshot: OverviewSnapshot?
+    public var allBars: [TimelineBarPoint] = []
 
     public var selectedMonthKey = DateKeys.monthKey(for: .now)
     public var selectedWalletID: UUID?
@@ -37,6 +38,16 @@ public final class CashRunwayAppModel {
     public var isLoading = false
     public private(set) var latestTransactionMonthKey: Int?
     private var foregroundRefreshTask: Task<Void, Never>?
+
+    public var currentCashFlowMinor: Int64 {
+        let selectedBar = allBars.first(where: {
+            switch selectedTimelinePeriod {
+            case .month: return $0.periodKey == selectedMonthKey
+            case .year: return $0.periodKey == selectedMonthKey / 100
+            }
+        })
+        return selectedBar.map { $0.incomeMinor - $0.expenseMinor } ?? 0
+    }
     private var lastForegroundRefreshAt: Date?
     private let foregroundRefreshMinimumInterval: TimeInterval = 10
     private var overviewSnapshotCache: [String: OverviewSnapshot] = [:]
@@ -73,6 +84,7 @@ public final class CashRunwayAppModel {
     public func reloadAll() throws {
         isLoading = true
         defer { isLoading = false }
+        try loadAllBars()
         let snapshot = try Self.loadSnapshot(
             repository: repository,
             selectedMonthKey: selectedMonthKey,
@@ -87,32 +99,8 @@ public final class CashRunwayAppModel {
         }
     }
 
-    /// Reloads only the mutable snapshots (dashboard, timeline, overview) without re-fetching
-    /// static metadata like categories, wallets, or labels. Used for month navigation.
-    public func reloadSnapshots() throws {
-        let cacheKey = overviewCacheKey(monthKey: selectedMonthKey, walletID: selectedWalletID)
-        if let cached = overviewSnapshotCache[cacheKey] {
-            overviewSnapshot = cached
-        }
-        isLoading = true
-        defer { isLoading = false }
-        let mutable = try Self.loadMutableSnapshots(
-            repository: repository,
-            selectedMonthKey: selectedMonthKey,
-            selectedWalletID: selectedWalletID,
-            selectedTimelinePeriod: selectedTimelinePeriod,
-            transactionQuery: transactionQuery
-        )
-        budgets = mutable.budgets
-        transactions = mutable.transactions
-        dashboardSnapshot = mutable.dashboardSnapshot
-        timelineSnapshot = mutable.timelineSnapshot
-        overviewSnapshot = mutable.overviewSnapshot
-        transactionQuery = mutable.transactionQuery
-        latestTransactionMonthKey = try? repository.latestTransactionMonthKey()
-        if let overview = mutable.overviewSnapshot {
-            setCachedOverview(overview, monthKey: selectedMonthKey, walletID: selectedWalletID)
-        }
+    private func loadAllBars() throws {
+        allBars = try repository.allBars(walletID: selectedWalletID, period: selectedTimelinePeriod)
     }
 
     /// Loads only the overview snapshot asynchronously. Used for Overview page month navigation.
@@ -151,6 +139,65 @@ public final class CashRunwayAppModel {
         selectedMonthKey = newMonthKey
         Task {
             await reloadOverview()
+        }
+    }
+
+    public func navigatePeriod(by offset: Int) {
+        let monthOffset = selectedTimelinePeriod == .year ? offset * 12 : offset
+        guard let newDate = DateKeys.calendar.date(byAdding: .month, value: monthOffset, to: DateKeys.startOfMonth(for: selectedMonthKey)) else { return }
+        let newMonthKey = DateKeys.monthKey(for: newDate)
+        guard newMonthKey <= maxMonthKey else { return }
+        selectedMonthKey = newMonthKey
+        reloadTimeline()
+    }
+
+    public func reloadTimeline() {
+        Task {
+            await reloadSnapshotsAsync()
+        }
+    }
+
+    private func reloadSnapshotsAsync() async {
+        let targetMonthKey = self.selectedMonthKey
+        let targetWalletID = self.selectedWalletID
+        let targetPeriod = self.selectedTimelinePeriod
+        var targetQuery = self.transactionQuery
+        targetQuery.walletID = targetWalletID
+
+        let cacheKey = overviewCacheKey(monthKey: targetMonthKey, walletID: targetWalletID)
+        if let cached = overviewSnapshotCache[cacheKey] {
+            overviewSnapshot = cached
+        }
+
+        do {
+            let repository = self.repository
+            let mutable = try await Task.detached(priority: .userInitiated) {
+                try Self.loadMutableSnapshots(
+                    repository: repository,
+                    selectedMonthKey: targetMonthKey,
+                    selectedWalletID: targetWalletID,
+                    selectedTimelinePeriod: targetPeriod,
+                    transactionQuery: targetQuery
+                )
+            }.value
+
+            guard selectedMonthKey == targetMonthKey,
+                  selectedWalletID == targetWalletID,
+                  selectedTimelinePeriod == targetPeriod else { return }
+
+            budgets = mutable.budgets
+            transactions = mutable.transactions
+            dashboardSnapshot = mutable.dashboardSnapshot
+            timelineSnapshot = mutable.timelineSnapshot
+            overviewSnapshot = mutable.overviewSnapshot
+            transactionQuery = mutable.transactionQuery
+            latestTransactionMonthKey = try? repository.latestTransactionMonthKey()
+            if let overview = mutable.overviewSnapshot {
+                setCachedOverview(overview, monthKey: targetMonthKey, walletID: targetWalletID)
+            }
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 

@@ -33,7 +33,19 @@ struct CashRunwayCoreTests {
         #expect(DateKeys.periodLabel(periodKey: yearKey, period: .year) == "2025")
     }
 
-    @Test func timelineSnapshotGroupsByMonthAndYearOnly() throws {
+    @Test func periodKeyRoundTripsToMonthKey() {
+        let calendar = Calendar(identifier: .gregorian)
+        let date = calendar.date(from: DateComponents(year: 2025, month: 4, day: 7))!
+        let monthKey = DateKeys.monthKey(for: date)
+
+        let monthPeriodKey = DateKeys.periodKey(for: date, period: .month)
+        #expect(DateKeys.monthKey(fromPeriodKey: monthPeriodKey, period: .month) == monthKey)
+
+        let yearPeriodKey = DateKeys.periodKey(for: date, period: .year)
+        #expect(DateKeys.monthKey(fromPeriodKey: yearPeriodKey, period: .year) == 202501)
+    }
+
+    @Test func timelineSnapshotGroupsByPeriod() throws {
         let location = TestSupport.makeLocation()
         let manager = try DatabaseManager(locationProvider: location)
         let repository = CashRunwayRepository(databaseManager: manager)
