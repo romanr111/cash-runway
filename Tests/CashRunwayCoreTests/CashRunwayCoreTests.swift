@@ -462,6 +462,56 @@ struct CashRunwayCoreTests {
         #expect(lastMonthPoint.totalWealthMinor == dashboardAllWallets.totalBalanceMinor)
     }
 
+    @Test func overviewSnapshotIncludesTransactionsBeforeWindow() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        let walletID = try #require(try repository.wallets().first?.id)
+        let expenseCategory = try #require(try repository.categories(kind: .expense).first?.id)
+        let calendar = Calendar(identifier: .gregorian)
+
+        // Create a transaction 8 months before the overview window
+        let earlyDate = calendar.date(from: DateComponents(year: 2025, month: 1, day: 10))!
+        try repository.saveTransaction(
+            TransactionDraft(
+                kind: .expense,
+                walletID: walletID,
+                amountMinor: 50_000,
+                occurredAt: earlyDate,
+                categoryID: expenseCategory,
+                merchant: "Early",
+                note: ""
+            )
+        )
+
+        // Create a transaction inside the window
+        let lateDate = calendar.date(from: DateComponents(year: 2025, month: 8, day: 10))!
+        try repository.saveTransaction(
+            TransactionDraft(
+                kind: .expense,
+                walletID: walletID,
+                amountMinor: 25_000,
+                occurredAt: lateDate,
+                categoryID: expenseCategory,
+                merchant: "Late",
+                note: ""
+            )
+        )
+
+        let monthKey = DateKeys.monthKey(for: lateDate)
+
+        // All-wallets view (default Overview filter) must include early transactions
+        let snapshotAll = try repository.overviewSnapshot(monthKey: monthKey, walletID: nil)
+        let pointAll = try #require(snapshotAll.months.first(where: { $0.monthKey == monthKey }))
+        let dashboardAll = try repository.dashboard(monthKey: monthKey, walletID: nil)
+        #expect(pointAll.totalWealthMinor == dashboardAll.totalBalanceMinor)
+
+        // Single-wallet view must also include early transactions
+        let snapshotOne = try repository.overviewSnapshot(monthKey: monthKey, walletID: walletID)
+        let pointOne = try #require(snapshotOne.months.first(where: { $0.monthKey == monthKey }))
+        let dashboardOne = try repository.dashboard(monthKey: monthKey, walletID: walletID)
+        #expect(pointOne.totalWealthMinor == dashboardOne.totalBalanceMinor)
+    }
+
     @Test func latestTransactionMonthKeyReflectsActualData() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()

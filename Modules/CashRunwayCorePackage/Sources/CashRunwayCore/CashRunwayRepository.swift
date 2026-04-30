@@ -1463,7 +1463,6 @@ public final class CashRunwayRepository: @unchecked Sendable {
     private func monthEndBalances(for months: [Int], walletID: UUID?, db: Database) throws -> [Int: Int64] {
         guard !months.isEmpty else { return [:] }
         let sortedMonths = Set(months).sorted()
-        let earliest = sortedMonths.first!
         let latest = sortedMonths.last!
 
         let startingBalance: Int64
@@ -1486,14 +1485,14 @@ public final class CashRunwayRepository: @unchecked Sendable {
             SELECT month_key,
                    COALESCE(SUM(income_minor - expense_minor + transfer_in_minor - transfer_out_minor), 0) AS net_delta
             FROM monthly_wallet_cashflow
-            WHERE month_key BETWEEN ? AND ?
+            WHERE month_key <= ?
             \(walletID == nil ? "" : "AND wallet_id = ?")
             GROUP BY month_key
             ORDER BY month_key
             """,
             arguments: walletID == nil
-                ? [earliest, latest]
-                : [earliest, latest, walletID!.uuidString]
+                ? [latest]
+                : [latest, walletID!.uuidString]
         )
 
         var cumulative = startingBalance
