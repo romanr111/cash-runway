@@ -1,6 +1,11 @@
 # CONTINUITY
 
 ## Snapshot
+- 2026-05-07T22:20:00+03:00 [USER] Goal update: code-review local CSV export changes, then publish, open PR, and merge into remote `main` only if validation is clean.
+- 2026-05-07T22:20:00+03:00 [TOOL] Active worktree `/Users/roman/Documents/Development/Cash Runway`; branch `codex/csv-export-merchant-file`; base `origin/main` at `054f7d5`; local diff contains CSV export merchant/file-sharing changes plus tests.
+- 2026-05-07T22:20:00+03:00 [TOOL] Review finding: `swift test` failed because `walletExportRoundTripVerifiesOldFormatImportsAndNewFormatExports` read an absolute iCloud fixture path and hit `Operation not permitted`; fix is to use a repo-local inline old-format CSV fixture.
+- 2026-05-07T22:23:00+03:00 [CODE] Review fix: transfer-only CSV export filters now return a header-only CSV instead of falling back to all expense/income rows; added focused coverage.
+- 2026-05-07T22:25:00+03:00 [TOOL] Verification clean after review fixes: `swift test` -> 49 tests passed; iPhone 17 simulator `xcodebuild clean build` -> `** BUILD SUCCEEDED **`; app launched as `dev.roman.cashrunway: 91022` with no crash/fatal/exception logs.
 - 2026-04-26 [USER] Goal: implement the full `PLAN.md` MVP for a Cash Runway iPhone finance app using screenshot references.
 - 2026-04-26 [DECISION] D001 ACTIVE: use a thin iOS host app plus a local Swift package for core/domain/UI modules so most functionality remains testable with `swift test`.
 - 2026-04-26 [DECISION] D002 ACTIVE: use host Xcode tooling instead of containers because native iOS simulator builds are the required output.

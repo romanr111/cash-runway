@@ -381,8 +381,8 @@ public final class CashRunwayAppModel {
         }
     }
 
-    public func exportCSV() -> String {
-        (try? csvService.exportCSV(query: transactionQuery)) ?? ""
+    public func exportCSV() throws -> String {
+        try csvService.exportCSV(query: transactionQuery)
     }
 
     public func previewCSV(data: Data) throws -> CSVImportPreview {

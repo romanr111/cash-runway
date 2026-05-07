@@ -27,6 +27,9 @@ struct SettingsView: View {
     @State private var importPreparationProgress = 0.0
     @State private var importPreparationStatus = ""
     @State private var importPreparationError: String?
+    @State private var isExporterPresented = false
+    @State private var exportFileURL: URL?
+    @State private var isExporting = false
 
     var body: some View {
         NavigationStack {
@@ -80,10 +83,29 @@ struct SettingsView: View {
                                 isImporterPresented = true
                             }
                             rowDivider
-                            ShareLink(item: model.exportCSV(), preview: SharePreview("cash-runway-export.csv")) {
-                                rowContent(icon: "square.and.arrow.up.fill", tint: "#E5862F", title: "Export CSV", subtitle: "Share the current filtered export")
+                            moreRow(icon: "square.and.arrow.up.fill", tint: "#E5862F", title: "Export CSV", subtitle: isExporting ? "Exporting…" : "Share the current filtered export") {
+                                guard !isExporting else { return }
+                                isExporting = true
+                                let service = model.csvService
+                                let query = model.transactionQuery
+                                Task.detached(priority: .userInitiated) {
+                                    do {
+                                        let csv = try service.exportCSV(query: query)
+                                        let url = FileManager.default.temporaryDirectory.appendingPathComponent("cash-runway-export.csv")
+                                        try csv.write(to: url, atomically: true, encoding: .utf8)
+                                        await MainActor.run {
+                                            exportFileURL = url
+                                            isExporterPresented = true
+                                            isExporting = false
+                                        }
+                                    } catch {
+                                        await MainActor.run {
+                                            model.errorMessage = error.localizedDescription
+                                            isExporting = false
+                                        }
+                                    }
+                                }
                             }
-                            .buttonStyle(.plain)
                         }
                         .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
@@ -143,6 +165,15 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $isDiagnosticsPresented) {
                 DiagnosticsView(model: model)
+            }
+            .sheet(isPresented: $isExporterPresented) {
+                if let url = exportFileURL {
+                    #if canImport(UIKit)
+                    ActivityView(activityItems: [url])
+                    #else
+                    Text("CSV export is unavailable on this platform.")
+                    #endif
+                }
             }
             .sheet(isPresented: $isImporterPresented) {
                 #if canImport(UIKit)
@@ -324,6 +355,17 @@ private enum CSVDocumentPickerError: LocalizedError, Equatable {
 }
 
 #if canImport(UIKit)
+private struct ActivityView: UIViewControllerRepresentable {
+    let activityItems: [Any]
+    let applicationActivities: [UIActivity]? = nil
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: activityItems, applicationActivities: applicationActivities)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
 private struct CSVDocumentPicker: UIViewControllerRepresentable {
     let allowedContentTypes: [UTType]
     let onCompletion: (Result<URL, any Error>) -> Void
