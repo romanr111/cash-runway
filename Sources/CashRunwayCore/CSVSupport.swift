@@ -136,8 +136,13 @@ public final class CSVService: @unchecked Sendable {
     }
 
     public func exportCSV(query: TransactionQuery = .init()) throws -> String {
-        let transactions = try repository.transactions(query: query, limit: nil)
-        let header = ["Date", "Wallet", "Type", "Category name", "Amount", "Currency", "Note", "Labels", "Author"]
+        var exportQuery = query
+        exportQuery.kinds = query.kinds.subtracting([.transfer])
+        let header = ["Date", "Wallet", "Type", "Category name", "Merchant", "Amount", "Currency", "Note", "Labels", "Author"]
+        guard !exportQuery.kinds.isEmpty else {
+            return header.joined(separator: ",")
+        }
+        let transactions = try repository.transactions(query: exportQuery, limit: nil)
         let dateFormatter = ISO8601DateFormatter()
         let lines = transactions.map { item in
             [
@@ -145,6 +150,7 @@ public final class CSVService: @unchecked Sendable {
                 item.walletName,
                 item.kind.rawValue.capitalized,
                 item.categoryName ?? "",
+                item.merchant,
                 MoneyFormatter.plainString(from: item.amountMinor),
                 "UAH",
                 item.note,

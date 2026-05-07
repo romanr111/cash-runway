@@ -200,7 +200,7 @@ struct TransactionDetailsView: View {
                     }
                 }
             }
-            .navigationTitle(item.merchant)
+            .navigationTitle(item.displayTitle)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }

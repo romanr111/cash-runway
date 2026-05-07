@@ -661,9 +661,10 @@ struct CashRunwayCoreTests {
         #expect(searchResults.first?.source == .importCSV)
         try TestSupport.assertCategoryTruth(repository)
         let exported = try service.exportCSV(query: .init(searchText: "Silp"))
-        #expect(exported.split(separator: "\n").first == "Date,Wallet,Type,Category name,Amount,Currency,Note,Labels,Author")
+        #expect(exported.split(separator: "\n").first == "Date,Wallet,Type,Category name,Merchant,Amount,Currency,Note,Labels,Author")
         #expect(exported.contains("\"Expense\""))
         #expect(exported.contains("\"-123.45\""))
+        #expect(exported.contains("\"Silpo\""))
     }
 
     @Test func cashRunwayWalletCSVFormatImportsSignedRowsAndExportsRoundTrippableFile() throws {
@@ -674,9 +675,9 @@ struct CashRunwayCoreTests {
         try repository.saveLabel(label)
         let service = CSVService(repository: repository)
         let csv = """
-        Date,Wallet,Type,Category name,Amount,Currency,Note,Labels,Author
-        2026-04-20T12:30:00Z,\(wallet.name),Expense,Groceries,-123.45,UAH,"weekly, groceries",Trip,ignored@example.com
-        2026-04-21T08:00:00Z,\(wallet.name),Income,Salary,400.00,UAH,Monthly salary,,ignored@example.com
+        Date,Wallet,Type,Category name,Merchant,Amount,Currency,Note,Labels,Author
+        2026-04-20T12:30:00Z,\(wallet.name),Expense,Groceries,,-123.45,UAH,"weekly, groceries",Trip,ignored@example.com
+        2026-04-21T08:00:00Z,\(wallet.name),Income,Salary,,400.00,UAH,Monthly salary,,ignored@example.com
         """
 
         let preview = try service.preview(data: Data(csv.utf8))
@@ -700,9 +701,10 @@ struct CashRunwayCoreTests {
         try TestSupport.assertCategoryTruth(repository)
 
         let exported = try service.exportCSV()
-        #expect(exported.split(separator: "\n").first == "Date,Wallet,Type,Category name,Amount,Currency,Note,Labels,Author")
-        #expect(exported.contains("\"Expense\",\"Groceries\",\"-123.45\""))
-        #expect(exported.contains("\"Income\",\"Salary\",\"400.00\""))
+        #expect(exported.split(separator: "\n").first == "Date,Wallet,Type,Category name,Merchant,Amount,Currency,Note,Labels,Author")
+        #expect(exported.contains("\"Expense\",\"Groceries\",\"\",\"-123.45\""))
+        #expect(exported.contains("\"Income\",\"Salary\",\"\",\"400.00\""))
+        #expect(exported.contains(",\"Trip\",\""))
 
         let roundTripRepository = try TestSupport.makeRepository()
         try roundTripRepository.seedIfNeeded()
@@ -725,9 +727,9 @@ struct CashRunwayCoreTests {
         let wallet = try #require(try repository.wallets().first)
         let service = CSVService(repository: repository)
         let csv = """
-        Date,Wallet,Type,Category name,Amount,Currency,Note,Labels,Author
-        2026-04-20T12:30:00Z,\(wallet.name),Expense,Pet Supplies,-123.45,UAH,Kibble,,ignored@example.com
-        2026-04-21T08:00:00Z,\(wallet.name),Income,Side Project,400.00,UAH,Invoice,,ignored@example.com
+        Date,Wallet,Type,Category name,Merchant,Amount,Currency,Note,Labels,Author
+        2026-04-20T12:30:00Z,\(wallet.name),Expense,Pet Supplies,,-123.45,UAH,Kibble,,ignored@example.com
+        2026-04-21T08:00:00Z,\(wallet.name),Income,Side Project,,400.00,UAH,Invoice,,ignored@example.com
         """
 
         let result = try service.importCSV(
@@ -753,10 +755,10 @@ struct CashRunwayCoreTests {
         let wallet = try #require(try repository.wallets().first)
         let service = CSVService(repository: repository)
         let csv = """
-        Date,Wallet,Type,Category name,Amount,Currency,Note,Labels,Author
-        2026-04-20T12:30:00Z,\(wallet.name),Expense,Groceries,-123.45,UAH,Weekly shopping,Trip;Work,ignored@example.com
-        2026-04-21T08:00:00Z,\(wallet.name),Expense,Groceries,-50.00,UAH,Quick run,Trip,ignored@example.com
-        2026-04-22T09:00:00Z,\(wallet.name),Income,Salary,400.00,UAH,Monthly pay,Work,ignored@example.com
+        Date,Wallet,Type,Category name,Merchant,Amount,Currency,Note,Labels,Author
+        2026-04-20T12:30:00Z,\(wallet.name),Expense,Groceries,,-123.45,UAH,Weekly shopping,Trip;Work,ignored@example.com
+        2026-04-21T08:00:00Z,\(wallet.name),Expense,Groceries,,-50.00,UAH,Quick run,Trip,ignored@example.com
+        2026-04-22T09:00:00Z,\(wallet.name),Income,Salary,,400.00,UAH,Monthly pay,Work,ignored@example.com
         """
 
         #expect(try repository.labels().isEmpty)
@@ -784,11 +786,11 @@ struct CashRunwayCoreTests {
         let wallet = try #require(try repository.wallets().first)
         let service = CSVService(repository: repository)
         let csv = """
-        Date,Wallet,Type,Category name,Amount,Currency,Note,Labels,Author
-        2026-04-20T12:30:00Z,\(wallet.name),Expense,Food & Drink,-123.45,UAH,Lunch,,ignored@example.com
-        2026-04-21T08:00:00Z,\(wallet.name),Expense,Отношения,-50.00,UAH,Flowers,,ignored@example.com
-        2026-04-22T09:00:00Z,\(wallet.name),Expense,Оренда,-300.00,UAH,Flat,,ignored@example.com
-        2026-04-23T10:00:00Z,\(wallet.name),Income,Фриланс,400.00,UAH,Invoice,,ignored@example.com
+        Date,Wallet,Type,Category name,Merchant,Amount,Currency,Note,Labels,Author
+        2026-04-20T12:30:00Z,\(wallet.name),Expense,Food & Drink,,-123.45,UAH,Lunch,,ignored@example.com
+        2026-04-21T08:00:00Z,\(wallet.name),Expense,Отношения,,-50.00,UAH,Flowers,,ignored@example.com
+        2026-04-22T09:00:00Z,\(wallet.name),Expense,Оренда,,-300.00,UAH,Flat,,ignored@example.com
+        2026-04-23T10:00:00Z,\(wallet.name),Income,Фриланс,,400.00,UAH,Invoice,,ignored@example.com
         """
 
         let result = try service.importCSV(
@@ -812,9 +814,9 @@ struct CashRunwayCoreTests {
         let expenseCountBefore = try repository.categories(kind: .expense).count
         let incomeCountBefore = try repository.categories(kind: .income).count
         let csv = """
-        Date,Wallet,Type,Category name,Amount,Currency,Note,Labels,Author
-        2026-04-20T12:30:00Z,\(wallet.name),Expense,groceries,-123.45,UAH,Weekly,,ignored@example.com
-        2026-04-21T08:00:00Z,\(wallet.name),Income,SALARY,400.00,UAH,Monthly,,ignored@example.com
+        Date,Wallet,Type,Category name,Merchant,Amount,Currency,Note,Labels,Author
+        2026-04-20T12:30:00Z,\(wallet.name),Expense,groceries,,-123.45,UAH,Weekly,,ignored@example.com
+        2026-04-21T08:00:00Z,\(wallet.name),Income,SALARY,,400.00,UAH,Monthly,,ignored@example.com
         """
 
         let result = try service.importCSV(
@@ -918,8 +920,405 @@ struct CashRunwayCoreTests {
         #expect(truth.labelLinkCount == fixture.labeledRowCount)
 
         let exported = try service.exportCSV()
-        #expect(exported.split(separator: "\n").first == "Date,Wallet,Type,Category name,Amount,Currency,Note,Labels,Author")
+        #expect(exported.split(separator: "\n").first == "Date,Wallet,Type,Category name,Merchant,Amount,Currency,Note,Labels,Author")
         #expect(TestSupport.csvRowCount(exported) == fixture.rowCount + 1)
+    }
+
+    @Test func csvExportIncludesMerchantColumn() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        let walletID = try #require(try repository.wallets().first?.id)
+        let service = CSVService(repository: repository)
+        let csv = """
+        Date,Amount,Merchant,Note
+        2026-01-02,100.00,TestShop,Purchase
+        """
+
+        _ = try service.importCSV(
+            data: Data(csv.utf8),
+            fileName: "export-test.csv",
+            mapping: CSVImportMapping(
+                dateColumn: "Date",
+                amountColumn: "Amount",
+                debitColumn: nil,
+                creditColumn: nil,
+                merchantColumn: "Merchant",
+                noteColumn: "Note",
+                categoryColumn: nil,
+                labelsColumn: nil,
+                walletID: walletID,
+                defaultKind: .expense
+            )
+        )
+
+        let exported = try service.exportCSV()
+        let header = exported.split(separator: "\n").first ?? ""
+        #expect(String(header) == "Date,Wallet,Type,Category name,Merchant,Amount,Currency,Note,Labels,Author")
+        #expect(exported.contains("\"TestShop\""))
+    }
+
+    @Test func csvExportRoundTripPreservesMerchant() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        let walletID = try #require(try repository.wallets().first?.id)
+        let service = CSVService(repository: repository)
+        let csv = """
+        Date,Amount,Merchant,Note
+        2026-01-10,250.00,Silpo,Groceries
+        """
+
+        _ = try service.importCSV(
+            data: Data(csv.utf8),
+            fileName: "merchant.csv",
+            mapping: CSVImportMapping(
+                dateColumn: "Date",
+                amountColumn: "Amount",
+                debitColumn: nil,
+                creditColumn: nil,
+                merchantColumn: "Merchant",
+                noteColumn: "Note",
+                categoryColumn: nil,
+                labelsColumn: nil,
+                walletID: walletID,
+                defaultKind: .expense
+            )
+        )
+
+        let exported = try service.exportCSV()
+        let roundTripRepo = try TestSupport.makeRepository()
+        try roundTripRepo.seedIfNeeded()
+        let roundTripWalletID = try #require(try roundTripRepo.wallets().first?.id)
+        let roundTripService = CSVService(repository: roundTripRepo)
+        let result = try roundTripService.importCSV(
+            data: Data(exported.utf8),
+            fileName: "roundtrip-merchant.csv",
+            mapping: TestSupport.cashRunwayWalletMapping(walletID: roundTripWalletID)
+        )
+
+        #expect(result.insertedTransactions == 1)
+        let imported = try roundTripRepo.transactions(query: .init(), limit: nil)
+        #expect(imported.count == 1)
+        #expect(imported.first?.merchant == "Silpo")
+        #expect(imported.first?.amountMinor == -25_000)
+    }
+
+    @Test func csvExportRoundTripPreservesAllFields() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        let walletID = try #require(try repository.wallets().first?.id)
+        let label = Label(id: UUID(), name: "Business", colorHex: "#1CC389", createdAt: .now, updatedAt: .now)
+        try repository.saveLabel(label)
+        let service = CSVService(repository: repository)
+        let csv = """
+        Date,Wallet,Type,Category name,Merchant,Amount,Currency,Note,Labels,Author
+        2026-03-15T10:00:00Z,Main Wallet,Income,Salary,ACME Corp,500.00,UAH,Monthly salary,Business,ignored@example.com
+        2026-03-20T14:30:00Z,Main Wallet,Expense,Groceries,ATB,-150.75,UAH,Weekly shopping,Business,ignored@example.com
+        """
+
+        let result = try service.importCSV(
+            data: Data(csv.utf8),
+            fileName: "all-fields.csv",
+            mapping: TestSupport.cashRunwayWalletMapping(walletID: walletID)
+        )
+
+        #expect(result.insertedTransactions == 2)
+        try TestSupport.assertWalletTruth(repository)
+        try TestSupport.assertCategoryTruth(repository)
+
+        let exported = try service.exportCSV()
+        let rows = TestSupport.parseCSVRows(exported)
+        #expect(rows.count == 3)
+        #expect(rows[0] == ["Date", "Wallet", "Type", "Category name", "Merchant", "Amount", "Currency", "Note", "Labels", "Author"])
+
+        let row1 = rows.first(where: { $0.indices.contains(3) && $0[3] == "Salary" })
+        #expect(row1 != nil)
+        #expect(row1?.dropFirst().count == 9)
+
+        let row2 = rows.first(where: { $0.indices.contains(3) && $0[3] == "Groceries" })
+        #expect(row2 != nil)
+
+        let roundTripRepo = try TestSupport.makeRepository()
+        try roundTripRepo.seedIfNeeded()
+        let roundTripWalletID = try #require(try roundTripRepo.wallets().first?.id)
+        let roundTripService = CSVService(repository: roundTripRepo)
+        let roundTripResult = try roundTripService.importCSV(
+            data: Data(exported.utf8),
+            fileName: "roundtrip-all.csv",
+            mapping: TestSupport.cashRunwayWalletMapping(walletID: roundTripWalletID)
+        )
+
+        #expect(roundTripResult.insertedTransactions == 2)
+        let importedLabels = try roundTripRepo.transactions(query: .init(), limit: nil).flatMap { $0.labels }
+        #expect(importedLabels.contains { $0.name == "Business" })
+    }
+
+    @Test func csvExportExcludesTransfersByDefault() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        let wallets = try repository.wallets()
+        #expect(wallets.count >= 2)
+        let service = CSVService(repository: repository)
+        let csv = """
+        Date,Amount,Merchant,Note
+        2026-01-10,100.00,Expense Row,Test
+        2026-01-11,200.00,Income Row,Credit
+        """
+
+        _ = try service.importCSV(
+            data: Data(csv.utf8),
+            fileName: "mixed.csv",
+            mapping: CSVImportMapping(
+                dateColumn: "Date",
+                amountColumn: "Amount",
+                debitColumn: nil,
+                creditColumn: nil,
+                merchantColumn: "Merchant",
+                noteColumn: "Note",
+                categoryColumn: nil,
+                labelsColumn: nil,
+                walletID: wallets[0].id,
+                defaultKind: .expense
+            )
+        )
+
+        try repository.saveTransaction(
+            TransactionDraft(
+                kind: .transfer,
+                walletID: wallets[0].id,
+                destinationWalletID: wallets[1].id,
+                amountMinor: 50_000,
+                occurredAt: Date(),
+                merchant: "Transfer Row",
+                note: "Move"
+            )
+        )
+
+        let allTransactions = try repository.transactions(query: .init(), limit: nil)
+        let hasTransfer = allTransactions.contains { $0.kind == .transfer }
+        #expect(hasTransfer)
+
+        let exported = try service.exportCSV()
+        let rows = TestSupport.parseCSVRows(exported)
+        let dataRows = rows.dropFirst()
+        #expect(dataRows.allSatisfy { row in
+            row.indices.contains(2) && row[2] != "Transfer"
+        })
+        #expect(dataRows.count == allTransactions.filter { $0.kind != .transfer }.count)
+
+        let transferOnlyExport = try service.exportCSV(query: .init(kinds: [.transfer]))
+        #expect(TestSupport.parseCSVRows(transferOnlyExport).count == 1)
+    }
+
+    @Test func csvExportWithFilterReturnsSubset() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        let walletID = try #require(try repository.wallets().first?.id)
+        let service = CSVService(repository: repository)
+        let csv = """
+        Date,Amount,Merchant,Note
+        2026-01-10,100.00,Shop A,First
+        2026-01-15,200.00,Shop B,Second
+        2026-02-01,300.00,Shop C,Third
+        """
+
+        _ = try service.importCSV(
+            data: Data(csv.utf8),
+            fileName: "filter-test.csv",
+            mapping: CSVImportMapping(
+                dateColumn: "Date",
+                amountColumn: "Amount",
+                debitColumn: nil,
+                creditColumn: nil,
+                merchantColumn: "Merchant",
+                noteColumn: "Note",
+                categoryColumn: nil,
+                labelsColumn: nil,
+                walletID: walletID,
+                defaultKind: .expense
+            )
+        )
+
+        let startDate = ISO8601DateFormatter().date(from: "2026-01-14T00:00:00Z")!
+        let filteredExport = try service.exportCSV(query: .init(startDate: startDate))
+        let rows = TestSupport.parseCSVRows(filteredExport)
+        #expect(rows.count == 3)
+        #expect(rows.dropFirst().allSatisfy { row in
+            row.indices.contains(4) && row[4] != "Shop A"
+        })
+
+        let searchExport = try service.exportCSV(query: .init(searchText: "Shop"))
+        let searchRows = TestSupport.parseCSVRows(searchExport)
+        #expect(searchRows.count == 4)
+
+        let noMatchExport = try service.exportCSV(query: .init(searchText: "Nonexistent"))
+        let noMatchRows = TestSupport.parseCSVRows(noMatchExport)
+        #expect(noMatchRows.count == 1)
+    }
+
+    @Test func csvExportWithEmptyDBReturnsHeaderOnly() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        let service = CSVService(repository: repository)
+        let exported = try service.exportCSV()
+        let rows = TestSupport.parseCSVRows(exported)
+        #expect(rows.count == 1)
+        #expect(rows[0] == ["Date", "Wallet", "Type", "Category name", "Merchant", "Amount", "Currency", "Note", "Labels", "Author"])
+    }
+
+    @Test func csvExportHandlesSpecialCharacters() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        let walletID = try #require(try repository.wallets().first?.id)
+        let walletName = try #require(try repository.wallets().first?.name)
+        let label1 = Label(id: UUID(), name: "ProjectX", colorHex: "#1CC389", createdAt: .now, updatedAt: .now)
+        let label2 = Label(id: UUID(), name: "YZ", colorHex: "#60788A", createdAt: .now, updatedAt: .now)
+        try repository.saveLabel(label1)
+        try repository.saveLabel(label2)
+        let service = CSVService(repository: repository)
+
+        let header = "Date,Wallet,Type,Category name,Merchant,Amount,Currency,Note,Labels,Author\n"
+        let row1 = "2026-04-01T10:00:00Z,\(walletName),Expense,Groceries,Shop A,-100.00,UAH,\"Note with, comma\",\"ProjectX;YZ\",ignored@example.com\n"
+        let csv = header + row1
+
+        let result = try service.importCSV(
+            data: Data(csv.utf8),
+            fileName: "special.csv",
+            mapping: TestSupport.cashRunwayWalletMapping(walletID: walletID)
+        )
+
+        #expect(result.insertedTransactions == 1)
+        let exported = try service.exportCSV()
+
+        let roundTripRepo = try TestSupport.makeRepository()
+        try roundTripRepo.seedIfNeeded()
+        try roundTripRepo.saveLabel(Label(id: UUID(), name: "ProjectX", colorHex: "#1CC389", createdAt: .now, updatedAt: .now))
+        try roundTripRepo.saveLabel(Label(id: UUID(), name: "YZ", colorHex: "#60788A", createdAt: .now, updatedAt: .now))
+        let roundTripWalletID = try #require(try roundTripRepo.wallets().first?.id)
+        let roundTripService = CSVService(repository: roundTripRepo)
+        let roundTripResult = try roundTripService.importCSV(
+            data: Data(exported.utf8),
+            fileName: "roundtrip-special.csv",
+            mapping: TestSupport.cashRunwayWalletMapping(walletID: roundTripWalletID)
+        )
+
+        #expect(roundTripResult.insertedTransactions == 1)
+        let roundTripTx = try #require(try roundTripRepo.transactions(query: .init(), limit: nil).first)
+        #expect(roundTripTx.merchant == "Shop A")
+        #expect(roundTripTx.note == "Note with, comma")
+        #expect(roundTripTx.labels.contains { $0.name == "ProjectX" })
+        #expect(roundTripTx.labels.contains { $0.name == "YZ" })
+    }
+
+    @Test func csvExportHandlesUnicodeCategoryLabels() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        let walletID = try #require(try repository.wallets().first?.id)
+        let walletName = try #require(try repository.wallets().first?.name)
+        let service = CSVService(repository: repository)
+
+        let header = "Date,Wallet,Type,Category name,Merchant,Amount,Currency,Note,Labels,Author\n"
+        let row1 = "2026-04-15T12:00:00Z,\(walletName),Expense,Продукти,Сільпо,-250.50,UAH,Щотижня,Покупки,ignored@example.com\n"
+        let row2 = "2026-04-16T09:00:00Z,\(walletName),Income,Зарплата,Робота,1000.00,UAH,Місячна,,ignored@example.com\n"
+        let csv = header + row1 + row2
+
+        let result = try service.importCSV(
+            data: Data(csv.utf8),
+            fileName: "unicode.csv",
+            mapping: TestSupport.cashRunwayWalletMapping(walletID: walletID)
+        )
+
+        #expect(result.insertedTransactions == 2)
+        let exported = try service.exportCSV()
+
+        let roundTripRepo = try TestSupport.makeRepository()
+        try roundTripRepo.seedIfNeeded()
+        let roundTripWalletID = try #require(try roundTripRepo.wallets().first?.id)
+        let roundTripService = CSVService(repository: roundTripRepo)
+        let roundTripResult = try roundTripService.importCSV(
+            data: Data(exported.utf8),
+            fileName: "roundtrip-unicode.csv",
+            mapping: TestSupport.cashRunwayWalletMapping(walletID: roundTripWalletID)
+        )
+
+        #expect(roundTripResult.insertedTransactions == 2)
+        let imported = try roundTripRepo.transactions(query: .init(), limit: nil)
+        #expect(imported.contains { $0.categoryName == "Продукти" && $0.merchant == "Сільпо" })
+        #expect(imported.contains { $0.categoryName == "Зарплата" && $0.merchant == "Робота" })
+        #expect(imported.contains { $0.amountMinor == -25_050 })
+        #expect(imported.contains { $0.amountMinor == 100_000 })
+    }
+
+    @Test func walletExportRoundTripVerifiesOldFormatImportsAndNewFormatExports() throws {
+        let text = """
+        Date,Wallet,Type,Category name,Amount,Currency,Note,Labels,Author
+        2026-04-20T12:30:00Z,Main Wallet,Expense,Groceries,-123.45,UAH,Weekly shopping,Trip|Work,ignored@example.com
+        2026-04-21T08:00:00Z,Main Wallet,Income,Salary,400.00,UAH,Monthly pay,Work,ignored@example.com
+        """
+        let data = Data(text.utf8)
+
+        let allRows = TestSupport.parseCSVRows(text)
+        let headerRow = try #require(allRows.first)
+        let oldHeaderCount = headerRow.count
+        #expect(oldHeaderCount == 9)
+        #expect(!headerRow.contains("Merchant"))
+
+        let oldRowCount = allRows.count - 1
+
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        let walletID = try #require(try repository.wallets().first?.id)
+        let service = CSVService(repository: repository)
+
+        let clock = ContinuousClock()
+        var elapsedSeconds = 0.0
+        let elapsed = try clock.measure {
+            let result = try service.importCSV(
+                data: data,
+                fileName: "old-format-wallet-export.csv",
+                mapping: TestSupport.cashRunwayWalletMapping(walletID: walletID)
+            )
+            #expect(result.insertedTransactions == oldRowCount)
+            #expect(result.rowErrors.isEmpty)
+        }
+        elapsedSeconds = TestSupport.seconds(elapsed)
+        #expect(elapsedSeconds < 60)
+
+        let exported = try service.exportCSV()
+        let exportedRows = TestSupport.parseCSVRows(exported)
+        let exportedHeader = try #require(exportedRows.first)
+        #expect(exportedHeader.count == 10)
+        #expect(exportedHeader.contains("Merchant"))
+        #expect(exportedRows.count == oldRowCount + 1)
+
+        let roundTripRepo = try TestSupport.makeRepository()
+        try roundTripRepo.seedIfNeeded()
+        let roundTripWalletID = try #require(try roundTripRepo.wallets().first?.id)
+        let roundTripService = CSVService(repository: roundTripRepo)
+
+        var roundTripElapsed = 0.0
+        let roundTripElapsedDur = try clock.measure {
+            let roundTripResult = try roundTripService.importCSV(
+                data: Data(exported.utf8),
+                fileName: "roundtrip-verification.csv",
+                mapping: TestSupport.cashRunwayWalletMapping(walletID: roundTripWalletID)
+            )
+            #expect(roundTripResult.insertedTransactions == oldRowCount)
+            #expect(roundTripResult.rowErrors.isEmpty)
+        }
+        roundTripElapsed = TestSupport.seconds(roundTripElapsedDur)
+        #expect(roundTripElapsed < 60)
+
+        let roundTripTransactions = try roundTripRepo.transactions(query: .init(), limit: nil)
+        #expect(roundTripTransactions.count == oldRowCount)
+        #expect(roundTripTransactions.allSatisfy { $0.merchant.isEmpty })
+
+        let originalTransactions = try repository.transactions(query: .init(), limit: nil)
+        #expect(originalTransactions.count == oldRowCount)
+        #expect(originalTransactions.allSatisfy { $0.merchant.isEmpty })
+        let originalLabeledCount = originalTransactions.filter { !$0.labels.isEmpty }.count
+        #expect(originalLabeledCount > 0)
+        let roundTripLabeledCount = roundTripTransactions.filter { !$0.labels.isEmpty }.count
+        #expect(roundTripLabeledCount == originalLabeledCount)
     }
 
     @Test func randomizedMutationSequencePreservesTruth() throws {
@@ -1093,7 +1492,7 @@ private enum TestSupport {
             amountColumn: "Amount",
             debitColumn: nil,
             creditColumn: nil,
-            merchantColumn: nil,
+            merchantColumn: "Merchant",
             noteColumn: "Note",
             categoryColumn: "Category name",
             labelsColumn: "Labels",
@@ -1207,7 +1606,7 @@ private enum TestSupport {
         }
     }
 
-    private static func parseCSVRows(_ text: String) -> [[String]] {
+    static func parseCSVRows(_ text: String) -> [[String]] {
         var rows: [[String]] = []
         var row: [String] = []
         var field = ""

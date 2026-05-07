@@ -1544,7 +1544,7 @@ public final class CashRunwayRepository: @unchecked Sendable {
                 categoryName: row["category_name"],
                 categoryColorHex: row["category_color_hex"],
                 categoryIconName: row["category_icon_name"],
-                merchant: transaction.merchant ?? Self.fallbackMerchant(for: transaction.type),
+                merchant: transaction.merchant ?? "",
                 note: transaction.note ?? "",
                 kind: transaction.type == .expense ? .expense : (transaction.type == .income ? .income : .transfer),
                 source: transaction.source,

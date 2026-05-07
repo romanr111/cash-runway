@@ -96,39 +96,22 @@ For product/MVP/app/completion of PLAN.md tasks:
 
 
 
-## Continuity Ledger (compaction-safe)
+## Continuity Ledger
 
-Maintain a single continuity file for this workspace: `CONTINUITY.md`.
-`CONTINUITY.md` is the canonical briefing designed to survive compaction; do not rely on earlier chat/tool output unless it's reflected there.
+- State lives in CONTINUITY.md. Read it before acting when present. Create it for long-running or multi-step work.
+- Update CONTINUITY.md after every meaningful change: file modified, decision made, blocker hit/resolved, verification result changed.
+- Snapshot must reflect current truth. Rewrite it, don't append stale state.
 
-### Operating rule
-- At the start of each assistant turn: read `CONTINUITY.md` before acting.
-- Update `CONTINUITY.md` only when there is a meaningful delta in: Goal/success criteria, Invariants/constraints, Decisions, State (Done/Now/Next), Open questions, Working set, or important tool outcomes.
+## Git Session Start
 
-### Keep it bounded (anti-bloat)
-- Keep `CONTINUITY.md` short and high-signal:
-  - `Snapshot`: ≤ 25 lines.
-  - `Done (recent)`: ≤ 7 bullets.
-  - `Working set`: ≤ 12 paths.
-  - `Receipts`: keep last 10–20 entries.
-- If sections exceed caps, compress older items into milestone bullets with pointers (commit/PR/log path/doc path). Do not paste raw logs.
+Before editing files, reporting repo status, removing worktrees, pulling, pushing, or committing in a git repo:
+- Run `git worktree list`.
+- Run `git -C <active-worktree> rev-parse --abbrev-ref HEAD`.
+- Run `git -C <active-worktree> status --short`.
+- If reality differs from CONTINUITY.md, update CONTINUITY.md first.
 
-### Anti-drift rules
-- Facts only, no transcripts.
-- Every entry must include:
-  - a date or ISO timestamp (e.g., `2026-01-13` or `2026-01-13T09:42Z`)
-  - a provenance tag: `[USER]`, `[CODE]`, `[TOOL]`, `[ASSUMPTION]`
-- If unknown, write `UNCONFIRMED` (never guess). If something changes, supersede it explicitly (don't silently rewrite history).
+## CONTINUITY.md Location
 
-### Decisions and incidents
-- Record durable choices in `Decisions` as ADR-lite entries (e.g., `D001 ACTIVE: …`).
-- For recurring weirdness, create a small, stable incident capsule (Symptoms / Evidence pointers / Mitigation / Status).
-
-### Plan tool vs ledger
-- Use `update_plan` for short-term execution scaffolding (3–7 steps).
-- Use `CONTINUITY.md` for long-running continuity ("what/why/current state"), not micro task lists.
-- Keep them consistent at the intent/progress level.
-
-### In replies
-- Start with a brief "Ledger Snapshot" (Goal + Now + Next + Open Questions).
-- Print the full ledger only when it materially changed or the user requests it
+- For git repos, keep CONTINUITY.md in the primary checkout.
+- Do not duplicate CONTINUITY.md across worktrees.
+- When multiple worktrees exist, use absolute paths and identify primary checkout, active worktree, branch, base branch, and merge status.

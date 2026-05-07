@@ -392,7 +392,10 @@ public struct TransactionListItem: Identifiable, Hashable, Sendable {
         if let categoryName, !categoryName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return categoryName
         }
-        return merchant
+        if !merchant.isEmpty {
+            return merchant
+        }
+        return kind.rawValue.capitalized
     }
 }
 
