@@ -667,6 +667,28 @@ struct CashRunwayCoreTests {
         #expect(exported.contains("\"Silpo\""))
     }
 
+    @Test func transactionSearchMatchesCategoryName() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        let walletID = try #require(try repository.wallets().first?.id)
+        let groceriesID = try #require(try repository.categories(kind: .expense).first(where: { $0.name == "Groceries" })?.id)
+
+        try repository.saveTransaction(
+            TransactionDraft(
+                kind: .expense,
+                walletID: walletID,
+                amountMinor: 4_200,
+                occurredAt: .now,
+                categoryID: groceriesID,
+                merchant: "Category search fixture",
+                note: "UITEST-CATEGORY-SEARCH"
+            )
+        )
+
+        let results = try repository.transactions(query: .init(searchText: "Grocer"))
+        #expect(results.contains { $0.note == "UITEST-CATEGORY-SEARCH" })
+    }
+
     @Test func cashRunwayWalletCSVFormatImportsSignedRowsAndExportsRoundTrippableFile() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()

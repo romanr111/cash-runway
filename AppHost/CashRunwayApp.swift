@@ -7,8 +7,10 @@ import SwiftUI
 struct CashRunwayApp: App {
     @Environment(\.scenePhase) private var scenePhase
     private let maintenanceCoordinator = BackgroundMaintenanceCoordinator()
+    private let runtime: CashRunwayAppRuntime
 
     init() {
+        runtime = CashRunwayAppRuntime.bootstrap()
         #if DEBUG
         DebugCSVImportSelfTest.runIfRequested()
         #endif
@@ -18,7 +20,11 @@ struct CashRunwayApp: App {
 
     var body: some Scene {
         WindowGroup {
-            CashRunwayRootView()
+            CashRunwayRootView(
+                model: runtime.model,
+                onboardingStore: runtime.onboardingStore,
+                bypassOnboarding: runtime.bypassOnboarding
+            )
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .background || phase == .active {

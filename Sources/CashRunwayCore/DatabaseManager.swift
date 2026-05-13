@@ -151,8 +151,12 @@ public final class DatabaseManager: @unchecked Sendable {
     public let dbQueue: DatabaseQueue
     public let keychain: KeychainStore
 
-    public init(locationProvider: DatabaseLocationProvider = .init(), allowsDestructiveRecovery: Bool = false) throws {
-        self.keychain = KeychainStore(service: "dev.roman.cash-runway")
+    public init(
+        locationProvider: DatabaseLocationProvider = .init(),
+        allowsDestructiveRecovery: Bool = false,
+        keychainService: String = "dev.roman.cash-runway"
+    ) throws {
+        self.keychain = KeychainStore(service: keychainService)
         let databaseURL = try locationProvider.databaseURL()
         self.dbQueue = try Self.openDatabase(
             at: databaseURL,
@@ -420,6 +424,7 @@ public final class DatabaseManager: @unchecked Sendable {
                 table.column("merchant")
                 table.column("note")
                 table.column("wallet_name")
+                table.column("category_name")
                 table.column("labels")
                 table.tokenizer = .unicode61()
             }
@@ -436,6 +441,41 @@ public final class DatabaseManager: @unchecked Sendable {
             try db.create(index: "idx_monthly_category_spend_month_category", on: "monthly_category_spend", columns: ["month_key", "category_id"])
             try db.create(index: "idx_daily_wallet_balance_delta_day_wallet", on: "daily_wallet_balance_delta", columns: ["day_key", "wallet_id"])
             try db.create(index: "idx_recurring_instances_template_day", on: "recurring_instances", columns: ["template_id", "day_key"])
+        }
+
+        migrator.registerMigration("v2_transaction_search_category_name") { db in
+            try db.drop(table: "transaction_search")
+            try db.create(virtualTable: "transaction_search", using: FTS5()) { table in
+                table.column("transaction_id").notIndexed()
+                table.column("merchant")
+                table.column("note")
+                table.column("wallet_name")
+                table.column("category_name")
+                table.column("labels")
+                table.tokenizer = .unicode61()
+            }
+
+            try db.execute(
+                sql: """
+                INSERT INTO transaction_search (transaction_id, merchant, note, wallet_name, category_name, labels)
+                SELECT
+                    t.id,
+                    COALESCE(t.merchant, ''),
+                    COALESCE(t.note, ''),
+                    COALESCE(w.name, ''),
+                    COALESCE(c.name, ''),
+                    COALESCE((
+                        SELECT group_concat(l.name, ' ')
+                        FROM transaction_labels tl
+                        JOIN labels l ON l.id = tl.label_id
+                        WHERE tl.transaction_id = t.id
+                    ), '')
+                FROM transactions t
+                JOIN wallets w ON w.id = t.wallet_id
+                LEFT JOIN categories c ON c.id = t.category_id
+                WHERE t.is_deleted = 0
+                """
+            )
         }
 
         return migrator

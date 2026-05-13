@@ -55,6 +55,7 @@ struct DashboardView: View {
                         .background(CashRunwayTheme.accent, in: Circle())
                         .shadow(color: CashRunwayTheme.accent.opacity(0.25), radius: 16, y: 10)
                 }
+                .accessibilityIdentifier(CashRunwayAccessibilityID.transactionAddButton)
                 .padding(.trailing, 20)
                 .padding(.bottom, 16)
             }
@@ -97,6 +98,7 @@ struct DashboardView: View {
                         .background(CashRunwayTheme.surface, in: Circle())
                         .overlay(Circle().stroke(CashRunwayTheme.line, lineWidth: 1))
                 }
+                .accessibilityIdentifier(CashRunwayAccessibilityID.timelineSearchButton)
             }
 
             VStack(spacing: 6) {
@@ -105,6 +107,7 @@ struct DashboardView: View {
                     .foregroundStyle(CashRunwayTheme.textPrimary)
                     .multilineTextAlignment(.center)
                     .animation(.smooth, value: model.currentCashFlowMinor)
+                    .accessibilityIdentifier(CashRunwayAccessibilityID.timelineCashFlowValue)
                 Text("Cash Flow")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(CashRunwayTheme.textMuted)
@@ -121,15 +124,18 @@ struct DashboardView: View {
                     model.selectedWalletID = nil
                     try? model.reloadAll()
                 }
+                .accessibilityIdentifier(CashRunwayAccessibilityID.timelineWallet("All Wallets"))
                 ForEach(model.wallets) { wallet in
                     Button(wallet.name) {
                         model.selectedWalletID = wallet.id
                         try? model.reloadAll()
                     }
+                    .accessibilityIdentifier(CashRunwayAccessibilityID.timelineWallet(wallet.name))
                 }
             } label: {
                 pillLabel(text: model.selectedWalletID.flatMap(walletName(for:)) ?? "All Wallets", systemImage: "chevron.down")
             }
+            .accessibilityIdentifier(CashRunwayAccessibilityID.timelineWalletMenu)
 
             Menu {
                 ForEach(TimelinePeriod.allCases, id: \.self) { period in
@@ -219,6 +225,7 @@ struct DashboardView: View {
             .background(CashRunwayTheme.surface, in: Capsule())
             .overlay(Capsule().stroke(CashRunwayTheme.line, lineWidth: 1))
         }
+        .accessibilityIdentifier(CashRunwayAccessibilityID.overviewOpenButton)
         .frame(maxWidth: .infinity, alignment: .center)
     }
 
@@ -243,6 +250,7 @@ struct DashboardView: View {
                                 TransactionRow(item: item)
                             }
                             .buttonStyle(.plain)
+                            .accessibilityIdentifier(CashRunwayAccessibilityID.transactionRow(item))
                             if item.id != section.items.last?.id {
                                 Divider()
                                     .overlay(CashRunwayTheme.line)
@@ -472,6 +480,7 @@ private struct TimelineOverviewView: View {
             }
             .disabled(prevMonthKey == nil)
             .buttonStyle(.plain)
+            .accessibilityIdentifier(CashRunwayAccessibilityID.overviewMonthPreviousButton)
 
             Spacer()
 
@@ -503,6 +512,7 @@ private struct TimelineOverviewView: View {
             }
             .disabled(!hasNext)
             .buttonStyle(.plain)
+            .accessibilityIdentifier(CashRunwayAccessibilityID.overviewMonthNextButton)
         }
     }
 
@@ -544,9 +554,11 @@ private struct TimelineOverviewView: View {
                 kindCard(title: "Expenses", value: MoneyFormatter.string(from: -(model.overviewSnapshot?.monthExpenseMinor ?? 0)), isSelected: categoryKind == .expense) {
                     categoryKind = .expense
                 }
+                .accessibilityIdentifier(CashRunwayAccessibilityID.overviewExpensesCard)
                 kindCard(title: "Income", value: MoneyFormatter.string(from: model.overviewSnapshot?.monthIncomeMinor ?? 0), isSelected: categoryKind == .income) {
                     categoryKind = .income
                 }
+                .accessibilityIdentifier(CashRunwayAccessibilityID.overviewIncomeCard)
             }
         }
     }
@@ -658,6 +670,7 @@ private struct TimelineOverviewView: View {
                         categoryLegendRow(item)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier(CashRunwayAccessibilityID.overviewCategory(item.name))
                 }
             }
 
@@ -923,6 +936,7 @@ private struct CategoryDetailOverviewView: View {
                 }
                 .disabled(!hasPrevMonth)
                 .buttonStyle(.plain)
+                .accessibilityIdentifier(CashRunwayAccessibilityID.overviewMonthPreviousButton)
 
                 Spacer()
 
@@ -954,6 +968,7 @@ private struct CategoryDetailOverviewView: View {
                 }
                 .disabled(!hasNextMonth)
                 .buttonStyle(.plain)
+                .accessibilityIdentifier(CashRunwayAccessibilityID.overviewMonthNextButton)
             }
         }
     }
@@ -1041,6 +1056,7 @@ private struct CategoryDetailOverviewView: View {
                         TransactionRow(item: item)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier(CashRunwayAccessibilityID.transactionRow(item))
                     if item.id != items.last?.id {
                         Divider()
                             .overlay(CashRunwayTheme.line)
@@ -1048,6 +1064,8 @@ private struct CategoryDetailOverviewView: View {
                 }
             }
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier(CashRunwayAccessibilityID.overviewCategoryDetailTransactionList)
     }
 
     private var transactions: [TransactionListItem] {
@@ -1171,6 +1189,7 @@ private struct TimelineSearchSheet: View {
             Form {
                 Section("Search") {
                     TextField("Merchant, note, wallet, label", text: $draftQuery.searchText)
+                        .accessibilityIdentifier(CashRunwayAccessibilityID.timelineSearchField)
                 }
 
                 Section("Filters") {
@@ -1224,6 +1243,7 @@ private struct TimelineSearchSheet: View {
                         draftQuery = .init()
                         usesDateRange = false
                     }
+                    .accessibilityIdentifier(CashRunwayAccessibilityID.timelineSearchResetButton)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Apply") {
@@ -1236,6 +1256,7 @@ private struct TimelineSearchSheet: View {
                         try? model.reloadAll()
                         dismiss()
                     }
+                    .accessibilityIdentifier(CashRunwayAccessibilityID.timelineSearchApplyButton)
                 }
             }
             .onAppear {

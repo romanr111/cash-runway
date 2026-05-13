@@ -1,15 +1,29 @@
 import SwiftUI
 
 public struct CashRunwayRootView: View {
-    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var model = CashRunwayAppModel()
+    @State private var hasCompletedOnboarding: Bool
     @State private var pin = ""
     @State private var onboardingPin = ""
     @State private var onboardingBiometrics = true
     @State private var relockTask: Task<Void, Never>?
     @Environment(\.scenePhase) private var scenePhase
+    private let onboardingStore: UserDefaults
+    private let bypassOnboarding: Bool
+    private static let onboardingKey = "hasCompletedOnboarding"
 
-    public init() {}
+    public init(
+        model: CashRunwayAppModel = CashRunwayAppModel(),
+        onboardingStore: UserDefaults = .standard,
+        bypassOnboarding: Bool = false
+    ) {
+        _model = State(initialValue: model)
+        self.onboardingStore = onboardingStore
+        self.bypassOnboarding = bypassOnboarding
+        _hasCompletedOnboarding = State(
+            initialValue: bypassOnboarding || onboardingStore.bool(forKey: Self.onboardingKey)
+        )
+    }
 
     public var body: some View {
         Group {
@@ -94,7 +108,7 @@ public struct CashRunwayRootView: View {
     }
 
     private var shouldShowOnboarding: Bool {
-        !hasCompletedOnboarding && model.lockStore.configuration() == nil
+        !bypassOnboarding && !hasCompletedOnboarding && model.lockStore.configuration() == nil
     }
 
     private var onboardingView: some View {
@@ -129,14 +143,14 @@ public struct CashRunwayRootView: View {
                 .background(CashRunwayTheme.card, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
 
                 Button("Continue Without Lock") {
-                    hasCompletedOnboarding = true
+                    completeOnboarding()
                 }
                 .buttonStyle(.bordered)
 
                 Button("Save PIN And Continue") {
                     model.enableLock(pin: onboardingPin, biometrics: onboardingBiometrics)
                     if model.errorMessage == nil {
-                        hasCompletedOnboarding = true
+                        completeOnboarding()
                         onboardingPin = ""
                     }
                 }
@@ -159,5 +173,10 @@ public struct CashRunwayRootView: View {
         }
         .padding(20)
         .background(CashRunwayTheme.card, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+    }
+
+    private func completeOnboarding() {
+        hasCompletedOnboarding = true
+        onboardingStore.set(true, forKey: Self.onboardingKey)
     }
 }
