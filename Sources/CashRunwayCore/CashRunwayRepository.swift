@@ -13,8 +13,12 @@ private struct AggregateContribution {
 public final class CashRunwayRepository: @unchecked Sendable {
     public let databaseManager: DatabaseManager
 
-    public init(databaseManager: DatabaseManager = try! DatabaseManager(allowsDestructiveRecovery: true)) {
+    public init(databaseManager: DatabaseManager) {
         self.databaseManager = databaseManager
+    }
+
+    public convenience init(allowsDestructiveRecovery: Bool = false) throws {
+        try self.init(databaseManager: DatabaseManager(allowsDestructiveRecovery: allowsDestructiveRecovery))
     }
 
     public func seedIfNeeded() throws {

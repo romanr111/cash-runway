@@ -114,6 +114,69 @@ struct CashRunwayCoreTests {
         #expect(recoveredEntries.contains { $0.lastPathComponent.contains("cash-runway.sqlite") })
     }
 
+    @Test func databaseKeyReadFailureDoesNotOverwriteStoredKey() throws {
+        let location = TestSupport.makeLocation()
+        let originalKey = Data("existing-database-key".utf8)
+        let keychain = TestKeychainStore(
+            items: ["database-key": originalKey],
+            readError: KeychainStoreError.readFailed(errSecInteractionNotAllowed)
+        )
+
+        var didThrow = false
+        do {
+            _ = try DatabaseManager(locationProvider: location, keychain: keychain)
+        } catch {
+            didThrow = true
+        }
+
+        #expect(didThrow)
+        #expect(keychain.item(account: "database-key") == originalKey)
+        #expect(keychain.writeCount == 0)
+    }
+
+    @Test func invalidDatabaseKeyDataDoesNotOverwriteStoredKey() throws {
+        let location = TestSupport.makeLocation()
+        let invalidKey = Data([0xff, 0xfe])
+        let keychain = TestKeychainStore(items: ["database-key": invalidKey])
+
+        var didThrowInvalidData = false
+        do {
+            _ = try DatabaseManager(locationProvider: location, keychain: keychain)
+        } catch KeychainStoreError.invalidStoredData("database-key") {
+            didThrowInvalidData = true
+        } catch {
+            didThrowInvalidData = false
+        }
+
+        #expect(didThrowInvalidData)
+        #expect(keychain.item(account: "database-key") == invalidKey)
+        #expect(keychain.writeCount == 0)
+    }
+
+    @Test func databaseOpenFailureDoesNotQuarantineByDefault() throws {
+        let location = TestSupport.makeLocation()
+        let keychain = TestKeychainStore()
+        let manager = try DatabaseManager(locationProvider: location, keychain: keychain)
+        try CashRunwayRepository(databaseManager: manager).seedIfNeeded()
+
+        let dbURL = try location.databaseURL()
+        let originalSize = try TestSupport.fileSize(at: dbURL)
+        let wrongKeychain = TestKeychainStore(items: ["database-key": Data("wrong-database-key".utf8)])
+
+        var didThrow = false
+        do {
+            _ = try DatabaseManager(locationProvider: location, keychain: wrongKeychain)
+        } catch {
+            didThrow = true
+        }
+
+        let recoveryDirectory = dbURL.deletingLastPathComponent().appendingPathComponent("Recovery", isDirectory: true)
+        #expect(didThrow)
+        #expect(FileManager.default.fileExists(atPath: dbURL.path))
+        #expect(!FileManager.default.fileExists(atPath: recoveryDirectory.path))
+        #expect(try TestSupport.fileSize(at: dbURL) == originalSize)
+    }
+
     @Test func recurringGenerationIsDeterministic() {
         let template = RecurringTemplate(
             id: UUID(),
@@ -1486,6 +1549,11 @@ private enum TestSupport {
         )
     }
 
+    static func fileSize(at url: URL) throws -> UInt64 {
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        return (attributes[.size] as? NSNumber)?.uint64Value ?? 0
+    }
+
     static func cashRunwayWalletMapping(walletID: UUID) -> CSVImportMapping {
         CSVImportMapping(
             dateColumn: "Date",
@@ -1697,5 +1765,36 @@ private enum TestSupport {
         let expectedMap = Dictionary(uniqueKeysWithValues: expected.map { ("\($0["category_id"] as String)-\($0["local_month_key"] as Int)", $0["total"] as Int64) })
         let actualMap = Dictionary(uniqueKeysWithValues: actual.map { ("\($0["category_id"] as String)-\($0["month_key"] as Int)", $0["expense_minor"] as Int64) })
         #expect(actualMap == expectedMap)
+    }
+}
+
+private final class TestKeychainStore: KeychainStoring, @unchecked Sendable {
+    private var items: [String: Data]
+    private let readError: Error?
+    private(set) var writeCount = 0
+
+    init(items: [String: Data] = [:], readError: Error? = nil) {
+        self.items = items
+        self.readError = readError
+    }
+
+    func read(account: String) throws -> Data? {
+        if let readError {
+            throw readError
+        }
+        return items[account]
+    }
+
+    func write(_ data: Data, account: String) throws {
+        writeCount += 1
+        items[account] = data
+    }
+
+    func delete(account: String) {
+        items.removeValue(forKey: account)
+    }
+
+    func item(account: String) -> Data? {
+        items[account]
     }
 }

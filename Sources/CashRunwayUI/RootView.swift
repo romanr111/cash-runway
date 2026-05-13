@@ -2,21 +2,40 @@ import SwiftUI
 
 public struct CashRunwayRootView: View {
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
-    @State private var model = CashRunwayAppModel()
+    @State private var model: CashRunwayAppModel?
+    @State private var startupError: String?
     @State private var pin = ""
     @State private var onboardingPin = ""
     @State private var onboardingBiometrics = true
     @State private var relockTask: Task<Void, Never>?
     @Environment(\.scenePhase) private var scenePhase
 
-    public init() {}
+    public init() {
+        do {
+            _model = State(initialValue: try CashRunwayAppModel.live())
+            _startupError = State(initialValue: nil)
+        } catch {
+            _model = State(initialValue: nil)
+            _startupError = State(initialValue: error.localizedDescription)
+        }
+    }
 
     public var body: some View {
         Group {
+            if let model {
+                content(model: model)
+            } else {
+                startupErrorView
+            }
+        }
+    }
+
+    private func content(model: CashRunwayAppModel) -> some View {
+        Group {
             if model.isLocked {
-                lockView
-            } else if shouldShowOnboarding {
-                onboardingView
+                lockView(model: model)
+            } else if shouldShowOnboarding(for: model) {
+                onboardingView(model: model)
             } else {
                 TabView {
                     DashboardView(model: model)
@@ -58,7 +77,27 @@ public struct CashRunwayRootView: View {
         }
     }
 
-    private var lockView: some View {
+    private var startupErrorView: some View {
+        VStack(spacing: 16) {
+            Spacer()
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 54))
+                .foregroundStyle(CashRunwayTheme.negative)
+            Text("Cash Runway Could Not Open")
+                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .foregroundStyle(CashRunwayTheme.textPrimary)
+            Text(startupError ?? "The local database could not be opened.")
+                .font(.system(size: 15))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(CashRunwayTheme.textSecondary)
+                .padding(.horizontal, 24)
+            Spacer()
+        }
+        .padding()
+        .background(CashRunwayTheme.background.ignoresSafeArea())
+    }
+
+    private func lockView(model: CashRunwayAppModel) -> some View {
         VStack(spacing: 18) {
             Spacer()
             Image(systemName: "lock.circle.fill")
@@ -93,11 +132,11 @@ public struct CashRunwayRootView: View {
         .background(CashRunwayTheme.background.ignoresSafeArea())
     }
 
-    private var shouldShowOnboarding: Bool {
+    private func shouldShowOnboarding(for model: CashRunwayAppModel) -> Bool {
         !hasCompletedOnboarding && model.lockStore.configuration() == nil
     }
 
-    private var onboardingView: some View {
+    private func onboardingView(model: CashRunwayAppModel) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 Spacer(minLength: 24)

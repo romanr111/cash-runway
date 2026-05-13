@@ -59,7 +59,7 @@ private final class BackgroundMaintenanceCoordinator {
         let taskBox = BackgroundProcessingTaskBox(task)
         let maintenanceTask = Task.detached(priority: .background) {
             do {
-                let repository = CashRunwayRepository()
+                let repository = try CashRunwayRepository()
                 try repository.runMaintenance()
                 try repository.refreshRecurringInstances()
                 return true
