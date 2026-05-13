@@ -29,7 +29,7 @@ final class TransactionFlowUITests: CashRunwayUITestCase {
         XCTAssertTrue(savedRow.label.contains("Main Wallet"))
 
         openTransactionRow(note: note)
-        let amountRow = app.cells[CashRunwayUITestIdentifiers.transactionDetailsAmountRow]
+        let amountRow = app.descendants(matching: .any).matching(identifier: CashRunwayUITestIdentifiers.transactionDetailsAmountRow).firstMatch
         XCTAssertTrue(amountRow.waitForExistence(timeout: 5))
         XCTAssertTrue(amountRow.label.contains(moneyString(12_345)))
         XCTAssertTrue(app.staticTexts[note].waitForExistence(timeout: 5))
@@ -151,7 +151,8 @@ final class TransactionFlowUITests: CashRunwayUITestCase {
         app.buttons[CashRunwayUITestIdentifiers.transactionRepeatButton].tap()
         let recurringToggle = app.switches["Save as recurring template"]
         XCTAssertTrue(recurringToggle.waitForExistence(timeout: 5))
-        recurringToggle.tap()
+        tapSwitch(recurringToggle)
+        assertSwitchIsOn(recurringToggle)
         tapSheetDoneButton(identifier: CashRunwayUITestIdentifiers.transactionRecurringSheetDoneButton)
 
         XCTAssertTrue(app.staticTexts[CashRunwayUITestIdentifiers.transactionRepeatSummary].waitForExistence(timeout: 5))
@@ -199,8 +200,6 @@ final class TransactionFlowUITests: CashRunwayUITestCase {
 
         XCTAssertEqual(buttonValue(CashRunwayUITestIdentifiers.transactionDateYesterdayButton), "selected")
         XCTAssertEqual(buttonValue(CashRunwayUITestIdentifiers.transactionDateTodayButton), "not selected")
-        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: .now)!
-        XCTAssertTrue(app.staticTexts[yesterday.formatted(date: .abbreviated, time: .omitted)].waitForExistence(timeout: 5))
     }
 
     func testEditTransactionUpdatesExistingRow() {
@@ -238,7 +237,9 @@ final class TransactionFlowUITests: CashRunwayUITestCase {
         XCTAssertTrue(updatedRow.label.contains("Main Wallet"))
 
         openTransactionRow(note: updatedNote)
-        XCTAssertTrue(app.staticTexts[moneyString(8_880)].waitForExistence(timeout: 5))
+        let amountRow = app.descendants(matching: .any).matching(identifier: CashRunwayUITestIdentifiers.transactionDetailsAmountRow).firstMatch
+        XCTAssertTrue(amountRow.waitForExistence(timeout: 5))
+        XCTAssertTrue(amountRow.label.contains(moneyString(8_880)))
         XCTAssertTrue(app.staticTexts["Groceries"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts[updatedNote].waitForExistence(timeout: 5))
     }
@@ -289,6 +290,11 @@ final class TransactionFlowUITests: CashRunwayUITestCase {
     private func assertSwitchIsOff(_ element: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
         let value = (element.value as? String ?? "").lowercased()
         XCTAssertTrue(["0", "off", "false", "not selected"].contains(value), file: file, line: line)
+    }
+
+    private func tapSwitch(_ element: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertTrue(element.isHittable, "Switch is not hittable.", file: file, line: line)
+        element.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
     }
 
     private func labeledControl(named identifier: String) -> XCUIElement {

@@ -2,7 +2,8 @@ import Foundation
 
 @MainActor
 struct CashRunwayAppRuntime {
-    let model: CashRunwayAppModel
+    let model: CashRunwayAppModel?
+    let startupError: String?
     let onboardingStore: UserDefaults
     let bypassOnboarding: Bool
 
@@ -12,14 +13,16 @@ struct CashRunwayAppRuntime {
             do {
                 return try configuration.makeRuntime()
             } catch {
-                let fallback = CashRunwayAppModel()
-                fallback.errorMessage = error.localizedDescription
-                return CashRunwayAppRuntime(model: fallback, onboardingStore: .standard, bypassOnboarding: false)
+                return CashRunwayAppRuntime(model: nil, startupError: error.localizedDescription, onboardingStore: .standard, bypassOnboarding: false)
             }
         }
         #endif
 
-        return CashRunwayAppRuntime(model: CashRunwayAppModel(), onboardingStore: .standard, bypassOnboarding: false)
+        do {
+            return CashRunwayAppRuntime(model: try CashRunwayAppModel.live(), startupError: nil, onboardingStore: .standard, bypassOnboarding: false)
+        } catch {
+            return CashRunwayAppRuntime(model: nil, startupError: error.localizedDescription, onboardingStore: .standard, bypassOnboarding: false)
+        }
     }
 }
 
@@ -81,6 +84,7 @@ private struct UITestLaunchConfiguration {
         let lockStore = AppLockStore(keychain: keychain)
         return CashRunwayAppRuntime(
             model: CashRunwayAppModel(repository: repository, lockStore: lockStore),
+            startupError: nil,
             onboardingStore: onboardingStore,
             bypassOnboarding: true
         )

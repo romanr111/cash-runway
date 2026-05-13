@@ -1,7 +1,8 @@
 import SwiftUI
 
 public struct CashRunwayRootView: View {
-    @State private var model = CashRunwayAppModel()
+    @State private var model: CashRunwayAppModel?
+    @State private var startupError: String?
     @State private var hasCompletedOnboarding: Bool
     @State private var pin = ""
     @State private var onboardingPin = ""
@@ -13,11 +14,26 @@ public struct CashRunwayRootView: View {
     private static let onboardingKey = "hasCompletedOnboarding"
 
     public init(
-        model: CashRunwayAppModel = CashRunwayAppModel(),
+        model: CashRunwayAppModel? = nil,
+        startupError: String? = nil,
         onboardingStore: UserDefaults = .standard,
         bypassOnboarding: Bool = false
     ) {
-        _model = State(initialValue: model)
+        if let model {
+            _model = State(initialValue: model)
+            _startupError = State(initialValue: startupError)
+        } else if let startupError {
+            _model = State(initialValue: nil)
+            _startupError = State(initialValue: startupError)
+        } else {
+            do {
+                _model = State(initialValue: try CashRunwayAppModel.live())
+                _startupError = State(initialValue: nil)
+            } catch {
+                _model = State(initialValue: nil)
+                _startupError = State(initialValue: error.localizedDescription)
+            }
+        }
         self.onboardingStore = onboardingStore
         self.bypassOnboarding = bypassOnboarding
         _hasCompletedOnboarding = State(
@@ -27,10 +43,20 @@ public struct CashRunwayRootView: View {
 
     public var body: some View {
         Group {
+            if let model {
+                content(model: model)
+            } else {
+                startupErrorView
+            }
+        }
+    }
+
+    private func content(model: CashRunwayAppModel) -> some View {
+        Group {
             if model.isLocked {
-                lockView
-            } else if shouldShowOnboarding {
-                onboardingView
+                lockView(model: model)
+            } else if shouldShowOnboarding(for: model) {
+                onboardingView(model: model)
             } else {
                 TabView {
                     DashboardView(model: model)
@@ -72,7 +98,27 @@ public struct CashRunwayRootView: View {
         }
     }
 
-    private var lockView: some View {
+    private var startupErrorView: some View {
+        VStack(spacing: 16) {
+            Spacer()
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 54))
+                .foregroundStyle(CashRunwayTheme.negative)
+            Text("Cash Runway Could Not Open")
+                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .foregroundStyle(CashRunwayTheme.textPrimary)
+            Text(startupError ?? "The local database could not be opened.")
+                .font(.system(size: 15))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(CashRunwayTheme.textSecondary)
+                .padding(.horizontal, 24)
+            Spacer()
+        }
+        .padding()
+        .background(CashRunwayTheme.background.ignoresSafeArea())
+    }
+
+    private func lockView(model: CashRunwayAppModel) -> some View {
         VStack(spacing: 18) {
             Spacer()
             Image(systemName: "lock.circle.fill")
@@ -107,11 +153,11 @@ public struct CashRunwayRootView: View {
         .background(CashRunwayTheme.background.ignoresSafeArea())
     }
 
-    private var shouldShowOnboarding: Bool {
+    private func shouldShowOnboarding(for model: CashRunwayAppModel) -> Bool {
         !bypassOnboarding && !hasCompletedOnboarding && model.lockStore.configuration() == nil
     }
 
-    private var onboardingView: some View {
+    private func onboardingView(model: CashRunwayAppModel) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 Spacer(minLength: 24)

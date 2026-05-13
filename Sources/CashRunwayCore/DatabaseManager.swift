@@ -4,14 +4,39 @@ import Security
 import CryptoKit
 import LocalAuthentication
 
-public final class KeychainStore: @unchecked Sendable {
-    private let service: String
+public enum KeychainStoreError: Error, LocalizedError, Equatable {
+    case readFailed(OSStatus)
+    case writeFailed(OSStatus)
+    case invalidStoredData(String)
 
-    public init(service: String) {
+    public var errorDescription: String? {
+        switch self {
+        case let .readFailed(status):
+            "Keychain read failed with status \(status)."
+        case let .writeFailed(status):
+            "Keychain write failed with status \(status)."
+        case let .invalidStoredData(account):
+            "Keychain item \(account) could not be decoded."
+        }
+    }
+}
+
+public protocol KeychainStoring: Sendable {
+    func read(account: String) throws -> Data?
+    func write(_ data: Data, account: String) throws
+    func delete(account: String)
+}
+
+public final class KeychainStore: KeychainStoring, @unchecked Sendable {
+    private let service: String
+    private let accessibility: CFString
+
+    public init(service: String, accessibility: CFString = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly) {
         self.service = service
+        self.accessibility = accessibility
     }
 
-    public func read(account: String) -> Data? {
+    public func read(account: String) throws -> Data? {
         let query: [CFString: Any] = [
             kSecClass: kSecClassGenericPassword,
             kSecAttrService: service,
@@ -22,20 +47,35 @@ public final class KeychainStore: @unchecked Sendable {
 
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
-        guard status == errSecSuccess else { return nil }
+        if status == errSecItemNotFound { return nil }
+        guard status == errSecSuccess else { throw KeychainStoreError.readFailed(status) }
         return result as? Data
     }
 
-    public func write(_ data: Data, account: String) {
+    public func write(_ data: Data, account: String) throws {
         let query: [CFString: Any] = [
             kSecClass: kSecClassGenericPassword,
             kSecAttrService: service,
             kSecAttrAccount: account,
         ]
-        SecItemDelete(query as CFDictionary)
+
+        let attributes: [CFString: Any] = [
+            kSecValueData: data,
+            kSecAttrAccessible: accessibility,
+        ]
+        let updateStatus = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+        if updateStatus == errSecSuccess { return }
+        guard updateStatus == errSecItemNotFound else {
+            throw KeychainStoreError.writeFailed(updateStatus)
+        }
+
         var item = query
         item[kSecValueData] = data
-        SecItemAdd(item as CFDictionary, nil)
+        item[kSecAttrAccessible] = accessibility
+        let addStatus = SecItemAdd(item as CFDictionary, nil)
+        guard addStatus == errSecSuccess else {
+            throw KeychainStoreError.writeFailed(addStatus)
+        }
     }
 
     public func delete(account: String) {
@@ -56,15 +96,15 @@ public struct AppLockConfiguration: Codable, Sendable, Equatable {
 }
 
 public final class AppLockStore: @unchecked Sendable {
-    private let keychain: KeychainStore
+    private let keychain: any KeychainStoring
     private let account = "app-lock-config"
 
-    public init(keychain: KeychainStore) {
+    public init(keychain: any KeychainStoring) {
         self.keychain = keychain
     }
 
     public func configuration() -> AppLockConfiguration? {
-        guard let data = keychain.read(account: account) else { return nil }
+        guard let data = try? keychain.read(account: account) else { return nil }
         return try? JSONDecoder().decode(AppLockConfiguration.self, from: data)
     }
 
@@ -78,7 +118,7 @@ public final class AppLockStore: @unchecked Sendable {
             usesBiometrics: biometrics,
             backgroundLockSeconds: backgroundLockSeconds
         )
-        keychain.write(try JSONEncoder().encode(config), account: account)
+        try keychain.write(try JSONEncoder().encode(config), account: account)
     }
 
     public func validate(pin: String) -> Bool {
@@ -149,14 +189,26 @@ public struct DatabaseLocationProvider {
 
 public final class DatabaseManager: @unchecked Sendable {
     public let dbQueue: DatabaseQueue
-    public let keychain: KeychainStore
+    public let keychain: any KeychainStoring
 
-    public init(
+    public convenience init(
         locationProvider: DatabaseLocationProvider = .init(),
         allowsDestructiveRecovery: Bool = false,
         keychainService: String = "dev.roman.cash-runway"
     ) throws {
-        self.keychain = KeychainStore(service: keychainService)
+        try self.init(
+            locationProvider: locationProvider,
+            allowsDestructiveRecovery: allowsDestructiveRecovery,
+            keychain: KeychainStore(service: keychainService)
+        )
+    }
+
+    init(
+        locationProvider: DatabaseLocationProvider = .init(),
+        allowsDestructiveRecovery: Bool = false,
+        keychain: any KeychainStoring
+    ) throws {
+        self.keychain = keychain
         let databaseURL = try locationProvider.databaseURL()
         self.dbQueue = try Self.openDatabase(
             at: databaseURL,
@@ -166,18 +218,21 @@ public final class DatabaseManager: @unchecked Sendable {
         )
     }
 
-    private static func databaseKey(using keychain: KeychainStore) -> String {
+    private static func databaseKey(using keychain: any KeychainStoring) throws -> String {
         let account = "database-key"
-        if let data = keychain.read(account: account), let key = String(data: data, encoding: .utf8) {
+        if let data = try keychain.read(account: account) {
+            guard let key = String(data: data, encoding: .utf8), !key.isEmpty else {
+                throw KeychainStoreError.invalidStoredData(account)
+            }
             return key
         }
 
         let key = UUID().uuidString.replacingOccurrences(of: "-", with: "") + UUID().uuidString.replacingOccurrences(of: "-", with: "")
-        keychain.write(Data(key.utf8), account: account)
+        try keychain.write(Data(key.utf8), account: account)
         return key
     }
 
-    private static func openDatabase(at url: URL, keychain: KeychainStore, migrator: DatabaseMigrator, allowsDestructiveRecovery: Bool) throws -> DatabaseQueue {
+    private static func openDatabase(at url: URL, keychain: any KeychainStoring, migrator: DatabaseMigrator, allowsDestructiveRecovery: Bool) throws -> DatabaseQueue {
         do {
             let dbQueue = try DatabaseQueue(path: url.path, configuration: makeConfiguration(keychain: keychain))
             try migrator.migrate(dbQueue)
@@ -194,10 +249,10 @@ public final class DatabaseManager: @unchecked Sendable {
         }
     }
 
-    private static func makeConfiguration(keychain: KeychainStore) -> Configuration {
+    private static func makeConfiguration(keychain: any KeychainStoring) -> Configuration {
         var configuration = Configuration()
         configuration.prepareDatabase { db in
-            try db.usePassphrase(databaseKey(using: keychain))
+            try db.usePassphrase(try databaseKey(using: keychain))
         }
         return configuration
     }

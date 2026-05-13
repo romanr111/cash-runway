@@ -58,8 +58,16 @@ public final class CashRunwayAppModel {
         max(DateKeys.monthKey(for: .now), latestTransactionMonthKey ?? 0)
     }
 
+    public static func live() throws -> CashRunwayAppModel {
+        let keychain = KeychainStore(service: "dev.roman.cash-runway")
+        return CashRunwayAppModel(
+            repository: try CashRunwayRepository(),
+            lockStore: AppLockStore(keychain: keychain)
+        )
+    }
+
     public init(
-        repository: CashRunwayRepository = CashRunwayRepository(),
+        repository: CashRunwayRepository,
         lockStore: AppLockStore = AppLockStore(keychain: KeychainStore(service: "dev.roman.cash-runway"))
     ) {
         self.repository = repository
