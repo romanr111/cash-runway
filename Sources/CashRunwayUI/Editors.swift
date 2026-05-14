@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 #if canImport(CashRunwayCore)
 import CashRunwayCore
@@ -14,10 +15,7 @@ struct TransactionEditorView: View {
         quickDateLabel: "Yesterday?",
         selectedLabelIDs: []
     )
-    @State private var showsCategorySheet = false
-    @State private var showsLabelsSheet = false
-    @State private var showsRecurringSheet = false
-    @State private var showsCategoryManagement = false
+    @State private var composerModal: ComposerModal?
     @State private var createRecurringTemplate = false
     @State private var recurringRuleType = RecurrenceRuleType.monthly
     @State private var recurringInterval = 1
@@ -25,9 +23,23 @@ struct TransactionEditorView: View {
     @State private var recurringWeekday = 1
     @State private var focusAmountAfterCategorySheet = false
     @State private var openCategoryManagementAfterCategorySheet = false
-    @FocusState private var amountFieldFocused: Bool
+    @State private var showsLabelsPanel = false
+    @State private var showsRecurringPanel = false
+    @FocusState private var focusedField: ComposerField?
 
     @State private var amountError: String?
+
+    private enum ComposerField: Hashable {
+        case amount
+        case note
+    }
+
+    private enum ComposerModal: String, Identifiable {
+        case categoryManagement
+        case category
+
+        var id: String { rawValue }
+    }
 
     var body: some View {
         NavigationStack {
@@ -38,71 +50,51 @@ struct TransactionEditorView: View {
                     composerHeader
                     detailsPane
                 }
+
             }
             .toolbar(.hidden, for: .navigationBar)
-            .onAppear {
-                showsCategorySheet = draft.id == nil
-            }
-            .sheet(isPresented: $showsCategorySheet) {
-                TransactionCategorySheet(
-                    model: model,
-                    draft: $draft,
-                    composerState: $composerState,
-                    onCategorySelected: {
-                        focusAmountAfterCategorySheet = true
-                    },
-                    onOpenManagement: {
-                        openCategoryManagementAfterCategorySheet = true
-                    }
-                )
-                .presentationDetents([.fraction(0.54), .large])
-                .presentationDragIndicator(.visible)
-            }
-            .sheet(isPresented: $showsLabelsSheet) {
-                NavigationStack {
-                    List {
-                        ForEach(model.labels) { label in
-                            Toggle(label.name, isOn: Binding(
-                                get: { composerState.selectedLabelIDs.contains(label.id) },
-                                set: { isSelected in
-                                    if isSelected {
-                                        composerState.selectedLabelIDs.append(label.id)
-                                    } else {
-                                        composerState.selectedLabelIDs.removeAll { $0 == label.id }
-                                    }
-                                    composerState.selectedLabelIDs = Array(Set(composerState.selectedLabelIDs)).sorted { $0.uuidString < $1.uuidString }
-                                    draft.labelIDs = composerState.selectedLabelIDs
-                                }
-                            ))
+            .sheet(item: $composerModal) { modal in
+                switch modal {
+                case .category:
+                    TransactionCategorySheet(
+                        model: model,
+                        draft: $draft,
+                        composerState: $composerState,
+                        onCategorySelected: {
+                            focusAmountAfterCategorySheet = true
+                        },
+                        onOpenManagement: {
+                            openCategoryManagementAfterCategorySheet = true
                         }
-                    }
-                    .navigationTitle("Labels")
-                    .toolbar {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Button("Done") { showsLabelsSheet = false }
-                        }
-                    }
+                    )
+                    .presentationDetents([.fraction(0.54), .large])
+                    .presentationDragIndicator(.visible)
+                    .accessibilityIdentifier(CashRunwayAccessibilityID.transactionCategorySheet)
+                case .categoryManagement:
+                    CategoryManagementView(model: model, initialKind: draft.kind == .income ? .income : .expense)
                 }
             }
-            .sheet(isPresented: $showsRecurringSheet) {
-                recurringSheet
-                    .presentationDetents([.medium])
+            .sheet(isPresented: $showsLabelsPanel) {
+                labelsSheet
+                    .presentationDetents([.fraction(0.55), .large])
                     .presentationDragIndicator(.visible)
             }
-            .sheet(isPresented: $showsCategoryManagement) {
-                CategoryManagementView(model: model, initialKind: draft.kind == .income ? .income : .expense)
+            .sheet(isPresented: $showsRecurringPanel) {
+                recurringSheet
+                    .presentationDetents([.fraction(0.45), .large])
+                    .presentationDragIndicator(.visible)
             }
-            .onChange(of: showsCategorySheet) { _, isPresented in
-                guard !isPresented else { return }
+            .onChange(of: composerModal) { _, modal in
+                guard modal == nil else { return }
                 let shouldOpenManagement = openCategoryManagementAfterCategorySheet
                 let shouldFocusAmount = focusAmountAfterCategorySheet
                 openCategoryManagementAfterCategorySheet = false
                 focusAmountAfterCategorySheet = false
                 DispatchQueue.main.async {
                     if shouldOpenManagement {
-                        showsCategoryManagement = true
+                        composerModal = .categoryManagement
                     } else if shouldFocusAmount {
-                        amountFieldFocused = true
+                        focusedField = .amount
                     }
                 }
             }
@@ -123,6 +115,9 @@ struct TransactionEditorView: View {
                 if draft.walletID == UUID(), let firstWalletID = model.wallets.first?.id {
                     draft.walletID = firstWalletID
                 }
+                if draft.id == nil {
+                    composerModal = .category
+                }
             }
         }
     }
@@ -139,6 +134,7 @@ struct TransactionEditorView: View {
                         .frame(width: 40, height: 40)
                         .background(.white.opacity(0.72), in: Circle())
                 }
+                .accessibilityIdentifier(CashRunwayAccessibilityID.transactionCloseButton)
 
                 Spacer()
 
@@ -149,7 +145,7 @@ struct TransactionEditorView: View {
                 Spacer()
 
                 Button {
-                    showsCategorySheet = true
+                    composerModal = .category
                 } label: {
                     Image(systemName: "square.grid.2x2")
                         .font(.system(size: 18, weight: .semibold))
@@ -161,7 +157,7 @@ struct TransactionEditorView: View {
 
             HStack(alignment: .center, spacing: 18) {
                 Button {
-                    showsCategorySheet = true
+                    composerModal = .category
                 } label: {
                     ZStack {
                         Circle()
@@ -177,6 +173,7 @@ struct TransactionEditorView: View {
                         }
                     }
                 }
+                .accessibilityIdentifier(CashRunwayAccessibilityID.transactionCategoryButton)
 
                 Spacer()
 
@@ -184,7 +181,7 @@ struct TransactionEditorView: View {
                     HStack(spacing: 10) {
                         TextField("0.00", text: $composerState.amountText)
                             .keyboardType(.decimalPad)
-                            .focused($amountFieldFocused)
+                            .focused($focusedField, equals: .amount)
                             .multilineTextAlignment(.trailing)
                             .font(.system(size: 42, weight: .bold, design: .rounded))
                             .foregroundStyle(CashRunwayTheme.textPrimary)
@@ -193,12 +190,13 @@ struct TransactionEditorView: View {
                                 ToolbarItemGroup(placement: .keyboard) {
                                     Spacer()
                                     Button("Done") {
-                                        amountFieldFocused = false
+                                        focusedField = nil
                                     }
                                     .font(.system(size: 17, weight: .semibold))
                                     .foregroundStyle(CashRunwayTheme.accent)
                                 }
                             }
+                            .accessibilityIdentifier(CashRunwayAccessibilityID.transactionAmountField)
                         Text("UAH")
                             .font(.system(size: 14, weight: .bold))
                             .foregroundStyle(CashRunwayTheme.textPrimary)
@@ -221,194 +219,329 @@ struct TransactionEditorView: View {
     }
 
     private var detailsPane: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: 0) {
-                rowButton(title: "Wallet", value: walletName(for: draft.walletID), action: {})
-                    .overlay(alignment: .trailing) {
-                        Menu {
-                            ForEach(model.wallets) { wallet in
-                                Button(wallet.name) { draft.walletID = wallet.id }
-                            }
-                        } label: {
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(CashRunwayTheme.textMuted)
-                        }
-                        .padding(.trailing, 2)
-                    }
-
-                divider
-
-                VStack(spacing: 12) {
-                    HStack {
-                        Text("Date")
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(CashRunwayTheme.textPrimary)
-                        Spacer()
-                        DatePicker("", selection: $draft.occurredAt, displayedComponents: [.date])
-                            .labelsHidden()
-                            .datePickerStyle(.compact)
-                            .tint(CashRunwayTheme.accentDark)
-                    }
-
-                    HStack(spacing: 4) {
-                        Spacer()
-                        HStack(spacing: 4) {
-                            dateShortcutButton("Today", isSelected: Calendar.current.isDateInToday(draft.occurredAt)) {
-                                draft.occurredAt = .now
-                            }
-                            dateShortcutButton("Yesterday", isSelected: Calendar.current.isDateInYesterday(draft.occurredAt)) {
-                                if let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: .now) {
-                                    draft.occurredAt = yesterday
-                                }
-                            }
-                        }
-                        .padding(4)
-                        .background(CashRunwayTheme.pill, in: Capsule())
-                    }
-                }
-                .padding(.vertical, 18)
-
-                divider
-
-                VStack(spacing: 0) {
-                    textFieldRow(title: "Note", text: $draft.note, placeholder: "Add a note")
-                    divider
-                    Button {
-                        showsLabelsSheet = true
-                    } label: {
-                        HStack {
-                            Text("Labels")
-                                .font(.system(size: 17, weight: .semibold))
-                                .foregroundStyle(CashRunwayTheme.textPrimary)
-                            Spacer()
-                            Text(labelSummary)
-                                .font(.system(size: 16))
-                                .foregroundStyle(CashRunwayTheme.textSecondary)
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(CashRunwayTheme.textMuted)
-                        }
-                        .padding(.vertical, 18)
-                    }
-
-                    if draft.kind == .transfer {
-                        divider
-                        HStack {
-                            Text("Transfer To")
-                                .font(.system(size: 17, weight: .semibold))
-                                .foregroundStyle(CashRunwayTheme.textPrimary)
-                            Spacer()
-                            Menu {
-                                ForEach(model.wallets.filter { $0.id != draft.walletID }) { wallet in
-                                    Button(wallet.name) { draft.destinationWalletID = wallet.id }
-                                }
-                            } label: {
-                                HStack(spacing: 8) {
-                                    Text(transferDestinationName)
-                                        .font(.system(size: 16))
-                                        .foregroundStyle(CashRunwayTheme.textSecondary)
+        ZStack(alignment: .top) {
+            ScrollViewReader { _ in
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 0) {
+                        rowButton(title: "Wallet", value: walletName(for: draft.walletID), action: {})
+                            .overlay(alignment: .trailing) {
+                                Menu {
+                                    ForEach(model.wallets) { wallet in
+                                        Button(wallet.name) { draft.walletID = wallet.id }
+                                    }
+                                } label: {
                                     Image(systemName: "chevron.right")
                                         .font(.system(size: 14, weight: .bold))
                                         .foregroundStyle(CashRunwayTheme.textMuted)
                                 }
+                                .padding(.trailing, 2)
+                                .accessibilityIdentifier(CashRunwayAccessibilityID.transactionWalletMenu)
+                            }
+
+                        divider
+
+                        VStack(spacing: 12) {
+                            HStack {
+                                Text("Date")
+                                    .font(.system(size: 17, weight: .semibold))
+                                    .foregroundStyle(CashRunwayTheme.textPrimary)
+                                Spacer()
+                                DatePicker("", selection: $draft.occurredAt, displayedComponents: [.date])
+                                    .labelsHidden()
+                                    .datePickerStyle(.compact)
+                                    .tint(CashRunwayTheme.accentDark)
+                            }
+
+                            HStack(spacing: 4) {
+                                Spacer()
+                                HStack(spacing: 4) {
+                                    dateShortcutButton("Today", isSelected: Calendar.current.isDateInToday(draft.occurredAt)) {
+                                        draft.occurredAt = .now
+                                    }
+                                    dateShortcutButton("Yesterday", isSelected: Calendar.current.isDateInYesterday(draft.occurredAt)) {
+                                        if let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: .now) {
+                                            draft.occurredAt = yesterday
+                                        }
+                                    }
+                                }
+                                .padding(4)
+                                .background(CashRunwayTheme.pill, in: Capsule())
                             }
                         }
                         .padding(.vertical, 18)
-                    }
 
-                    divider
+                        divider
 
-                    Button {
-                        showsRecurringSheet = true
-                    } label: {
-                        HStack {
-                            Text("Repeat")
-                                .font(.system(size: 17, weight: .semibold))
-                                .foregroundStyle(CashRunwayTheme.textPrimary)
-                            Spacer()
-                            Text(createRecurringTemplate ? recurringSummary : "One-time")
-                                .font(.system(size: 16))
-                                .foregroundStyle(CashRunwayTheme.textSecondary)
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(CashRunwayTheme.textMuted)
+                        VStack(spacing: 0) {
+                            textFieldRow(
+                                title: "Note",
+                                text: $draft.note,
+                                placeholder: "Add a note",
+                                identifier: CashRunwayAccessibilityID.transactionNoteField,
+                                focus: $focusedField,
+                                focusValue: .note
+                            )
+                            divider
+                            Button {
+                                focusedField = nil
+                                showsLabelsPanel = true
+                                showsRecurringPanel = false
+                            } label: {
+                                HStack {
+                                    Text("Labels")
+                                        .font(.system(size: 17, weight: .semibold))
+                                        .foregroundStyle(CashRunwayTheme.textPrimary)
+                                    Spacer()
+                                    Text(labelSummary)
+                                        .font(.system(size: 16))
+                                        .foregroundStyle(CashRunwayTheme.textSecondary)
+                                        .accessibilityIdentifier(CashRunwayAccessibilityID.transactionLabelsSummary)
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 14, weight: .bold))
+                                        .foregroundStyle(CashRunwayTheme.textMuted)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.vertical, 18)
+                                .contentShape(Rectangle())
+                            }
+                            .accessibilityIdentifier(CashRunwayAccessibilityID.transactionLabelsButton)
+                            .buttonStyle(.plain)
+
+                            if draft.kind == .transfer {
+                                divider
+                                HStack {
+                                    Text("Transfer To")
+                                        .font(.system(size: 17, weight: .semibold))
+                                        .foregroundStyle(CashRunwayTheme.textPrimary)
+                                    Spacer()
+                                    Menu {
+                                        ForEach(model.wallets.filter { $0.id != draft.walletID }) { wallet in
+                                            Button(wallet.name) { draft.destinationWalletID = wallet.id }
+                                        }
+                                    } label: {
+                                        HStack(spacing: 8) {
+                                            Text(transferDestinationName)
+                                                .font(.system(size: 16))
+                                                .foregroundStyle(CashRunwayTheme.textSecondary)
+                                            Image(systemName: "chevron.right")
+                                                .font(.system(size: 14, weight: .bold))
+                                                .foregroundStyle(CashRunwayTheme.textMuted)
+                                        }
+                                    }
+                                    .accessibilityIdentifier(CashRunwayAccessibilityID.transactionTransferDestinationMenu)
+                                }
+                                .padding(.vertical, 18)
+                            }
+
+                            divider
+
+                            Button {
+                                focusedField = nil
+                                showsRecurringPanel = true
+                                showsLabelsPanel = false
+                            } label: {
+                                HStack {
+                                    Text("Repeat")
+                                        .font(.system(size: 17, weight: .semibold))
+                                        .foregroundStyle(CashRunwayTheme.textPrimary)
+                                    Spacer()
+                                    Text(createRecurringTemplate ? recurringSummary : "One-time")
+                                        .font(.system(size: 16))
+                                        .foregroundStyle(CashRunwayTheme.textSecondary)
+                                        .accessibilityIdentifier(CashRunwayAccessibilityID.transactionRepeatSummary)
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 14, weight: .bold))
+                                        .foregroundStyle(CashRunwayTheme.textMuted)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.vertical, 18)
+                                .contentShape(Rectangle())
+                            }
+                            .accessibilityIdentifier(CashRunwayAccessibilityID.transactionRepeatButton)
+                            .buttonStyle(.plain)
                         }
-                        .padding(.vertical, 18)
+                        .padding(.horizontal, 20)
+                        .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 30, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 30, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
+                        .padding(.top, 20)
+
+                        Button {
+                            amountError = nil
+                            guard let parsed = try? MoneyFormatter.parseMinorUnits(composerState.amountText), parsed > 0 else {
+                                amountError = "Enter a valid amount greater than zero."
+                                return
+                            }
+                            draft.kind = composerState.selectedKind
+                            draft.categoryID = composerState.selectedCategoryID
+                            draft.labelIDs = composerState.selectedLabelIDs
+                            draft.amountMinor = parsed
+                            model.saveTransaction(draft, recurringTemplate: recurringTemplate)
+                            dismiss()
+                        } label: {
+                            Text("Save Transaction")
+                                .font(.system(size: 18, weight: .bold))
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 18)
+                                .background(CashRunwayTheme.accentDark, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                        }
+                        .padding(.top, 20)
+                        .accessibilityIdentifier(CashRunwayAccessibilityID.transactionSaveButton)
+
+                        if let amountError {
+                            Text(amountError)
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(CashRunwayTheme.negative)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .padding(.top, 8)
+                                .accessibilityIdentifier(CashRunwayAccessibilityID.transactionValidationAmount)
+                        }
+
+                        Spacer().frame(height: 32)
                     }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 18)
                 }
-                .padding(.horizontal, 20)
-                .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 30, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 30, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
-                .padding(.top, 20)
-
-                Button {
-                    amountError = nil
-                    guard let parsed = try? MoneyFormatter.parseMinorUnits(composerState.amountText), parsed > 0 else {
-                        amountError = "Enter a valid amount greater than zero."
-                        return
-                    }
-                    draft.kind = composerState.selectedKind
-                    draft.categoryID = composerState.selectedCategoryID
-                    draft.labelIDs = composerState.selectedLabelIDs
-                    draft.amountMinor = parsed
-                    model.saveTransaction(draft, recurringTemplate: recurringTemplate)
-                    dismiss()
-                } label: {
-                    Text("Save Transaction")
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 18)
-                        .background(CashRunwayTheme.accentDark, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-                }
-                .padding(.top, 20)
-
-                if let amountError {
-                    Text(amountError)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(CashRunwayTheme.negative)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.top, 8)
-                }
-
-                Spacer().frame(height: 32)
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 18)
         }
     }
 
     private var recurringSheet: some View {
         NavigationStack {
-            Form {
-                Toggle("Save as recurring template", isOn: $createRecurringTemplate)
-                if createRecurringTemplate {
-                    Picker("Rule", selection: $recurringRuleType) {
-                        ForEach(RecurrenceRuleType.allCases, id: \.self) { rule in
-                            Text(rule.rawValue.capitalized).tag(rule)
+            VStack(spacing: 0) {
+                HStack {
+                    Text("Recurring")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(CashRunwayTheme.textPrimary)
+                    Spacer()
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 18)
+
+                Divider().overlay(CashRunwayTheme.line)
+
+                VStack(alignment: .leading, spacing: 14) {
+                    Toggle("Save as recurring template", isOn: $createRecurringTemplate)
+                    if createRecurringTemplate {
+                        Picker("Rule", selection: $recurringRuleType) {
+                            ForEach(RecurrenceRuleType.allCases, id: \.self) { rule in
+                                Text(rule.rawValue.capitalized).tag(rule)
+                            }
                         }
-                    }
-                    Stepper("Interval \(recurringInterval)", value: $recurringInterval, in: 1...12)
-                    if recurringRuleType == .monthly || recurringRuleType == .yearly {
-                        Stepper("Day \(recurringDayOfMonth)", value: $recurringDayOfMonth, in: 1...28)
-                    }
-                    if recurringRuleType == .weekly {
-                        Picker("Weekday", selection: $recurringWeekday) {
-                            ForEach(1...7, id: \.self) { weekday in
-                                Text(weekdayName(weekday)).tag(weekday)
+                        Stepper("Interval \(recurringInterval)", value: $recurringInterval, in: 1...12)
+                        if recurringRuleType == .monthly || recurringRuleType == .yearly {
+                            Stepper("Day \(recurringDayOfMonth)", value: $recurringDayOfMonth, in: 1...28)
+                        }
+                        if recurringRuleType == .weekly {
+                            Picker("Weekday", selection: $recurringWeekday) {
+                                ForEach(1...7, id: \.self) { weekday in
+                                    Text(weekdayName(weekday)).tag(weekday)
+                                }
                             }
                         }
                     }
                 }
             }
-            .navigationTitle("Recurring")
+            .padding(.vertical, 18)
+            .padding(.horizontal, 20)
+            .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 30, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 30, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
+            .frame(maxWidth: .infinity, minHeight: 220, maxHeight: 320, alignment: .top)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { showsRecurringSheet = false }
+                    Button("Done") {
+                        showsRecurringPanel = false
+                    }
+                    .accessibilityIdentifier(CashRunwayAccessibilityID.transactionRecurringSheetDoneButton)
                 }
             }
+            .navigationBarTitleDisplayMode(.inline)
         }
+        .accessibilityIdentifier(CashRunwayAccessibilityID.transactionRecurringSheet)
+        .accessibilityElement(children: .contain)
+    }
+
+    private var labelsSheet: some View {
+        let labels: [CashRunwayLabel] = {
+            guard ProcessInfo.processInfo.environment["CASH_RUNWAY_UI_TEST_MODE"] == "1" else {
+                return model.labels
+            }
+
+            let uiTestLabels = model.labels.filter { $0.name.hasPrefix("UITEST-") }
+            return uiTestLabels.isEmpty ? model.labels : uiTestLabels
+        }()
+
+        return NavigationStack {
+            VStack(spacing: 0) {
+                HStack {
+                    Text("Labels")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(CashRunwayTheme.textPrimary)
+                    Spacer()
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 18)
+
+                Divider().overlay(CashRunwayTheme.line)
+
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(labels) { label in
+                            Button {
+                                if composerState.selectedLabelIDs.contains(label.id) {
+                                    composerState.selectedLabelIDs.removeAll { $0 == label.id }
+                                } else {
+                                    composerState.selectedLabelIDs.append(label.id)
+                                }
+                                composerState.selectedLabelIDs = Array(Set(composerState.selectedLabelIDs)).sorted { $0.uuidString < $1.uuidString }
+                                draft.labelIDs = composerState.selectedLabelIDs
+                            } label: {
+                                HStack {
+                                    Text(label.name)
+                                        .font(.system(size: 17, weight: .semibold))
+                                        .foregroundStyle(CashRunwayTheme.textPrimary)
+                                    Spacer()
+                                    Image(systemName: composerState.selectedLabelIDs.contains(label.id) ? "checkmark.circle.fill" : "circle")
+                                        .foregroundStyle(CashRunwayTheme.textMuted)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 14)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier(label.name)
+                            .accessibilityValue(composerState.selectedLabelIDs.contains(label.id) ? "selected" : "not selected")
+
+                            if label.id != labels.last?.id {
+                                Divider().overlay(CashRunwayTheme.line)
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(.bottom, 8)
+            .padding(.horizontal, 20)
+            .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 30, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 30, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
+            .frame(maxWidth: .infinity, minHeight: 260, maxHeight: 360, alignment: .top)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") {
+                        showsLabelsPanel = false
+                    }
+                    .accessibilityIdentifier(CashRunwayAccessibilityID.transactionLabelsSheetDoneButton)
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                #if DEBUG
+                NSLog("labels sheet appeared")
+                #endif
+            }
+        }
+        .accessibilityIdentifier(CashRunwayAccessibilityID.transactionLabelsSheet)
+        .accessibilityElement(children: .contain)
     }
 
     private var recurringTemplate: RecurringTemplate? {
@@ -513,15 +646,31 @@ struct TransactionEditorView: View {
         .buttonStyle(.plain)
     }
 
-    private func textFieldRow(title: String, text: Binding<String>, placeholder: String) -> some View {
+    private func textFieldRow(
+        title: String,
+        text: Binding<String>,
+        placeholder: String,
+        identifier: String? = nil,
+        focus: FocusState<ComposerField?>.Binding? = nil,
+        focusValue: ComposerField? = nil
+    ) -> some View {
         HStack {
             Text(title)
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(CashRunwayTheme.textPrimary)
             Spacer()
-            TextField(placeholder, text: text)
-                .multilineTextAlignment(.trailing)
-                .foregroundStyle(CashRunwayTheme.textSecondary)
+            if let focus, let focusValue {
+                TextField(placeholder, text: text)
+                    .focused(focus, equals: focusValue)
+                    .multilineTextAlignment(.trailing)
+                    .foregroundStyle(CashRunwayTheme.textSecondary)
+                    .accessibilityIdentifier(identifier ?? "")
+            } else {
+                TextField(placeholder, text: text)
+                    .multilineTextAlignment(.trailing)
+                    .foregroundStyle(CashRunwayTheme.textSecondary)
+                    .accessibilityIdentifier(identifier ?? "")
+            }
         }
         .padding(.vertical, 18)
     }
@@ -536,6 +685,8 @@ struct TransactionEditorView: View {
                 .background(isSelected ? CashRunwayTheme.accentMuted : Color.clear, in: Capsule())
         }
         .buttonStyle(.plain)
+        .accessibilityValue(isSelected ? "selected" : "not selected")
+        .accessibilityIdentifier(title == "Today" ? CashRunwayAccessibilityID.transactionDateTodayButton : CashRunwayAccessibilityID.transactionDateYesterdayButton)
     }
 }
 
@@ -557,6 +708,7 @@ private struct TransactionCategorySheet: View {
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal, 20)
+                .accessibilityIdentifier(CashRunwayAccessibilityID.transactionKindPicker)
                 .onChange(of: composerState.selectedKind) { _, kind in
                     draft.kind = kind
                     switch kind {
@@ -611,6 +763,7 @@ private struct TransactionCategorySheet: View {
                                     }
                                 }
                                 .buttonStyle(.plain)
+                                .accessibilityIdentifier(CashRunwayAccessibilityID.transactionCategory(category.name))
                             }
                         }
                         .padding(.horizontal, 20)
@@ -639,6 +792,7 @@ private struct TransactionCategorySheet: View {
                         Image(systemName: "checkmark")
                             .font(.system(size: 15, weight: .bold))
                     }
+                    .accessibilityIdentifier(CashRunwayAccessibilityID.transactionCategorySheetDoneButton)
                 }
             }
         }

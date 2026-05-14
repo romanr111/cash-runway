@@ -13,8 +13,12 @@ private struct AggregateContribution {
 public final class CashRunwayRepository: @unchecked Sendable {
     public let databaseManager: DatabaseManager
 
-    public init(databaseManager: DatabaseManager = try! DatabaseManager(allowsDestructiveRecovery: true)) {
+    public init(databaseManager: DatabaseManager) {
         self.databaseManager = databaseManager
+    }
+
+    public convenience init(allowsDestructiveRecovery: Bool = false) throws {
+        try self.init(databaseManager: DatabaseManager(allowsDestructiveRecovery: allowsDestructiveRecovery))
     }
 
     public func seedIfNeeded() throws {
@@ -1653,6 +1657,9 @@ public final class CashRunwayRepository: @unchecked Sendable {
     private func syncSearch(_ db: Database, transaction: CashRunwayTransaction) throws {
         try db.execute(sql: "DELETE FROM transaction_search WHERE transaction_id = ?", arguments: [transaction.id.uuidString])
         let walletName = try String.fetchOne(db, sql: "SELECT name FROM wallets WHERE id = ?", arguments: [transaction.walletID.uuidString]) ?? ""
+        let categoryName = transaction.categoryID.flatMap {
+            try? String.fetchOne(db, sql: "SELECT name FROM categories WHERE id = ?", arguments: [$0.uuidString])
+        } ?? ""
         let labelNames = try String.fetchAll(
             db,
             sql: """
@@ -1663,8 +1670,8 @@ public final class CashRunwayRepository: @unchecked Sendable {
             arguments: [transaction.id.uuidString]
         ).joined(separator: " ")
         try db.execute(
-            sql: "INSERT INTO transaction_search (transaction_id, merchant, note, wallet_name, labels) VALUES (?, ?, ?, ?, ?)",
-            arguments: [transaction.id.uuidString, transaction.merchant ?? "", transaction.note ?? "", walletName, labelNames]
+            sql: "INSERT INTO transaction_search (transaction_id, merchant, note, wallet_name, category_name, labels) VALUES (?, ?, ?, ?, ?, ?)",
+            arguments: [transaction.id.uuidString, transaction.merchant ?? "", transaction.note ?? "", walletName, categoryName, labelNames]
         )
     }
 

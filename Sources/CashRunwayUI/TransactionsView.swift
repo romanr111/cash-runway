@@ -171,11 +171,20 @@ struct TransactionDetailsView: View {
         NavigationStack {
             List {
                 Section("Summary") {
-                    detailRow("Amount", MoneyFormatter.string(from: item.amountMinor))
+                    detailRow("Amount", MoneyFormatter.string(from: item.amountMinor), identifier: CashRunwayAccessibilityID.transactionDetailsAmountRow)
                     detailRow("Wallet", item.walletName)
                     detailRow("Type", item.kind.rawValue.capitalized)
                     detailRow("Date", item.occurredAt.formatted(date: .abbreviated, time: .omitted))
                     detailRow("Source", item.source.rawValue.replacingOccurrences(of: "_", with: " ").capitalized)
+                }
+                if item.kind == .transfer, let transferDraft = try? model.repository.transactionDraft(id: item.id) {
+                    Section("Transfer") {
+                        detailRow(
+                            "Destination",
+                            model.wallets.first(where: { $0.id == transferDraft.destinationWalletID })?.name ?? "Unknown",
+                            identifier: CashRunwayAccessibilityID.transactionDetailsDestinationRow
+                        )
+                    }
                 }
                 if let categoryName = item.categoryName {
                     Section("Category") {
@@ -194,27 +203,33 @@ struct TransactionDetailsView: View {
                 }
                 Section {
                     Button("Edit", action: onEdit)
+                        .accessibilityIdentifier(CashRunwayAccessibilityID.transactionDetailsEditButton)
                     Button("Delete", role: .destructive) {
                         model.deleteTransaction(id: item.id)
                         dismiss()
                     }
+                    .accessibilityIdentifier(CashRunwayAccessibilityID.transactionDetailsDeleteButton)
                 }
             }
             .navigationTitle(item.displayTitle)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }
+                        .accessibilityIdentifier(CashRunwayAccessibilityID.transactionDetailsDoneButton)
                 }
             }
         }
     }
 
-    private func detailRow(_ title: String, _ value: String) -> some View {
+    private func detailRow(_ title: String, _ value: String, identifier: String? = nil) -> some View {
         HStack {
             Text(title)
                 .foregroundStyle(CashRunwayTheme.textSecondary)
             Spacer()
             Text(value)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title), \(value)")
+        .accessibilityIdentifier(identifier ?? "")
     }
 }

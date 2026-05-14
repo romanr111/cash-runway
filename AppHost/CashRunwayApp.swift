@@ -1,24 +1,33 @@
 import BackgroundTasks
 import Darwin
 import Foundation
+import GRDB
 import SwiftUI
 
 @main
 struct CashRunwayApp: App {
     @Environment(\.scenePhase) private var scenePhase
     private let maintenanceCoordinator = BackgroundMaintenanceCoordinator()
+    private let runtime: CashRunwayAppRuntime
 
     init() {
         #if DEBUG
+        DebugDataRecoveryAttempt.runIfRequested()
         DebugCSVImportSelfTest.runIfRequested()
         #endif
+        runtime = CashRunwayAppRuntime.bootstrap()
         maintenanceCoordinator.register()
         maintenanceCoordinator.schedule()
     }
 
     var body: some Scene {
         WindowGroup {
-            CashRunwayRootView()
+            CashRunwayRootView(
+                model: runtime.model,
+                startupError: runtime.startupError,
+                onboardingStore: runtime.onboardingStore,
+                bypassOnboarding: runtime.bypassOnboarding
+            )
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .background || phase == .active {
@@ -59,7 +68,7 @@ private final class BackgroundMaintenanceCoordinator {
         let taskBox = BackgroundProcessingTaskBox(task)
         let maintenanceTask = Task.detached(priority: .background) {
             do {
-                let repository = CashRunwayRepository()
+                let repository = try CashRunwayRepository()
                 try repository.runMaintenance()
                 try repository.refreshRecurringInstances()
                 return true
@@ -88,6 +97,122 @@ private final class BackgroundProcessingTaskBox: @unchecked Sendable {
 }
 
 #if DEBUG
+private enum DebugDataRecoveryAttempt {
+    struct ProbeResult {
+        var transactionCount: Int
+        var walletCount: Int
+    }
+
+    static func runIfRequested() {
+        let environment = ProcessInfo.processInfo.environment
+        guard environment["CASH_RUNWAY_RECOVERY_ATTEMPT"] == "1" else { return }
+
+        do {
+            let report = try run()
+            try write(report)
+            print(report)
+            Darwin.exit(0)
+        } catch {
+            let report = "FAIL recovery_attempt error=\(error.localizedDescription)"
+            try? write(report)
+            print(report)
+            Darwin.exit(1)
+        }
+    }
+
+    private static func run() throws -> String {
+        let fileManager = FileManager.default
+        let databaseURL = try DatabaseLocationProvider().databaseURL()
+        let directoryURL = databaseURL.deletingLastPathComponent()
+        let recoveryDirectory = directoryURL.appendingPathComponent("Recovery", isDirectory: true)
+
+        guard fileManager.fileExists(atPath: recoveryDirectory.path) else {
+            return "NOOP recovery_attempt reason=no_recovery_directory"
+        }
+
+        let backups = try fileManager.contentsOfDirectory(at: recoveryDirectory, includingPropertiesForKeys: [.fileSizeKey])
+            .filter { url in
+                let name = url.lastPathComponent
+                return name.hasPrefix("cash-runway.sqlite.") && name.hasSuffix(".bak") && !name.contains("-wal") && !name.contains("-shm")
+            }
+            .map { url -> (url: URL, size: Int) in
+                let values = try url.resourceValues(forKeys: [.fileSizeKey])
+                return (url, values.fileSize ?? 0)
+            }
+            .sorted { lhs, rhs in
+                if lhs.size == rhs.size {
+                    return lhs.url.lastPathComponent < rhs.url.lastPathComponent
+                }
+                return lhs.size > rhs.size
+            }
+
+        guard let backup = backups.first else {
+            return "NOOP recovery_attempt reason=no_database_backup"
+        }
+
+        let keychain = KeychainStore(service: "dev.roman.cash-runway")
+        guard let keyData = try keychain.read(account: "database-key"),
+              let key = String(data: keyData, encoding: .utf8),
+              !key.isEmpty
+        else {
+            return "NOOP recovery_attempt reason=no_readable_database_key backup=\(backup.url.lastPathComponent) backup_bytes=\(backup.size)"
+        }
+
+        let activeProbe = try? probe(databaseURL, key: key)
+        guard let backupProbe = try? probe(backup.url, key: key) else {
+            return "NOOP recovery_attempt reason=backup_not_decryptable_with_current_key backup=\(backup.url.lastPathComponent) backup_bytes=\(backup.size) active_transactions=\(activeProbe?.transactionCount ?? -1)"
+        }
+
+        let activeTransactions = activeProbe?.transactionCount ?? -1
+        guard backupProbe.transactionCount > activeTransactions else {
+            return "NOOP recovery_attempt reason=backup_not_better backup=\(backup.url.lastPathComponent) backup_transactions=\(backupProbe.transactionCount) active_transactions=\(activeTransactions)"
+        }
+
+        let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
+        let attemptDirectory = recoveryDirectory.appendingPathComponent("RestoreAttempt-\(stamp)", isDirectory: true)
+        try fileManager.createDirectory(at: attemptDirectory, withIntermediateDirectories: true)
+
+        for suffix in ["", "-wal", "-shm"] {
+            let activeURL = URL(fileURLWithPath: databaseURL.path + suffix)
+            guard fileManager.fileExists(atPath: activeURL.path) else { continue }
+            try fileManager.copyItem(at: activeURL, to: attemptDirectory.appendingPathComponent(activeURL.lastPathComponent))
+            try fileManager.removeItem(at: activeURL)
+        }
+
+        let backupBaseName = backup.url.lastPathComponent.dropLast(".bak".count)
+        for (sourceSuffix, destinationSuffix) in [("", ""), ("-wal", "-wal"), ("-shm", "-shm")] {
+            let backupComponent = "\(backupBaseName)\(sourceSuffix).bak"
+            let backupURL = recoveryDirectory.appendingPathComponent(backupComponent)
+            guard fileManager.fileExists(atPath: backupURL.path) else { continue }
+            let destinationURL = URL(fileURLWithPath: databaseURL.path + destinationSuffix)
+            try fileManager.copyItem(at: backupURL, to: destinationURL)
+        }
+
+        let restoredProbe = try probe(databaseURL, key: key)
+        return "RESTORED recovery_attempt backup=\(backup.url.lastPathComponent) backup_bytes=\(backup.size) restored_transactions=\(restoredProbe.transactionCount) restored_wallets=\(restoredProbe.walletCount) previous_active_transactions=\(activeTransactions)"
+    }
+
+    private static func probe(_ url: URL, key: String) throws -> ProbeResult {
+        var configuration = Configuration()
+        configuration.prepareDatabase { db in
+            try db.usePassphrase(key)
+        }
+
+        let queue = try DatabaseQueue(path: url.path, configuration: configuration)
+        return try queue.read { db in
+            ProbeResult(
+                transactionCount: try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM transactions") ?? 0,
+                walletCount: try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM wallets") ?? 0
+            )
+        }
+    }
+
+    private static func write(_ report: String) throws {
+        let documents = try FileManager.default.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+        try report.write(to: documents.appendingPathComponent("recovery-attempt-report.txt"), atomically: true, encoding: .utf8)
+    }
+}
+
 private enum DebugCSVImportSelfTest {
     static func runIfRequested() {
         let environment = ProcessInfo.processInfo.environment

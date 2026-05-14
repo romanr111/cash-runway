@@ -24,7 +24,22 @@
 		A0010001000100010001000F /* Sources/CashRunwayCore/CSVSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010012 /* Sources/CashRunwayCore/CSVSupport.swift */; };
 		A00100010001000100010010 /* Sources/CashRunwayCore/Fixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010013 /* Sources/CashRunwayCore/Fixtures.swift */; };
 		A00100010001000100010011 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = A00A00010001000100010002 /* GRDB */; };
+		A00100010001000100010012 /* AppHost/UITestRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010014 /* AppHost/UITestRuntime.swift */; };
+		A00100010001000100010013 /* Sources/CashRunwayUI/AccessibilityIdentifiers.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010015 /* Sources/CashRunwayUI/AccessibilityIdentifiers.swift */; };
+		A00100010001000100010014 /* Tests/CashRunwayUITests/CashRunwayUITestCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010016 /* Tests/CashRunwayUITests/CashRunwayUITestCase.swift */; };
+		A00100010001000100010015 /* Tests/CashRunwayUITests/TransactionCRUDUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010017 /* Tests/CashRunwayUITests/TransactionCRUDUITests.swift */; };
+		A00100010001000100010016 /* Tests/CashRunwayUITests/TransactionOverviewUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010018 /* Tests/CashRunwayUITests/TransactionOverviewUITests.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		A00D00010001000100010001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A00600010001000100010000 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A00500010001000100010001;
+			remoteInfo = CashRunway;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		A00200010001000100010001 /* AppHost/CashRunwayApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppHost/CashRunwayApp.swift; sourceTree = "<group>"; };
@@ -46,6 +61,12 @@
 		A00200010001000100010011 /* Sources/CashRunwayCore/CashRunwayRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayCore/CashRunwayRepository.swift; sourceTree = "<group>"; };
 		A00200010001000100010012 /* Sources/CashRunwayCore/CSVSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayCore/CSVSupport.swift; sourceTree = "<group>"; };
 		A00200010001000100010013 /* Sources/CashRunwayCore/Fixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayCore/Fixtures.swift; sourceTree = "<group>"; };
+		A00200010001000100010014 /* AppHost/UITestRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppHost/UITestRuntime.swift; sourceTree = "<group>"; };
+		A00200010001000100010015 /* Sources/CashRunwayUI/AccessibilityIdentifiers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayUI/AccessibilityIdentifiers.swift; sourceTree = "<group>"; };
+		A00200010001000100010016 /* Tests/CashRunwayUITests/CashRunwayUITestCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/CashRunwayUITests/CashRunwayUITestCase.swift; sourceTree = "<group>"; };
+		A00200010001000100010017 /* Tests/CashRunwayUITests/TransactionCRUDUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/CashRunwayUITests/TransactionCRUDUITests.swift; sourceTree = "<group>"; };
+		A00200010001000100010018 /* Tests/CashRunwayUITests/TransactionOverviewUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/CashRunwayUITests/TransactionOverviewUITests.swift; sourceTree = "<group>"; };
+		A00200010001000100010019 /* CashRunwayUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CashRunwayUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -54,6 +75,13 @@
 			buildActionMask = 2147483647;
 			files = (
 				A00100010001000100010011 /* GRDB in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A00300010001000100010002 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -66,6 +94,7 @@
 				A00400010001000100010002 /* AppHost */,
 				A00400010001000100010005 /* Core */,
 				A00400010001000100010003 /* UI */,
+				A00400010001000100010006 /* Tests */,
 				A00400010001000100010004 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -74,6 +103,7 @@
 			isa = PBXGroup;
 			children = (
 				A00200010001000100010001 /* AppHost/CashRunwayApp.swift */,
+				A00200010001000100010014 /* AppHost/UITestRuntime.swift */,
 				A0020001000100010001000A /* AppHost/Info.plist */,
 				A0020001000100010001000B /* AppHost/CashRunway.entitlements */,
 			);
@@ -91,6 +121,7 @@
 				A00200010001000100010007 /* Sources/CashRunwayUI/BudgetsView.swift */,
 				A00200010001000100010008 /* Sources/CashRunwayUI/SettingsView.swift */,
 				A00200010001000100010009 /* Sources/CashRunwayUI/Editors.swift */,
+				A00200010001000100010015 /* Sources/CashRunwayUI/AccessibilityIdentifiers.swift */,
 			);
 			name = UI;
 			sourceTree = "<group>";
@@ -99,6 +130,7 @@
 			isa = PBXGroup;
 			children = (
 				A0020001000100010001000C /* CashRunway.app */,
+				A00200010001000100010019 /* CashRunwayUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -115,6 +147,16 @@
 				A00200010001000100010013 /* Sources/CashRunwayCore/Fixtures.swift */,
 			);
 			name = Core;
+			sourceTree = "<group>";
+		};
+		A00400010001000100010006 /* Tests */ = {
+			isa = PBXGroup;
+			children = (
+				A00200010001000100010016 /* Tests/CashRunwayUITests/CashRunwayUITestCase.swift */,
+				A00200010001000100010017 /* Tests/CashRunwayUITests/TransactionCRUDUITests.swift */,
+				A00200010001000100010018 /* Tests/CashRunwayUITests/TransactionOverviewUITests.swift */,
+			);
+			name = Tests;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -141,6 +183,26 @@
 			productReference = A0020001000100010001000C /* CashRunway.app */;
 			productType = "com.apple.product-type.application";
 		};
+		A00500010001000100010002 /* CashRunwayUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A00800010001000100010003 /* Build configuration list for PBXNativeTarget "CashRunwayUITests" */;
+			buildPhases = (
+				A00600010001000100010002 /* Sources */,
+				A00300010001000100010002 /* Frameworks */,
+				A00700010001000100010002 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A00E00010001000100010001 /* PBXTargetDependency */,
+			);
+			name = CashRunwayUITests;
+			packageProductDependencies = (
+			);
+			productName = CashRunwayUITests;
+			productReference = A00200010001000100010019 /* CashRunwayUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -152,6 +214,10 @@
 				TargetAttributes = {
 					A00500010001000100010001 = {
 						CreatedOnToolsVersion = 26.3;
+					};
+					A00500010001000100010002 = {
+						CreatedOnToolsVersion = 26.3;
+						TestTargetID = A00500010001000100010001;
 					};
 				};
 			};
@@ -172,12 +238,20 @@
 			projectRoot = "";
 			targets = (
 				A00500010001000100010001 /* CashRunway */,
+				A00500010001000100010002 /* CashRunwayUITests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		A00700010001000100010001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A00700010001000100010002 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -229,10 +303,30 @@
 				A0010001000100010001000E /* Sources/CashRunwayCore/CashRunwayRepository.swift in Sources */,
 				A0010001000100010001000F /* Sources/CashRunwayCore/CSVSupport.swift in Sources */,
 				A00100010001000100010010 /* Sources/CashRunwayCore/Fixtures.swift in Sources */,
+				A00100010001000100010012 /* AppHost/UITestRuntime.swift in Sources */,
+				A00100010001000100010013 /* Sources/CashRunwayUI/AccessibilityIdentifiers.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A00600010001000100010002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A00100010001000100010014 /* Tests/CashRunwayUITests/CashRunwayUITestCase.swift in Sources */,
+				A00100010001000100010015 /* Tests/CashRunwayUITests/TransactionCRUDUITests.swift in Sources */,
+				A00100010001000100010016 /* Tests/CashRunwayUITests/TransactionOverviewUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A00E00010001000100010001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A00500010001000100010001 /* CashRunway */;
+			targetProxy = A00D00010001000100010001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		A00B00010001000100010001 /* Debug */ = {
@@ -339,6 +433,53 @@
 			};
 			name = Release;
 		};
+		A00B00010001000100010005 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = N9TN2548UX;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = dev.roman.cashrunway.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_TARGET_NAME = CashRunway;
+			};
+			name = Debug;
+		};
+		A00B00010001000100010006 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = N9TN2548UX;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = dev.roman.cashrunway.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_TARGET_NAME = CashRunway;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -356,6 +497,15 @@
 			buildConfigurations = (
 				A00B00010001000100010003 /* Debug */,
 				A00B00010001000100010004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A00800010001000100010003 /* Build configuration list for PBXNativeTarget "CashRunwayUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A00B00010001000100010005 /* Debug */,
+				A00B00010001000100010006 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
