@@ -1,6 +1,11 @@
 # CONTINUITY
 
 ## Snapshot
+- 2026-05-14T09:20:00+03:00 [CODE] Database crash-resilience test suite implemented per approved plan: enabled WAL mode (`configuration.journalMode = .wal`), added DEBUG-only fatalError gate preventing `allowsDestructiveRecovery` in release builds, and added 23 new tests across 6 files.
+- 2026-05-14T09:20:00+03:00 [CODE] New tests: `DatabaseWALTests` (4 tests: WAL file creation, checkpoint truncation, committed data survives reopen, SHM-loss auto-recovery); `DatabaseTransactionSafetyTests` (6 tests: write-throw rollback, transfer pair invariants, deletion invariants, category merge consistency, wallet deletion cleanup); `DatabaseConcurrencyTests` (3 tests: simultaneous writes, read-during-write, concurrent CSV imports); `DatabaseCrashSimulationTests` (3 tests: committed data survives process death, transfer data survives, seed data survives); `DatabaseLifecycleTests` (4 tests: corruption quarantine, WAL/SHM quarantine, migration failure preserves data, repository reopen); `DatabaseBackupTests` (3 tests: CSV export completeness, labels/categories in export, round-trip wallet balance restoration).
+- 2026-05-14T09:20:00+03:00 [CODE] Test infrastructure: made `TestSupport` and `TestKeychainStore` `internal` so new test files can share helpers; added `assertNoPartialTransfer`, WAL/SHM URL helpers, `corruptSQLiteHeader`, `deleteSHMFile`, and `TransactionTruth: Equatable`.
+- 2026-05-14T09:20:00+03:00 [FIX] Fixed pre-existing test race condition: `migrationReopensExistingDatabase` and new reopen tests now use isolated `TestKeychainStore` instead of the global keychain, preventing cross-test-suite keychain collisions when running in parallel.
+- 2026-05-14T09:20:00+03:00 [VERIFY] `swift test` -> 76 tests in 8 suites passed; `xcodebuild -scheme CashRunway -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' clean build` -> `** BUILD SUCCEEDED **`; iPhone 17 simulator boot check launched `dev.roman.cashrunway` with no crash/fatal/exception/not-entitled entries.
 - 2026-05-13T23:32:00+03:00 [TOOL] Real-device recovery attempt on connected iPhone `Roma iPhone` copied pre/post evidence under `/Users/roman/Documents/Development/CashRunwayDataLossForensics/`; DEBUG probe selected `cash-runway.sqlite.2026-05-11T23-55-43Z.bak` (11,644,928 bytes) and reported `NOOP recovery_attempt reason=backup_not_decryptable_with_current_key ... active_transactions=0`, so no on-device restore was performed.
 - 2026-05-13T23:32:00+03:00 [VERIFY] Installed Debug build over existing bundle id `dev.roman.cashrunway`, launched recovery probe successfully after developer-profile trust, then launched normally on device; `devicectl device info processes` showed `CashRunway` running as pid `8340`.
 - 2026-05-13T23:26:00+03:00 [CODE] Primary checkout is now on `main`; `codex/xcuitest-transaction-suite` was fast-forward merged as `e09c4a3`, and `codex/data-loss-investigation` is being merged with conflict resolution that preserves UI-test isolated runtime plus fail-closed DB startup.
@@ -97,14 +102,15 @@
 
 ## Working set
 - `/Users/roman/Documents/Development/Cash Runway/CONTINUITY.md`
-- `/Users/roman/Documents/Development/Cash Runway/Sources/CashRunwayCore/CSVSupport.swift`
-- `/Users/roman/Documents/Development/Cash Runway/Modules/CashRunwayCorePackage/Sources/CashRunwayCore/CSVSupport.swift`
-- `/Users/roman/Documents/Development/Cash Runway/Sources/CashRunwayCore/Models.swift`
-- `/Users/roman/Documents/Development/Cash Runway/Modules/CashRunwayCorePackage/Sources/CashRunwayCore/Models.swift`
-- `/Users/roman/Documents/Development/Cash Runway/Sources/CashRunwayUI/DashboardView.swift`
-- `/Users/roman/Documents/Development/Cash Runway/Sources/CashRunwayUI/SettingsView.swift`
-- `/Users/roman/Documents/Development/Cash Runway/Sources/CashRunwayUI/AppModel.swift`
+- `/Users/roman/Documents/Development/Cash Runway/Sources/CashRunwayCore/DatabaseManager.swift`
+- `/Users/roman/Documents/Development/Cash Runway/Modules/CashRunwayCorePackage/Sources/CashRunwayCore/DatabaseManager.swift`
 - `/Users/roman/Documents/Development/Cash Runway/Tests/CashRunwayCoreTests/CashRunwayCoreTests.swift`
+- `/Users/roman/Documents/Development/Cash Runway/Tests/CashRunwayCoreTests/DatabaseWALTests.swift`
+- `/Users/roman/Documents/Development/Cash Runway/Tests/CashRunwayCoreTests/DatabaseTransactionSafetyTests.swift`
+- `/Users/roman/Documents/Development/Cash Runway/Tests/CashRunwayCoreTests/DatabaseConcurrencyTests.swift`
+- `/Users/roman/Documents/Development/Cash Runway/Tests/CashRunwayCoreTests/DatabaseCrashSimulationTests.swift`
+- `/Users/roman/Documents/Development/Cash Runway/Tests/CashRunwayCoreTests/DatabaseLifecycleTests.swift`
+- `/Users/roman/Documents/Development/Cash Runway/Tests/CashRunwayCoreTests/DatabaseBackupTests.swift`
 
 ## Receipts
 - 2026-04-28T23:17:00+03:00 [TOOL] After local folder rename and clearing stale SwiftPM `.build`, `swift test` -> 24 tests in 2 suites passed after 74.153s.

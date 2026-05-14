@@ -196,6 +196,11 @@ public final class DatabaseManager: @unchecked Sendable {
         allowsDestructiveRecovery: Bool = false,
         keychainService: String = "dev.roman.cash-runway"
     ) throws {
+        #if !DEBUG
+        if allowsDestructiveRecovery {
+            fatalError("Destructive recovery is not allowed in release builds.")
+        }
+        #endif
         try self.init(
             locationProvider: locationProvider,
             allowsDestructiveRecovery: allowsDestructiveRecovery,
@@ -251,10 +256,17 @@ public final class DatabaseManager: @unchecked Sendable {
 
     private static func makeConfiguration(keychain: any KeychainStoring) -> Configuration {
         var configuration = Configuration()
+        configuration.journalMode = .wal
         configuration.prepareDatabase { db in
             try db.usePassphrase(try databaseKey(using: keychain))
         }
         return configuration
+    }
+
+    func checkpointWal() throws {
+        try dbQueue.writeWithoutTransaction { db in
+            try db.execute(sql: "PRAGMA wal_checkpoint(TRUNCATE)")
+        }
     }
 
     private static func shouldRecover(from error: Error) -> Bool {

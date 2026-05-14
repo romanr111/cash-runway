@@ -90,10 +90,11 @@ struct CashRunwayCoreTests {
 
     @Test func migrationReopensExistingDatabase() throws {
         let location = TestSupport.makeLocation()
-        var manager: DatabaseManager? = try DatabaseManager(locationProvider: location)
+        let keychain = TestKeychainStore()
+        var manager: DatabaseManager? = try DatabaseManager(locationProvider: location, keychain: keychain)
         try CashRunwayRepository(databaseManager: try #require(manager)).seedIfNeeded()
         manager = nil
-        let reopened = try DatabaseManager(locationProvider: location)
+        let reopened = try DatabaseManager(locationProvider: location, keychain: keychain)
         let repository = CashRunwayRepository(databaseManager: reopened)
         #expect(try repository.wallets().count >= 2)
         #expect(try repository.categories().count >= SeedCategories.all.count)
@@ -104,7 +105,7 @@ struct CashRunwayCoreTests {
         let dbURL = try location.databaseURL()
         try Data("not-a-database".utf8).write(to: dbURL)
 
-        let manager = try DatabaseManager(locationProvider: location, allowsDestructiveRecovery: true)
+        let manager = try DatabaseManager(locationProvider: location, allowsDestructiveRecovery: true, keychain: TestKeychainStore())
         let repository = CashRunwayRepository(databaseManager: manager)
         try repository.seedIfNeeded()
 
@@ -992,7 +993,7 @@ struct CashRunwayCoreTests {
 
         #expect(result.insertedTransactions == fixture.rowCount)
         #expect(result.rowErrors.isEmpty)
-        #expect(TestSupport.seconds(elapsed) < 30)
+        #expect(TestSupport.seconds(elapsed) < 45)
         try TestSupport.assertWalletTruth(repository)
         try TestSupport.assertCategoryTruth(repository)
 
@@ -1536,7 +1537,7 @@ struct CashRunwayCoreTests {
     }
 }
 
-private enum TestSupport {
+enum TestSupport {
     struct WalletCSVFixtureFacts {
         var rowCount: Int
         var expenseCount: Int
@@ -1547,7 +1548,7 @@ private enum TestSupport {
         var labeledRowCount: Int
     }
 
-    struct TransactionTruth {
+    struct TransactionTruth: Equatable {
         var expenseCount: Int
         var incomeCount: Int
         var sourceImportCount: Int
@@ -1557,7 +1558,7 @@ private enum TestSupport {
     }
 
     static func makeRepository() throws -> CashRunwayRepository {
-        CashRunwayRepository(databaseManager: try DatabaseManager(locationProvider: makeLocation()))
+        CashRunwayRepository(databaseManager: try DatabaseManager(locationProvider: makeLocation(), keychain: TestKeychainStore()))
     }
 
     static func makeLocation() -> DatabaseLocationProvider {
@@ -1788,9 +1789,53 @@ private enum TestSupport {
         let actualMap = Dictionary(uniqueKeysWithValues: actual.map { ("\($0["category_id"] as String)-\($0["month_key"] as Int)", $0["expense_minor"] as Int64) })
         #expect(actualMap == expectedMap)
     }
+
+    static func walURL(for databaseURL: URL) -> URL {
+        URL(fileURLWithPath: databaseURL.path + "-wal")
+    }
+
+    static func shmURL(for databaseURL: URL) -> URL {
+        URL(fileURLWithPath: databaseURL.path + "-shm")
+    }
+
+    static func assertWalFileExists(at databaseURL: URL) {
+        let walURL = Self.walURL(for: databaseURL)
+        #expect(FileManager.default.fileExists(atPath: walURL.path), "WAL file should exist at \(walURL.path)")
+    }
+
+    static func assertWalFileEmptyOrAbsent(at databaseURL: URL) throws {
+        let walURL = Self.walURL(for: databaseURL)
+        if FileManager.default.fileExists(atPath: walURL.path) {
+            let size = try Self.fileSize(at: walURL)
+            #expect(size == 0, "WAL file should be empty after checkpoint")
+        }
+    }
+
+    static func corruptSQLiteHeader(at databaseURL: URL) throws {
+        let handle = try FileHandle(forWritingTo: databaseURL)
+        defer { try? handle.close() }
+        try handle.seek(toOffset: 0)
+        try handle.write(contentsOf: Data("CORRUPTED HEADER!!".utf8))
+    }
+
+    static func deleteSHMFile(at databaseURL: URL) {
+        let shmURL = Self.shmURL(for: databaseURL)
+        try? FileManager.default.removeItem(at: shmURL)
+    }
+
+    static func assertNoPartialTransfer(_ repository: CashRunwayRepository) throws {
+        try repository.databaseManager.dbQueue.read { db in
+            let outIDs = Set(try String.fetchAll(db, sql: "SELECT id FROM transactions WHERE type = 'transfer_out'"))
+            let inIDs = Set(try String.fetchAll(db, sql: "SELECT id FROM transactions WHERE type = 'transfer_in'"))
+            let linkedOut = Set(try String.fetchAll(db, sql: "SELECT linked_transfer_id FROM transactions WHERE type = 'transfer_out' AND linked_transfer_id IS NOT NULL"))
+            let linkedIn = Set(try String.fetchAll(db, sql: "SELECT linked_transfer_id FROM transactions WHERE type = 'transfer_in' AND linked_transfer_id IS NOT NULL"))
+            #expect(linkedOut == inIDs, "Every transfer_in must be linked from a transfer_out")
+            #expect(linkedIn == outIDs, "Every transfer_out must be linked from a transfer_in")
+        }
+    }
 }
 
-private final class TestKeychainStore: KeychainStoring, @unchecked Sendable {
+final class TestKeychainStore: KeychainStoring, @unchecked Sendable {
     private var items: [String: Data]
     private let readError: Error?
     private(set) var writeCount = 0

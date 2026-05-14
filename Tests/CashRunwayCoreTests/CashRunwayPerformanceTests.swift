@@ -123,7 +123,7 @@ struct CashRunwayPerformanceTests {
             databaseURLOverride: baseURL.appendingPathComponent("cash-runway.sqlite"),
             directoryName: UUID().uuidString
         )
-        return CashRunwayRepository(databaseManager: try DatabaseManager(locationProvider: location))
+        return CashRunwayRepository(databaseManager: try DatabaseManager(locationProvider: location, keychain: TestKeychainStore()))
     }
 
     private func seconds(_ duration: Duration) -> Double {
