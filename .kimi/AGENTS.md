@@ -51,9 +51,9 @@ A task is done when:
 - the requested change is implemented or the question is answered,
   - build attempted (when source code changed),
   - errors/warnings addressed (or explicitly listed and agreed as out-of-scope),
-- documentation is updated only for impacted areas,
-- impact is explained (shortly what changed, where, why),
-- follow-ups are listed if anything was intentionally left out.
+  - documentation is updated only for impacted areas,
+  - impact is explained (shortly what changed, where, why),
+  - follow-ups are listed if anything was intentionally left out.
 - Deliver a runnable app first, then deepen architecture.
 
 For product/MVP/app/completion of PLAN.md tasks:
@@ -115,3 +115,63 @@ Before editing files, reporting repo status, removing worktrees, pulling, pushin
 - For git repos, keep CONTINUITY.md in the primary checkout.
 - Do not duplicate CONTINUITY.md across worktrees.
 - When multiple worktrees exist, use absolute paths and identify primary checkout, active worktree, branch, base branch, and merge status.
+
+---
+
+## Token-efficiency rules (Cash Runway)
+
+### Self-review proportionality
+Full self-code-review (re-read every changed file, grep for orphans, verify logic) is required for:
+- Multi-file changes (> 3 files)
+- Architectural or API changes
+- Security-sensitive changes (Keychain, DB encryption, auth)
+
+**Skip the full second pass for:**
+- Single-file comment-only changes
+- Simple test disables (`@Test(.disabled(...))`)
+- Adding deprecation comments with no logic changes
+For these, a quick `git diff --stat` + `grep` for typos is sufficient.
+
+### Verification shortcuts
+Repetitive full validation burns tokens. Use targeted checks:
+
+**After core-only changes (no UI touched):**
+```bash
+swift test 2>&1 | tail -10
+```
+Skip the simulator build if no UI files were modified.
+
+**After UI-only changes (no repository/DB logic touched):**
+```bash
+xcodebuild -scheme CashRunway -sdk iphonesimulator \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
+  clean build 2>&1 | grep -E "(warning:|error:|BUILD SUCCEEDED|BUILD FAILED)"
+```
+Skip `swift test` if no test-impacting logic changed.
+
+**After both core and UI changes:** run both gates, but filter aggressively.
+
+### Worktree hygiene — mandatory cleanup
+Historical pattern: worktrees and branches accumulated (`codex/xcuitest-transaction-suite`, `codex/data-loss-investigation`, `codex/keychain-startup-hardening`) and were not always pruned, leaving stale entries.
+
+**Rule:** Immediately after a feature branch is merged and pushed:
+1. `git worktree remove <path>` (or `git worktree prune` if the directory is already gone).
+2. `git branch -d <branch>` (local).
+3. `git push origin --delete <branch>` (remote) if the branch was pushed.
+4. Update `CONTINUITY.md` to reflect the cleaned state.
+
+A clean workspace has **one** worktree (the primary checkout) and **one** local branch (`main`).
+
+### Exploration cost ceiling
+The codebase contains large files (`CashRunwayRepository.swift` ~1940 lines, `DashboardView.swift` ~1270 lines, `Editors.swift` ~1280 lines). Blind exploration is expensive.
+
+**Rule:** Before launching an `explore` agent or running > 3 grep/read calls, check the **Code location quick reference** in the root `AGENTS.md`. If the target is listed there, read the known file directly with `line_offset` instead of exploring.
+
+### Real-device debugging — explicit approval required
+Real-device work (builds to `iphoneos`, `devicectl` launches, forensics, Recovery/ backup inspection) is **orders of magnitude slower** than simulator work due to:
+- Xcode symbol cache regeneration
+- Developer-profile trust steps
+- Full `xcodebuild` archive/install cycles
+- Manual device interaction
+
+**Rule:** Simulator is the default validation target. Real-device work requires explicit user approval or a confirmed device-specific bug.
