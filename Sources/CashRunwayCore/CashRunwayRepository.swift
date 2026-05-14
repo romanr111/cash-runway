@@ -970,16 +970,18 @@ public final class CashRunwayRepository: @unchecked Sendable {
             )
             let labelIDs = labelRows.compactMap { UUID(uuidString: $0["label_id"]) }
 
-            if transaction.type == .transferOut {
+            if transaction.type == .transferOut || transaction.type == .transferIn {
                 guard let linkedID = transaction.linkedTransferID,
-                      let destinationWalletID = try String.fetchOne(db, sql: "SELECT wallet_id FROM transactions WHERE id = ?", arguments: [linkedID.uuidString]).flatMap(UUID.init(uuidString:))
+                      let linkedWalletID = try String.fetchOne(db, sql: "SELECT wallet_id FROM transactions WHERE id = ?", arguments: [linkedID.uuidString]).flatMap(UUID.init(uuidString:))
                 else {
                     throw CashRunwayError.invalidState("Transfer pair is missing.")
                 }
+                let sourceWalletID = transaction.type == .transferOut ? transaction.walletID : linkedWalletID
+                let destinationWalletID = transaction.type == .transferOut ? linkedWalletID : transaction.walletID
                 return TransactionDraft(
-                    id: transaction.id,
+                    id: sourceWalletID == transaction.walletID ? transaction.id : linkedID,
                     kind: .transfer,
-                    walletID: transaction.walletID,
+                    walletID: sourceWalletID,
                     destinationWalletID: destinationWalletID,
                     amountMinor: transaction.amountMinor,
                     occurredAt: transaction.occurredAt,
@@ -1028,7 +1030,7 @@ public final class CashRunwayRepository: @unchecked Sendable {
             let transaction = try Self.transaction(transactionRow)
 
             var transactionsToDelete = [transaction]
-            if transaction.type == .transferOut, let linkedID = transaction.linkedTransferID,
+            if (transaction.type == .transferOut || transaction.type == .transferIn), let linkedID = transaction.linkedTransferID,
                let linkedRow = try Row.fetchOne(db, sql: "SELECT * FROM transactions WHERE id = ?", arguments: [linkedID.uuidString]) {
                 transactionsToDelete.append(try Self.transaction(linkedRow))
             }

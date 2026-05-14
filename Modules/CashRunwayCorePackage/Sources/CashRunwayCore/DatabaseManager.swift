@@ -3,6 +3,7 @@ import GRDB
 import Security
 import CryptoKit
 import LocalAuthentication
+import OSLog
 
 public enum KeychainStoreError: Error, LocalizedError, Equatable {
     case readFailed(OSStatus)
@@ -18,6 +19,48 @@ public enum KeychainStoreError: Error, LocalizedError, Equatable {
         case let .invalidStoredData(account):
             "Keychain item \(account) could not be decoded."
         }
+    }
+
+    public var isInteractionNotAllowed: Bool {
+        switch self {
+        case .readFailed(errSecInteractionNotAllowed), .writeFailed(errSecInteractionNotAllowed):
+            true
+        case .readFailed, .writeFailed, .invalidStoredData:
+            false
+        }
+    }
+}
+
+public struct CashRunwayStartupFailure: Error, LocalizedError, Equatable, Sendable {
+    public let message: String
+    public let isRetryable: Bool
+    public let diagnosticCode: String
+
+    public init(error: Error) {
+        if Self.isKeychainInteractionNotAllowed(error) {
+            message = "Unlock your iPhone, return to Cash Runway, and tap Retry. Your database was not changed."
+            isRetryable = true
+            diagnosticCode = "keychain-interaction-not-allowed"
+        } else {
+            message = error.localizedDescription
+            isRetryable = false
+            diagnosticCode = "startup-open-failed"
+        }
+    }
+
+    public init(message: String) {
+        self.message = message
+        isRetryable = message.contains("status \(errSecInteractionNotAllowed)")
+        diagnosticCode = isRetryable ? "keychain-interaction-not-allowed" : "startup-open-failed"
+    }
+
+    public var errorDescription: String? { message }
+
+    private static func isKeychainInteractionNotAllowed(_ error: Error) -> Bool {
+        if let keychainError = error as? KeychainStoreError {
+            return keychainError.isInteractionNotAllowed
+        }
+        return error.localizedDescription.contains("status \(errSecInteractionNotAllowed)")
     }
 }
 
@@ -188,6 +231,8 @@ public struct DatabaseLocationProvider {
 }
 
 public final class DatabaseManager: @unchecked Sendable {
+    private static let logger = Logger(subsystem: "dev.roman.cashrunway", category: "keychain")
+
     public let dbQueue: DatabaseQueue
     public let keychain: any KeychainStoring
 
@@ -229,12 +274,21 @@ public final class DatabaseManager: @unchecked Sendable {
             guard let key = String(data: data, encoding: .utf8), !key.isEmpty else {
                 throw KeychainStoreError.invalidStoredData(account)
             }
+            stampDatabaseKeyAccessibility(data, using: keychain)
             return key
         }
 
         let key = UUID().uuidString.replacingOccurrences(of: "-", with: "") + UUID().uuidString.replacingOccurrences(of: "-", with: "")
         try keychain.write(Data(key.utf8), account: account)
         return key
+    }
+
+    private static func stampDatabaseKeyAccessibility(_ data: Data, using keychain: any KeychainStoring) {
+        do {
+            try keychain.write(data, account: "database-key")
+        } catch {
+            logger.error("Database key accessibility stamp failed: \(CashRunwayStartupFailure(error: error).diagnosticCode, privacy: .public)")
+        }
     }
 
     private static func openDatabase(at url: URL, keychain: any KeychainStoring, migrator: DatabaseMigrator, allowsDestructiveRecovery: Bool) throws -> DatabaseQueue {

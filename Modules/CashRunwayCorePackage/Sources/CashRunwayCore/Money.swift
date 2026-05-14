@@ -27,7 +27,11 @@ public enum MoneyFormatter {
         var rounded = Decimal()
         NSDecimalRound(&rounded, &scaled, 0, .plain)
 
-        guard let result = NSDecimalNumber(decimal: rounded).int64Value as Int64? else {
+        let nsNumber = NSDecimalNumber(decimal: rounded)
+        guard nsNumber != NSDecimalNumber.notANumber,
+              let result = nsNumber.int64Value as Int64?,
+              Decimal(result) == rounded
+        else {
             throw MoneyError.invalidAmount(input)
         }
         return result
@@ -47,7 +51,7 @@ public enum MoneyFormatter {
 
     public static func plainString(from minorUnits: Int64) -> String {
         let sign = minorUnits < 0 ? "-" : ""
-        let absolute = abs(minorUnits)
+        let absolute = minorUnits == Int64.min ? UInt64(Int64.max) + 1 : UInt64(abs(minorUnits))
         return "\(sign)\(absolute / 100).\(String(format: "%02d", absolute % 100))"
     }
 }

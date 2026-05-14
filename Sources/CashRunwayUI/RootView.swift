@@ -1,17 +1,20 @@
 import SwiftUI
+import OSLog
 
 public struct CashRunwayRootView: View {
     @State private var model: CashRunwayAppModel?
-    @State private var startupError: String?
+    @State private var startupFailure: CashRunwayStartupFailure?
     @State private var hasCompletedOnboarding: Bool
     @State private var pin = ""
     @State private var onboardingPin = ""
     @State private var onboardingBiometrics = true
     @State private var relockTask: Task<Void, Never>?
+    @State private var didRetryStartupOnActive = false
     @Environment(\.scenePhase) private var scenePhase
     private let onboardingStore: UserDefaults
     private let bypassOnboarding: Bool
     private static let onboardingKey = "hasCompletedOnboarding"
+    private static let logger = Logger(subsystem: "dev.roman.cashrunway", category: "startup")
 
     public init(
         model: CashRunwayAppModel? = nil,
@@ -21,17 +24,19 @@ public struct CashRunwayRootView: View {
     ) {
         if let model {
             _model = State(initialValue: model)
-            _startupError = State(initialValue: startupError)
+            _startupFailure = State(initialValue: startupError.map(CashRunwayStartupFailure.init(message:)))
         } else if let startupError {
             _model = State(initialValue: nil)
-            _startupError = State(initialValue: startupError)
+            _startupFailure = State(initialValue: CashRunwayStartupFailure(message: startupError))
         } else {
             do {
                 _model = State(initialValue: try CashRunwayAppModel.live())
-                _startupError = State(initialValue: nil)
+                _startupFailure = State(initialValue: nil)
             } catch {
                 _model = State(initialValue: nil)
-                _startupError = State(initialValue: error.localizedDescription)
+                let failure = CashRunwayStartupFailure(error: error)
+                Self.logger.error("Startup failed: \(failure.diagnosticCode, privacy: .public)")
+                _startupFailure = State(initialValue: failure)
             }
         }
         self.onboardingStore = onboardingStore
@@ -48,6 +53,15 @@ public struct CashRunwayRootView: View {
             } else {
                 startupErrorView
             }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active,
+                  model == nil,
+                  startupFailure?.isRetryable == true,
+                  !didRetryStartupOnActive
+            else { return }
+            didRetryStartupOnActive = true
+            retryStartup()
         }
     }
 
@@ -107,15 +121,32 @@ public struct CashRunwayRootView: View {
             Text("Cash Runway Could Not Open")
                 .font(.system(size: 24, weight: .bold, design: .rounded))
                 .foregroundStyle(CashRunwayTheme.textPrimary)
-            Text(startupError ?? "The local database could not be opened.")
+            Text(startupFailure?.message ?? "The local database could not be opened.")
                 .font(.system(size: 15))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(CashRunwayTheme.textSecondary)
                 .padding(.horizontal, 24)
+            if startupFailure?.isRetryable == true {
+                Button("Retry") {
+                    retryStartup()
+                }
+                .buttonStyle(.borderedProminent)
+            }
             Spacer()
         }
         .padding()
         .background(CashRunwayTheme.background.ignoresSafeArea())
+    }
+
+    private func retryStartup() {
+        do {
+            model = try CashRunwayAppModel.live()
+            startupFailure = nil
+        } catch {
+            let failure = CashRunwayStartupFailure(error: error)
+            Self.logger.error("Startup retry failed: \(failure.diagnosticCode, privacy: .public)")
+            startupFailure = failure
+        }
     }
 
     private func lockView(model: CashRunwayAppModel) -> some View {

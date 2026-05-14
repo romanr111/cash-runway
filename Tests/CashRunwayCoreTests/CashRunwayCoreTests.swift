@@ -135,6 +135,41 @@ struct CashRunwayCoreTests {
         #expect(keychain.writeCount == 0)
     }
 
+    @Test func keychainInteractionNotAllowedMapsToRetryableStartupFailure() {
+        let failure = CashRunwayStartupFailure(error: KeychainStoreError.readFailed(errSecInteractionNotAllowed))
+
+        #expect(failure.isRetryable)
+        #expect(failure.message.contains("Unlock your iPhone"))
+        #expect(failure.diagnosticCode == "keychain-interaction-not-allowed")
+    }
+
+    @Test func readableDatabaseKeyIsStampedWithoutChangingBytes() throws {
+        let location = TestSupport.makeLocation()
+        let originalKey = Data("existing-database-key".utf8)
+        let keychain = TestKeychainStore(items: ["database-key": originalKey])
+
+        _ = try DatabaseManager(locationProvider: location, keychain: keychain)
+
+        #expect(keychain.item(account: "database-key") == originalKey)
+        #expect(keychain.writeHistory.contains { $0.account == "database-key" && $0.data == originalKey })
+        #expect(keychain.deleteCount == 0)
+    }
+
+    @Test func databaseKeyStampFailureDoesNotBlockOpenOrChangeStoredKey() throws {
+        let location = TestSupport.makeLocation()
+        let originalKey = Data("existing-database-key".utf8)
+        let keychain = TestKeychainStore(
+            items: ["database-key": originalKey],
+            writeError: KeychainStoreError.writeFailed(errSecInteractionNotAllowed)
+        )
+
+        _ = try DatabaseManager(locationProvider: location, keychain: keychain)
+
+        #expect(keychain.item(account: "database-key") == originalKey)
+        #expect(keychain.writeCount >= 1)
+        #expect(keychain.deleteCount == 0)
+    }
+
     @Test func invalidDatabaseKeyDataDoesNotOverwriteStoredKey() throws {
         let location = TestSupport.makeLocation()
         let invalidKey = Data([0xff, 0xfe])
@@ -1838,11 +1873,15 @@ enum TestSupport {
 final class TestKeychainStore: KeychainStoring, @unchecked Sendable {
     private var items: [String: Data]
     private let readError: Error?
+    private let writeError: Error?
     private(set) var writeCount = 0
+    private(set) var deleteCount = 0
+    private(set) var writeHistory: [(account: String, data: Data)] = []
 
-    init(items: [String: Data] = [:], readError: Error? = nil) {
+    init(items: [String: Data] = [:], readError: Error? = nil, writeError: Error? = nil) {
         self.items = items
         self.readError = readError
+        self.writeError = writeError
     }
 
     func read(account: String) throws -> Data? {
@@ -1854,10 +1893,15 @@ final class TestKeychainStore: KeychainStoring, @unchecked Sendable {
 
     func write(_ data: Data, account: String) throws {
         writeCount += 1
+        writeHistory.append((account, data))
+        if let writeError {
+            throw writeError
+        }
         items[account] = data
     }
 
     func delete(account: String) {
+        deleteCount += 1
         items.removeValue(forKey: account)
     }
 
