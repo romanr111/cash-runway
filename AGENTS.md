@@ -86,7 +86,7 @@ To avoid expensive exploration of large files, use this reference before greppin
 | All editors (transaction, wallet, category, recurring, **budget**) | `Sources/CashRunwayUI/Editors.swift` | ~1280 |
 | Settings / More screen | `Sources/CashRunwayUI/SettingsView.swift` | ~990 |
 | App state / repository wrapper | `Sources/CashRunwayUI/AppModel.swift` | ~620 |
-| DB + Keychain + **AppLockStore** | `Sources/CashRunwayCore/DatabaseManager.swift` | ~550 |
+| DB + Keychain + **AppLockStore** | `Sources/CashRunwayCore/DatabaseManager.swift` | ~610 |
 | Repository queries + **budgets/saveBudget** | `Sources/CashRunwayCore/CashRunwayRepository.swift` | ~1940 |
 | Models: **Budget**, **BudgetProgress**, transactions, wallets | `Sources/CashRunwayCore/Models.swift` | ~650 |
 | Main app entry + BG tasks | `AppHost/CashRunwayApp.swift` | ~295 |
@@ -104,7 +104,7 @@ If UI tests are explicitly requested:
 - Run only the targeted UI test class; do not run the full UI test suite repeatedly.
 
 ### Real-device debugging — approval gate
-Real-device builds, forensics, and `devicectl` launches are **slow and token-expensive** (full Xcode builds, symbol downloads, manual trust steps). 
+Real-device builds, forensics, and `devicectl` launches are **slow and token-expensive** (full Xcode builds, symbol downloads, manual trust steps).
 
 **Rule:** Do not initiate real-device debugging, data recovery, or on-device forensics unless the user explicitly requests it or the issue is confirmed device-specific. Simulator verification is the default.
 

@@ -51,9 +51,9 @@ A task is done when:
 - the requested change is implemented or the question is answered,
   - build attempted (when source code changed),
   - errors/warnings addressed (or explicitly listed and agreed as out-of-scope),
-  - documentation is updated only for impacted areas,
-  - impact is explained (shortly what changed, where, why),
-  - follow-ups are listed if anything was intentionally left out.
+- documentation is updated only for impacted areas,
+- impact is explained (shortly what changed, where, why),
+- follow-ups are listed if anything was intentionally left out.
 - Deliver a runnable app first, then deepen architecture.
 
 For product/MVP/app/completion of PLAN.md tasks:
@@ -154,7 +154,7 @@ Skip `swift test` if no test-impacting logic changed.
 ### Worktree hygiene — mandatory cleanup
 Historical pattern: worktrees and branches accumulated (`codex/xcuitest-transaction-suite`, `codex/data-loss-investigation`, `codex/keychain-startup-hardening`) and were not always pruned, leaving stale entries.
 
-**Rule:** Immediately after a feature branch is merged and pushed:
+**Rule:** Immediately after a feature branch is merged and pushed with user approval:
 1. `git worktree remove <path>` (or `git worktree prune` if the directory is already gone).
 2. `git branch -d <branch>` (local).
 3. `git push origin --delete <branch>` (remote) if the branch was pushed.
