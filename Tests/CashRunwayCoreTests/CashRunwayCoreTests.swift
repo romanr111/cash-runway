@@ -387,7 +387,8 @@ struct CashRunwayCoreTests {
         #expect(pairCount == 2)
     }
 
-    @Test func budgetProgressTracksTransactionMutations() throws {
+    @Test(.disabled("Budgets feature is de-prioritized. Re-enable when work resumes."))
+    func budgetProgressTracksTransactionMutations() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
         let monthKey = DateKeys.monthKey(for: .now)

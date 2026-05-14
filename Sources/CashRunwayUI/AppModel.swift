@@ -13,6 +13,7 @@ public typealias CashRunwayLabel = Label
 public final class CashRunwayAppModel {
     public var repository: CashRunwayRepository
     public var csvService: CSVService
+    // DEPRECATED — App Lock is deprecated. Remove when work resumes or feature is removed.
     public var lockStore: AppLockStore
 
     public var wallets: [Wallet] = []
@@ -20,6 +21,7 @@ public final class CashRunwayAppModel {
     public var incomeCategories: [CashRunwayCategory] = []
     public var labels: [CashRunwayLabel] = []
     public var transactions: [TransactionListItem] = []
+    // DEPRECATED — Budgets feature is de-prioritized. Work stopped; do not modify or add tests until resumed.
     public var budgets: [BudgetProgress] = []
     public var templates: [RecurringTemplate] = []
     public var instances: [RecurringInstance] = []
@@ -32,7 +34,9 @@ public final class CashRunwayAppModel {
     public var selectedWalletID: UUID?
     public var selectedTimelinePeriod: TimelinePeriod = .month
     public var transactionQuery = TransactionQuery()
+    // DEPRECATED — App Lock is deprecated. Remove when work resumes or feature is removed.
     public var isLocked = false
+    // DEPRECATED — App Lock is deprecated. Remove when work resumes or feature is removed.
     public var lockMessage: String?
     public var errorMessage: String?
     public var isLoading = false
@@ -241,6 +245,7 @@ public final class CashRunwayAppModel {
         }
     }
 
+    // DEPRECATED — App Lock is deprecated. Remove when work resumes or feature is removed.
     public func unlock(pin: String) {
         guard lockStore.validate(pin: pin) else {
             lockMessage = "Incorrect PIN."
@@ -250,6 +255,7 @@ public final class CashRunwayAppModel {
         lockMessage = nil
     }
 
+    // DEPRECATED — App Lock is deprecated. Remove when work resumes or feature is removed.
     public func unlockWithBiometrics() async {
         guard await lockStore.unlockWithBiometrics() else {
             lockMessage = "Biometric unlock failed."
@@ -259,6 +265,7 @@ public final class CashRunwayAppModel {
         lockMessage = nil
     }
 
+    // DEPRECATED — App Lock is deprecated. Remove when work resumes or feature is removed.
     public func enableLock(pin: String, biometrics: Bool) {
         do {
             try lockStore.save(pin: pin, biometrics: biometrics, backgroundLockSeconds: 15)
@@ -315,12 +322,14 @@ public final class CashRunwayAppModel {
         }
     }
 
+    // DEPRECATED — Budgets feature is de-prioritized. Work stopped; do not modify or add tests until resumed.
     public func saveBudget(_ budget: Budget) {
         runMutation {
             try repository.saveBudget(budget)
         }
     }
 
+    // DEPRECATED — Budgets feature is de-prioritized. Work stopped; do not modify or add tests until resumed.
     public func archiveBudget(_ budget: Budget) {
         var archived = budget
         archived.isArchived = true

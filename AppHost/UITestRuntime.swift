@@ -19,7 +19,8 @@ struct CashRunwayAppRuntime {
         #endif
 
         do {
-            return CashRunwayAppRuntime(model: try CashRunwayAppModel.live(), startupError: nil, onboardingStore: .standard, bypassOnboarding: false)
+            let model = try CashRunwayAppModel.live()
+            return CashRunwayAppRuntime(model: model, startupError: nil, onboardingStore: .standard, bypassOnboarding: false)
         } catch {
             return CashRunwayAppRuntime(model: nil, startupError: error.localizedDescription, onboardingStore: .standard, bypassOnboarding: false)
         }
@@ -60,6 +61,7 @@ private struct UITestLaunchConfiguration {
 
     func makeRuntime() throws -> CashRunwayAppRuntime {
         let keychain = KeychainStore(service: keychainService)
+        // DEPRECATED — App Lock is deprecated. Remove when work resumes or feature is removed.
         keychain.delete(account: "app-lock-config")
 
         if shouldReset {

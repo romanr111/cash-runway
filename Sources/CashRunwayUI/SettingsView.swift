@@ -14,7 +14,6 @@ struct SettingsView: View {
     @State private var isLabelsPresented = false
     @State private var isTemplatesPresented = false
     @State private var isWalletsPresented = false
-    @State private var isLockPresented = false
     @State private var isImporterPresented = false
     @State private var isImportReviewPresented = false
     @State private var isDiagnosticsPresented = false
@@ -63,9 +62,6 @@ struct SettingsView: View {
                                 isWalletsPresented = true
                             }
                             rowDivider
-                            moreRow(icon: "lock.fill", tint: "#87C56A", title: "App Lock", subtitle: model.lockStore.configuration()?.isEnabled == true ? "Enabled" : "Disabled") {
-                                isLockPresented = true
-                            }
                         }
                         .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
@@ -145,9 +141,6 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $isWalletsPresented) {
                 WalletManagementView(model: model)
-            }
-            .sheet(isPresented: $isLockPresented) {
-                LockConfigurationView(model: model)
             }
             .sheet(isPresented: $isImportReviewPresented) {
                 CSVImportReviewView(
@@ -560,6 +553,7 @@ private struct ScheduledTransactionsView: View {
     }
 }
 
+// DEPRECATED — App Lock is deprecated. Remove when work resumes or feature is removed.
 private struct LockConfigurationView: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var model: CashRunwayAppModel

@@ -131,6 +131,7 @@ public final class KeychainStore: KeychainStoring, @unchecked Sendable {
     }
 }
 
+// DEPRECATED — App Lock is deprecated. Remove when work resumes or feature is removed.
 public struct AppLockConfiguration: Codable, Sendable, Equatable {
     public var pinHash: String
     public var isEnabled: Bool
@@ -138,6 +139,7 @@ public struct AppLockConfiguration: Codable, Sendable, Equatable {
     public var backgroundLockSeconds: Int
 }
 
+// DEPRECATED — App Lock is deprecated. Remove when work resumes or feature is removed.
 public final class AppLockStore: @unchecked Sendable {
     private let keychain: any KeychainStoring
     private let account = "app-lock-config"

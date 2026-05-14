@@ -79,9 +79,6 @@ public struct CashRunwayRootView: View {
                     TransactionsView(model: model)
                         .tabItem { SwiftUI.Label("Wallets", systemImage: "wallet.pass.fill") }
 
-                    BudgetsView(model: model)
-                        .tabItem { SwiftUI.Label("Budgets", systemImage: "suitcase.rolling.fill") }
-
                     SettingsView(model: model)
                         .tabItem { SwiftUI.Label("More", systemImage: "ellipsis") }
                 }
@@ -91,6 +88,7 @@ public struct CashRunwayRootView: View {
         }
         .task { model.bootstrap() }
         .onChange(of: scenePhase) { _, phase in
+            // DEPRECATED — App Lock background relock logic is deprecated.
             if phase == .background, let configuration = model.lockStore.configuration(), configuration.isEnabled {
                 relockTask?.cancel()
                 relockTask = Task {
@@ -149,6 +147,7 @@ public struct CashRunwayRootView: View {
         }
     }
 
+    // DEPRECATED — App Lock is deprecated. Remove when work resumes or feature is removed.
     private func lockView(model: CashRunwayAppModel) -> some View {
         VStack(spacing: 18) {
             Spacer()
@@ -185,9 +184,12 @@ public struct CashRunwayRootView: View {
     }
 
     private func shouldShowOnboarding(for model: CashRunwayAppModel) -> Bool {
-        !bypassOnboarding && !hasCompletedOnboarding && model.lockStore.configuration() == nil
+        // DEPRECATED — Onboarding and App Lock setup are deprecated.
+        // App launches straight to Timeline on first startup.
+        false
     }
 
+    // DEPRECATED — Onboarding with App Lock setup is deprecated. Remove when work resumes or feature is removed.
     private func onboardingView(model: CashRunwayAppModel) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {

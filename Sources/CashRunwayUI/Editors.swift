@@ -981,6 +981,7 @@ private struct CategoryMergeView: View {
     }
 }
 
+// DEPRECATED — Budgets feature is de-prioritized. Work stopped; do not modify or add tests until resumed.
 struct BudgetEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var model: CashRunwayAppModel

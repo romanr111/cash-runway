@@ -126,6 +126,7 @@ public final class CashRunwayRepository: @unchecked Sendable {
         }
     }
 
+    // DEPRECATED — Budgets feature is de-prioritized. Work stopped; do not modify or add tests until resumed.
     public func budgets(monthKey: Int) throws -> [BudgetProgress] {
         try databaseManager.dbQueue.read { db in
             try Row.fetchAll(
@@ -295,6 +296,7 @@ public final class CashRunwayRepository: @unchecked Sendable {
         }
     }
 
+    // DEPRECATED — Budgets feature is de-prioritized. Work stopped; do not modify or add tests until resumed.
     public func saveBudget(_ budget: Budget) throws {
         guard budget.limitMinor > 0 else {
             throw CashRunwayError.validation("Budget limit must be greater than zero.")

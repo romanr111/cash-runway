@@ -3,6 +3,7 @@ import SwiftUI
 import CashRunwayCore
 #endif
 
+// DEPRECATED — Budgets feature is de-prioritized. Work stopped; do not modify or add tests until resumed.
 struct BudgetsView: View {
     @Bindable var model: CashRunwayAppModel
     @State private var isBudgetEditorPresented = false
