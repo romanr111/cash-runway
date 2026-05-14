@@ -190,6 +190,7 @@ public struct CashRunwayTransaction: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
+// DEPRECATED — Budgets feature is de-prioritized. Work stopped; do not modify or add tests until resumed.
 public struct Budget: Identifiable, Codable, Hashable, Sendable {
     public var id: UUID
     public var categoryID: UUID
@@ -497,6 +498,7 @@ public struct BalancePoint: Identifiable, Hashable, Sendable {
     public var amountMinor: Int64
 }
 
+// DEPRECATED — Budgets feature is de-prioritized. Work stopped; do not modify or add tests until resumed.
 public struct BudgetProgress: Identifiable, Hashable, Sendable {
     public var id: UUID
     public var budget: Budget

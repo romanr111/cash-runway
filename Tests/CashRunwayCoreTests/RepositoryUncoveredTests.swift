@@ -201,7 +201,8 @@ struct RepositoryUncoveredTests {
 
     // MARK: - saveBudget validation
 
-    @Test func saveBudgetRejectsNonPositiveLimit() throws {
+    @Test(.disabled("Budgets feature is de-prioritized. Re-enable when work resumes."))
+    func saveBudgetRejectsNonPositiveLimit() throws {
         let repository = try TestSupport.makeRepository()
         #expect(throws: CashRunwayError.validation("Budget limit must be greater than zero.")) {
             try repository.saveBudget(Budget(

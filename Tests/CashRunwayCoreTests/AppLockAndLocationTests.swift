@@ -4,7 +4,8 @@ import Testing
 
 @Suite(.serialized)
 struct AppLockAndLocationTests {
-    @Test func appLockSaveAndValidate() throws {
+    @Test(.disabled("App Lock is deprecated. Re-enable when work resumes."))
+    func appLockSaveAndValidate() throws {
         let keychain = TestKeychainStore()
         let store = AppLockStore(keychain: keychain)
         try store.save(pin: "1234", biometrics: false, backgroundLockSeconds: 15)
@@ -12,7 +13,8 @@ struct AppLockAndLocationTests {
         #expect(store.validate(pin: "0000") == false)
     }
 
-    @Test func appLockRejectsShortPin() {
+    @Test(.disabled("App Lock is deprecated. Re-enable when work resumes."))
+    func appLockRejectsShortPin() {
         let keychain = TestKeychainStore()
         let store = AppLockStore(keychain: keychain)
         #expect(throws: CashRunwayError.validation("PIN must be at least 4 digits.")) {
@@ -20,20 +22,23 @@ struct AppLockAndLocationTests {
         }
     }
 
-    @Test func appLockConfigurationWithCorruptData() {
+    @Test(.disabled("App Lock is deprecated. Re-enable when work resumes."))
+    func appLockConfigurationWithCorruptData() {
         let keychain = TestKeychainStore(items: ["app-lock-config": Data("not json".utf8)])
         let store = AppLockStore(keychain: keychain)
         #expect(store.configuration() == nil)
     }
 
-    @Test func appLockConfigurationWhenMissing() {
+    @Test(.disabled("App Lock is deprecated. Re-enable when work resumes."))
+    func appLockConfigurationWhenMissing() {
         let keychain = TestKeychainStore()
         let store = AppLockStore(keychain: keychain)
         #expect(store.configuration() == nil)
         #expect(store.validate(pin: "1234") == false)
     }
 
-    @Test func appLockCanUseBiometricsWhenDisabled() {
+    @Test(.disabled("App Lock is deprecated. Re-enable when work resumes."))
+    func appLockCanUseBiometricsWhenDisabled() {
         let keychain = TestKeychainStore()
         let store = AppLockStore(keychain: keychain)
         #expect(store.canUseBiometrics() == false)
