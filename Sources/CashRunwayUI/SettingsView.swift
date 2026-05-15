@@ -87,7 +87,11 @@ struct SettingsView: View {
 
                         VStack(spacing: 0) {
                             moreRow(icon: "tray.and.arrow.down.fill", tint: "#5FD4BF", title: "Import CSV", subtitle: "Map and load bank exports") {
-                                isImporterPresented = true
+                                if model.wallets.isEmpty {
+                                    model.errorMessage = "Create at least one wallet before importing CSV."
+                                } else {
+                                    isImporterPresented = true
+                                }
                             }
                             rowDivider
                             moreRow(icon: "square.and.arrow.up.fill", tint: "#E5862F", title: "Export CSV", subtitle: isExporting ? "Exporting…" : "Share the current filtered export") {
@@ -460,6 +464,7 @@ struct SettingsView: View {
     }
 
     private func defaultMapping(headers: [String], preset: CSVPreset) -> CSVImportMapping {
+        // Import CSV is blocked at the UI level when no wallets exist.
         let walletID = model.wallets.first?.id ?? UUID()
         let dateColumn = header(named: ["Дата операції", "Date", "date"], in: headers) ?? headers.first ?? ""
         let amountColumn = header(named: ["Сума в грн", "Amount", "amount", "sum"], in: headers)
@@ -826,10 +831,11 @@ private struct ScheduledTransactionsView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
+                        guard let firstWalletID = model.wallets.first?.id else { return }
                         templateDraft = RecurringTemplate(
                             id: UUID(),
                             kind: .expense,
-                            walletID: model.wallets.first?.id ?? UUID(),
+                            walletID: firstWalletID,
                             counterpartyWalletID: model.wallets.dropFirst().first?.id,
                             amountMinor: 0,
                             categoryID: model.expenseCategories.first?.id,
@@ -849,6 +855,7 @@ private struct ScheduledTransactionsView: View {
                     } label: {
                         Image(systemName: "plus")
                     }
+                    .disabled(model.wallets.isEmpty)
                 }
             }
             .sheet(isPresented: $isEditorPresented) {

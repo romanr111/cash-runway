@@ -1,7 +1,7 @@
 <!--
 Rules:
 - Rewrite Snapshot to current truth on every meaningful update.
-- Meaningful update: file modified, decision made, blocker hit/resolved, task completed or abandoned, or verification result changed.
+- Meaningful update: file modified, decision made, blocker hit/resolved, task completed/abandoned, or verification result changed.
 - Reading or searching does not trigger a rewrite.
 - Omit Git context for non-repo tasks.
 - Omit Worktree detail when working directly in the primary checkout.
@@ -16,48 +16,42 @@ Rules:
 
 ## Snapshot
 
-- Goal: Fix the SwiftLint failures from run `25972254133` and publish the result from an isolated worktree.
-- Success criteria: SwiftLint no longer reports serious violations for the current codebase, validation passes, and a PR is open from this branch.
-- Current state: PR `#9` was corrected in source: Static Analysis is green locally by rule checks, and the E2E startup Keychain failure has a UI-test-runtime fix with a targeted simulator test passing.
-- Next action: Amend and push the branch, then confirm the GitHub Actions checks.
+- Goal: Finish the first-launch data behavior change and publish it as a PR into `origin/main`.
+- Success criteria: Fresh first launch no longer creates fake starter wallets/budgets/transactions, fixture and UI-test paths seed their own test data, validation passes, and a PR is open against `origin/main`.
+- Current state: The `codex/stop-fake-data` worktree was being rebased onto `origin/main` with conflicts resolved toward current-main continuity and explicit fixture seeding.
+- Next action: Continue the rebase, run validation, then push and open the PR.
 - Open questions: None.
 - Merge status: not-merged.
-- Worktree reason: ci-fix.
+- Worktree reason: isolated-feature.
 
 ## Git context
 
 - Repo root: `/Users/roman/Documents/Development/Cash Runway`
-- Working directory: `/Users/roman/.codex/worktrees/cash-runway-lint-fix`
-- Branch: `codex/cash-runway-lint-fix`
+- Working directory: `/Users/roman/.codex/worktrees/cash-runway-stop-fake-data`
+- Branch: `codex/stop-fake-data`
 - Base branch: `origin/main`
 
 ## Working set
 
-- `.swiftlint.yml`
-- `Sources/CashRunwayCore/CashRunwayRepository.swift`
-- `Modules/CashRunwayCorePackage/Sources/CashRunwayCore/CashRunwayRepository.swift`
-- `Sources/CashRunwayCore/DatabaseManager.swift`
-- `Modules/CashRunwayCorePackage/Sources/CashRunwayCore/DatabaseManager.swift`
-- `Sources/CashRunwayCore/Models.swift`
-- `Modules/CashRunwayCorePackage/Sources/CashRunwayCore/Models.swift`
-- `Sources/CashRunwayUI/SettingsView.swift`
-- `Tests/CashRunwayCoreTests/CashRunwayCoreTests.swift`
 - `AppHost/UITestRuntime.swift`
+- `Sources/CashRunwayCore/**`
+- `Modules/CashRunwayCorePackage/Sources/CashRunwayCore/**`
+- `Sources/CashRunwayUI/**`
+- `Tests/CashRunwayCoreTests/**`
+- `CONTINUITY.md`
 
 ## Done (recent)
 
-- 2026-05-17 [TOOL] Created isolated worktree `codex/cash-runway-lint-fix` from `main`.
-- 2026-05-17 [TOOL] Confirmed the failing GitHub Actions job was blocked by SwiftLint, not build or test failures.
-- 2026-05-17 [CODE] Decision: keep the current monolith-heavy code and relax SwiftLint thresholds for the legacy size rules instead of doing a large refactor.
-- 2026-05-17 [VERIFY] `swift test` passed 215 tests in 21 suites.
-- 2026-05-17 [VERIFY] `xcodebuild -project CashRunway.xcodeproj -scheme CashRunway -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' clean build` ended `** BUILD SUCCEEDED **`.
-- 2026-05-17 [TOOL] Pushed `codex/cash-runway-lint-fix` and opened PR `https://github.com/romanr111/cash-runway/pull/9`.
-- 2026-05-17 [CODE] Split `CashRunwayRepository` into same-file extensions, formatted overlong model/settings initializers, split the oversized core-test suite body, and added a narrow source-local waiver for the declarative database migrator.
-- 2026-05-17 [VERIFY] Follow-up `swift test --filter 'CSVEdgeCaseTests|CashRunwayCoreTests'` passed 215 tests in 21 suites.
-- 2026-05-17 [CODE] Injected an in-memory `KeychainStoring` into DEBUG UI-test runtime to avoid unsigned CI simulator Keychain status `-34018`.
-- 2026-05-17 [VERIFY] Targeted simulator UI test `TransactionFlowUITests/testAddExpenseTransactionHappyPath` passed on local `iPhone 17`.
+- 2026-05-17 [TOOL] Started from the preserved clean worktree `/Users/roman/.codex/worktrees/cash-runway-stop-fake-data` on `codex/stop-fake-data`.
+- 2026-05-17 [TOOL] Confirmed no open GitHub PR existed for the branch before publishing.
+- 2026-05-17 [CODE] Rebased the feature branch onto current `origin/main` and resolved first-pass conflicts in `CONTINUITY.md` and `CSVEdgeCaseTests.swift`.
+- 2026-05-15 [CODE] Changed `seedIfNeeded()` so fresh databases create default categories only; fake starter wallets, budgets, and transactions are no longer created on first launch.
+- 2026-05-15 [CODE] Updated fixture, UI-test, and unit-test setup paths to seed wallets explicitly when tests need transaction-capable data.
+- 2026-05-15 [CODE] Added zero-wallet UI guards and empty states so first launch remains usable without fake data.
 
 ## Receipts
 
-- 2026-05-17 [TOOL] `git worktree list` showed the new worktree at `/Users/roman/.codex/worktrees/cash-runway-lint-fix` on `codex/cash-runway-lint-fix`.
-- 2026-05-17 [TOOL] The repo root still had an unrelated modified `CONTINUITY.md` in the primary checkout.
+- 2026-05-17 [TOOL] `git worktree list` showed primary checkout plus `/Users/roman/.codex/worktrees/cash-runway-stop-fake-data`.
+- 2026-05-17 [TOOL] `gh auth status` confirmed GitHub CLI authentication for `romanr111`.
+- 2026-05-17 [TOOL] `git rebase origin/main` stopped on `CONTINUITY.md` and `Tests/CashRunwayCoreTests/CSVEdgeCaseTests.swift`; conflicts were resolved manually.
+- 2026-05-17 [CODE] Decision: preserve current-main concise continuity format and discard stale legacy ledger blocks during conflict resolution.

@@ -337,6 +337,7 @@ private struct TransactionCoreUITestSeeder {
 
     func seed() throws {
         try removeExistingUITestTransactions()
+        try seedFixtureWalletsIfNeeded()
 
         let wallets = try repository.wallets()
         guard let mainWallet = wallets.first(where: { $0.name == "Main Wallet" }),
@@ -423,6 +424,37 @@ private struct TransactionCoreUITestSeeder {
 
         try repository.runMaintenance()
         try repository.refreshRecurringInstances()
+    }
+
+    private func seedFixtureWalletsIfNeeded() throws {
+        guard try repository.wallets().isEmpty else { return }
+        let now = Date()
+        try repository.saveWallet(Wallet(
+            id: UUID(uuidString: "33333333-3333-3333-3333-333333333331") ?? UUID(),
+            name: "Main Wallet",
+            kind: .card,
+            colorHex: "#60788A",
+            iconName: "wallet.pass.fill",
+            startingBalanceMinor: 5_000_000,
+            currentBalanceMinor: 5_000_000,
+            isArchived: false,
+            sortOrder: 0,
+            createdAt: now,
+            updatedAt: now
+        ))
+        try repository.saveWallet(Wallet(
+            id: UUID(uuidString: "33333333-3333-3333-3333-333333333332") ?? UUID(),
+            name: "Savings",
+            kind: .account,
+            colorHex: "#1CC389",
+            iconName: "banknote.fill",
+            startingBalanceMinor: 360_000,
+            currentBalanceMinor: 360_000,
+            isArchived: false,
+            sortOrder: 1,
+            createdAt: now,
+            updatedAt: now
+        ))
     }
 
     private func removeExistingUITestTransactions() throws {

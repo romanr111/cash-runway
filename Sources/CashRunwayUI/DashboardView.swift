@@ -12,16 +12,22 @@ struct DashboardView: View {
     @State private var showsOverview = false
     @State private var selectedItem: TransactionListItem?
     @State private var draft = TransactionDraft(kind: .expense, walletID: UUID(), amountMinor: 0, occurredAt: .now)
+    @State private var isWalletEditorPresented = false
+    @State private var walletDraft = Wallet(id: UUID(), name: "", kind: .cash, colorHex: "#60788A", iconName: "wallet.pass.fill", startingBalanceMinor: 0, currentBalanceMinor: 0, isArchived: false, sortOrder: 0, createdAt: .now, updatedAt: .now)
 
     var body: some View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 24) {
-                    hero
-                    filters
-                    chartCard
-                    overviewButton
-                    transactionFeed
+                    if model.wallets.isEmpty {
+                        emptyState
+                    } else {
+                        hero
+                        filters
+                        chartCard
+                        overviewButton
+                        transactionFeed
+                    }
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 12)
@@ -38,26 +44,30 @@ struct DashboardView: View {
                 }
             }
             .overlay(alignment: .bottomTrailing) {
-                Button {
-                    draft = TransactionDraft(
-                        kind: .expense,
-                        walletID: model.wallets.first?.id ?? UUID(),
-                        amountMinor: 0,
-                        occurredAt: .now,
-                        categoryID: model.expenseCategories.first?.id
-                    )
-                    isComposerPresented = true
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 26, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 64, height: 64)
-                        .background(CashRunwayTheme.accent, in: Circle())
-                        .shadow(color: CashRunwayTheme.accent.opacity(0.25), radius: 16, y: 10)
+                if !model.wallets.isEmpty {
+                    Button {
+                        if let walletID = model.wallets.first?.id {
+                            draft = TransactionDraft(
+                                kind: .expense,
+                                walletID: walletID,
+                                amountMinor: 0,
+                                occurredAt: .now,
+                                categoryID: model.expenseCategories.first?.id
+                            )
+                            isComposerPresented = true
+                        }
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.system(size: 26, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 64, height: 64)
+                            .background(CashRunwayTheme.accent, in: Circle())
+                            .shadow(color: CashRunwayTheme.accent.opacity(0.25), radius: 16, y: 10)
+                    }
+                    .accessibilityIdentifier(CashRunwayAccessibilityID.transactionAddButton)
+                    .padding(.trailing, 20)
+                    .padding(.bottom, 16)
                 }
-                .accessibilityIdentifier(CashRunwayAccessibilityID.transactionAddButton)
-                .padding(.trailing, 20)
-                .padding(.bottom, 16)
             }
             .navigationDestination(isPresented: $showsOverview) {
                 TimelineOverviewView(model: model)
@@ -81,7 +91,55 @@ struct DashboardView: View {
             .fullScreenCover(isPresented: $isComposerPresented) {
                 TransactionEditorView(model: model, draft: $draft)
             }
+            .sheet(isPresented: $isWalletEditorPresented) {
+                WalletEditorView(model: model, wallet: $walletDraft)
+            }
         }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 18) {
+            Spacer(minLength: 60)
+            Image(systemName: "wallet.pass.fill")
+                .font(.system(size: 56))
+                .foregroundStyle(CashRunwayTheme.textMuted)
+            Text("Create your first wallet")
+                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .foregroundStyle(CashRunwayTheme.textPrimary)
+            Text("Add a wallet to start tracking transactions and see your cash flow.")
+                .font(.system(size: 15))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(CashRunwayTheme.textSecondary)
+                .padding(.horizontal, 24)
+            Button {
+                walletDraft = Wallet(
+                    id: UUID(),
+                    name: "",
+                    kind: .cash,
+                    colorHex: "#60788A",
+                    iconName: "wallet.pass.fill",
+                    startingBalanceMinor: 0,
+                    currentBalanceMinor: 0,
+                    isArchived: false,
+                    sortOrder: 0,
+                    createdAt: .now,
+                    updatedAt: .now
+                )
+                isWalletEditorPresented = true
+            } label: {
+                HStack {
+                    Image(systemName: "plus.circle.fill")
+                    Text("Add Wallet")
+                }
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 14)
+                .background(CashRunwayTheme.accent, in: Capsule())
+            }
+            Spacer(minLength: 60)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     private var hero: some View {

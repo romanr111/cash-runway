@@ -58,6 +58,7 @@ struct CSVEdgeCaseTests {
     @Test func importWithDebitCreditColumns() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let walletID = try #require(try repository.wallets().first?.id)
         let service = CSVService(repository: repository)
         let text = "Date,Debit,Credit\n2025-01-01,100,\n2025-01-02,,200"
@@ -83,6 +84,7 @@ struct CSVEdgeCaseTests {
     @Test func importWithExplicitTypeColumn() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallets = try repository.wallets()
         #expect(wallets.count >= 2)
         let walletID = wallets[0].id
@@ -109,7 +111,8 @@ struct CSVEdgeCaseTests {
     @Test func importUnsupportedCurrencySkipsRow() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
-        let walletID = try repository.wallets().first!.id
+        try TestSupport.seedFixtureWallets(into: repository)
+        let walletID = try #require(try repository.wallets().first?.id)
         let service = CSVService(repository: repository)
         let text = "Date,Amount,Currency\n2025-01-01,100,USD"
         let mapping = CSVImportMapping(
@@ -136,6 +139,7 @@ struct CSVEdgeCaseTests {
     @Test func importWithEscapedQuotes() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let walletID = try #require(try repository.wallets().first?.id)
         let service = CSVService(repository: repository)
         let text = "Date,Amount,Note\n2025-01-01,100,\"She said \"hello\"\""
@@ -158,6 +162,7 @@ struct CSVEdgeCaseTests {
     @Test func importWindows1251Fallback() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let service = CSVService(repository: repository)
         // "Привіт" in Windows-1251 is not valid UTF-8
         let windows1251Bytes: [UInt8] = [0xCF, 0xF0, 0xE8, 0xE2, 0xB3, 0xF2]
@@ -174,6 +179,7 @@ struct CSVEdgeCaseTests {
     @Test func importMalformedQuotesDoesNotCrash() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let walletID = try #require(try repository.wallets().first?.id)
         let service = CSVService(repository: repository)
         // Unclosed quote — parser should not crash
@@ -199,6 +205,7 @@ struct CSVEdgeCaseTests {
     @Test func importWithTypeColumnFallsBackToIncomeForPositiveAmount() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let walletID = try #require(try repository.wallets().first?.id)
         let service = CSVService(repository: repository)
         // Type is "Unknown" (not income/expense/transfer), amount is positive, typeColumn is present

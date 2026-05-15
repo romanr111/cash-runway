@@ -50,6 +50,7 @@ struct CashRunwayCoreTests {
         let manager = try DatabaseManager(locationProvider: location)
         let repository = CashRunwayRepository(databaseManager: manager)
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallets = try repository.wallets()
         #expect(wallets.count >= 2)
         let wallet = wallets[0]
@@ -92,7 +93,9 @@ struct CashRunwayCoreTests {
         let location = TestSupport.makeLocation()
         let keychain = TestKeychainStore()
         var manager: DatabaseManager? = try DatabaseManager(locationProvider: location, keychain: keychain)
-        try CashRunwayRepository(databaseManager: try #require(manager)).seedIfNeeded()
+        let repo = CashRunwayRepository(databaseManager: try #require(manager))
+        try repo.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repo)
         manager = nil
         let reopened = try DatabaseManager(locationProvider: location, keychain: keychain)
         let repository = CashRunwayRepository(databaseManager: reopened)
@@ -108,6 +111,7 @@ struct CashRunwayCoreTests {
         let manager = try DatabaseManager(locationProvider: location, allowsDestructiveRecovery: true, keychain: TestKeychainStore())
         let repository = CashRunwayRepository(databaseManager: manager)
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
 
         #expect(try repository.wallets().count >= 2)
         let recoveryDirectory = dbURL.deletingLastPathComponent().appendingPathComponent("Recovery", isDirectory: true)
@@ -308,6 +312,7 @@ struct CashRunwayCoreTests {
     @Test func transactionMutationsKeepAggregatesCorrect() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallets = try repository.wallets()
         let expenseCategory = try #require(try repository.categories(kind: .expense).first)
         let incomeCategory = try #require(try repository.categories(kind: .income).first)
@@ -351,6 +356,7 @@ struct CashRunwayCoreTests {
     @Test func transferEditsRemainBalanced() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallets = try repository.wallets()
         let when = Date()
 
@@ -391,6 +397,7 @@ struct CashRunwayCoreTests {
     func budgetProgressTracksTransactionMutations() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let monthKey = DateKeys.monthKey(for: .now)
         let expenseCategories = try repository.categories(kind: .expense)
         let groceries = try #require(expenseCategories.first)
@@ -435,6 +442,7 @@ struct CashRunwayCoreTests {
     @Test func timelineSnapshotGroupsHistoryAndMonthlyBars() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallets = try repository.wallets()
         let expenseCategory = try #require(try repository.categories(kind: .expense).first?.id)
         let incomeCategory = try #require(try repository.categories(kind: .income).first?.id)
@@ -489,6 +497,7 @@ struct CashRunwayCoreTests {
     @Test func overviewSnapshotSeparatesExpenseIncomeAndLabels() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let walletID = try #require(try repository.wallets().first?.id)
         let expenseCategory = try #require(try repository.categories(kind: .expense).first?.id)
         let incomeCategory = try #require(try repository.categories(kind: .income).first?.id)
@@ -542,6 +551,7 @@ struct CashRunwayCoreTests {
     @Test func overviewSnapshotBatchBalancesMatchCumulativeTruth() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let walletID = try #require(try repository.wallets().first?.id)
         let expenseCategory = try #require(try repository.categories(kind: .expense).first?.id)
         let calendar = Calendar(identifier: .gregorian)
@@ -577,6 +587,7 @@ struct CashRunwayCoreTests {
     @Test func overviewSnapshotIncludesTransactionsBeforeWindow() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let walletID = try #require(try repository.wallets().first?.id)
         let expenseCategory = try #require(try repository.categories(kind: .expense).first?.id)
         let calendar = Calendar(identifier: .gregorian)
@@ -627,6 +638,7 @@ struct CashRunwayCoreTests {
     @Test func latestTransactionMonthKeyReflectsActualData() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let walletID = try #require(try repository.wallets().first?.id)
         let expenseCategory = try #require(try repository.categories(kind: .expense).first?.id)
 
@@ -651,6 +663,7 @@ struct CashRunwayCoreTests {
     @Test func categoryManagementCountsAndOrderingPersist() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallets = try repository.wallets()
         let categories = try repository.categories(kind: .expense)
         let firstCategory = try #require(categories.first)
@@ -692,6 +705,7 @@ struct CashRunwayCoreTests {
     @Test func recurringPostingUpdatesInstanceAndTransactions() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let walletID = try #require(try repository.wallets().first?.id)
         let categoryID = try #require(try repository.categories(kind: .expense).first?.id)
         let template = RecurringTemplate(
@@ -726,6 +740,7 @@ struct CashRunwayCoreTests {
     @Test func csvImportExportAndSearchWorkTogether() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let walletID = try #require(try repository.wallets().first?.id)
         let service = CSVService(repository: repository)
         let csv = """
@@ -770,6 +785,7 @@ struct CashRunwayCoreTests {
     @Test func transactionSearchMatchesCategoryName() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let walletID = try #require(try repository.wallets().first?.id)
         let groceriesID = try #require(try repository.categories(kind: .expense).first(where: { $0.name == "Groceries" })?.id)
 
@@ -792,6 +808,7 @@ struct CashRunwayCoreTests {
     @Test func cashRunwayWalletCSVFormatImportsSignedRowsAndExportsRoundTrippableFile() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallet = try #require(try repository.wallets().first)
         let label = Label(id: UUID(), name: "Trip", colorHex: "#1CC389", createdAt: .now, updatedAt: .now)
         try repository.saveLabel(label)
@@ -830,6 +847,7 @@ struct CashRunwayCoreTests {
 
         let roundTripRepository = try TestSupport.makeRepository()
         try roundTripRepository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: roundTripRepository)
         try roundTripRepository.saveLabel(label)
         let roundTripService = CSVService(repository: roundTripRepository)
         let roundTripWalletID = try #require(try roundTripRepository.wallets().first?.id)
@@ -846,6 +864,7 @@ struct CashRunwayCoreTests {
     @Test func csvImportCreatesMissingCategoriesFromMappedColumn() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallet = try #require(try repository.wallets().first)
         let service = CSVService(repository: repository)
         let csv = """
@@ -874,6 +893,7 @@ struct CashRunwayCoreTests {
     @Test func csvImportCreatesMissingLabelsFromMappedColumn() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallet = try #require(try repository.wallets().first)
         let service = CSVService(repository: repository)
         let csv = """
@@ -905,6 +925,7 @@ struct CashRunwayCoreTests {
     @Test func csvImportAssignsContextualIconsToLocalizedCreatedCategories() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallet = try #require(try repository.wallets().first)
         let service = CSVService(repository: repository)
         let csv = """
@@ -931,6 +952,7 @@ struct CashRunwayCoreTests {
     @Test func csvImportMatchesExistingCategoriesCaseInsensitivelyWithoutDuplicates() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallet = try #require(try repository.wallets().first)
         let service = CSVService(repository: repository)
         let expenseCountBefore = try repository.categories(kind: .expense).count
@@ -958,6 +980,7 @@ struct CashRunwayCoreTests {
     @Test func csvPreviewCountsRowsAndImportResultReportsSkippedRows() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let walletID = try #require(try repository.wallets().first?.id)
         let service = CSVService(repository: repository)
         let csv = """
@@ -1010,6 +1033,7 @@ extension CashRunwayCoreTests {
 
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         for labelName in fixture.labelNames {
             try repository.saveLabel(Label(id: UUID(), name: labelName, colorHex: "#60788A", createdAt: .now, updatedAt: .now))
         }
@@ -1050,6 +1074,7 @@ extension CashRunwayCoreTests {
     @Test func csvExportIncludesMerchantColumn() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let walletID = try #require(try repository.wallets().first?.id)
         let service = CSVService(repository: repository)
         let csv = """
@@ -1083,6 +1108,7 @@ extension CashRunwayCoreTests {
     @Test func csvExportRoundTripPreservesMerchant() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let walletID = try #require(try repository.wallets().first?.id)
         let service = CSVService(repository: repository)
         let csv = """
@@ -1110,6 +1136,7 @@ extension CashRunwayCoreTests {
         let exported = try service.exportCSV()
         let roundTripRepo = try TestSupport.makeRepository()
         try roundTripRepo.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: roundTripRepo)
         let roundTripWalletID = try #require(try roundTripRepo.wallets().first?.id)
         let roundTripService = CSVService(repository: roundTripRepo)
         let result = try roundTripService.importCSV(
@@ -1128,6 +1155,7 @@ extension CashRunwayCoreTests {
     @Test func csvExportRoundTripPreservesAllFields() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let walletID = try #require(try repository.wallets().first?.id)
         let label = Label(id: UUID(), name: "Business", colorHex: "#1CC389", createdAt: .now, updatedAt: .now)
         try repository.saveLabel(label)
@@ -1162,6 +1190,7 @@ extension CashRunwayCoreTests {
 
         let roundTripRepo = try TestSupport.makeRepository()
         try roundTripRepo.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: roundTripRepo)
         let roundTripWalletID = try #require(try roundTripRepo.wallets().first?.id)
         let roundTripService = CSVService(repository: roundTripRepo)
         let roundTripResult = try roundTripService.importCSV(
@@ -1178,6 +1207,7 @@ extension CashRunwayCoreTests {
     @Test func csvExportExcludesTransfersByDefault() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallets = try repository.wallets()
         #expect(wallets.count >= 2)
         let service = CSVService(repository: repository)
@@ -1235,6 +1265,7 @@ extension CashRunwayCoreTests {
     @Test func csvExportWithFilterReturnsSubset() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let walletID = try #require(try repository.wallets().first?.id)
         let service = CSVService(repository: repository)
         let csv = """
@@ -1291,6 +1322,7 @@ extension CashRunwayCoreTests {
     @Test func csvExportHandlesSpecialCharacters() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let walletID = try #require(try repository.wallets().first?.id)
         let walletName = try #require(try repository.wallets().first?.name)
         let label1 = Label(id: UUID(), name: "ProjectX", colorHex: "#1CC389", createdAt: .now, updatedAt: .now)
@@ -1314,6 +1346,7 @@ extension CashRunwayCoreTests {
 
         let roundTripRepo = try TestSupport.makeRepository()
         try roundTripRepo.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: roundTripRepo)
         try roundTripRepo.saveLabel(Label(id: UUID(), name: "ProjectX", colorHex: "#1CC389", createdAt: .now, updatedAt: .now))
         try roundTripRepo.saveLabel(Label(id: UUID(), name: "YZ", colorHex: "#60788A", createdAt: .now, updatedAt: .now))
         let roundTripWalletID = try #require(try roundTripRepo.wallets().first?.id)
@@ -1335,6 +1368,7 @@ extension CashRunwayCoreTests {
     @Test func csvExportHandlesUnicodeCategoryLabels() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let walletID = try #require(try repository.wallets().first?.id)
         let walletName = try #require(try repository.wallets().first?.name)
         let service = CSVService(repository: repository)
@@ -1355,6 +1389,7 @@ extension CashRunwayCoreTests {
 
         let roundTripRepo = try TestSupport.makeRepository()
         try roundTripRepo.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: roundTripRepo)
         let roundTripWalletID = try #require(try roundTripRepo.wallets().first?.id)
         let roundTripService = CSVService(repository: roundTripRepo)
         let roundTripResult = try roundTripService.importCSV(
@@ -1389,6 +1424,7 @@ extension CashRunwayCoreTests {
 
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let walletID = try #require(try repository.wallets().first?.id)
         let service = CSVService(repository: repository)
 
@@ -1415,6 +1451,7 @@ extension CashRunwayCoreTests {
 
         let roundTripRepo = try TestSupport.makeRepository()
         try roundTripRepo.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: roundTripRepo)
         let roundTripWalletID = try #require(try roundTripRepo.wallets().first?.id)
         let roundTripService = CSVService(repository: roundTripRepo)
 
@@ -1447,6 +1484,7 @@ extension CashRunwayCoreTests {
     @Test func randomizedMutationSequencePreservesTruth() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         var rng = FixtureGenerator.SeededRNG(seed: 77)
         let wallets = try repository.wallets()
         let expenseCategories = try repository.categories(kind: .expense)
@@ -1483,6 +1521,7 @@ extension CashRunwayCoreTests {
     @Test func walletDeletionRemovesWalletAndTransactions() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallets = try repository.wallets()
         #expect(wallets.count >= 2)
         let firstWallet = wallets[0]
@@ -1528,6 +1567,7 @@ extension CashRunwayCoreTests {
     @Test func walletDeletionCleansUpLinkedTransfersInOtherWallets() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallets = try repository.wallets()
         #expect(wallets.count >= 2)
         let sourceWallet = wallets[0]
@@ -1562,6 +1602,7 @@ extension CashRunwayCoreTests {
     @Test func cannotDeleteLastActiveWallet() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         var wallets = try repository.wallets()
         while wallets.count > 1 {
             try repository.deleteWallet(id: wallets[0].id)
@@ -1571,6 +1612,73 @@ extension CashRunwayCoreTests {
         #expect(throws: CashRunwayError.validation("At least one active wallet must remain.")) {
             try repository.deleteWallet(id: wallets[0].id)
         }
+    }
+
+    @Test func seedIfNeededCreatesCategoriesButNoWalletsOrBudgets() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+
+        let wallets = try repository.wallets()
+        let budgets = try repository.budgets(monthKey: DateKeys.monthKey(for: .now))
+        let categories = try repository.categories()
+
+        #expect(wallets.isEmpty, "Fresh install should not auto-create wallets.")
+        #expect(budgets.isEmpty, "Fresh install should not auto-create budgets.")
+        #expect(categories.count > 0, "Fresh install should create default categories.")
+    }
+
+    @Test func seedIfNeededPreservesLegacySeededWallets() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+
+        let walletsBefore = try repository.wallets()
+        #expect(walletsBefore.count == 2)
+
+        try repository.seedIfNeeded()
+
+        let walletsAfter = try repository.wallets()
+        #expect(walletsAfter.count == 2)
+        #expect(walletsAfter.map(\.name).sorted() == ["Main Wallet", "Savings"])
+    }
+
+    @Test func seedIfNeededPreservesExistingTransactionsAndBalances() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let wallet = try #require(try repository.wallets().first)
+        let category = try #require(try repository.categories(kind: .expense).first)
+
+        try repository.saveTransaction(
+            TransactionDraft(
+                kind: .expense,
+                walletID: wallet.id,
+                amountMinor: 5_000,
+                occurredAt: .now,
+                categoryID: category.id,
+                merchant: "Test",
+                note: ""
+            )
+        )
+        let balanceBefore = try #require(try repository.wallets().first).currentBalanceMinor
+        let txCountBefore = try repository.transactions().count
+
+        try repository.seedIfNeeded()
+
+        let balanceAfter = try #require(try repository.wallets().first).currentBalanceMinor
+        let txCountAfter = try repository.transactions().count
+        #expect(balanceAfter == balanceBefore)
+        #expect(txCountAfter == txCountBefore)
+    }
+
+    @Test func freshDatabaseAfterBootstrapHasNoWalletsNoBudgetsNoTransactions() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+
+        #expect(try repository.wallets().isEmpty)
+        #expect(try repository.budgets(monthKey: DateKeys.monthKey(for: .now)).isEmpty)
+        #expect(try repository.transactions().isEmpty)
+        #expect(try repository.categories().count > 0)
     }
 }
 
@@ -1607,6 +1715,36 @@ enum TestSupport {
             databaseURLOverride: baseURL.appendingPathComponent("cash-runway.sqlite"),
             directoryName: UUID().uuidString
         )
+    }
+
+    static func seedFixtureWallets(into repository: CashRunwayRepository) throws {
+        let now = Date()
+        try repository.saveWallet(Wallet(
+            id: UUID(uuidString: "33333333-3333-3333-3333-333333333331") ?? UUID(),
+            name: "Main Wallet",
+            kind: .card,
+            colorHex: "#60788A",
+            iconName: "wallet.pass.fill",
+            startingBalanceMinor: 5_000_000,
+            currentBalanceMinor: 5_000_000,
+            isArchived: false,
+            sortOrder: 0,
+            createdAt: now,
+            updatedAt: now
+        ))
+        try repository.saveWallet(Wallet(
+            id: UUID(uuidString: "33333333-3333-3333-3333-333333333332") ?? UUID(),
+            name: "Savings",
+            kind: .account,
+            colorHex: "#1CC389",
+            iconName: "banknote.fill",
+            startingBalanceMinor: 360_000,
+            currentBalanceMinor: 360_000,
+            isArchived: false,
+            sortOrder: 1,
+            createdAt: now,
+            updatedAt: now
+        ))
     }
 
     static func fileSize(at url: URL) throws -> UInt64 {

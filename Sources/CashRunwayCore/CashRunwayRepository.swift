@@ -618,45 +618,6 @@ public final class CashRunwayRepository: @unchecked Sendable {
 extension CashRunwayRepository {
     public func seedIfNeeded() throws {
         try databaseManager.dbQueue.write { db in
-            let count = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM wallets") ?? 0
-            if count == 0 {
-                let now = Date()
-                try db.execute(
-                    sql: """
-                    INSERT INTO wallets (id, name, kind, color_hex, icon_name, starting_balance_minor, current_balance_minor, is_archived, sort_order, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)
-                    """,
-                    arguments: [
-                        UUID(uuidString: "33333333-3333-3333-3333-333333333331")!.uuidString,
-                        "Main Wallet",
-                        WalletKind.card.rawValue,
-                        "#60788A",
-                        "wallet.pass.fill",
-                        5_000_000,
-                        5_000_000,
-                        now,
-                        now,
-                    ]
-                )
-                try db.execute(
-                    sql: """
-                    INSERT INTO wallets (id, name, kind, color_hex, icon_name, starting_balance_minor, current_balance_minor, is_archived, sort_order, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, 0, 1, ?, ?)
-                    """,
-                    arguments: [
-                        UUID(uuidString: "33333333-3333-3333-3333-333333333332")!.uuidString,
-                        "Savings",
-                        WalletKind.account.rawValue,
-                        "#1CC389",
-                        "banknote.fill",
-                        360_000,
-                        360_000,
-                        now,
-                        now,
-                    ]
-                )
-            }
-
             let categoryCount = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM categories") ?? 0
             if categoryCount == 0 {
                 let now = Date()
@@ -680,19 +641,9 @@ extension CashRunwayRepository {
                 }
             }
 
-            let budgetCount = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM budgets") ?? 0
-            if budgetCount == 0, let housing = SeedCategories.all.first(where: { $0.name == "Housing" }) {
-                let now = Date()
-                let monthKey = DateKeys.monthKey(for: .now)
-                try db.execute(
-                    sql: """
-                    INSERT INTO budgets (id, category_id, month_key, limit_minor, is_archived, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, 0, ?, ?)
-                    """,
-                    arguments: [UUID().uuidString, housing.id.uuidString, monthKey, 90_000, now, now]
-                )
-                try recomputeBudgetSnapshots(db, monthKeys: [monthKey])
-            }
+            // Do not auto-create wallets.
+            // Do not auto-create budgets.
+            // Do not delete or mutate existing user data.
         }
     }
 

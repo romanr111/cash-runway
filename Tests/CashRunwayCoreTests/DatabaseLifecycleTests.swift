@@ -14,7 +14,7 @@ struct DatabaseLifecycleTests {
         var manager: DatabaseManager? = try DatabaseManager(locationProvider: location, keychain: keychain)
         let repository = CashRunwayRepository(databaseManager: try #require(manager))
         try repository.seedIfNeeded()
-        let walletCountBefore = try repository.wallets().count
+        let categoryCountBefore = try repository.categories().count
         manager = nil
 
         // Corrupt the SQLite header.
@@ -24,7 +24,7 @@ struct DatabaseLifecycleTests {
         let recoveredManager = try DatabaseManager(locationProvider: location, allowsDestructiveRecovery: true, keychain: keychain)
         let recoveredRepo = CashRunwayRepository(databaseManager: recoveredManager)
         try recoveredRepo.seedIfNeeded()
-        #expect(try recoveredRepo.wallets().count == walletCountBefore)
+        #expect(try recoveredRepo.categories().count == categoryCountBefore)
 
         // Original file should be in Recovery directory.
         let recoveryDir = dbURL.deletingLastPathComponent().appendingPathComponent("Recovery", isDirectory: true)
@@ -40,6 +40,7 @@ struct DatabaseLifecycleTests {
         var manager: DatabaseManager? = try DatabaseManager(locationProvider: location, keychain: keychain)
         let repository = CashRunwayRepository(databaseManager: try #require(manager))
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         try repository.saveTransaction(
             TransactionDraft(
                 kind: .expense,
@@ -72,6 +73,7 @@ struct DatabaseLifecycleTests {
         var manager: DatabaseManager? = try DatabaseManager(locationProvider: location, keychain: keychain)
         let repository = CashRunwayRepository(databaseManager: try #require(manager))
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let walletCount = try repository.wallets().count
         let dbURL = try location.databaseURL()
         manager = nil
@@ -114,6 +116,7 @@ struct DatabaseLifecycleTests {
         var manager: DatabaseManager? = try DatabaseManager(locationProvider: location, keychain: keychain)
         let repository = CashRunwayRepository(databaseManager: try #require(manager))
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         try repository.saveTransaction(
             TransactionDraft(
                 kind: .expense,
