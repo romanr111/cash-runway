@@ -13,6 +13,7 @@ public typealias CashRunwayLabel = Label
 public final class CashRunwayAppModel {
     public var repository: CashRunwayRepository
     public var csvService: CSVService
+    public var backupService: BackupService
     // DEPRECATED — App Lock is deprecated. Remove when work resumes or feature is removed.
     public var lockStore: AppLockStore
 
@@ -76,6 +77,7 @@ public final class CashRunwayAppModel {
     ) {
         self.repository = repository
         self.csvService = CSVService(repository: repository)
+        self.backupService = BackupService(repository: repository)
         self.lockStore = lockStore
     }
 
@@ -428,6 +430,49 @@ public final class CashRunwayAppModel {
 
     public func detectPreset(headers: [String]) -> CSVPreset {
         csvService.detectPreset(headers: headers)
+    }
+
+    public func exportFullBackup() throws -> Data {
+        let backup = try backupService.exportFullBackup()
+        return try backupService.encode(backup)
+    }
+
+    public func previewFullBackup(data: Data) throws -> BackupValidationSummary {
+        let backup = try backupService.decode(data: data)
+        return try backupService.validate(backup)
+    }
+
+    @discardableResult
+    public func restoreFullBackup(data: Data) async throws -> BackupRestoreResult {
+        let previousSelectedWalletID = selectedWalletID
+        let previousOverviewSnapshotCache = overviewSnapshotCache
+        let previousOverviewSnapshotCacheOrder = overviewSnapshotCacheOrder
+        var didPrepareForRestore = false
+
+        do {
+            let backup = try backupService.decode(data: data)
+            _ = try backupService.validate(backup)
+
+            foregroundRefreshTask?.cancel()
+            foregroundRefreshTask = nil
+            overviewSnapshotCache.removeAll()
+            overviewSnapshotCacheOrder.removeAll()
+            selectedWalletID = nil
+            didPrepareForRestore = true
+
+            let result = try backupService.restore(backup)
+            await reloadAll()
+            errorMessage = nil
+            return result
+        } catch {
+            if didPrepareForRestore {
+                selectedWalletID = previousSelectedWalletID
+                overviewSnapshotCache = previousOverviewSnapshotCache
+                overviewSnapshotCacheOrder = previousOverviewSnapshotCacheOrder
+            }
+            errorMessage = "Backup could not be restored. Your current data was not changed."
+            throw error
+        }
     }
 
     public func handleForegroundResume() {

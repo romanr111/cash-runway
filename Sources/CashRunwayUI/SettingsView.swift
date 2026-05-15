@@ -29,6 +29,16 @@ struct SettingsView: View {
     @State private var isExporterPresented = false
     @State private var exportFileURL: URL?
     @State private var isExporting = false
+    @State private var isBackupExportWarningPresented = false
+    @State private var isBackupExporterPresented = false
+    @State private var backupExportFileURL: URL?
+    @State private var isBackupExporting = false
+    @State private var isBackupImporterPresented = false
+    @State private var isBackupImportReviewPresented = false
+    @State private var backupImportData = Data()
+    @State private var backupImportFileName = ""
+    @State private var backupImportSummary: BackupValidationSummary?
+    @State private var backupImportPreparationError: String?
 
     var body: some View {
         NavigationStack {
@@ -102,6 +112,15 @@ struct SettingsView: View {
                                     }
                                 }
                             }
+                            rowDivider
+                            moreRow(icon: "externaldrive.fill", tint: "#4A80C1", title: "Import Full Backup", subtitle: "Replace data from JSON") {
+                                isBackupImporterPresented = true
+                            }
+                            rowDivider
+                            moreRow(icon: "externaldrive.badge.plus", tint: "#7A6FF0", title: "Export Full Backup", subtitle: isBackupExporting ? "Exporting…" : "Share unencrypted backup JSON") {
+                                guard !isBackupExporting else { return }
+                                isBackupExportWarningPresented = true
+                            }
                         }
                         .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
@@ -168,14 +187,49 @@ struct SettingsView: View {
                     #endif
                 }
             }
+            .sheet(isPresented: $isBackupExporterPresented) {
+                if let url = backupExportFileURL {
+                    #if canImport(UIKit)
+                    ActivityView(activityItems: [url])
+                    #else
+                    Text("Backup export is unavailable on this platform.")
+                    #endif
+                }
+            }
             .sheet(isPresented: $isImporterPresented) {
                 #if canImport(UIKit)
-                CSVDocumentPicker(allowedContentTypes: [.commaSeparatedText, .plainText]) { result in
+                DocumentPicker(allowedContentTypes: [.commaSeparatedText, .plainText]) { result in
                     handleImporterResult(result)
                 }
                 #else
                 Text("CSV import is unavailable on this platform.")
                 #endif
+            }
+            .sheet(isPresented: $isBackupImporterPresented) {
+                #if canImport(UIKit)
+                DocumentPicker(allowedContentTypes: [.json, .plainText]) { result in
+                    handleBackupImporterResult(result)
+                }
+                #else
+                Text("Backup import is unavailable on this platform.")
+                #endif
+            }
+            .sheet(isPresented: $isBackupImportReviewPresented) {
+                BackupImportReviewView(
+                    model: model,
+                    fileName: backupImportFileName,
+                    data: backupImportData,
+                    summary: backupImportSummary,
+                    preparationError: backupImportPreparationError
+                )
+            }
+            .alert("Unencrypted Backup", isPresented: $isBackupExportWarningPresented) {
+                Button("Cancel", role: .cancel) {}
+                Button("Export") {
+                    exportFullBackup()
+                }
+            } message: {
+                Text("This backup file contains unencrypted financial data. Anyone with access to it may be able to read your wallets, transactions, categories, labels, and recurring entries. Store it securely.")
             }
         }
     }
@@ -186,11 +240,82 @@ struct SettingsView: View {
         case let .success(url):
             prepareImport(from: url)
         case let .failure(error):
-            if let pickerError = error as? CSVDocumentPickerError, pickerError == .cancelled {
+            if let pickerError = error as? DocumentPickerError, pickerError == .cancelled {
                 return
             }
             model.errorMessage = error.localizedDescription
         }
+    }
+
+    private func exportFullBackup() {
+        isBackupExporting = true
+        let service = model.backupService
+        Task { @MainActor in
+            do {
+                let data = try await Task.detached(priority: .userInitiated) {
+                    let backup = try service.exportFullBackup()
+                    return try service.encode(backup)
+                }.value
+                let url = FileManager.default.temporaryDirectory.appendingPathComponent("cash-runway-backup-\(backupFileTimestamp()).json")
+                try data.write(to: url, options: .atomic)
+                backupExportFileURL = url
+                isBackupExporterPresented = true
+            } catch {
+                model.errorMessage = error.localizedDescription
+            }
+            isBackupExporting = false
+        }
+    }
+
+    private func handleBackupImporterResult(_ result: Result<URL, any Error>) {
+        isBackupImporterPresented = false
+        switch result {
+        case let .success(url):
+            prepareBackupImport(from: url)
+        case let .failure(error):
+            if let pickerError = error as? DocumentPickerError, pickerError == .cancelled {
+                return
+            }
+            model.errorMessage = error.localizedDescription
+        }
+    }
+
+    private func prepareBackupImport(from url: URL) {
+        let fileName = url.lastPathComponent.isEmpty ? "backup.json" : url.lastPathComponent
+        let service = model.backupService
+        backupImportData = Data()
+        backupImportFileName = fileName
+        backupImportSummary = nil
+        backupImportPreparationError = nil
+        isBackupImportReviewPresented = true
+
+        Task {
+            do {
+                let data = try await Task.detached(priority: .userInitiated) {
+                    try CSVImportFileReader.readData(from: url)
+                }.value
+                let summary = try await Task.detached(priority: .userInitiated) {
+                    let backup = try service.decode(data: data)
+                    return try service.validate(backup)
+                }.value
+
+                await MainActor.run {
+                    backupImportData = data
+                    backupImportSummary = summary
+                }
+            } catch {
+                await MainActor.run {
+                    backupImportPreparationError = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    private func backupFileTimestamp() -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd-HHmmss"
+        return formatter.string(from: Date())
     }
 
     private func prepareImport(from url: URL) {
@@ -333,14 +458,14 @@ struct SettingsView: View {
     }
 }
 
-private enum CSVDocumentPickerError: LocalizedError, Equatable {
+private enum DocumentPickerError: LocalizedError, Equatable {
     case emptySelection
     case cancelled
 
     var errorDescription: String? {
         switch self {
         case .emptySelection:
-            "No CSV file was selected."
+            "No file was selected."
         case .cancelled:
             nil
         }
@@ -359,7 +484,7 @@ private struct ActivityView: UIViewControllerRepresentable {
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
-private struct CSVDocumentPicker: UIViewControllerRepresentable {
+private struct DocumentPicker: UIViewControllerRepresentable {
     let allowedContentTypes: [UTType]
     let onCompletion: (Result<URL, any Error>) -> Void
 
@@ -385,14 +510,14 @@ private struct CSVDocumentPicker: UIViewControllerRepresentable {
 
         func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
             guard let url = urls.first else {
-                onCompletion(.failure(CSVDocumentPickerError.emptySelection))
+                onCompletion(.failure(DocumentPickerError.emptySelection))
                 return
             }
             onCompletion(.success(url))
         }
 
         func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
-            onCompletion(.failure(CSVDocumentPickerError.cancelled))
+            onCompletion(.failure(DocumentPickerError.cancelled))
         }
     }
 }
@@ -402,6 +527,127 @@ private struct CSVPreparedImport: Sendable {
     let data: Data
     let preview: CSVImportPreview
     let preset: CSVPreset
+}
+
+private struct BackupImportReviewView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Bindable var model: CashRunwayAppModel
+    let fileName: String
+    let data: Data
+    let summary: BackupValidationSummary?
+    let preparationError: String?
+    @State private var isRestoreConfirmationPresented = false
+    @State private var isRestoring = false
+    @State private var restoreMessage: String?
+    @State private var restoreError: String?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Source") {
+                    summaryRow("File", value: fileName)
+                }
+
+                if let preparationError {
+                    Section("Import Error") {
+                        Text(preparationError)
+                            .foregroundStyle(CashRunwayTheme.negative)
+                    }
+                } else if let summary {
+                    Section("Preview") {
+                        summaryRow("Backup created", value: Self.dateFormatter.string(from: summary.createdAt))
+                        summaryRow("Wallets", value: "\(summary.walletCount)")
+                        summaryRow("Transactions", value: "\(summary.transactionCount)")
+                        summaryRow("Categories", value: "\(summary.categoryCount)")
+                        summaryRow("Labels", value: "\(summary.labelCount)")
+                        summaryRow("Recurring templates", value: "\(summary.recurringTemplateCount)")
+                    }
+
+                    Section {
+                        Text("Restoring this backup will replace all current Cash Runway data on this device. This cannot be merged automatically.")
+                            .foregroundStyle(CashRunwayTheme.negative)
+                    }
+
+                    if isRestoring {
+                        Section("Restoring") {
+                            ProgressView("Restoring backup...")
+                        }
+                    }
+
+                    if let restoreMessage {
+                        Section("Result") {
+                            Text(restoreMessage)
+                                .foregroundStyle(CashRunwayTheme.positive)
+                        }
+                    } else if let restoreError {
+                        Section("Restore Error") {
+                            Text(restoreError)
+                                .foregroundStyle(CashRunwayTheme.negative)
+                        }
+                    }
+                } else {
+                    Section("Loading") {
+                        ProgressView("Reading backup...")
+                    }
+                }
+            }
+            .navigationTitle("Import Full Backup")
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(restoreMessage == nil && preparationError == nil ? "Cancel" : "Done") { dismiss() }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    if summary != nil, preparationError == nil, restoreMessage == nil {
+                        Button("Restore", role: .destructive) {
+                            isRestoreConfirmationPresented = true
+                        }
+                        .disabled(isRestoring)
+                    }
+                }
+            }
+            .alert("Replace Current Data?", isPresented: $isRestoreConfirmationPresented) {
+                Button("Cancel", role: .cancel) {}
+                Button("Restore", role: .destructive) {
+                    startRestore()
+                }
+            } message: {
+                Text("Restoring this backup will replace all current Cash Runway data on this device. This cannot be merged automatically.")
+            }
+        }
+    }
+
+    private func startRestore() {
+        guard !isRestoring else { return }
+        isRestoring = true
+        restoreError = nil
+        Task { @MainActor in
+            do {
+                _ = try await model.restoreFullBackup(data: data)
+                restoreMessage = "Backup restored successfully."
+            } catch {
+                restoreError = "Backup could not be restored. Your current data was not changed."
+            }
+            isRestoring = false
+        }
+    }
+
+    private func summaryRow(_ title: String, value: String) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title)
+                .foregroundStyle(CashRunwayTheme.textSecondary)
+            Spacer(minLength: 16)
+            Text(value)
+                .multilineTextAlignment(.trailing)
+                .foregroundStyle(CashRunwayTheme.textPrimary)
+        }
+    }
+
+    private static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        return formatter
+    }()
 }
 
 private struct LabelManagementView: View {

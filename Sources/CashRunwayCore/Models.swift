@@ -294,6 +294,436 @@ public struct ImportJob: Identifiable, Codable, Hashable, Sendable {
     public var errorSummary: String?
 }
 
+public struct CashRunwayBackup: Codable, Sendable {
+    public var metadata: CashRunwayBackupMetadata
+    public var wallets: [BackupWallet]
+    public var categories: [BackupCategory]
+    public var labels: [BackupLabel]
+    public var transactions: [BackupTransaction]
+    public var transactionLabels: [BackupTransactionLabel]
+    public var budgets: [BackupBudget]
+    public var recurringTemplates: [BackupRecurringTemplate]
+    public var recurringInstances: [BackupRecurringInstance]
+    public var importJobs: [BackupImportJob]
+}
+
+public struct CashRunwayBackupMetadata: Codable, Hashable, Sendable {
+    public var format: String
+    public var version: Int
+    public var createdAt: Date
+    public var appVersion: String
+    public var currency: String
+}
+
+public struct BackupWallet: Identifiable, Codable, Hashable, Sendable {
+    public var id: UUID
+    public var name: String
+    public var kind: WalletKind
+    public var colorHex: String?
+    public var iconName: String?
+    public var startingBalanceMinor: Int64
+    public var currentBalanceMinor: Int64
+    public var isArchived: Bool
+    public var sortOrder: Int
+    public var createdAt: Date
+    public var updatedAt: Date
+}
+
+public struct BackupCategory: Identifiable, Codable, Hashable, Sendable {
+    public var id: UUID
+    public var name: String
+    public var kind: CategoryKind
+    public var iconName: String?
+    public var colorHex: String?
+    public var parentID: UUID?
+    public var isSystem: Bool
+    public var isArchived: Bool
+    public var sortOrder: Int
+    public var createdAt: Date
+    public var updatedAt: Date
+}
+
+public struct BackupLabel: Identifiable, Codable, Hashable, Sendable {
+    public var id: UUID
+    public var name: String
+    public var colorHex: String?
+    public var createdAt: Date
+    public var updatedAt: Date
+}
+
+public struct BackupTransaction: Identifiable, Codable, Hashable, Sendable {
+    public var id: UUID
+    public var walletID: UUID
+    public var type: TransactionKind
+    public var linkedTransferID: UUID?
+    public var amountMinor: Int64
+    public var occurredAt: Date
+    public var localDayKey: Int
+    public var localMonthKey: Int
+    public var categoryID: UUID?
+    public var merchant: String?
+    public var note: String?
+    public var isDeleted: Bool
+    public var source: TransactionSource
+    public var recurringTemplateID: UUID?
+    public var recurringInstanceID: UUID?
+    public var importJobID: UUID?
+    public var importFingerprint: String?
+    public var createdAt: Date
+    public var updatedAt: Date
+}
+
+public struct BackupTransactionLabel: Codable, Hashable, Sendable {
+    public var transactionID: UUID
+    public var labelID: UUID
+}
+
+public struct BackupBudget: Identifiable, Codable, Hashable, Sendable {
+    public var id: UUID
+    public var categoryID: UUID
+    public var monthKey: Int
+    public var limitMinor: Int64
+    public var isArchived: Bool
+    public var createdAt: Date
+    public var updatedAt: Date
+}
+
+public struct BackupRecurringTemplate: Identifiable, Codable, Hashable, Sendable {
+    public var id: UUID
+    public var kind: RecurringTemplateKind
+    public var walletID: UUID
+    public var counterpartyWalletID: UUID?
+    public var amountMinor: Int64
+    public var categoryID: UUID?
+    public var merchant: String?
+    public var note: String?
+    public var ruleType: RecurrenceRuleType
+    public var ruleInterval: Int
+    public var dayOfMonth: Int?
+    public var weekday: Int?
+    public var startDate: Date
+    public var endDate: Date?
+    public var isActive: Bool
+    public var createdAt: Date
+    public var updatedAt: Date
+}
+
+public struct BackupRecurringInstance: Identifiable, Codable, Hashable, Sendable {
+    public var id: UUID
+    public var templateID: UUID
+    public var dueDate: Date
+    public var dayKey: Int
+    public var status: RecurringInstanceStatus
+    public var linkedTransactionID: UUID?
+    public var overrideAmountMinor: Int64?
+    public var overrideCategoryID: UUID?
+    public var overrideNote: String?
+    public var overrideMerchant: String?
+    public var createdAt: Date
+    public var updatedAt: Date
+}
+
+public struct BackupImportJob: Identifiable, Codable, Hashable, Sendable {
+    public var id: UUID
+    public var sourceName: String
+    public var fileName: String
+    public var status: ImportJobStatus
+    public var totalRows: Int
+    public var validRows: Int
+    public var invalidRows: Int
+    public var startedAt: Date
+    public var finishedAt: Date?
+    public var errorSummary: String?
+}
+
+public struct BackupValidationSummary: Hashable, Sendable {
+    public var createdAt: Date
+    public var walletCount: Int
+    public var categoryCount: Int
+    public var labelCount: Int
+    public var transactionCount: Int
+    public var recurringTemplateCount: Int
+
+    public init(createdAt: Date, walletCount: Int, categoryCount: Int, labelCount: Int, transactionCount: Int, recurringTemplateCount: Int) {
+        self.createdAt = createdAt
+        self.walletCount = walletCount
+        self.categoryCount = categoryCount
+        self.labelCount = labelCount
+        self.transactionCount = transactionCount
+        self.recurringTemplateCount = recurringTemplateCount
+    }
+}
+
+public struct BackupRestoreResult: Sendable {
+    public var summary: BackupValidationSummary
+    public var safetyBackupURL: URL?
+
+    public init(summary: BackupValidationSummary, safetyBackupURL: URL? = nil) {
+        self.summary = summary
+        self.safetyBackupURL = safetyBackupURL
+    }
+}
+
+public enum BackupError: LocalizedError, Equatable {
+    case unsupportedFormat
+    case unsupportedVersion(Int)
+    case duplicateID(String)
+    case duplicateRelationship(String)
+    case brokenReference(String)
+    case invalidTransferPair(String)
+    case duplicateImportFingerprint(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .unsupportedFormat:
+            "This is not a Cash Runway backup file."
+        case let .unsupportedVersion(version):
+            "Backup version \(version) is not supported."
+        case let .duplicateID(entity):
+            "Backup contains duplicate \(entity) IDs."
+        case let .duplicateRelationship(entity):
+            "Backup contains duplicate \(entity) relationships."
+        case let .brokenReference(message):
+            "Backup contains broken references: \(message)"
+        case let .invalidTransferPair(message):
+            "Backup contains invalid transfer pairs: \(message)"
+        case let .duplicateImportFingerprint(fingerprint):
+            "Backup contains duplicate import fingerprint: \(fingerprint)"
+        }
+    }
+}
+
+public final class BackupService: @unchecked Sendable {
+    private let repository: CashRunwayRepository
+
+    public init(repository: CashRunwayRepository) {
+        self.repository = repository
+    }
+
+    public func exportFullBackup() throws -> CashRunwayBackup {
+        try repository.exportFullBackup()
+    }
+
+    public func encode(_ backup: CashRunwayBackup) throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return try encoder.encode(backup)
+    }
+
+    public func decode(data: Data) throws -> CashRunwayBackup {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .custom(Self.decodeISO8601Date)
+        return try decoder.decode(CashRunwayBackup.self, from: data)
+    }
+
+    public func validate(_ backup: CashRunwayBackup) throws -> BackupValidationSummary {
+        try BackupValidator.validate(backup)
+    }
+
+    public func restore(_ backup: CashRunwayBackup) throws -> BackupRestoreResult {
+        _ = try validate(backup)
+        let safetyBackupURL = try writeSafetyBackup()
+        let result = try repository.restoreFullBackup(backup)
+        return BackupRestoreResult(summary: result.summary, safetyBackupURL: safetyBackupURL)
+    }
+
+    private func writeSafetyBackup() throws -> URL {
+        let currentBackup = try exportFullBackup()
+        let data = try encode(currentBackup)
+        let directoryURL = FileManager.default.temporaryDirectory.appendingPathComponent("CashRunwayBackups", isDirectory: true)
+        try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        let url = directoryURL.appendingPathComponent("pre-restore-cash-runway-backup-\(Self.fileTimestamp()).json")
+        try data.write(to: url, options: .atomic)
+        return url
+    }
+
+    private static func fileTimestamp() -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd-HHmmss"
+        return formatter.string(from: Date())
+    }
+
+    private static func decodeISO8601Date(_ decoder: Decoder) throws -> Date {
+        let container = try decoder.singleValueContainer()
+        let value = try container.decode(String.self)
+
+        let fractionalFormatter = ISO8601DateFormatter()
+        fractionalFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = fractionalFormatter.date(from: value) {
+            return date
+        }
+
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        if let date = formatter.date(from: value) {
+            return date
+        }
+
+        throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid ISO-8601 date: \(value)")
+    }
+}
+
+enum BackupValidator {
+    static func validate(_ backup: CashRunwayBackup) throws -> BackupValidationSummary {
+        guard backup.metadata.format == "cash-runway-backup" else {
+            throw BackupError.unsupportedFormat
+        }
+        guard backup.metadata.version == 1 else {
+            throw BackupError.unsupportedVersion(backup.metadata.version)
+        }
+
+        let walletIDs = try uniqueIDs(backup.wallets.map(\.id), entity: "wallet")
+        let categoryIDs = try uniqueIDs(backup.categories.map(\.id), entity: "category")
+        let labelIDs = try uniqueIDs(backup.labels.map(\.id), entity: "label")
+        let transactionIDs = try uniqueIDs(backup.transactions.map(\.id), entity: "transaction")
+        let budgetIDs = try uniqueIDs(backup.budgets.map(\.id), entity: "budget")
+        let recurringTemplateIDs = try uniqueIDs(backup.recurringTemplates.map(\.id), entity: "recurring template")
+        let recurringInstanceIDs = try uniqueIDs(backup.recurringInstances.map(\.id), entity: "recurring instance")
+        _ = try uniqueIDs(backup.importJobs.map(\.id), entity: "import job")
+
+        try validateCategoryParents(backup.categories, categoryIDs: categoryIDs)
+        try validateBudgets(backup.budgets, budgetIDs: budgetIDs, categoryIDs: categoryIDs)
+        try validateRecurringTemplates(backup.recurringTemplates, walletIDs: walletIDs, categoryIDs: categoryIDs)
+        try validateRecurringInstances(backup.recurringInstances, templateIDs: recurringTemplateIDs, transactionIDs: transactionIDs, categoryIDs: categoryIDs)
+        try validateTransactions(backup.transactions, transactionIDs: transactionIDs, walletIDs: walletIDs, categoryIDs: categoryIDs, recurringTemplateIDs: recurringTemplateIDs, recurringInstanceIDs: recurringInstanceIDs)
+        try validateTransactionLabels(backup.transactionLabels, transactionIDs: transactionIDs, labelIDs: labelIDs)
+        try validateImportFingerprints(backup.transactions)
+        try validateTransferPairs(backup.transactions)
+
+        return BackupValidationSummary(
+            createdAt: backup.metadata.createdAt,
+            walletCount: backup.wallets.count,
+            categoryCount: backup.categories.count,
+            labelCount: backup.labels.count,
+            transactionCount: backup.transactions.count,
+            recurringTemplateCount: backup.recurringTemplates.count
+        )
+    }
+
+    private static func uniqueIDs(_ ids: [UUID], entity: String) throws -> Set<UUID> {
+        let set = Set(ids)
+        if set.count != ids.count {
+            throw BackupError.duplicateID(entity)
+        }
+        return set
+    }
+
+    private static func validateCategoryParents(_ categories: [BackupCategory], categoryIDs: Set<UUID>) throws {
+        for category in categories {
+            if let parentID = category.parentID, !categoryIDs.contains(parentID) {
+                throw BackupError.brokenReference("category \(category.id) parent \(parentID)")
+            }
+        }
+    }
+
+    private static func validateBudgets(_ budgets: [BackupBudget], budgetIDs: Set<UUID>, categoryIDs: Set<UUID>) throws {
+        for budget in budgets {
+            if !categoryIDs.contains(budget.categoryID) {
+                throw BackupError.brokenReference("budget \(budget.id) category \(budget.categoryID)")
+            }
+        }
+    }
+
+    private static func validateRecurringTemplates(_ templates: [BackupRecurringTemplate], walletIDs: Set<UUID>, categoryIDs: Set<UUID>) throws {
+        for template in templates {
+            if !walletIDs.contains(template.walletID) {
+                throw BackupError.brokenReference("recurring template \(template.id) wallet \(template.walletID)")
+            }
+            if let counterpartyWalletID = template.counterpartyWalletID, !walletIDs.contains(counterpartyWalletID) {
+                throw BackupError.brokenReference("recurring template \(template.id) counterparty wallet \(counterpartyWalletID)")
+            }
+            if let categoryID = template.categoryID, !categoryIDs.contains(categoryID) {
+                throw BackupError.brokenReference("recurring template \(template.id) category \(categoryID)")
+            }
+        }
+    }
+
+    private static func validateRecurringInstances(_ instances: [BackupRecurringInstance], templateIDs: Set<UUID>, transactionIDs: Set<UUID>, categoryIDs: Set<UUID>) throws {
+        for instance in instances {
+            if !templateIDs.contains(instance.templateID) {
+                throw BackupError.brokenReference("recurring instance \(instance.id) template \(instance.templateID)")
+            }
+            if let linkedTransactionID = instance.linkedTransactionID, !transactionIDs.contains(linkedTransactionID) {
+                throw BackupError.brokenReference("recurring instance \(instance.id) transaction \(linkedTransactionID)")
+            }
+            if let categoryID = instance.overrideCategoryID, !categoryIDs.contains(categoryID) {
+                throw BackupError.brokenReference("recurring instance \(instance.id) override category \(categoryID)")
+            }
+        }
+    }
+
+    private static func validateTransactions(_ transactions: [BackupTransaction], transactionIDs: Set<UUID>, walletIDs: Set<UUID>, categoryIDs: Set<UUID>, recurringTemplateIDs: Set<UUID>, recurringInstanceIDs: Set<UUID>) throws {
+        for transaction in transactions {
+            if !walletIDs.contains(transaction.walletID) {
+                throw BackupError.brokenReference("transaction \(transaction.id) wallet \(transaction.walletID)")
+            }
+            if let categoryID = transaction.categoryID, !categoryIDs.contains(categoryID) {
+                throw BackupError.brokenReference("transaction \(transaction.id) category \(categoryID)")
+            }
+            if let linkedTransferID = transaction.linkedTransferID, !transactionIDs.contains(linkedTransferID) {
+                throw BackupError.brokenReference("transaction \(transaction.id) linked transfer \(linkedTransferID)")
+            }
+            if let recurringTemplateID = transaction.recurringTemplateID, !recurringTemplateIDs.contains(recurringTemplateID) {
+                throw BackupError.brokenReference("transaction \(transaction.id) recurring template \(recurringTemplateID)")
+            }
+            if let recurringInstanceID = transaction.recurringInstanceID, !recurringInstanceIDs.contains(recurringInstanceID) {
+                throw BackupError.brokenReference("transaction \(transaction.id) recurring instance \(recurringInstanceID)")
+            }
+        }
+    }
+
+    private static func validateTransactionLabels(_ rows: [BackupTransactionLabel], transactionIDs: Set<UUID>, labelIDs: Set<UUID>) throws {
+        var pairs = Set<BackupTransactionLabel>()
+        for row in rows {
+            if !transactionIDs.contains(row.transactionID) {
+                throw BackupError.brokenReference("transaction label transaction \(row.transactionID)")
+            }
+            if !labelIDs.contains(row.labelID) {
+                throw BackupError.brokenReference("transaction label label \(row.labelID)")
+            }
+            if !pairs.insert(row).inserted {
+                throw BackupError.duplicateRelationship("transaction label")
+            }
+        }
+    }
+
+    private static func validateImportFingerprints(_ transactions: [BackupTransaction]) throws {
+        var fingerprints = Set<String>()
+        for transaction in transactions {
+            guard let fingerprint = transaction.importFingerprint, !fingerprint.isEmpty else { continue }
+            if !fingerprints.insert(fingerprint).inserted {
+                throw BackupError.duplicateImportFingerprint(fingerprint)
+            }
+        }
+    }
+
+    private static func validateTransferPairs(_ transactions: [BackupTransaction]) throws {
+        let byID = Dictionary(uniqueKeysWithValues: transactions.map { ($0.id, $0) })
+        for transaction in transactions where transaction.type == .transferOut || transaction.type == .transferIn {
+            guard let linkedTransferID = transaction.linkedTransferID, let linked = byID[linkedTransferID] else {
+                throw BackupError.invalidTransferPair("transaction \(transaction.id) is missing its linked transfer")
+            }
+            guard linked.linkedTransferID == transaction.id else {
+                throw BackupError.invalidTransferPair("transaction \(transaction.id) is not linked back")
+            }
+            guard transaction.amountMinor == linked.amountMinor else {
+                throw BackupError.invalidTransferPair("transaction \(transaction.id) amount does not match")
+            }
+            guard transaction.walletID != linked.walletID else {
+                throw BackupError.invalidTransferPair("transaction \(transaction.id) uses the same wallet on both sides")
+            }
+            switch (transaction.type, linked.type) {
+            case (.transferOut, .transferIn), (.transferIn, .transferOut):
+                break
+            default:
+                throw BackupError.invalidTransferPair("transaction \(transaction.id) is not paired with the opposite transfer type")
+            }
+        }
+    }
+}
+
 public struct TransactionDraft: Identifiable, Codable, Hashable, Sendable {
     public enum Kind: String, CaseIterable, Codable, Sendable {
         case expense
