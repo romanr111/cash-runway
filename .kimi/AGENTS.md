@@ -80,6 +80,7 @@ For product/MVP/app/completion of PLAN.md tasks:
 - If the repo has an existing container workflow (Dockerfile/compose/Makefile targets), follow it.
 - If the repo has no container workflow, create a minimal one.
 - Keep repo-specific container details in the repo’s `AGENTS.md`.
+- Cash Runway exception: native iOS tooling is the default here. Use host Swift/Xcode/iOS Simulator workflows; do not create Docker/container workflows for normal Cash Runway work unless explicitly asked.
 
 ### Secrets and sensitive data
 - Never print secrets (tokens, private keys, credentials) to terminal output.
@@ -118,7 +119,7 @@ Before editing files, reporting repo status, removing worktrees, pulling, pushin
 
 ---
 
-## Token-efficiency rules (Cash Runway)
+## Cash Runway speed rules
 
 ### Self-review proportionality
 Full self-code-review (re-read every changed file, grep for orphans, verify logic) is required for:
@@ -132,24 +133,11 @@ Full self-code-review (re-read every changed file, grep for orphans, verify logi
 - Adding deprecation comments with no logic changes
 For these, a quick `git diff --stat` + `grep` for typos is sufficient.
 
-### Verification shortcuts
-Repetitive full validation burns tokens. Use targeted checks:
-
-**After core-only changes (no UI touched):**
-```bash
-swift test 2>&1 | tail -10
-```
-Skip the simulator build if no UI files were modified.
-
-**After UI-only changes (no repository/DB logic touched):**
-```bash
-xcodebuild -scheme CashRunway -sdk iphonesimulator \
-  -destination 'platform=iOS Simulator,name=iPhone 17' \
-  clean build 2>&1 | grep -E "(warning:|error:|BUILD SUCCEEDED|BUILD FAILED)"
-```
-Skip `swift test` if no test-impacting logic changed.
-
-**After both core and UI changes:** run both gates, but filter aggressively.
+### Validation tiers
+Use targeted checks during implementation, then run the full required gates before merge/publish.
+- Core-only changes start with focused `swift test --filter ...`.
+- UI-only changes start with filtered simulator `xcodebuild`.
+- DB/keychain/persistence/security changes require focused tests, full `swift test`, simulator build, and boot/log check.
 
 ### Worktree hygiene — mandatory cleanup
 Historical pattern: worktrees and branches accumulated (`codex/xcuitest-transaction-suite`, `codex/data-loss-investigation`, `codex/keychain-startup-hardening`) and were not always pruned, leaving stale entries.
@@ -160,18 +148,13 @@ Historical pattern: worktrees and branches accumulated (`codex/xcuitest-transact
 3. `git push origin --delete <branch>` (remote) if the branch was pushed.
 4. Update `CONTINUITY.md` to reflect the cleaned state.
 
-A clean workspace has **one** worktree (the primary checkout) and **one** local branch (`main`).
+A clean workspace has **one** worktree (the primary checkout) and **one** local branch (`main`), except intentionally retained legacy branches.
 
 ### Exploration cost ceiling
-The codebase contains large files (`CashRunwayRepository.swift` ~1940 lines, `DashboardView.swift` ~1270 lines, `Editors.swift` ~1280 lines). Blind exploration is expensive.
+Before broad exploration, use the Code location quick reference in the root `AGENTS.md`. For large files, use `rg -n` plus line-window reads instead of reading whole files.
 
-**Rule:** Before launching an `explore` agent or running > 3 grep/read calls, check the **Code location quick reference** in the root `AGENTS.md`. If the target is listed there, read the known file directly with `line_offset` instead of exploring.
+### UI tests
+UI tests are opt-in and targeted. When explicitly working on them, use deterministic `CASH_RUNWAY_UI_TEST_MODE` / `UITEST-*` data and inspect the live accessibility tree or logs before changing UI code for a failing selector.
 
-### Real-device debugging — explicit approval required
-Real-device work (builds to `iphoneos`, `devicectl` launches, forensics, Recovery/ backup inspection) is **orders of magnitude slower** than simulator work due to:
-- Xcode symbol cache regeneration
-- Developer-profile trust steps
-- Full `xcodebuild` archive/install cycles
-- Manual device interaction
-
-**Rule:** Simulator is the default validation target. Real-device work requires explicit user approval or a confirmed device-specific bug.
+### Real-device debugging
+Simulator is the default validation target. Real-device work requires explicit user approval or a confirmed device-specific bug. For confirmed real-device issues, preserve evidence first when data may be at risk, verify device unlock/trust, and prefer plain `devicectl` launch/timing before Xcode/LLDB-heavy debugging.

@@ -108,6 +108,14 @@ Real-device builds, forensics, and `devicectl` launches are **slow and token-exp
 
 **Rule:** Do not initiate real-device debugging, data recovery, or on-device forensics unless the user explicitly requests it or the issue is confirmed device-specific. Simulator verification is the default.
 
+### Development speed rules
+- Native iOS tooling is the default for this repo. Use host Swift/Xcode/iOS Simulator workflows; do not create Docker/container workflows for normal Cash Runway work unless explicitly asked.
+- Use targeted checks during implementation, then run the full required gates before merge/publish. Core-only changes start with focused `swift test --filter ...`; UI-only changes start with filtered simulator `xcodebuild`; DB/keychain/persistence/security changes require focused tests, full `swift test`, simulator build, and boot/log check.
+- Before broad exploration, use the Code location quick reference above. For large files, use `rg -n` plus line-window reads instead of reading whole files.
+- UI tests are opt-in and targeted. When explicitly working on them, use deterministic `CASH_RUNWAY_UI_TEST_MODE` / `UITEST-*` data and inspect the live accessibility tree or logs before changing UI code for a failing selector.
+- For confirmed real-device issues, preserve evidence first when data may be at risk, verify device unlock/trust, and prefer plain `devicectl` launch/timing before Xcode/LLDB-heavy debugging.
+- After an approved merge/push, clean merged worktrees and branches, prune stale worktrees, and update `CONTINUITY.md`.
+
 ### Feature deprecation / temporary disable pattern
 When hiding a feature temporarily (as done for Budgets and App Lock):
 1. **Hide UI entry points** only (remove from `TabView`, remove settings row, skip onboarding).
