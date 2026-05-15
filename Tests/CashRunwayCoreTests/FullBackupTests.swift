@@ -237,6 +237,7 @@ struct FullBackupTests {
     private func makePopulatedRepository() throws -> (CashRunwayRepository, FixtureIDs) {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallets = try repository.wallets()
         let expenseCategory = try #require(try repository.categories(kind: .expense).first)
         let incomeCategory = try #require(try repository.categories(kind: .income).first)
