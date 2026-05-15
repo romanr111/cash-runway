@@ -21,6 +21,15 @@ struct TransactionsView: View {
                             .font(.system(size: 20, weight: .bold, design: .rounded))
                             .foregroundStyle(CashRunwayTheme.textPrimary)
 
+                        if model.wallets.isEmpty {
+                            ContentUnavailableView(
+                                "Create a wallet to start tracking transactions",
+                                systemImage: "wallet.pass.fill",
+                                description: Text("Tap Add Wallet below to get started.")
+                            )
+                            .padding(.top, 20)
+                        }
+
                         ForEach(model.wallets) { wallet in
                             Button {
                                 walletDraft = wallet

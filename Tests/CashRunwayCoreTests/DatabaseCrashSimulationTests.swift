@@ -11,6 +11,7 @@ struct DatabaseCrashSimulationTests {
         var manager: DatabaseManager? = try DatabaseManager(locationProvider: location, keychain: keychain)
         let repository = CashRunwayRepository(databaseManager: try #require(manager))
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallets = try repository.wallets()
         let category = try #require(try repository.categories(kind: .expense).first)
 
@@ -51,6 +52,7 @@ struct DatabaseCrashSimulationTests {
         var manager: DatabaseManager? = try DatabaseManager(locationProvider: location, keychain: keychain)
         let repository = CashRunwayRepository(databaseManager: try #require(manager))
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallets = try repository.wallets()
         #expect(wallets.count >= 2)
 
@@ -83,7 +85,6 @@ struct DatabaseCrashSimulationTests {
         let repository = CashRunwayRepository(databaseManager: try #require(manager))
         try repository.seedIfNeeded()
 
-        let walletsBefore = try repository.wallets().count
         let categoriesBefore = try repository.categories().count
 
         manager = nil
@@ -91,7 +92,7 @@ struct DatabaseCrashSimulationTests {
         let reopenedManager = try DatabaseManager(locationProvider: location, keychain: keychain)
         let reopenedRepo = CashRunwayRepository(databaseManager: reopenedManager)
 
-        #expect(try reopenedRepo.wallets().count == walletsBefore)
+        #expect(try reopenedRepo.wallets().count == 0)
         #expect(try reopenedRepo.categories().count == categoriesBefore)
     }
 }

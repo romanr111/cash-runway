@@ -104,6 +104,7 @@ struct RepositoryCRUDTests {
     @Test func saveRecurringTemplateUpdatesExisting() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallets = try repository.wallets()
         let wallet = try #require(wallets.first)
         let category = try #require(try repository.categories(kind: .expense).first)
@@ -147,6 +148,7 @@ struct RepositoryCRUDTests {
     @Test func saveRecurringInstanceUpdatesExisting() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallets = try repository.wallets()
         let wallet = try #require(wallets.first)
         let category = try #require(try repository.categories(kind: .expense).first)

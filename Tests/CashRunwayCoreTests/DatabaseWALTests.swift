@@ -10,6 +10,7 @@ struct DatabaseWALTests {
         let manager = try DatabaseManager(locationProvider: location, keychain: TestKeychainStore())
         let repository = CashRunwayRepository(databaseManager: manager)
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
 
         let dbURL = try location.databaseURL()
         TestSupport.assertWalFileExists(at: dbURL)
@@ -20,6 +21,7 @@ struct DatabaseWALTests {
         let manager = try DatabaseManager(locationProvider: location, keychain: TestKeychainStore())
         let repository = CashRunwayRepository(databaseManager: manager)
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
 
         let dbURL = try location.databaseURL()
         TestSupport.assertWalFileExists(at: dbURL)
@@ -34,6 +36,7 @@ struct DatabaseWALTests {
         var manager: DatabaseManager? = try DatabaseManager(locationProvider: location, keychain: keychain)
         let repository = CashRunwayRepository(databaseManager: try #require(manager))
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallets = try repository.wallets()
         let category = try #require(try repository.categories(kind: .expense).first)
 
@@ -68,6 +71,7 @@ struct DatabaseWALTests {
         var manager: DatabaseManager? = try DatabaseManager(locationProvider: location, keychain: keychain)
         let repository = CashRunwayRepository(databaseManager: try #require(manager))
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallets = try repository.wallets()
         let category = try #require(try repository.categories(kind: .expense).first)
 

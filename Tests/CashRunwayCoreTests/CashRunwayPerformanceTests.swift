@@ -70,6 +70,7 @@ struct CashRunwayPerformanceTests {
     @Test func importBatchAndAggregateRebuildTimingGate() throws {
         let repository = try makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let walletID = try #require(try repository.wallets().first?.id)
         let walletName = try #require(try repository.wallets().first?.name)
         let service = CSVService(repository: repository)

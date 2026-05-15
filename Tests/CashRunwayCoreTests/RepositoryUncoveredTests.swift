@@ -17,6 +17,7 @@ struct RepositoryUncoveredTests {
     @Test func allBarsYearlyPeriod() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallets = try repository.wallets()
         let categories = try repository.categories(kind: .expense)
         let calendar = Calendar(identifier: .gregorian)
@@ -35,6 +36,7 @@ struct RepositoryUncoveredTests {
     @Test func allBarsWithWalletFilter() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallets = try repository.wallets()
         let categories = try repository.categories(kind: .expense)
         let calendar = Calendar(identifier: .gregorian)
@@ -55,6 +57,7 @@ struct RepositoryUncoveredTests {
     @Test func transactionDraftFromTransferOutSide() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallets = try repository.wallets()
         let calendar = Calendar(identifier: .gregorian)
         let date = calendar.date(from: DateComponents(year: 2025, month: 1, day: 15))!
@@ -92,6 +95,7 @@ struct RepositoryUncoveredTests {
     @Test func deleteTransferFromEitherSideRemovesBoth() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallets = try repository.wallets()
         let calendar = Calendar(identifier: .gregorian)
         let date = calendar.date(from: DateComponents(year: 2025, month: 1, day: 15))!
@@ -143,6 +147,7 @@ struct RepositoryUncoveredTests {
     @Test func dashboardWithWalletFilter() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallets = try repository.wallets()
         let categories = try repository.categories(kind: .expense)
         let calendar = Calendar(identifier: .gregorian)
@@ -165,6 +170,7 @@ struct RepositoryUncoveredTests {
     @Test func overviewSnapshotBasic() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallets = try repository.wallets()
         let categories = try repository.categories(kind: .expense)
         let calendar = Calendar(identifier: .gregorian)
@@ -184,6 +190,7 @@ struct RepositoryUncoveredTests {
     @Test func overviewSnapshotWithWalletFilter() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallets = try repository.wallets()
         let categories = try repository.categories(kind: .expense)
         let calendar = Calendar(identifier: .gregorian)
@@ -217,6 +224,7 @@ struct RepositoryUncoveredTests {
     @Test func skipRecurringInstance() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallets = try repository.wallets()
         let template = RecurringTemplate(
             id: UUID(), kind: .expense, walletID: wallets[0].id,
@@ -243,6 +251,7 @@ struct RepositoryUncoveredTests {
     @Test func postRecurringInstance() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallets = try repository.wallets()
         let template = RecurringTemplate(
             id: UUID(), kind: .expense, walletID: wallets[0].id,
@@ -269,6 +278,7 @@ struct RepositoryUncoveredTests {
     @Test func postRecurringTransferInstance() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallets = try repository.wallets()
         let template = RecurringTemplate(
             id: UUID(), kind: .transfer, walletID: wallets[0].id,
@@ -297,6 +307,7 @@ struct RepositoryUncoveredTests {
     @Test func categoryManagementItemsAndReorder() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let expenseCategories = try repository.categories(kind: .expense)
         #expect(expenseCategories.count >= 2)
 
@@ -314,6 +325,7 @@ struct RepositoryUncoveredTests {
     @Test func failImportUpdatesStatus() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let jobID = UUID()
         try repository.failImport(jobID: jobID, errorSummary: "Network error")
         // No assertion possible without read API; test exercises the code path.
@@ -324,6 +336,7 @@ struct RepositoryUncoveredTests {
     @Test func transactionsQueryWithFilters() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallets = try repository.wallets()
         let categories = try repository.categories(kind: .expense)
         let calendar = Calendar(identifier: .gregorian)
@@ -353,6 +366,7 @@ struct RepositoryUncoveredTests {
     @Test func transactionsQueryWithDateRange() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallets = try repository.wallets()
         let categories = try repository.categories(kind: .expense)
         let calendar = Calendar(identifier: .gregorian)

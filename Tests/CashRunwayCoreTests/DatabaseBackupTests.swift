@@ -7,6 +7,7 @@ struct DatabaseBackupTests {
     @Test func csvExportContainsEveryNonDeletedTransaction() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallets = try repository.wallets()
         let expenseCategory = try #require(try repository.categories(kind: .expense).first)
         let incomeCategory = try #require(try repository.categories(kind: .income).first)
@@ -36,6 +37,7 @@ struct DatabaseBackupTests {
     @Test func csvExportContainsAllLabelsAndCategories() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let walletID = try #require(try repository.wallets().first?.id)
         let category = try #require(try repository.categories(kind: .expense).first)
         let label = Label(id: UUID(), name: "Trip", colorHex: "#1CC389", createdAt: .now, updatedAt: .now)
@@ -64,6 +66,7 @@ struct DatabaseBackupTests {
     @Test func csvRoundTripRestoresAllWalletsAndBalances() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallet = try #require(try repository.wallets().first)
         let category = try #require(try repository.categories(kind: .expense).first)
         let service = CSVService(repository: repository)
@@ -81,6 +84,7 @@ struct DatabaseBackupTests {
 
         let roundTripRepo = try TestSupport.makeRepository()
         try roundTripRepo.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: roundTripRepo)
         let roundTripWalletID = try #require(try roundTripRepo.wallets().first?.id)
         let roundTripService = CSVService(repository: roundTripRepo)
         let result = try roundTripService.importCSV(

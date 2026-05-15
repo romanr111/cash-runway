@@ -7,6 +7,7 @@ struct DatabaseConcurrencyTests {
     @Test func simultaneousWritesDoNotCorruptAggregates() async throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallets = try repository.wallets()
         let expenseCategory = try #require(try repository.categories(kind: .expense).first)
         let incomeCategory = try #require(try repository.categories(kind: .income).first)
@@ -39,6 +40,7 @@ struct DatabaseConcurrencyTests {
     @Test func readDuringWriteDoesNotSeePartialState() async throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallets = try repository.wallets()
         let category = try #require(try repository.categories(kind: .expense).first)
 
@@ -75,6 +77,7 @@ struct DatabaseConcurrencyTests {
     @Test func concurrentCSVImportsDoNotDeadlock() async throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallet = try #require(try repository.wallets().first)
         let service = CSVService(repository: repository)
 

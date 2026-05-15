@@ -10,6 +10,7 @@ struct DatabaseTransactionSafetyTests {
         let manager = try DatabaseManager(locationProvider: location, keychain: TestKeychainStore())
         let repository = CashRunwayRepository(databaseManager: manager)
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallets = try repository.wallets()
 
         let countBefore = try repository.transactions().count
@@ -42,6 +43,7 @@ struct DatabaseTransactionSafetyTests {
     @Test func transferCreationMaintainsPairInvariants() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallets = try repository.wallets()
         #expect(wallets.count >= 2)
 
@@ -65,6 +67,7 @@ struct DatabaseTransactionSafetyTests {
     @Test func transferEditMaintainsPairInvariants() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallets = try repository.wallets()
         #expect(wallets.count >= 2)
 
@@ -101,6 +104,7 @@ struct DatabaseTransactionSafetyTests {
     @Test func deleteTransactionMaintainsPairInvariants() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallets = try repository.wallets()
         #expect(wallets.count >= 2)
 
@@ -125,6 +129,7 @@ struct DatabaseTransactionSafetyTests {
     @Test func categoryMergeMaintainsTransactionConsistency() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let walletID = try #require(try repository.wallets().first?.id)
         let expenseCategories = try repository.categories(kind: .expense)
         let oldCategory = try #require(expenseCategories.first)
@@ -154,6 +159,7 @@ struct DatabaseTransactionSafetyTests {
     @Test func walletDeletionRemovesAllLinkedData() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let wallets = try repository.wallets()
         #expect(wallets.count >= 2)
         let targetWallet = wallets[0]
