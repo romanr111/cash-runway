@@ -170,6 +170,46 @@ public final class CashRunwayRepository: @unchecked Sendable {
         }
     }
 
+    public func exportFullBackup() throws -> CashRunwayBackup {
+        try databaseManager.dbQueue.read { db in
+            let metadata = CashRunwayBackupMetadata(
+                format: "cash-runway-backup",
+                version: 1,
+                createdAt: Date(),
+                appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0",
+                currency: "UAH"
+            )
+
+            return CashRunwayBackup(
+                metadata: metadata,
+                wallets: try Row.fetchAll(db, sql: "SELECT * FROM wallets ORDER BY sort_order, name").map(Self.backupWallet),
+                categories: try Row.fetchAll(db, sql: "SELECT * FROM categories ORDER BY kind, sort_order, name").map(Self.backupCategory),
+                labels: try Row.fetchAll(db, sql: "SELECT * FROM labels ORDER BY name").map(Self.backupLabel),
+                transactions: try Row.fetchAll(db, sql: "SELECT * FROM transactions ORDER BY occurred_at, created_at, id").map(Self.backupTransaction),
+                transactionLabels: try Row.fetchAll(db, sql: "SELECT * FROM transaction_labels ORDER BY transaction_id, label_id").map(Self.backupTransactionLabel),
+                budgets: try Row.fetchAll(db, sql: "SELECT * FROM budgets ORDER BY month_key, category_id").map(Self.backupBudget),
+                recurringTemplates: try Row.fetchAll(db, sql: "SELECT * FROM recurring_templates ORDER BY created_at, id").map(Self.backupRecurringTemplate),
+                recurringInstances: try Row.fetchAll(db, sql: "SELECT * FROM recurring_instances ORDER BY due_date, id").map(Self.backupRecurringInstance),
+                importJobs: try Row.fetchAll(db, sql: "SELECT * FROM import_jobs ORDER BY started_at, id").map(Self.backupImportJob)
+            )
+        }
+    }
+
+    @discardableResult
+    public func restoreFullBackup(_ backup: CashRunwayBackup) throws -> BackupRestoreResult {
+        let summary = try BackupValidator.validate(backup)
+        try databaseManager.dbQueue.write { db in
+            try clearDerivedTables(db)
+            try clearSourceTables(db)
+            try insertBackupSourceData(backup, into: db)
+            try db.execute(sql: "UPDATE wallets SET current_balance_minor = starting_balance_minor")
+            let monthKeys = Set(backup.transactions.map(\.localMonthKey)).union(backup.budgets.map(\.monthKey))
+            try rebuildMonths(db, monthKeys: monthKeys)
+            try rebuildFTS(db)
+        }
+        return BackupRestoreResult(summary: summary)
+    }
+
     public func latestTransactionMonthKey() throws -> Int? {
         try databaseManager.dbQueue.read { db in
             try Int.fetchOne(db, sql: "SELECT MAX(local_month_key) FROM transactions WHERE is_deleted = 0")
@@ -1797,8 +1837,161 @@ public final class CashRunwayRepository: @unchecked Sendable {
         }
     }
 
+    private func clearDerivedTables(_ db: Database) throws {
+        try db.execute(sql: "DELETE FROM transaction_search")
+        try db.execute(sql: "DELETE FROM aggregate_dirty_ranges")
+        try db.execute(sql: "DELETE FROM budget_progress_snapshot")
+        try db.execute(sql: "DELETE FROM daily_wallet_balance_delta")
+        try db.execute(sql: "DELETE FROM monthly_category_spend")
+        try db.execute(sql: "DELETE FROM monthly_wallet_cashflow")
+    }
+
+    private func clearSourceTables(_ db: Database) throws {
+        try db.execute(sql: "DELETE FROM transaction_labels")
+        try db.execute(sql: "DELETE FROM transactions")
+        try db.execute(sql: "DELETE FROM recurring_instances")
+        try db.execute(sql: "DELETE FROM recurring_templates")
+        try db.execute(sql: "DELETE FROM import_jobs")
+        try db.execute(sql: "DELETE FROM budgets")
+        try db.execute(sql: "DELETE FROM labels")
+        try db.execute(sql: "DELETE FROM categories")
+        try db.execute(sql: "DELETE FROM wallets")
+    }
+
+    private func insertBackupSourceData(_ backup: CashRunwayBackup, into db: Database) throws {
+        for wallet in backup.wallets {
+            try db.execute(
+                sql: """
+                INSERT INTO wallets (id, name, kind, color_hex, icon_name, starting_balance_minor, current_balance_minor, is_archived, sort_order, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                arguments: [
+                    wallet.id.uuidString, wallet.name, wallet.kind.rawValue, wallet.colorHex, wallet.iconName,
+                    wallet.startingBalanceMinor, wallet.startingBalanceMinor, wallet.isArchived, wallet.sortOrder,
+                    wallet.createdAt, wallet.updatedAt,
+                ]
+            )
+        }
+
+        for category in backup.categories {
+            try db.execute(
+                sql: """
+                INSERT INTO categories (id, name, kind, icon_name, color_hex, parent_id, is_system, is_archived, sort_order, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                arguments: [
+                    category.id.uuidString, category.name, category.kind.rawValue, category.iconName, category.colorHex,
+                    category.parentID?.uuidString, category.isSystem, category.isArchived, category.sortOrder,
+                    category.createdAt, category.updatedAt,
+                ]
+            )
+        }
+
+        for label in backup.labels {
+            try db.execute(
+                sql: "INSERT INTO labels (id, name, color_hex, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+                arguments: [label.id.uuidString, label.name, label.colorHex, label.createdAt, label.updatedAt]
+            )
+        }
+
+        for importJob in backup.importJobs {
+            try db.execute(
+                sql: """
+                INSERT INTO import_jobs (id, source_name, file_name, status, total_rows, valid_rows, invalid_rows, started_at, finished_at, error_summary)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                arguments: [
+                    importJob.id.uuidString, importJob.sourceName, importJob.fileName, importJob.status.rawValue,
+                    importJob.totalRows, importJob.validRows, importJob.invalidRows, importJob.startedAt,
+                    importJob.finishedAt, importJob.errorSummary,
+                ]
+            )
+        }
+
+        for budget in backup.budgets {
+            try db.execute(
+                sql: "INSERT INTO budgets (id, category_id, month_key, limit_minor, is_archived, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                arguments: [
+                    budget.id.uuidString, budget.categoryID.uuidString, budget.monthKey, budget.limitMinor,
+                    budget.isArchived, budget.createdAt, budget.updatedAt,
+                ]
+            )
+        }
+
+        for template in backup.recurringTemplates {
+            try db.execute(
+                sql: """
+                INSERT INTO recurring_templates (id, kind, wallet_id, counterparty_wallet_id, amount_minor, category_id, merchant, note, rule_type, rule_interval, day_of_month, weekday, start_date, end_date, is_active, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                arguments: [
+                    template.id.uuidString, template.kind.rawValue, template.walletID.uuidString,
+                    template.counterpartyWalletID?.uuidString, template.amountMinor, template.categoryID?.uuidString,
+                    template.merchant, template.note, template.ruleType.rawValue, template.ruleInterval,
+                    template.dayOfMonth, template.weekday, template.startDate, template.endDate, template.isActive,
+                    template.createdAt, template.updatedAt,
+                ]
+            )
+        }
+
+        for instance in backup.recurringInstances {
+            try db.execute(
+                sql: """
+                INSERT INTO recurring_instances (id, template_id, due_date, day_key, status, linked_transaction_id, override_amount_minor, override_category_id, override_note, override_merchant, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                arguments: [
+                    instance.id.uuidString, instance.templateID.uuidString, instance.dueDate, instance.dayKey,
+                    instance.status.rawValue, instance.linkedTransactionID?.uuidString, instance.overrideAmountMinor,
+                    instance.overrideCategoryID?.uuidString, instance.overrideNote, instance.overrideMerchant,
+                    instance.createdAt, instance.updatedAt,
+                ]
+            )
+        }
+
+        for transaction in backup.transactions {
+            try db.execute(
+                sql: """
+                INSERT INTO transactions (id, wallet_id, type, linked_transfer_id, amount_minor, occurred_at, local_day_key, local_month_key, category_id, merchant, note, is_deleted, source, recurring_template_id, recurring_instance_id, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                arguments: [
+                    transaction.id.uuidString, transaction.walletID.uuidString, transaction.type.rawValue,
+                    transaction.linkedTransferID?.uuidString, transaction.amountMinor, transaction.occurredAt,
+                    transaction.localDayKey, transaction.localMonthKey, transaction.categoryID?.uuidString,
+                    transaction.merchant, transaction.note, transaction.isDeleted, transaction.source.rawValue,
+                    transaction.recurringTemplateID?.uuidString, transaction.recurringInstanceID?.uuidString,
+                    transaction.createdAt, transaction.updatedAt,
+                ]
+            )
+        }
+
+        for row in backup.transactionLabels {
+            try db.execute(
+                sql: "INSERT INTO transaction_labels (transaction_id, label_id) VALUES (?, ?)",
+                arguments: [row.transactionID.uuidString, row.labelID.uuidString]
+            )
+        }
+    }
+
     private static func wallet(_ row: Row) throws -> Wallet {
         Wallet(
+            id: UUID(uuidString: row["id"])!,
+            name: row["name"],
+            kind: WalletKind(rawValue: row["kind"]) ?? .other,
+            colorHex: row["color_hex"],
+            iconName: row["icon_name"],
+            startingBalanceMinor: row["starting_balance_minor"],
+            currentBalanceMinor: row["current_balance_minor"],
+            isArchived: row["is_archived"],
+            sortOrder: row["sort_order"],
+            createdAt: row["created_at"],
+            updatedAt: row["updated_at"]
+        )
+    }
+
+    private static func backupWallet(_ row: Row) throws -> BackupWallet {
+        BackupWallet(
             id: UUID(uuidString: row["id"])!,
             name: row["name"],
             kind: WalletKind(rawValue: row["kind"]) ?? .other,
@@ -1850,8 +2043,34 @@ public final class CashRunwayRepository: @unchecked Sendable {
         )
     }
 
+    private static func backupCategory(_ row: Row) throws -> BackupCategory {
+        BackupCategory(
+            id: UUID(uuidString: row["id"])!,
+            name: row["name"],
+            kind: CategoryKind(rawValue: row["kind"]) ?? .expense,
+            iconName: row["icon_name"],
+            colorHex: row["color_hex"],
+            parentID: (row["parent_id"] as String?).flatMap(UUID.init(uuidString:)),
+            isSystem: row["is_system"],
+            isArchived: row["is_archived"],
+            sortOrder: row["sort_order"],
+            createdAt: row["created_at"],
+            updatedAt: row["updated_at"]
+        )
+    }
+
     private static func label(_ row: Row) throws -> Label {
         Label(
+            id: UUID(uuidString: row["id"])!,
+            name: row["name"],
+            colorHex: row["color_hex"],
+            createdAt: row["created_at"],
+            updatedAt: row["updated_at"]
+        )
+    }
+
+    private static func backupLabel(_ row: Row) throws -> BackupLabel {
+        BackupLabel(
             id: UUID(uuidString: row["id"])!,
             name: row["name"],
             colorHex: row["color_hex"],
@@ -1882,6 +2101,37 @@ public final class CashRunwayRepository: @unchecked Sendable {
         )
     }
 
+    private static func backupTransaction(_ row: Row) throws -> BackupTransaction {
+        BackupTransaction(
+            id: UUID(uuidString: row["id"])!,
+            walletID: UUID(uuidString: row["wallet_id"])!,
+            type: TransactionKind(rawValue: row["type"]) ?? .expense,
+            linkedTransferID: (row["linked_transfer_id"] as String?).flatMap(UUID.init(uuidString:)),
+            amountMinor: row["amount_minor"],
+            occurredAt: row["occurred_at"],
+            localDayKey: row["local_day_key"],
+            localMonthKey: row["local_month_key"],
+            categoryID: (row["category_id"] as String?).flatMap(UUID.init(uuidString:)),
+            merchant: row["merchant"],
+            note: row["note"],
+            isDeleted: row["is_deleted"],
+            source: TransactionSource(rawValue: row["source"]) ?? .manual,
+            recurringTemplateID: (row["recurring_template_id"] as String?).flatMap(UUID.init(uuidString:)),
+            recurringInstanceID: (row["recurring_instance_id"] as String?).flatMap(UUID.init(uuidString:)),
+            importJobID: nil,
+            importFingerprint: nil,
+            createdAt: row["created_at"],
+            updatedAt: row["updated_at"]
+        )
+    }
+
+    private static func backupTransactionLabel(_ row: Row) throws -> BackupTransactionLabel {
+        BackupTransactionLabel(
+            transactionID: UUID(uuidString: row["transaction_id"])!,
+            labelID: UUID(uuidString: row["label_id"])!
+        )
+    }
+
     private static func budget(_ row: Row) throws -> Budget {
         Budget(
             id: UUID(uuidString: row["id"])!,
@@ -1894,8 +2144,42 @@ public final class CashRunwayRepository: @unchecked Sendable {
         )
     }
 
+    private static func backupBudget(_ row: Row) throws -> BackupBudget {
+        BackupBudget(
+            id: UUID(uuidString: row["id"])!,
+            categoryID: UUID(uuidString: row["category_id"])!,
+            monthKey: row["month_key"],
+            limitMinor: row["limit_minor"],
+            isArchived: row["is_archived"],
+            createdAt: row["created_at"],
+            updatedAt: row["updated_at"]
+        )
+    }
+
     private static func recurringTemplate(_ row: Row) throws -> RecurringTemplate {
         RecurringTemplate(
+            id: UUID(uuidString: row["id"])!,
+            kind: RecurringTemplateKind(rawValue: row["kind"]) ?? .expense,
+            walletID: UUID(uuidString: row["wallet_id"])!,
+            counterpartyWalletID: (row["counterparty_wallet_id"] as String?).flatMap(UUID.init(uuidString:)),
+            amountMinor: row["amount_minor"],
+            categoryID: (row["category_id"] as String?).flatMap(UUID.init(uuidString:)),
+            merchant: row["merchant"],
+            note: row["note"],
+            ruleType: RecurrenceRuleType(rawValue: row["rule_type"]) ?? .monthly,
+            ruleInterval: row["rule_interval"],
+            dayOfMonth: row["day_of_month"],
+            weekday: row["weekday"],
+            startDate: row["start_date"],
+            endDate: row["end_date"],
+            isActive: row["is_active"],
+            createdAt: row["created_at"],
+            updatedAt: row["updated_at"]
+        )
+    }
+
+    private static func backupRecurringTemplate(_ row: Row) throws -> BackupRecurringTemplate {
+        BackupRecurringTemplate(
             id: UUID(uuidString: row["id"])!,
             kind: RecurringTemplateKind(rawValue: row["kind"]) ?? .expense,
             walletID: UUID(uuidString: row["wallet_id"])!,
@@ -1930,6 +2214,38 @@ public final class CashRunwayRepository: @unchecked Sendable {
             overrideMerchant: row["override_merchant"],
             createdAt: row["created_at"],
             updatedAt: row["updated_at"]
+        )
+    }
+
+    private static func backupRecurringInstance(_ row: Row) throws -> BackupRecurringInstance {
+        BackupRecurringInstance(
+            id: UUID(uuidString: row["id"])!,
+            templateID: UUID(uuidString: row["template_id"])!,
+            dueDate: row["due_date"],
+            dayKey: row["day_key"],
+            status: RecurringInstanceStatus(rawValue: row["status"]) ?? .scheduled,
+            linkedTransactionID: (row["linked_transaction_id"] as String?).flatMap(UUID.init(uuidString:)),
+            overrideAmountMinor: row["override_amount_minor"],
+            overrideCategoryID: (row["override_category_id"] as String?).flatMap(UUID.init(uuidString:)),
+            overrideNote: row["override_note"],
+            overrideMerchant: row["override_merchant"],
+            createdAt: row["created_at"],
+            updatedAt: row["updated_at"]
+        )
+    }
+
+    private static func backupImportJob(_ row: Row) throws -> BackupImportJob {
+        BackupImportJob(
+            id: UUID(uuidString: row["id"])!,
+            sourceName: row["source_name"],
+            fileName: row["file_name"],
+            status: ImportJobStatus(rawValue: row["status"]) ?? .created,
+            totalRows: row["total_rows"],
+            validRows: row["valid_rows"],
+            invalidRows: row["invalid_rows"],
+            startedAt: row["started_at"],
+            finishedAt: row["finished_at"],
+            errorSummary: row["error_summary"]
         )
     }
 }
