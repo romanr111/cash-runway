@@ -1,6 +1,7 @@
 # CONTINUITY
 
 ## Snapshot
+- 2026-05-15T17:12:00+03:00 [DONE] PR 3 atomic CSV import pushed to `origin/main` as `3d19ef6`; worktree `/Users/roman/.codex/worktrees/cash-runway-csv-import-atomic-idempotent` removed; local branch `codex/csv-import-atomic-idempotent` deleted. Remaining worktrees: primary `main` and `codex/stop-fake-data`.
 - 2026-05-15T17:10:00+03:00 [CODE] Self-review fix: `commitCSVImport` now accepts explicit `invalidRows` parameter to correctly report counts when >20 rows fail validation (rowErrors is capped at 20). Added `csvImportReportsCorrectInvalidRowCountWhenManyRowsFail` regression test.
 - 2026-05-15T17:10:00+03:00 [VERIFY] Post-fix validation: `swift test` passed 188 tests in 16 suites after 129.209s; `xcodebuild` iPhone 17 simulator clean build ended `** BUILD SUCCEEDED **`.
 - 2026-05-15T16:52:00+03:00 [DONE] PR 3 atomic CSV import merged into primary `main` as `0f1f43e` (fast-forward from `617f509`). `swift test` passed 187 tests in 16 suites after 127.423s; `xcodebuild` iPhone 17 simulator clean build ended `** BUILD SUCCEEDED **`; simulator boot check launched `dev.roman.cashrunway: 3579` with no crash/fatal/exception/error entries. Worktree cleanup pending user approval.
