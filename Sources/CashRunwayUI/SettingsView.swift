@@ -1067,10 +1067,26 @@ private struct CSVImportReviewView: View {
 
     private func resultSection(_ result: CSVImportResult) -> some View {
         Section("Result") {
-            SwiftUI.Label("Imported \(result.insertedTransactions) transactions", systemImage: "checkmark.circle.fill")
-                .foregroundStyle(CashRunwayTheme.positive)
-            if result.job.invalidRows > 0 {
-                Text("\(result.job.invalidRows) rows skipped")
+            if result.insertedTransactions == 0, result.duplicateRows > 0 {
+                SwiftUI.Label("No new transactions. This file appears to have already been imported.", systemImage: "checkmark.circle")
+                    .foregroundStyle(CashRunwayTheme.textSecondary)
+            } else if result.insertedTransactions == 0, result.invalidRows > 0 {
+                SwiftUI.Label("No transactions were imported. Review the row errors below.", systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(CashRunwayTheme.negative)
+            } else if result.insertedTransactions > 0, result.invalidRows > 0 {
+                SwiftUI.Label("Imported valid rows. Some rows were skipped because they could not be parsed.", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(CashRunwayTheme.positive)
+            } else {
+                SwiftUI.Label("Imported \(result.insertedTransactions) transactions", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(CashRunwayTheme.positive)
+            }
+
+            if result.duplicateRows > 0 {
+                Text("Skipped duplicates: \(result.duplicateRows)")
+                    .foregroundStyle(CashRunwayTheme.textSecondary)
+            }
+            if result.invalidRows > 0 {
+                Text("Failed rows: \(result.invalidRows)")
                     .foregroundStyle(CashRunwayTheme.negative)
                 ForEach(result.rowErrors) { rowError in
                     Text("Row \(rowError.rowNumber): \(rowError.message)")

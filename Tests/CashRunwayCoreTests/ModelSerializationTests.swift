@@ -139,6 +139,7 @@ struct ModelSerializationTests {
             totalRows: 102,
             validRows: 100,
             invalidRows: 2,
+            duplicateRows: 0,
             startedAt: now,
             finishedAt: now,
             errorSummary: nil

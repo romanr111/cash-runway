@@ -78,7 +78,8 @@ struct CashRunwayPerformanceTests {
             let type = index % 10 == 0 ? "Income" : "Expense"
             let category = type == "Income" ? "Salary" : "Groceries"
             let amount = type == "Income" ? "1000.00" : "-12.34"
-            lines.append("2026-04-\(String(format: "%02d", (index % 28) + 1))T10:00:00Z,\(walletName),\(type),\(category),\(amount),UAH,,,")
+            let note = "txn-\(index)"
+            lines.append("2026-04-\(String(format: "%02d", (index % 28) + 1))T10:00:00Z,\(walletName),\(type),\(category),\(amount),UAH,\(note),,")
         }
         let data = Data(lines.joined(separator: "\n").utf8)
         let clock = ContinuousClock()

@@ -166,10 +166,12 @@ public struct CashRunwayTransaction: Identifiable, Codable, Hashable, Sendable {
     public var source: TransactionSource
     public var recurringTemplateID: UUID?
     public var recurringInstanceID: UUID?
+    public var importJobID: UUID?
+    public var importFingerprint: String?
     public var createdAt: Date
     public var updatedAt: Date
 
-    public init(id: UUID, walletID: UUID, type: TransactionKind, linkedTransferID: UUID?, amountMinor: Int64, occurredAt: Date, localDayKey: Int, localMonthKey: Int, categoryID: UUID?, merchant: String?, note: String?, isDeleted: Bool, source: TransactionSource, recurringTemplateID: UUID?, recurringInstanceID: UUID?, createdAt: Date, updatedAt: Date) {
+    public init(id: UUID, walletID: UUID, type: TransactionKind, linkedTransferID: UUID?, amountMinor: Int64, occurredAt: Date, localDayKey: Int, localMonthKey: Int, categoryID: UUID?, merchant: String?, note: String?, isDeleted: Bool, source: TransactionSource, recurringTemplateID: UUID?, recurringInstanceID: UUID?, importJobID: UUID? = nil, importFingerprint: String? = nil, createdAt: Date, updatedAt: Date) {
         self.id = id
         self.walletID = walletID
         self.type = type
@@ -185,6 +187,8 @@ public struct CashRunwayTransaction: Identifiable, Codable, Hashable, Sendable {
         self.source = source
         self.recurringTemplateID = recurringTemplateID
         self.recurringInstanceID = recurringInstanceID
+        self.importJobID = importJobID
+        self.importFingerprint = importFingerprint
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
@@ -289,6 +293,7 @@ public struct ImportJob: Identifiable, Codable, Hashable, Sendable {
     public var totalRows: Int
     public var validRows: Int
     public var invalidRows: Int
+    public var duplicateRows: Int
     public var startedAt: Date
     public var finishedAt: Date?
     public var errorSummary: String?
@@ -744,6 +749,8 @@ public struct TransactionDraft: Identifiable, Codable, Hashable, Sendable {
     public var source: TransactionSource
     public var recurringTemplateID: UUID?
     public var recurringInstanceID: UUID?
+    public var importJobID: UUID?
+    public var importFingerprint: String?
 
     public init(
         id: UUID? = nil,
@@ -758,7 +765,9 @@ public struct TransactionDraft: Identifiable, Codable, Hashable, Sendable {
         note: String = "",
         source: TransactionSource = .manual,
         recurringTemplateID: UUID? = nil,
-        recurringInstanceID: UUID? = nil
+        recurringInstanceID: UUID? = nil,
+        importJobID: UUID? = nil,
+        importFingerprint: String? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -773,6 +782,8 @@ public struct TransactionDraft: Identifiable, Codable, Hashable, Sendable {
         self.source = source
         self.recurringTemplateID = recurringTemplateID
         self.recurringInstanceID = recurringInstanceID
+        self.importJobID = importJobID
+        self.importFingerprint = importFingerprint
     }
 }
 
@@ -1026,8 +1037,44 @@ public struct CSVImportMapping: Sendable {
 public struct CSVImportResult: Sendable {
     public var job: ImportJob
     public var insertedTransactions: Int
+    public var duplicateRows: Int
+    public var invalidRows: Int
     public var affectedMonths: Set<Int>
     public var rowErrors: [CSVRowError]
+}
+
+public struct PreparedImportRow: Sendable {
+    public var rowNumber: Int
+    public var draft: TransactionDraft
+    public var fingerprint: String
+    public var sourceName: String
+    public var rawCategoryName: String?
+    public var rawLabelNames: [String]
+    public var currency: String?
+    public var categoryIconName: String?
+    public var categoryColorHex: String?
+
+    public init(
+        rowNumber: Int,
+        draft: TransactionDraft,
+        fingerprint: String,
+        sourceName: String,
+        rawCategoryName: String? = nil,
+        rawLabelNames: [String] = [],
+        currency: String? = nil,
+        categoryIconName: String? = nil,
+        categoryColorHex: String? = nil
+    ) {
+        self.rowNumber = rowNumber
+        self.draft = draft
+        self.fingerprint = fingerprint
+        self.sourceName = sourceName
+        self.rawCategoryName = rawCategoryName
+        self.rawLabelNames = rawLabelNames
+        self.currency = currency
+        self.categoryIconName = categoryIconName
+        self.categoryColorHex = categoryColorHex
+    }
 }
 
 public struct CSVRowError: Identifiable, Hashable, Sendable {

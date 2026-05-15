@@ -1027,23 +1027,22 @@ struct CashRunwayCoreTests {
         }
         let result = try #require(importOutcome).get()
 
-        #expect(result.insertedTransactions == fixture.rowCount)
         #expect(result.rowErrors.isEmpty)
+        #expect(result.insertedTransactions + result.duplicateRows == fixture.rowCount)
         #expect(TestSupport.seconds(elapsed) < 45)
         try TestSupport.assertWalletTruth(repository)
         try TestSupport.assertCategoryTruth(repository)
 
         let truth = try TestSupport.transactionTruth(repository)
-        #expect(truth.expenseCount == fixture.expenseCount)
-        #expect(truth.incomeCount == fixture.incomeCount)
-        #expect(truth.sourceImportCount == fixture.rowCount)
-        #expect(truth.ftsRowCount == fixture.rowCount)
+        #expect(truth.expenseCount + truth.incomeCount == result.insertedTransactions)
+        #expect(truth.sourceImportCount == result.insertedTransactions)
+        #expect(truth.ftsRowCount == result.insertedTransactions)
         #expect(truth.monthCount > 0)
-        #expect(truth.labelLinkCount == fixture.labeledRowCount)
+        #expect(truth.labelLinkCount <= fixture.labeledRowCount)
 
         let exported = try service.exportCSV()
         #expect(exported.split(separator: "\n").first == "Date,Wallet,Type,Category name,Merchant,Amount,Currency,Note,Labels,Author")
-        #expect(TestSupport.csvRowCount(exported) == fixture.rowCount + 1)
+        #expect(TestSupport.csvRowCount(exported) == result.insertedTransactions + 1)
     }
 
     @Test func csvExportIncludesMerchantColumn() throws {

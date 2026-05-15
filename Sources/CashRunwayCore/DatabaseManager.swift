@@ -601,6 +601,13 @@ public final class DatabaseManager: @unchecked Sendable {
             )
         }
 
+        migrator.registerMigration("v3_import_idempotency") { db in
+            try db.execute(sql: "ALTER TABLE import_jobs ADD COLUMN duplicate_rows INTEGER NOT NULL DEFAULT 0")
+            try db.execute(sql: "ALTER TABLE transactions ADD COLUMN import_job_id TEXT")
+            try db.execute(sql: "ALTER TABLE transactions ADD COLUMN import_fingerprint TEXT")
+            try db.execute(sql: "CREATE UNIQUE INDEX idx_transactions_import_fingerprint ON transactions(import_fingerprint) WHERE import_fingerprint IS NOT NULL")
+        }
+
         return migrator
     }
 }

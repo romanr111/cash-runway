@@ -1118,6 +1118,7 @@ public final class CashRunwayRepository: @unchecked Sendable {
         }
     }
 
+    // DEPRECATED — CSV import is now atomic via commitCSVImport. Do not use.
     public func appendImportedTransactions(_ drafts: [TransactionDraft]) throws {
         guard !drafts.isEmpty else { return }
         try databaseManager.dbQueue.write { db in
@@ -1132,6 +1133,7 @@ public final class CashRunwayRepository: @unchecked Sendable {
         }
     }
 
+    // DEPRECATED — CSV import is now atomic via commitCSVImport. Do not use.
     public func finalizeImport(jobID: UUID, affectedMonths: Set<Int>, validRows: Int, invalidRows: Int, errorSummary: String?) throws {
         try databaseManager.dbQueue.write { db in
             try markDirtyRanges(db, monthKeys: affectedMonths)
@@ -1162,6 +1164,183 @@ public final class CashRunwayRepository: @unchecked Sendable {
                 arguments: [ImportJobStatus.failed.rawValue, Date(), errorSummary, jobID.uuidString]
             )
         }
+    }
+
+    public func commitCSVImport(
+        fileName: String,
+        sourceName: String,
+        preparedRows: [PreparedImportRow],
+        rowErrors: [CSVRowError],
+        invalidRows: Int? = nil
+    ) throws -> CSVImportResult {
+        let now = Date()
+        let jobID = UUID()
+        let resolvedInvalidRows = invalidRows ?? rowErrors.count
+        let totalRows = preparedRows.count + resolvedInvalidRows
+
+        return try databaseManager.dbQueue.write { db in
+            try db.execute(
+                sql: """
+                INSERT INTO import_jobs (id, source_name, file_name, status, total_rows, valid_rows, invalid_rows, duplicate_rows, started_at, finished_at, error_summary)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                arguments: [
+                    jobID.uuidString, sourceName, fileName, ImportJobStatus.validated.rawValue, totalRows,
+                    preparedRows.count, resolvedInvalidRows, 0, now, nil, resolvedInvalidRows > 0 ? "\(resolvedInvalidRows) rows failed validation." : nil,
+                ]
+            )
+
+            var seenFingerprints = try existingImportFingerprints(db)
+            var insertedRows = 0
+            var duplicateRows = 0
+            var affectedMonths = Set<Int>()
+
+            for row in preparedRows {
+                if seenFingerprints.contains(row.fingerprint) {
+                    duplicateRows += 1
+                    continue
+                }
+
+                let categoryID = try resolveOrCreateCategory(
+                    db,
+                    rawName: row.rawCategoryName,
+                    kind: row.draft.kind,
+                    iconName: row.categoryIconName,
+                    colorHex: row.categoryColorHex
+                )
+                let labelIDs = try row.rawLabelNames.map { try resolveOrCreateLabel(db, name: $0) }
+
+                var draft = row.draft
+                draft.categoryID = categoryID
+                draft.labelIDs = labelIDs
+                draft.importJobID = jobID
+                draft.importFingerprint = row.fingerprint
+
+                try validate(draft)
+                if draft.kind == .transfer {
+                    try saveTransfer(db, draft: draft)
+                } else {
+                    try saveSingleTransaction(db, draft: draft)
+                }
+
+                seenFingerprints.insert(row.fingerprint)
+                insertedRows += 1
+                affectedMonths.insert(DateKeys.monthKey(for: row.draft.occurredAt))
+            }
+
+            try db.execute(
+                sql: """
+                UPDATE import_jobs
+                SET status = ?, valid_rows = ?, invalid_rows = ?, duplicate_rows = ?, finished_at = ?, error_summary = ?
+                WHERE id = ?
+                """,
+                arguments: [
+                    ImportJobStatus.committed.rawValue,
+                    insertedRows,
+                    resolvedInvalidRows,
+                    duplicateRows,
+                    Date(),
+                    resolvedInvalidRows > 0 ? "\(resolvedInvalidRows) rows failed validation." : nil,
+                    jobID.uuidString,
+                ]
+            )
+
+            let job = ImportJob(
+                id: jobID,
+                sourceName: sourceName,
+                fileName: fileName,
+                status: .committed,
+                totalRows: totalRows,
+                validRows: insertedRows,
+                invalidRows: resolvedInvalidRows,
+                duplicateRows: duplicateRows,
+                startedAt: now,
+                finishedAt: Date(),
+                errorSummary: resolvedInvalidRows > 0 ? "\(resolvedInvalidRows) rows failed validation." : nil
+            )
+
+            return CSVImportResult(
+                job: job,
+                insertedTransactions: insertedRows,
+                duplicateRows: duplicateRows,
+                invalidRows: resolvedInvalidRows,
+                affectedMonths: affectedMonths,
+                rowErrors: rowErrors
+            )
+        }
+    }
+
+    private func existingImportFingerprints(_ db: Database) throws -> Set<String> {
+        let rows = try String.fetchAll(db, sql: "SELECT import_fingerprint FROM transactions WHERE import_fingerprint IS NOT NULL")
+        return Set(rows)
+    }
+
+    private func resolveOrCreateCategory(
+        _ db: Database,
+        rawName: String?,
+        kind: TransactionDraft.Kind,
+        iconName: String?,
+        colorHex: String?
+    ) throws -> UUID? {
+        guard kind != .transfer else { return nil }
+        let categoryKind: CategoryKind = kind == .income ? .income : .expense
+        let fallbackName = kind == .income ? "Other Income" : "Other Expense"
+
+        let allRows = try Row.fetchAll(db, sql: "SELECT * FROM categories WHERE kind = ? AND is_archived = 0", arguments: [categoryKind.rawValue])
+
+        if let rawName {
+            for row in allRows {
+                let rowName: String = row["name"]
+                if rowName.trimmingCharacters(in: .whitespacesAndNewlines).caseInsensitiveCompare(rawName) == .orderedSame {
+                    return UUID(uuidString: row["id"])!
+                }
+            }
+        }
+
+        if rawName == nil {
+            if let fallbackRow = allRows.first(where: { ($0["name"] as String) == fallbackName }) {
+                return UUID(uuidString: fallbackRow["id"])!
+            }
+            if let firstRow = allRows.first {
+                return UUID(uuidString: firstRow["id"])!
+            }
+        }
+
+        let fallbackRow = allRows.first(where: { ($0["name"] as String) == fallbackName }) ?? allRows.first
+        let resolvedIconName = iconName ?? fallbackRow?["icon_name"]
+        let resolvedColorHex = colorHex ?? fallbackRow?["color_hex"]
+
+        let now = Date()
+        let id = UUID()
+        let name = rawName ?? fallbackName
+        try db.execute(
+            sql: """
+            INSERT INTO categories (id, name, kind, icon_name, color_hex, parent_id, is_system, is_archived, sort_order, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            arguments: [
+                id.uuidString, name, categoryKind.rawValue, resolvedIconName, resolvedColorHex,
+                nil, false, false, (allRows.map { $0["sort_order"] as Int }.max() ?? 0) + 1, now, now,
+            ]
+        )
+        return id
+    }
+
+    private func resolveOrCreateLabel(_ db: Database, name: String) throws -> UUID {
+        let rows = try Row.fetchAll(db, sql: "SELECT * FROM labels")
+        for row in rows {
+            let rowName: String = row["name"]
+            if rowName.trimmingCharacters(in: .whitespacesAndNewlines).caseInsensitiveCompare(name) == .orderedSame {
+                return UUID(uuidString: row["id"])!
+            }
+        }
+        let now = Date()
+        let id = UUID()
+        try db.execute(
+            sql: "INSERT INTO labels (id, name, color_hex, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+            arguments: [id.uuidString, name, "#60788A", now, now]
+        )
+        return id
     }
 
     public func runMaintenance() throws {
@@ -1244,6 +1423,8 @@ public final class CashRunwayRepository: @unchecked Sendable {
             source: draft.source,
             recurringTemplateID: draft.recurringTemplateID,
             recurringInstanceID: draft.recurringInstanceID,
+            importJobID: draft.importJobID,
+            importFingerprint: draft.importFingerprint,
             createdAt: existing?.createdAt ?? now,
             updatedAt: now
         )
@@ -1292,6 +1473,8 @@ public final class CashRunwayRepository: @unchecked Sendable {
             source: draft.source,
             recurringTemplateID: draft.recurringTemplateID,
             recurringInstanceID: draft.recurringInstanceID,
+            importJobID: draft.importJobID,
+            importFingerprint: draft.importFingerprint,
             createdAt: sourceExisting?.createdAt ?? now,
             updatedAt: now
         )
@@ -1311,6 +1494,8 @@ public final class CashRunwayRepository: @unchecked Sendable {
             source: draft.source,
             recurringTemplateID: draft.recurringTemplateID,
             recurringInstanceID: draft.recurringInstanceID,
+            importJobID: draft.importJobID,
+            importFingerprint: draft.importFingerprint,
             createdAt: targetExisting?.createdAt ?? now,
             updatedAt: now
         )
@@ -1339,8 +1524,8 @@ public final class CashRunwayRepository: @unchecked Sendable {
     private func upsertTransactionRow(_ db: Database, transaction: CashRunwayTransaction) throws {
         try db.execute(
             sql: """
-            INSERT INTO transactions (id, wallet_id, type, linked_transfer_id, amount_minor, occurred_at, local_day_key, local_month_key, category_id, merchant, note, is_deleted, source, recurring_template_id, recurring_instance_id, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO transactions (id, wallet_id, type, linked_transfer_id, amount_minor, occurred_at, local_day_key, local_month_key, category_id, merchant, note, is_deleted, source, recurring_template_id, recurring_instance_id, import_job_id, import_fingerprint, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 wallet_id = excluded.wallet_id,
                 type = excluded.type,
@@ -1355,6 +1540,8 @@ public final class CashRunwayRepository: @unchecked Sendable {
                 source = excluded.source,
                 recurring_template_id = excluded.recurring_template_id,
                 recurring_instance_id = excluded.recurring_instance_id,
+                import_job_id = excluded.import_job_id,
+                import_fingerprint = excluded.import_fingerprint,
                 updated_at = excluded.updated_at
             """,
             arguments: [
@@ -1362,6 +1549,7 @@ public final class CashRunwayRepository: @unchecked Sendable {
                 transaction.amountMinor, transaction.occurredAt, transaction.localDayKey, transaction.localMonthKey,
                 transaction.categoryID?.uuidString, transaction.merchant, transaction.note, transaction.isDeleted,
                 transaction.source.rawValue, transaction.recurringTemplateID?.uuidString, transaction.recurringInstanceID?.uuidString,
+                transaction.importJobID?.uuidString, transaction.importFingerprint,
                 transaction.createdAt, transaction.updatedAt,
             ]
         )
@@ -2096,6 +2284,8 @@ public final class CashRunwayRepository: @unchecked Sendable {
             source: TransactionSource(rawValue: row["source"]) ?? .manual,
             recurringTemplateID: (row["recurring_template_id"] as String?).flatMap(UUID.init(uuidString:)),
             recurringInstanceID: (row["recurring_instance_id"] as String?).flatMap(UUID.init(uuidString:)),
+            importJobID: (row["import_job_id"] as String?).flatMap(UUID.init(uuidString:)),
+            importFingerprint: row["import_fingerprint"],
             createdAt: row["created_at"],
             updatedAt: row["updated_at"]
         )

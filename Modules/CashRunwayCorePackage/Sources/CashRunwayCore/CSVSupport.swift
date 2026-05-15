@@ -1,11 +1,45 @@
 import Foundation
 import GRDB
+import CryptoKit
 
 public enum CSVPreset: String, CaseIterable, Sendable {
     case cashRunwayWallet = "Cash Runway Wallet"
     case privatBank = "PrivatBank"
     case monobank = "Monobank"
     case generic = "Generic CSV"
+}
+
+public func importFingerprint(
+    sourceName: String,
+    walletID: UUID,
+    kind: TransactionDraft.Kind,
+    occurredAt: Date,
+    amountMinor: Int64,
+    merchant: String?,
+    note: String?,
+    categoryName: String?,
+    currency: String?
+) -> String {
+    let normalizedMerchant = (merchant ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    let normalizedNote = (note ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    let normalizedCategory = (categoryName ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    let normalizedCurrency = (currency ?? "").trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+    let kindString = kind.rawValue
+    let dateString = ISO8601DateFormatter().string(from: occurredAt)
+    let components = [
+        sourceName,
+        walletID.uuidString,
+        kindString,
+        dateString,
+        String(amountMinor),
+        normalizedMerchant,
+        normalizedNote,
+        normalizedCategory,
+        normalizedCurrency,
+    ]
+    let input = components.joined(separator: "|")
+    let hash = SHA256.hash(data: Data(input.utf8))
+    return hash.compactMap { String(format: "%02x", $0) }.joined()
 }
 
 public final class CSVService: @unchecked Sendable {
@@ -41,15 +75,12 @@ public final class CSVService: @unchecked Sendable {
         let rows = parseRows(text)
         guard let headers = rows.first else { throw CashRunwayError.validation("CSV file is empty.") }
         let headerIndex = Dictionary(uniqueKeysWithValues: headers.enumerated().map { ($1, $0) })
-        let now = Date()
-        var affectedMonths = Set<Int>()
-        var validDrafts: [TransactionDraft] = []
+        let sourceName = detectPreset(headers: headers).rawValue
         var invalidRows = 0
         var rowErrors: [CSVRowError] = []
         let wallets = try repository.wallets()
-        var expenseCategories = try repository.categories(kind: .expense)
-        var incomeCategories = try repository.categories(kind: .income)
-        var availableLabels = try repository.labels()
+
+        var preparedRows: [PreparedImportRow] = []
 
         for (offset, row) in rows.dropFirst().enumerated() {
             do {
@@ -57,29 +88,49 @@ public final class CSVService: @unchecked Sendable {
                 try validateCurrency(row: row, mapping: mapping, headerIndex: headerIndex)
                 let signedAmount = try parseAmount(row: row, mapping: mapping, headerIndex: headerIndex)
                 let kind = parseKind(row: row, mapping: mapping, headerIndex: headerIndex, signedAmount: signedAmount)
-                let categoryID = try resolveCategoryID(
-                    row: row,
-                    mapping: mapping,
-                    headerIndex: headerIndex,
+                guard kind != .transfer else {
+                    throw CashRunwayError.validation("Transfer rows are not supported for CSV import.")
+                }
+                let walletID = parseWalletID(row: row, mapping: mapping, headerIndex: headerIndex, wallets: wallets)
+                let merchant = cell(row, mapping.merchantColumn, headerIndex)
+                let note = cell(row, mapping.noteColumn, headerIndex)
+                let rawCategoryName = normalizedCategoryName(cell(row, mapping.categoryColumn, headerIndex))
+                let rawLabels = rawLabelNames(from: cell(row, mapping.labelsColumn, headerIndex))
+                let currency = normalizedCurrency(cell(row, mapping.currencyColumn, headerIndex))
+                let appearance = rawCategoryName.flatMap { importedCategoryAppearance(for: $0, kind: kind) }
+                let fingerprint = importFingerprint(
+                    sourceName: sourceName,
+                    walletID: walletID,
                     kind: kind,
-                    expenseCategories: &expenseCategories,
-                    incomeCategories: &incomeCategories
+                    occurredAt: date,
+                    amountMinor: abs(signedAmount),
+                    merchant: merchant,
+                    note: note,
+                    categoryName: rawCategoryName,
+                    currency: currency
                 )
-                let labels = parseLabels(row: row, mapping: mapping, headerIndex: headerIndex, availableLabels: &availableLabels)
-                validDrafts.append(
-                    TransactionDraft(
-                        kind: kind,
-                        walletID: parseWalletID(row: row, mapping: mapping, headerIndex: headerIndex, wallets: wallets),
-                        amountMinor: abs(signedAmount),
-                        occurredAt: date,
-                        categoryID: categoryID,
-                        labelIDs: labels,
-                        merchant: cell(row, mapping.merchantColumn, headerIndex),
-                        note: cell(row, mapping.noteColumn, headerIndex),
-                        source: .importCSV
+                let draft = TransactionDraft(
+                    kind: kind,
+                    walletID: walletID,
+                    amountMinor: abs(signedAmount),
+                    occurredAt: date,
+                    merchant: merchant,
+                    note: note,
+                    source: .importCSV
+                )
+                preparedRows.append(
+                    PreparedImportRow(
+                        rowNumber: offset + 2,
+                        draft: draft,
+                        fingerprint: fingerprint,
+                        sourceName: sourceName,
+                        rawCategoryName: rawCategoryName,
+                        rawLabelNames: rawLabels,
+                        currency: currency,
+                        categoryIconName: appearance?.iconName,
+                        categoryColorHex: appearance?.colorHex
                     )
                 )
-                affectedMonths.insert(DateKeys.monthKey(for: date))
             } catch {
                 invalidRows += 1
                 if rowErrors.count < 20 {
@@ -88,51 +139,13 @@ public final class CSVService: @unchecked Sendable {
             }
         }
 
-        var job = ImportJob(
-            id: UUID(),
-            sourceName: detectPreset(headers: headers).rawValue,
+        return try repository.commitCSVImport(
             fileName: fileName,
-            status: .validated,
-            totalRows: max(rows.count - 1, 0),
-            validRows: validDrafts.count,
-            invalidRows: invalidRows,
-            startedAt: now,
-            finishedAt: nil,
-            errorSummary: invalidRows > 0 ? "\(invalidRows) rows failed validation." : nil
+            sourceName: sourceName,
+            preparedRows: preparedRows,
+            rowErrors: rowErrors,
+            invalidRows: invalidRows
         )
-
-        try repository.databaseManager.dbQueue.write { db in
-            try db.execute(
-                sql: """
-                INSERT INTO import_jobs (id, source_name, file_name, status, total_rows, valid_rows, invalid_rows, started_at, finished_at, error_summary)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                arguments: [
-                    job.id.uuidString, job.sourceName, job.fileName, job.status.rawValue, job.totalRows,
-                    job.validRows, job.invalidRows, job.startedAt, job.finishedAt, job.errorSummary,
-                ]
-            )
-        }
-
-        do {
-            for batch in stride(from: 0, to: validDrafts.count, by: 500).map({ Array(validDrafts[$0..<min($0 + 500, validDrafts.count)]) }) {
-                try repository.appendImportedTransactions(batch)
-            }
-            try repository.finalizeImport(
-                jobID: job.id,
-                affectedMonths: affectedMonths,
-                validRows: validDrafts.count,
-                invalidRows: invalidRows,
-                errorSummary: job.errorSummary
-            )
-        } catch {
-            try? repository.failImport(jobID: job.id, errorSummary: error.localizedDescription)
-            throw error
-        }
-
-        job.status = .committed
-        job.finishedAt = Date()
-        return CSVImportResult(job: job, insertedTransactions: validDrafts.count, affectedMonths: affectedMonths, rowErrors: rowErrors)
     }
 
     public func exportCSV(query: TransactionQuery = .init()) throws -> String {
@@ -340,55 +353,6 @@ public final class CSVService: @unchecked Sendable {
         }
     }
 
-    private func resolveCategoryID(
-        row: [String],
-        mapping: CSVImportMapping,
-        headerIndex: [String: Int],
-        kind: TransactionDraft.Kind,
-        expenseCategories: inout [Category],
-        incomeCategories: inout [Category]
-    ) throws -> UUID? {
-        guard kind != .transfer else { return nil }
-        let categoryName = normalizedCategoryName(cell(row, mapping.categoryColumn, headerIndex))
-        let categories = kind == .income ? incomeCategories : expenseCategories
-        guard let categoryName else {
-            return fallbackCategoryID(in: categories, for: kind)
-        }
-        if let existing = categories.first(where: { normalizedCategoryName($0.name)?.caseInsensitiveCompare(categoryName) == .orderedSame }) {
-            return existing.id
-        }
-
-        let createdCategory = try createImportedCategory(named: categoryName, kind: kind, existingCategories: categories)
-        if kind == .income {
-            incomeCategories.append(createdCategory)
-        } else {
-            expenseCategories.append(createdCategory)
-        }
-        return createdCategory.id
-    }
-
-    private func createImportedCategory(named name: String, kind: TransactionDraft.Kind, existingCategories: [Category]) throws -> Category {
-        let fallbackName = kind == .income ? "Other Income" : "Other Expense"
-        let fallback = existingCategories.first(where: { $0.name == fallbackName }) ?? existingCategories.first
-        let appearance = importedCategoryAppearance(for: name, kind: kind)
-        let now = Date()
-        let category = Category(
-            id: UUID(),
-            name: name,
-            kind: kind == .income ? .income : .expense,
-            iconName: appearance?.iconName ?? fallback?.iconName,
-            colorHex: appearance?.colorHex ?? fallback?.colorHex,
-            parentID: nil,
-            isSystem: false,
-            isArchived: false,
-            sortOrder: (existingCategories.map(\.sortOrder).max() ?? 0) + 1,
-            createdAt: now,
-            updatedAt: now
-        )
-        try repository.saveCategory(category)
-        return category
-    }
-
     private func importedCategoryAppearance(for name: String, kind: TransactionDraft.Kind) -> ImportedCategoryAppearance? {
         let normalizedName = normalizedKeywordText(name)
         let rules = kind == .income ? Self.incomeAppearanceRules : Self.expenseAppearanceRules
@@ -411,9 +375,26 @@ public final class CSVService: @unchecked Sendable {
         return trimmed.isEmpty ? nil : trimmed
     }
 
-    private func fallbackCategoryID(in categories: [Category], for kind: TransactionDraft.Kind) -> UUID? {
-        let fallbackName = kind == .income ? "Other Income" : "Other Expense"
-        return categories.first(where: { $0.name == fallbackName })?.id ?? categories.first?.id
+    private func normalizedCurrency(_ input: String) -> String? {
+        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func rawLabelNames(from raw: String) -> [String] {
+        guard !raw.isEmpty else { return [] }
+        let separator: Character? = if raw.contains("|") {
+            "|"
+        } else if raw.contains(";") {
+            ";"
+        } else {
+            nil
+        }
+        let names = if let separator {
+            raw.split(separator: separator).map { $0.trimmingCharacters(in: .whitespaces) }
+        } else {
+            [raw.trimmingCharacters(in: .whitespaces)]
+        }
+        return names.filter { !$0.isEmpty }
     }
 
     private struct ImportedCategoryAppearance {
@@ -450,46 +431,6 @@ public final class CSVService: @unchecked Sendable {
         .init(keywords: ["refund", "cashback", "reimbursement", "возврат", "поверн", "кешбек"], iconName: "arrow.uturn.backward.circle.fill", colorHex: "#16C790"),
         .init(keywords: ["freelance", "project", "side", "contract", "фриланс", "проект", "контракт"], iconName: "briefcase.fill", colorHex: "#2AAAD2"),
     ]
-
-    private func parseLabels(row: [String], mapping: CSVImportMapping, headerIndex: [String: Int], availableLabels: inout [Label]) -> [UUID] {
-        let raw = cell(row, mapping.labelsColumn, headerIndex)
-        guard !raw.isEmpty else { return [] }
-        let separator: Character? = if raw.contains("|") {
-            "|"
-        } else if raw.contains(";") {
-            ";"
-        } else {
-            nil
-        }
-        let names = if let separator {
-            raw.split(separator: separator).map { $0.trimmingCharacters(in: .whitespaces) }
-        } else {
-            [raw.trimmingCharacters(in: .whitespaces)]
-        }
-        return names.compactMap { name in
-            if let existing = availableLabels.first(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }) {
-                return existing.id
-            }
-            let created = try? createImportedLabel(named: name)
-            if let created {
-                availableLabels.append(created)
-            }
-            return created?.id
-        }
-    }
-
-    private func createImportedLabel(named name: String) throws -> Label {
-        let now = Date()
-        let label = Label(
-            id: UUID(),
-            name: name,
-            colorHex: "#60788A",
-            createdAt: now,
-            updatedAt: now
-        )
-        try repository.saveLabel(label)
-        return label
-    }
 
     private func escape(_ value: String) -> String {
         let escaped = value.replacingOccurrences(of: "\"", with: "\"\"")
