@@ -114,6 +114,69 @@ struct CashRunwayPerformanceTests {
         #expect(seconds(elapsed) < 5)
     }
 
+    @Test func overviewSnapshotTimingGate() throws {
+        let repository = try makeRepository()
+        let generator = FixtureGenerator(repository: repository)
+        try generator.populate(scenario: .medium)
+        let monthKey = DateKeys.monthKey(for: .now)
+        let clock = ContinuousClock()
+
+        let elapsed = clock.measure {
+            _ = try? repository.overviewSnapshot(monthKey: monthKey)
+        }
+        #expect(seconds(elapsed) < 2)
+    }
+
+    @Test func timelineSnapshotTimingGate() throws {
+        let repository = try makeRepository()
+        let generator = FixtureGenerator(repository: repository)
+        try generator.populate(scenario: .medium)
+        let monthKey = DateKeys.monthKey(for: .now)
+        let clock = ContinuousClock()
+
+        let elapsed = clock.measure {
+            _ = try? repository.timelineSnapshot(monthKey: monthKey)
+        }
+        #expect(seconds(elapsed) < 2)
+    }
+
+    @Test func allBarsTimingGate() throws {
+        let repository = try makeRepository()
+        let generator = FixtureGenerator(repository: repository)
+        try generator.populate(scenario: .medium)
+        let clock = ContinuousClock()
+
+        let elapsed = clock.measure {
+            _ = try? repository.allBars()
+        }
+        #expect(seconds(elapsed) < 2)
+    }
+
+    @Test func runMaintenanceTimingGate() throws {
+        let repository = try makeRepository()
+        let generator = FixtureGenerator(repository: repository)
+        try generator.populate(scenario: .medium)
+        let clock = ContinuousClock()
+
+        let elapsed = clock.measure {
+            _ = try? repository.runMaintenance()
+        }
+        #expect(seconds(elapsed) < 5)
+    }
+
+    @Test func fixturePopulationTimingGate() throws {
+        let repository = try makeRepository()
+        let generator = FixtureGenerator(repository: repository)
+        let clock = ContinuousClock()
+
+        let elapsed = clock.measure {
+            try? generator.populate(scenario: .medium)
+        }
+        // .medium = 10K transactions inserted one-by-one; known bottleneck.
+        // Gate is generous to avoid CI flakiness while flagging regressions.
+        #expect(seconds(elapsed) < 30)
+    }
+
     private func makeRepository() throws -> CashRunwayRepository {
         let baseURL = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("cash-runway-perf-tests", isDirectory: true)

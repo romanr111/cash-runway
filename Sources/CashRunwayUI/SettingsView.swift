@@ -854,7 +854,7 @@ private struct CSVImportReviewView: View {
         Task { @MainActor in
             await Task.yield()
             do {
-                importResult = try model.importCSV(data: data, fileName: fileName, mapping: mapping)
+                importResult = try await model.importCSV(data: data, fileName: fileName, mapping: mapping)
             } catch {
                 importError = error.localizedDescription
             }

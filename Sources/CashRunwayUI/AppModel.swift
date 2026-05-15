@@ -79,12 +79,12 @@ public final class CashRunwayAppModel {
         self.lockStore = lockStore
     }
 
-    public func bootstrap() {
+    public func bootstrap() async {
         do {
             try repository.seedIfNeeded()
             try repository.runMaintenance()
             try repository.refreshRecurringInstances()
-            try reloadAll()
+            await reloadAll()
             if let configuration = lockStore.configuration(), configuration.isEnabled {
                 isLocked = true
             }
@@ -93,21 +93,41 @@ public final class CashRunwayAppModel {
         }
     }
 
-    public func reloadAll() throws {
+    @discardableResult
+    public func reloadAll() async -> Bool {
         isLoading = true
         defer { isLoading = false }
-        try loadAllBars()
-        let snapshot = try Self.loadSnapshot(
-            repository: repository,
-            selectedMonthKey: selectedMonthKey,
-            selectedWalletID: selectedWalletID,
-            selectedTimelinePeriod: selectedTimelinePeriod,
-            transactionQuery: transactionQuery
-        )
-        apply(snapshot)
-        latestTransactionMonthKey = try? repository.latestTransactionMonthKey()
-        if let overview = snapshot.overviewSnapshot {
-            setCachedOverview(overview, monthKey: overview.selectedMonthKey, walletID: overview.walletFilterID)
+        do {
+            let repository = self.repository
+            let selectedMonthKey = self.selectedMonthKey
+            let selectedWalletID = self.selectedWalletID
+            let selectedTimelinePeriod = self.selectedTimelinePeriod
+            var query = self.transactionQuery
+            query.walletID = selectedWalletID
+
+            let (bars, snapshot) = try await Task.detached(priority: .userInitiated) {
+                let bars = try repository.allBars(walletID: selectedWalletID, period: selectedTimelinePeriod)
+                let snapshot = try Self.loadSnapshot(
+                    repository: repository,
+                    selectedMonthKey: selectedMonthKey,
+                    selectedWalletID: selectedWalletID,
+                    selectedTimelinePeriod: selectedTimelinePeriod,
+                    transactionQuery: query
+                )
+                return (bars, snapshot)
+            }.value
+
+            self.allBars = bars
+            self.apply(snapshot)
+            self.latestTransactionMonthKey = try? repository.latestTransactionMonthKey()
+            if let overview = snapshot.overviewSnapshot {
+                self.setCachedOverview(overview, monthKey: overview.selectedMonthKey, walletID: overview.walletFilterID)
+            }
+            self.errorMessage = nil
+            return true
+        } catch {
+            self.errorMessage = error.localizedDescription
+            return false
         }
     }
 
@@ -386,10 +406,10 @@ public final class CashRunwayAppModel {
     }
 
     @discardableResult
-    public func importCSV(data: Data, fileName: String, mapping: CSVImportMapping) throws -> CSVImportResult {
+    public func importCSV(data: Data, fileName: String, mapping: CSVImportMapping) async throws -> CSVImportResult {
         do {
             let result = try csvService.importCSV(data: data, fileName: fileName, mapping: mapping)
-            try reloadAll()
+            await reloadAll()
             errorMessage = nil
             return result
         } catch {
@@ -465,9 +485,12 @@ public final class CashRunwayAppModel {
         do {
             try mutation()
             overviewSnapshotCache.removeAll()
-            try reloadAll()
-            lastForegroundRefreshAt = Date()
-            errorMessage = nil
+            Task { @MainActor in
+                let success = await reloadAll()
+                if success {
+                    lastForegroundRefreshAt = Date()
+                }
+            }
         } catch {
             errorMessage = error.localizedDescription
         }

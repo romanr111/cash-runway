@@ -116,7 +116,7 @@ struct BudgetsView: View {
                 ForEach(monthOptions, id: \.self) { monthKey in
                     Button {
                         model.selectedMonthKey = monthKey
-                        try? model.reloadAll()
+                        Task { await model.reloadAll() }
                     } label: {
                         Text(CashRunwayTheme.monthAbbreviation(for: monthKey))
                             .font(.system(size: 14, weight: .bold))

@@ -122,13 +122,13 @@ struct DashboardView: View {
             Menu {
                 Button("All Wallets") {
                     model.selectedWalletID = nil
-                    try? model.reloadAll()
+                    Task { await model.reloadAll() }
                 }
                 .accessibilityIdentifier(CashRunwayAccessibilityID.timelineWallet("All Wallets"))
                 ForEach(model.wallets) { wallet in
                     Button(wallet.name) {
                         model.selectedWalletID = wallet.id
-                        try? model.reloadAll()
+                        Task { await model.reloadAll() }
                     }
                     .accessibilityIdentifier(CashRunwayAccessibilityID.timelineWallet(wallet.name))
                 }
@@ -141,7 +141,7 @@ struct DashboardView: View {
                 ForEach(TimelinePeriod.allCases, id: \.self) { period in
                     Button(period.displayName) {
                         model.selectedTimelinePeriod = period
-                        try? model.reloadAll()
+                        Task { await model.reloadAll() }
                     }
                 }
             } label: {
@@ -447,12 +447,12 @@ private struct TimelineOverviewView: View {
             Menu {
                 Button("All Wallets") {
                     model.selectedWalletID = nil
-                    try? model.reloadAll()
+                    Task { await model.reloadAll() }
                 }
                 ForEach(model.wallets) { wallet in
                     Button(wallet.name) {
                         model.selectedWalletID = wallet.id
-                        try? model.reloadAll()
+                        Task { await model.reloadAll() }
                     }
                 }
             } label: {
@@ -1253,7 +1253,7 @@ private struct TimelineSearchSheet: View {
                         }
                         draftQuery.walletID = model.selectedWalletID
                         model.transactionQuery = draftQuery
-                        try? model.reloadAll()
+                        Task { await model.reloadAll() }
                         dismiss()
                     }
                     .accessibilityIdentifier(CashRunwayAccessibilityID.timelineSearchApplyButton)

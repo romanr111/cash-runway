@@ -86,7 +86,7 @@ public struct CashRunwayRootView: View {
                 .background(CashRunwayTheme.background)
             }
         }
-        .task { model.bootstrap() }
+        .task { await model.bootstrap() }
         .onChange(of: scenePhase) { _, phase in
             // DEPRECATED — App Lock background relock logic is deprecated.
             if phase == .background, let configuration = model.lockStore.configuration(), configuration.isEnabled {

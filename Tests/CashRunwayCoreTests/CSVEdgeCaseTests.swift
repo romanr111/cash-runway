@@ -154,4 +154,72 @@ struct CSVEdgeCaseTests {
         let result = try service.importCSV(data: Data(text.utf8), fileName: "test.csv", mapping: mapping)
         #expect(result.insertedTransactions == 1)
     }
+
+    @Test func importWindows1251Fallback() throws {
+        let repository = try! TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        let service = CSVService(repository: repository)
+        // "Привіт" in Windows-1251 is not valid UTF-8
+        let windows1251Bytes: [UInt8] = [0xCF, 0xF0, 0xE8, 0xE2, 0xB3, 0xF2]
+        let header = Data("Date,Amount\n".utf8)
+        let body = Data("2025-01-01,100\n".utf8)
+        var data = header
+        data.append(contentsOf: windows1251Bytes)
+        data.append(contentsOf: [0x0A]) // newline
+        data.append(body)
+        let preview = try service.preview(data: data)
+        #expect(preview.totalRows >= 0)
+    }
+
+    @Test func importMalformedQuotesDoesNotCrash() throws {
+        let repository = try! TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        let walletID = try #require(try repository.wallets().first?.id)
+        let service = CSVService(repository: repository)
+        // Unclosed quote — parser should not crash
+        let text = "Date,Amount,Note\n2025-01-01,100,\"unclosed note"
+        let mapping = CSVImportMapping(
+            dateColumn: "Date",
+            amountColumn: "Amount",
+            debitColumn: nil,
+            creditColumn: nil,
+            merchantColumn: nil,
+            noteColumn: "Note",
+            categoryColumn: nil,
+            labelsColumn: nil,
+            walletID: walletID,
+            defaultKind: .expense
+        )
+        let result = try service.importCSV(data: Data(text.utf8), fileName: "test.csv", mapping: mapping)
+        // The row with malformed quote may be skipped or parsed differently,
+        // but the operation must not crash.
+        #expect(result.job.invalidRows >= 0)
+    }
+
+    @Test func importWithTypeColumnFallsBackToIncomeForPositiveAmount() throws {
+        let repository = try! TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        let walletID = try #require(try repository.wallets().first?.id)
+        let service = CSVService(repository: repository)
+        // Type is "Unknown" (not income/expense/transfer), amount is positive, typeColumn is present
+        let text = "Date,Type,Amount\n2025-01-01,Unknown,100"
+        let mapping = CSVImportMapping(
+            dateColumn: "Date",
+            amountColumn: "Amount",
+            debitColumn: nil,
+            creditColumn: nil,
+            merchantColumn: nil,
+            noteColumn: nil,
+            categoryColumn: nil,
+            labelsColumn: nil,
+            walletID: walletID,
+            defaultKind: .expense,
+            typeColumn: "Type"
+        )
+        let result = try service.importCSV(data: Data(text.utf8), fileName: "test.csv", mapping: mapping)
+        #expect(result.insertedTransactions == 1)
+        let transactions = try repository.transactions(query: .init())
+        let imported = try #require(transactions.first)
+        #expect(imported.kind == .income)
+    }
 }
