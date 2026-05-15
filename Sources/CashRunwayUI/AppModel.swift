@@ -13,8 +13,9 @@ public typealias CashRunwayLabel = Label
 public final class CashRunwayAppModel {
     public var repository: CashRunwayRepository
     public var csvService: CSVService
-    // DEPRECATED — App Lock is deprecated. Remove when work resumes or feature is removed.
-    public var lockStore: AppLockStore
+    // LEGACY_DISABLED_APP_LOCK:
+    // App Lock is disabled for MVP. Do not wire into runtime without a new product decision.
+    // public var lockStore: AppLockStore
 
     public var wallets: [Wallet] = []
     public var expenseCategories: [CashRunwayCategory] = []
@@ -34,10 +35,10 @@ public final class CashRunwayAppModel {
     public var selectedWalletID: UUID?
     public var selectedTimelinePeriod: TimelinePeriod = .month
     public var transactionQuery = TransactionQuery()
-    // DEPRECATED — App Lock is deprecated. Remove when work resumes or feature is removed.
-    public var isLocked = false
-    // DEPRECATED — App Lock is deprecated. Remove when work resumes or feature is removed.
-    public var lockMessage: String?
+    // LEGACY_DISABLED_APP_LOCK:
+    // App Lock is disabled for MVP. Do not wire into runtime without a new product decision.
+    // public var isLocked = false
+    // public var lockMessage: String?
     public var errorMessage: String?
     public var isLoading = false
     public private(set) var latestTransactionMonthKey: Int?
@@ -63,20 +64,22 @@ public final class CashRunwayAppModel {
     }
 
     public static func live() throws -> CashRunwayAppModel {
-        let keychain = KeychainStore(service: "dev.roman.cash-runway")
+        // LEGACY_DISABLED_APP_LOCK:
+        // App Lock is disabled for MVP.
         return CashRunwayAppModel(
-            repository: try CashRunwayRepository(),
-            lockStore: AppLockStore(keychain: keychain)
+            repository: try CashRunwayRepository()
         )
     }
 
     public init(
-        repository: CashRunwayRepository,
-        lockStore: AppLockStore = AppLockStore(keychain: KeychainStore(service: "dev.roman.cash-runway"))
+        repository: CashRunwayRepository
+        // LEGACY_DISABLED_APP_LOCK:
+        // App Lock is disabled for MVP.
+        // lockStore: AppLockStore = AppLockStore(keychain: KeychainStore(service: "dev.roman.cash-runway"))
     ) {
         self.repository = repository
         self.csvService = CSVService(repository: repository)
-        self.lockStore = lockStore
+        // self.lockStore = lockStore
     }
 
     public func bootstrap() async {
@@ -85,9 +88,11 @@ public final class CashRunwayAppModel {
             try repository.runMaintenance()
             try repository.refreshRecurringInstances()
             await reloadAll()
-            if let configuration = lockStore.configuration(), configuration.isEnabled {
-                isLocked = true
-            }
+            // LEGACY_DISABLED_APP_LOCK:
+            // App Lock bootstrap check is disabled for MVP.
+            // if let configuration = lockStore.configuration(), configuration.isEnabled {
+            //     isLocked = true
+            // }
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -265,35 +270,34 @@ public final class CashRunwayAppModel {
         }
     }
 
-    // DEPRECATED — App Lock is deprecated. Remove when work resumes or feature is removed.
-    public func unlock(pin: String) {
-        guard lockStore.validate(pin: pin) else {
-            lockMessage = "Incorrect PIN."
-            return
-        }
-        isLocked = false
-        lockMessage = nil
-    }
+    // LEGACY_DISABLED_APP_LOCK:
+    // App Lock is disabled for MVP. Do not wire into runtime without a new product decision.
+    // public func unlock(pin: String) {
+    //     guard lockStore.validate(pin: pin) else {
+    //         lockMessage = "Incorrect PIN."
+    //         return
+    //     }
+    //     isLocked = false
+    //     lockMessage = nil
+    // }
 
-    // DEPRECATED — App Lock is deprecated. Remove when work resumes or feature is removed.
-    public func unlockWithBiometrics() async {
-        guard await lockStore.unlockWithBiometrics() else {
-            lockMessage = "Biometric unlock failed."
-            return
-        }
-        isLocked = false
-        lockMessage = nil
-    }
+    // public func unlockWithBiometrics() async {
+    //     guard await lockStore.unlockWithBiometrics() else {
+    //         lockMessage = "Biometric unlock failed."
+    //         return
+    //     }
+    //     isLocked = false
+    //     lockMessage = nil
+    // }
 
-    // DEPRECATED — App Lock is deprecated. Remove when work resumes or feature is removed.
-    public func enableLock(pin: String, biometrics: Bool) {
-        do {
-            try lockStore.save(pin: pin, biometrics: biometrics, backgroundLockSeconds: 15)
-            errorMessage = nil
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
+    // public func enableLock(pin: String, biometrics: Bool) {
+    //     do {
+    //         try lockStore.save(pin: pin, biometrics: biometrics, backgroundLockSeconds: 15)
+    //         errorMessage = nil
+    //     } catch {
+    //         errorMessage = error.localizedDescription
+    //     }
+    // }
 
     public func saveTransaction(_ draft: TransactionDraft) {
         saveTransaction(draft, recurringTemplate: nil)
@@ -431,7 +435,8 @@ public final class CashRunwayAppModel {
     }
 
     public func handleForegroundResume() {
-        guard !isLocked else { return }
+        // LEGACY_DISABLED_APP_LOCK:
+        // guard !isLocked else { return }
         let now = Date()
         if let lastForegroundRefreshAt, now.timeIntervalSince(lastForegroundRefreshAt) < foregroundRefreshMinimumInterval {
             return

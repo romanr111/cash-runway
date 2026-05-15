@@ -20,8 +20,6 @@
     <string>1.0</string>
     <key>CFBundleVersion</key>
     <string>1</string>
-	<key>NSFaceIDUsageDescription</key>
-	<string>Use Face ID to unlock Cash Runway.</string>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<string>dev.roman.cash-runway.maintenance</string>

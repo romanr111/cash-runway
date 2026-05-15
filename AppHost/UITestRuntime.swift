@@ -61,8 +61,9 @@ private struct UITestLaunchConfiguration {
 
     func makeRuntime() throws -> CashRunwayAppRuntime {
         let keychain = KeychainStore(service: keychainService)
-        // DEPRECATED — App Lock is deprecated. Remove when work resumes or feature is removed.
-        keychain.delete(account: "app-lock-config")
+        // LEGACY_DISABLED_APP_LOCK:
+        // App Lock is disabled for MVP.
+        // keychain.delete(account: "app-lock-config")
 
         if shouldReset {
             try resetDatabaseFiles()
@@ -83,9 +84,11 @@ private struct UITestLaunchConfiguration {
         try repository.seedIfNeeded()
         try seedScenarioIfNeeded(using: repository)
 
-        let lockStore = AppLockStore(keychain: keychain)
+        // LEGACY_DISABLED_APP_LOCK:
+        // App Lock is disabled for MVP.
+        // let lockStore = AppLockStore(keychain: keychain)
         return CashRunwayAppRuntime(
-            model: CashRunwayAppModel(repository: repository, lockStore: lockStore),
+            model: CashRunwayAppModel(repository: repository),
             startupError: nil,
             onboardingStore: onboardingStore,
             bypassOnboarding: true

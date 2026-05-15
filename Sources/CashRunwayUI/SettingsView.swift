@@ -553,36 +553,37 @@ private struct ScheduledTransactionsView: View {
     }
 }
 
-// DEPRECATED — App Lock is deprecated. Remove when work resumes or feature is removed.
-private struct LockConfigurationView: View {
-    @Environment(\.dismiss) private var dismiss
-    @Bindable var model: CashRunwayAppModel
-    @State private var pin = ""
-    @State private var biometrics = true
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                SecureField("PIN", text: $pin)
-                    .keyboardType(.numberPad)
-                Toggle("Enable biometrics", isOn: $biometrics)
-            }
-            .navigationTitle("App Lock")
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Save") {
-                        model.enableLock(pin: pin, biometrics: biometrics)
-                        dismiss()
-                    }
-                    .disabled(pin.isEmpty)
-                }
-            }
-        }
-    }
-}
+// LEGACY_DISABLED_APP_LOCK:
+// App Lock is disabled for MVP. Do not wire into runtime without a new product decision.
+// private struct LockConfigurationView: View {
+//     @Environment(\.dismiss) private var dismiss
+//     @Bindable var model: CashRunwayAppModel
+//     @State private var pin = ""
+//     @State private var biometrics = true
+//
+//     var body: some View {
+//         NavigationStack {
+//             Form {
+//                 SecureField("PIN", text: $pin)
+//                     .keyboardType(.numberPad)
+//                 Toggle("Enable biometrics", isOn: $biometrics)
+//             }
+//             .navigationTitle("App Lock")
+//             .toolbar {
+//                 ToolbarItem(placement: .topBarLeading) {
+//                     Button("Cancel") { dismiss() }
+//                 }
+//                 ToolbarItem(placement: .topBarTrailing) {
+//                     Button("Save") {
+//                         model.enableLock(pin: pin, biometrics: biometrics)
+//                         dismiss()
+//                     }
+//                     .disabled(pin.isEmpty)
+//                 }
+//             }
+//         }
+//     }
+// }
 
 private struct DiagnosticsView: View {
     @Environment(\.dismiss) private var dismiss

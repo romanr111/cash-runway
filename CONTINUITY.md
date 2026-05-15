@@ -1,6 +1,7 @@
 # CONTINUITY
 
 ## Snapshot
+- 2026-05-15T14:33:44+03:00 [TOOL] Primary checkout `/Users/roman/Documents/Development/Cash Runway` is on `main` at `34e0aca` with pre-existing local edits in `AppHost/Info.plist`, `AppHost/UITestRuntime.swift`, `Sources/CashRunwayUI/AppModel.swift`, `Sources/CashRunwayUI/RootView.swift`, and `Sources/CashRunwayUI/SettingsView.swift`; PR 5 full-backup implementation will use separate worktree `/Users/roman/.codex/worktrees/cash-runway-full-backup-restore` on branch `codex/full-backup-restore`.
 - 2026-05-15T09:19:00+03:00 [DOC] Rewrote `PLAN.md` from a historical MVP checklist into a compact current-state spec covering what is already done, what is intentionally deferred, and what should be done next.
 - 2026-05-15T09:03:31+03:00 [DOC] Updated `AGENTS.md` and `.kimi/AGENTS.md` with high-impact Cash Runway speed rules: native iOS tooling default, validation tiers, exploration ceiling, UI-test restraint, real-device escalation, and post-merge worktree cleanup.
 - 2026-05-14T22:05:00+03:00 [CODE] Keychain startup stability hardening implemented in isolated worktree `/Users/roman/.codex/worktrees/cash-runway-keychain-startup-hardening` on branch `codex/keychain-startup-hardening`: `errSecInteractionNotAllowed` now maps to retryable unlock guidance, startup screen has Retry plus one active-phase retry, readable DB keys are best-effort stamped with explicit accessibility without delete/recovery, and core/UI logging uses non-sensitive diagnostic codes only.
@@ -120,6 +121,7 @@
 
 ## Working set
 - `/Users/roman/Documents/Development/Cash Runway/CONTINUITY.md`
+- `/Users/roman/.codex/worktrees/cash-runway-full-backup-restore`
 - `/Users/roman/Documents/Development/Cash Runway/AppHost/UITestRuntime.swift`
 
 ## Receipts
