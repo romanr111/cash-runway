@@ -7,14 +7,14 @@ final class MonobankConnectionUITests: CashRunwayUITestCase {
         openMonobankConnection()
         completeTokenValidation()
 
-        XCTAssertTrue(app.switches[CashRunwayUITestIdentifiers.monobankAccountToggle("uitest-uah-card")].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.otherElements[CashRunwayUITestIdentifiers.monobankAccountRow("uitest-usd-card")].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Black card ****1111 · UAH"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["White card ****8888 · 840"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Not supported in MVP"].waitForExistence(timeout: 5))
 
         app.buttons[CashRunwayUITestIdentifiers.monobankAccountsContinueButton].tap()
         app.buttons[CashRunwayUITestIdentifiers.monobankStartSyncButton].tap()
 
-        XCTAssertTrue(app.staticTexts[CashRunwayUITestIdentifiers.monobankStatusScreen].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Monobank connected"].waitForExistence(timeout: 10))
         XCTAssertEqual(app.staticTexts[CashRunwayUITestIdentifiers.monobankImportedExpensesValue].label, "1")
         XCTAssertEqual(app.staticTexts[CashRunwayUITestIdentifiers.monobankLastResultValue].label, "success")
 
@@ -41,7 +41,7 @@ final class MonobankConnectionUITests: CashRunwayUITestCase {
         let error = app.staticTexts[CashRunwayUITestIdentifiers.monobankValidationError]
         XCTAssertTrue(error.waitForExistence(timeout: 5))
         XCTAssertTrue(error.label.contains("Bank token is invalid"))
-        XCTAssertFalse(app.staticTexts[CashRunwayUITestIdentifiers.monobankStatusScreen].exists)
+        XCTAssertFalse(app.staticTexts["Monobank connected"].exists)
         XCTAssertTrue(app.buttons[CashRunwayUITestIdentifiers.monobankValidateButton].exists)
     }
 
@@ -53,7 +53,7 @@ final class MonobankConnectionUITests: CashRunwayUITestCase {
         app.buttons[CashRunwayUITestIdentifiers.monobankAccountsContinueButton].tap()
         app.buttons[CashRunwayUITestIdentifiers.monobankStartSyncButton].tap()
 
-        XCTAssertTrue(app.staticTexts[CashRunwayUITestIdentifiers.monobankStatusScreen].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Monobank connected"].waitForExistence(timeout: 10))
         let lastResult = app.staticTexts[CashRunwayUITestIdentifiers.monobankLastResultValue]
         XCTAssertTrue(lastResult.waitForExistence(timeout: 5))
         XCTAssertTrue(lastResult.label.contains("UITEST first sync failed"))
@@ -84,6 +84,6 @@ final class MonobankConnectionUITests: CashRunwayUITestCase {
         tokenField.typeText("UITEST-MONOBANK-TOKEN")
         hideKeyboardIfNeeded()
         app.buttons[CashRunwayUITestIdentifiers.monobankValidateButton].tap()
-        XCTAssertTrue(app.otherElements[CashRunwayUITestIdentifiers.monobankAccountRow("uitest-uah-card")].waitForExistence(timeout: 5), file: file, line: line)
+        XCTAssertTrue(app.staticTexts["Black card ****1111 · UAH"].waitForExistence(timeout: 5), file: file, line: line)
     }
 }

@@ -873,9 +873,13 @@ private struct MonobankConnectionWizardView: View {
     @State private var isValidating = false
     @State private var isConnecting = false
     @State private var syncStartAt = Date()
+    @State private var completedStatus: BankConnectionStatusSnapshot?
 
     var body: some View {
-        NavigationStack {
+        if let completedStatus {
+            MonobankConnectionStatusView(model: model, status: completedStatus)
+        } else {
+            NavigationStack {
             Group {
                 switch step {
                 case .intro:
@@ -915,6 +919,7 @@ private struct MonobankConnectionWizardView: View {
                     Button("Cancel") { dismiss() }
                 }
             }
+        }
         }
     }
 
@@ -956,6 +961,7 @@ private struct MonobankConnectionWizardView: View {
                     )
                 }
                 _ = try await model.connectMonobank(token: token, selections: selections, syncStartAt: syncStartAt)
+                completedStatus = model.monobankConnectionStatus()
             } catch {
                 connectionError = error.localizedDescription
             }
