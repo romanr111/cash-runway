@@ -32,6 +32,7 @@ struct CashRunwayAppRuntime {
 private struct UITestLaunchConfiguration {
     enum Scenario: String {
         case transactionCore = "transaction_core"
+        case monobankFirstStart = "monobank_first_start"
     }
 
     static var current: UITestLaunchConfiguration? {
@@ -44,13 +45,15 @@ private struct UITestLaunchConfiguration {
         return UITestLaunchConfiguration(
             scenario: scenario,
             databaseURL: Self.resolveDatabaseURL(databasePath),
-            shouldReset: environment["CASH_RUNWAY_UI_TEST_RESET"] == "1"
+            shouldReset: environment["CASH_RUNWAY_UI_TEST_RESET"] == "1",
+            monobankMode: UITestMonobankMode(rawValue: environment["CASH_RUNWAY_UI_TEST_MONOBANK_MODE"] ?? UITestMonobankMode.happyPath.rawValue) ?? .happyPath
         )
     }
 
     let scenario: Scenario?
     let databaseURL: URL
     let shouldReset: Bool
+    let monobankMode: UITestMonobankMode
 
     private let keychainService = "dev.roman.cashrunway.uitest"
     private let defaultsSuiteName = "dev.roman.cashrunway.uitest"
@@ -87,8 +90,20 @@ private struct UITestLaunchConfiguration {
         // LEGACY_DISABLED_APP_LOCK:
         // App Lock is disabled for MVP.
         // let lockStore = AppLockStore(keychain: keychain)
+        let model: CashRunwayAppModel
+        if scenario == .monobankFirstStart {
+            let tokenStore = KeychainBankTokenStore(keychain: keychain)
+            model = CashRunwayAppModel(
+                repository: repository,
+                bankTokenStore: tokenStore,
+                bankSyncPerformer: UITestBankSyncPerformer(repository: repository, mode: monobankMode),
+                monobankTokenValidator: UITestMonobankTokenValidator(mode: monobankMode)
+            )
+        } else {
+            model = CashRunwayAppModel(repository: repository)
+        }
         return CashRunwayAppRuntime(
-            model: CashRunwayAppModel(repository: repository),
+            model: model,
             startupError: nil,
             onboardingStore: onboardingStore,
             bypassOnboarding: true
@@ -114,6 +129,140 @@ private struct UITestLaunchConfiguration {
             return URL(fileURLWithPath: rawPath)
         }
         return FileManager.default.temporaryDirectory.appendingPathComponent(rawPath)
+    }
+}
+
+private enum UITestMonobankMode: String {
+    case happyPath = "happy_path"
+    case invalidToken = "invalid_token"
+    case firstSyncFailsThenRecovers = "first_sync_fails_then_recovers"
+    case foregroundNewExpense = "foreground_new_expense"
+}
+
+private final class UITestMonobankTokenValidator: MonobankTokenValidating, @unchecked Sendable {
+    private let mode: UITestMonobankMode
+
+    init(mode: UITestMonobankMode) {
+        self.mode = mode
+    }
+
+    func clientInfo(token: String) async throws -> MonobankClientInfo {
+        guard mode != .invalidToken, token == "UITEST-MONOBANK-TOKEN" else {
+            throw BankSyncError.tokenInvalid
+        }
+        return MonobankClientInfo(
+            name: "UITest Monobank User",
+            accounts: [
+                MonobankAccount(id: "uitest-uah-card", type: "black", currencyCode: 980, maskedPan: ["4444333322221111"], iban: nil),
+                MonobankAccount(id: "uitest-usd-card", type: "white", currencyCode: 840, maskedPan: ["5555666677778888"], iban: nil),
+            ]
+        )
+    }
+}
+
+private final class UITestBankSyncPerformer: BankSyncPerforming, @unchecked Sendable {
+    private let repository: CashRunwayRepository
+    private let mode: UITestMonobankMode
+    private let lock = NSLock()
+    private var syncAttemptCount = 0
+
+    init(repository: CashRunwayRepository, mode: UITestMonobankMode) {
+        self.repository = repository
+        self.mode = mode
+    }
+
+    func syncOnDemand() async throws -> BankSyncResult {
+        try await syncActiveIntegrations()
+    }
+
+    func syncOnForeground() async throws -> BankSyncResult {
+        try await syncActiveIntegrations()
+    }
+
+    func syncIntegration(_ integrationID: UUID) async throws -> BankSyncResult {
+        try await sync(integrationIDs: [integrationID])
+    }
+
+    private func syncActiveIntegrations() async throws -> BankSyncResult {
+        let ids = try repository.activeBankIntegrations().map(\.id)
+        return try await sync(integrationIDs: ids)
+    }
+
+    private func sync(integrationIDs: [UUID]) async throws -> BankSyncResult {
+        guard !integrationIDs.isEmpty else { return BankSyncResult() }
+        let attempt = nextSyncAttempt()
+        if mode == .firstSyncFailsThenRecovers, attempt == 1 {
+            throw BankSyncError.transient("UITEST first sync failed")
+        }
+
+        var result = BankSyncResult()
+        for integrationID in integrationIDs {
+            guard let integration = try repository.bankIntegrations().first(where: { $0.id == integrationID }),
+                  integration.status == .active
+            else { continue }
+
+            let accounts = try repository.enabledBankAccounts(integrationID: integration.id)
+            for account in accounts where account.currencyCode == 980 {
+                let importResult = try repository.importMonobankExpenseItems(
+                    statementItems(for: integration, attempt: attempt),
+                    account: account,
+                    integration: integration
+                )
+                result.importedCount += importResult.importedCount
+                result.skippedCount += importResult.skippedCount
+                result.syncedAccountCount += 1
+                try repository.markBankAccountSynced(account.id, at: syncDate(for: integration, attempt: attempt))
+            }
+
+            try repository.markBankIntegrationSynced(integration.id, at: syncDate(for: integration, attempt: attempt))
+        }
+        return result
+    }
+
+    private func nextSyncAttempt() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        syncAttemptCount += 1
+        return syncAttemptCount
+    }
+
+    private func statementItems(for integration: BankIntegration, attempt: Int) -> [MonobankStatementItem] {
+        let startTime = Int(integration.syncStartAt.timeIntervalSince1970)
+        var items = [
+            statementItem(id: "uitest-old-history", time: startTime - 60, amount: -7_777, description: "UITEST old history", comment: "UITEST-MONO-OLD"),
+            statementItem(id: "uitest-income", time: startTime + 5, amount: 9_999, description: "UITEST income", comment: "UITEST-MONO-INCOME"),
+            statementItem(id: "uitest-new-expense", time: startTime + 30, amount: -1_234, description: "UITEST Monobank Merchant", comment: "UITEST-MONO-NEW"),
+        ]
+        if mode == .foregroundNewExpense || (mode == .firstSyncFailsThenRecovers && attempt > 1) {
+            items.append(statementItem(id: "uitest-later-expense", time: startTime + 120, amount: -2_345, description: "UITEST Foreground Merchant", comment: "UITEST-MONO-FOREGROUND"))
+        }
+        return items
+    }
+
+    private func syncDate(for integration: BankIntegration, attempt: Int) -> Date {
+        integration.syncStartAt.addingTimeInterval(TimeInterval(180 + attempt))
+    }
+
+    private func statementItem(id: String, time: Int, amount: Int64, description: String, comment: String) -> MonobankStatementItem {
+        MonobankStatementItem(
+            id: id,
+            time: time,
+            description: description,
+            mcc: nil,
+            originalMcc: nil,
+            amount: amount,
+            operationAmount: nil,
+            currencyCode: 980,
+            commissionRate: nil,
+            cashbackAmount: nil,
+            balance: nil,
+            hold: nil,
+            receiptId: nil,
+            comment: comment,
+            counterEdrpou: nil,
+            counterIban: nil,
+            counterName: description
+        )
     }
 }
 

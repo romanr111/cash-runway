@@ -43,6 +43,21 @@ enum CashRunwayAccessibilityID {
     static let overviewMonthPreviousButton = "overview.month.previousButton"
     static let overviewMonthNextButton = "overview.month.nextButton"
 
+    static let settingsMonobankRow = "settings.monobank.row"
+    static let monobankIntroContinueButton = "monobank.intro.continueButton"
+    static let monobankTokenField = "monobank.token.field"
+    static let monobankValidateButton = "monobank.token.validateButton"
+    static let monobankValidationError = "monobank.token.validationError"
+    static let monobankAccountsContinueButton = "monobank.accounts.continueButton"
+    static let monobankStartSyncButton = "monobank.confirmation.startSyncButton"
+    static let monobankConnectionError = "monobank.confirmation.connectionError"
+    static let monobankStatusScreen = "monobank.status.screen"
+    static let monobankLastResultValue = "monobank.status.lastResult"
+    static let monobankImportedExpensesValue = "monobank.status.importedExpenses"
+    static let monobankSyncNowButton = "monobank.status.syncNowButton"
+    static let monobankManageAccountsButton = "monobank.status.manageAccountsButton"
+    static let monobankDisconnectButton = "monobank.status.disconnectButton"
+
     static func transactionCategory(_ name: String) -> String {
         "transaction.category.\(slug(name))"
     }
@@ -63,6 +78,14 @@ enum CashRunwayAccessibilityID {
 
     static func overviewCategory(_ name: String) -> String {
         "overview.category.\(slug(name))"
+    }
+
+    static func monobankAccountRow(_ id: String) -> String {
+        "monobank.account.row.\(slug(id))"
+    }
+
+    static func monobankAccountToggle(_ id: String) -> String {
+        "monobank.account.toggle.\(slug(id))"
     }
 
     private static func slug(_ value: String) -> String {

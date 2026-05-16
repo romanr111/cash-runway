@@ -28,6 +28,10 @@ struct TransactionEditorView: View {
     @FocusState private var focusedField: ComposerField?
 
     @State private var amountError: String?
+    @State private var originalCategoryID: UUID?
+    @State private var isCategoryLearningPromptPresented = false
+    @State private var pendingLearnTransactionID: UUID?
+    @State private var pendingLearnCategoryID: UUID?
 
     private enum ComposerField: Hashable {
         case amount
@@ -84,6 +88,16 @@ struct TransactionEditorView: View {
                     .presentationDetents([.fraction(0.45), .large])
                     .presentationDragIndicator(.visible)
             }
+            .alert("Use this category next time?", isPresented: $isCategoryLearningPromptPresented) {
+                Button("Apply next time") {
+                    commitTransaction(learnCategoryRule: true)
+                }
+                Button("Only this transaction", role: .cancel) {
+                    commitTransaction(learnCategoryRule: false)
+                }
+            } message: {
+                Text(categoryLearningPromptMessage)
+            }
             .onChange(of: composerModal) { _, modal in
                 guard modal == nil else { return }
                 let shouldOpenManagement = openCategoryManagementAfterCategorySheet
@@ -99,6 +113,7 @@ struct TransactionEditorView: View {
                 }
             }
             .onAppear {
+                originalCategoryID = draft.categoryID
                 composerState = TransactionComposerState(
                     selectedKind: draft.kind,
                     selectedCategoryID: draft.categoryID,
@@ -375,8 +390,15 @@ struct TransactionEditorView: View {
                             draft.categoryID = composerState.selectedCategoryID
                             draft.labelIDs = composerState.selectedLabelIDs
                             draft.amountMinor = parsed
-                            model.saveTransaction(draft, recurringTemplate: recurringTemplate)
-                            dismiss()
+                            if shouldOfferCategoryLearning,
+                               let transactionID = draft.id,
+                               let categoryID = draft.categoryID {
+                                pendingLearnTransactionID = transactionID
+                                pendingLearnCategoryID = categoryID
+                                isCategoryLearningPromptPresented = true
+                            } else {
+                                commitTransaction(learnCategoryRule: false)
+                            }
                         } label: {
                             Text("Save Transaction")
                                 .font(.system(size: 18, weight: .bold))
@@ -617,6 +639,37 @@ struct TransactionEditorView: View {
             return wallet.name
         }
         return "Select wallet"
+    }
+
+    private var shouldOfferCategoryLearning: Bool {
+        draft.source == .bankSync
+            && draft.id != nil
+            && draft.kind == .expense
+            && draft.categoryID != nil
+            && originalCategoryID != draft.categoryID
+    }
+
+    private var categoryLearningPromptMessage: String {
+        let merchant = draft.merchant.isEmpty ? "this merchant" : draft.merchant
+        let oldName = categoryName(originalCategoryID) ?? "Other Expense"
+        let newName = categoryName(pendingLearnCategoryID ?? draft.categoryID) ?? "this category"
+        return "You changed \"\(merchant)\" from \(oldName) to \(newName). Apply \(newName) to future \(merchant) transactions?"
+    }
+
+    private func categoryName(_ id: UUID?) -> String? {
+        guard let id else { return nil }
+        return model.expenseCategories.first(where: { $0.id == id })?.name
+            ?? model.incomeCategories.first(where: { $0.id == id })?.name
+    }
+
+    private func commitTransaction(learnCategoryRule: Bool) {
+        model.saveTransaction(draft, recurringTemplate: recurringTemplate)
+        if learnCategoryRule,
+           let transactionID = pendingLearnTransactionID ?? draft.id,
+           let categoryID = pendingLearnCategoryID ?? draft.categoryID {
+            model.learnBankCategoryRule(transactionID: transactionID, categoryID: categoryID)
+        }
+        dismiss()
     }
 
     private var divider: some View {

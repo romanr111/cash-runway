@@ -14,6 +14,9 @@ public final class CashRunwayAppModel {
     public var repository: CashRunwayRepository
     public var csvService: CSVService
     public var backupService: BackupService
+    public var bankTokenStore: any BankTokenStore
+    private let bankSyncPerformer: any BankSyncPerforming
+    private let monobankTokenValidator: any MonobankTokenValidating
     // LEGACY_DISABLED_APP_LOCK:
     // App Lock is disabled for MVP. Do not wire into runtime without a new product decision.
     // public var lockStore: AppLockStore
@@ -41,6 +44,7 @@ public final class CashRunwayAppModel {
     // public var isLocked = false
     // public var lockMessage: String?
     public var errorMessage: String?
+    public var bankSyncMessage: String?
     public var isLoading = false
     public private(set) var latestTransactionMonthKey: Int?
     private var foregroundRefreshTask: Task<Void, Never>?
@@ -81,7 +85,25 @@ public final class CashRunwayAppModel {
         self.repository = repository
         self.csvService = CSVService(repository: repository)
         self.backupService = BackupService(repository: repository)
+        let bankTokenStore = KeychainBankTokenStore(keychain: KeychainStore(service: "dev.roman.cash-runway"))
+        self.bankTokenStore = bankTokenStore
+        self.bankSyncPerformer = BankSyncSerialPerformer(BankSyncCoordinator(repository: repository, tokenStore: bankTokenStore))
+        self.monobankTokenValidator = MonobankDirectTokenValidator()
         // self.lockStore = lockStore
+    }
+
+    public init(
+        repository: CashRunwayRepository,
+        bankTokenStore: any BankTokenStore,
+        bankSyncPerformer: any BankSyncPerforming,
+        monobankTokenValidator: any MonobankTokenValidating
+    ) {
+        self.repository = repository
+        self.csvService = CSVService(repository: repository)
+        self.backupService = BackupService(repository: repository)
+        self.bankTokenStore = bankTokenStore
+        self.bankSyncPerformer = BankSyncSerialPerformer(bankSyncPerformer)
+        self.monobankTokenValidator = monobankTokenValidator
     }
 
     public func bootstrap() async {
@@ -436,6 +458,97 @@ public final class CashRunwayAppModel {
         csvService.detectPreset(headers: headers)
     }
 
+    public func monobankConnectionStatus() -> BankConnectionStatusSnapshot {
+        (try? repository.bankConnectionStatus(provider: .monobank)) ?? BankConnectionStatusSnapshot(
+            integration: nil,
+            enabledAccountCount: 0,
+            syncStartAt: nil,
+            lastSuccessfulSyncAt: nil,
+            lastSyncError: nil,
+            importedExpenseCount: 0
+        )
+    }
+
+    public func monobankConnectedAccounts(integrationID: UUID) -> [BankAccount] {
+        (try? repository.bankAccounts(integrationID: integrationID)) ?? []
+    }
+
+    public func validateMonobankToken(_ token: String) async throws -> MonobankClientInfo {
+        do {
+            let service = MonobankConnectionService(
+                repository: repository,
+                tokenStore: bankTokenStore,
+                tokenValidator: monobankTokenValidator,
+                syncPerformer: bankSyncPerformer
+            )
+            let info = try await service.validateToken(token)
+            bankSyncMessage = nil
+            return info
+        } catch {
+            bankSyncMessage = error.localizedDescription
+            throw error
+        }
+    }
+
+    @discardableResult
+    public func connectMonobank(
+        token: String,
+        selections: [MonobankAccountConnectionSelection],
+        syncStartAt: Date = Date()
+    ) async throws -> BankIntegration {
+        do {
+            let service = MonobankConnectionService(
+                repository: repository,
+                tokenStore: bankTokenStore,
+                tokenValidator: monobankTokenValidator,
+                syncPerformer: bankSyncPerformer,
+                now: { syncStartAt }
+            )
+            let integration = try await service.connectMonobank(token: token, selections: selections)
+            await reloadAll()
+            bankSyncMessage = nil
+            return integration
+        } catch {
+            bankSyncMessage = error.localizedDescription
+            throw error
+        }
+    }
+
+    public func syncMonobankNow() async {
+        do {
+            _ = try await bankSyncPerformer.syncOnDemand()
+            await reloadAll()
+            bankSyncMessage = nil
+        } catch {
+            bankSyncMessage = error.localizedDescription
+        }
+    }
+
+    public func disconnectBankIntegration(_ integrationID: UUID) {
+        do {
+            let service = MonobankConnectionService(
+                repository: repository,
+                tokenStore: bankTokenStore,
+                tokenValidator: monobankTokenValidator,
+                syncPerformer: bankSyncPerformer
+            )
+            try service.disconnectIntegration(integrationID)
+            bankSyncMessage = nil
+            Task { @MainActor in await reloadAll() }
+        } catch {
+            bankSyncMessage = error.localizedDescription
+        }
+    }
+
+    public func learnBankCategoryRule(transactionID: UUID, categoryID: UUID) {
+        do {
+            try repository.learnBankMerchantCategoryRule(transactionID: transactionID, categoryID: categoryID)
+            bankSyncMessage = nil
+        } catch {
+            bankSyncMessage = error.localizedDescription
+        }
+    }
+
     public func exportFullBackup() throws -> Data {
         let backup = try backupService.exportFullBackup()
         return try backupService.encode(backup)
@@ -493,21 +606,30 @@ public final class CashRunwayAppModel {
         let selectedWalletID = selectedWalletID
         let selectedTimelinePeriod = selectedTimelinePeriod
         let transactionQuery = transactionQuery
+        let bankSyncPerformer = bankSyncPerformer
         foregroundRefreshTask = Task { [weak self] in
             defer {
                 self?.foregroundRefreshTask = nil
             }
             do {
-                let snapshot = try await Task.detached(priority: .utility) {
+                let (snapshot, bankSyncMessage) = try await Task.detached(priority: .utility) {
+                    let syncMessage: String?
+                    do {
+                        _ = try await bankSyncPerformer.syncOnForeground()
+                        syncMessage = nil
+                    } catch {
+                        syncMessage = error.localizedDescription
+                    }
                     try repository.runMaintenance()
                     try repository.refreshRecurringInstances()
-                    return try Self.loadSnapshot(
+                    let snapshot = try Self.loadSnapshot(
                         repository: repository,
                         selectedMonthKey: selectedMonthKey,
                         selectedWalletID: selectedWalletID,
                         selectedTimelinePeriod: selectedTimelinePeriod,
                         transactionQuery: transactionQuery
                     )
+                    return (snapshot, syncMessage)
                 }.value
                 guard !Task.isCancelled else { return }
                 guard let self else { return }
@@ -520,6 +642,7 @@ public final class CashRunwayAppModel {
                     self.setCachedOverview(overview, monthKey: overview.selectedMonthKey, walletID: overview.walletFilterID)
                 }
                 self.lastForegroundRefreshAt = Date()
+                self.bankSyncMessage = bankSyncMessage
                 self.errorMessage = nil
             } catch is CancellationError {
                 // The next foreground resume can schedule a fresh refresh.

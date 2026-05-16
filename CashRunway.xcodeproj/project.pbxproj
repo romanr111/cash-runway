@@ -29,6 +29,7 @@
 		A00100010001000100010014 /* Tests/CashRunwayUITests/CashRunwayUITestCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010016 /* Tests/CashRunwayUITests/CashRunwayUITestCase.swift */; };
 		A00100010001000100010015 /* Tests/CashRunwayUITests/TransactionCRUDUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010017 /* Tests/CashRunwayUITests/TransactionCRUDUITests.swift */; };
 		A00100010001000100010016 /* Tests/CashRunwayUITests/TransactionOverviewUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010018 /* Tests/CashRunwayUITests/TransactionOverviewUITests.swift */; };
+		A00100010001000100010017 /* Tests/CashRunwayUITests/MonobankConnectionUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0020001000100010001001A /* Tests/CashRunwayUITests/MonobankConnectionUITests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -67,6 +68,7 @@
 		A00200010001000100010017 /* Tests/CashRunwayUITests/TransactionCRUDUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/CashRunwayUITests/TransactionCRUDUITests.swift; sourceTree = "<group>"; };
 		A00200010001000100010018 /* Tests/CashRunwayUITests/TransactionOverviewUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/CashRunwayUITests/TransactionOverviewUITests.swift; sourceTree = "<group>"; };
 		A00200010001000100010019 /* CashRunwayUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CashRunwayUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A0020001000100010001001A /* Tests/CashRunwayUITests/MonobankConnectionUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/CashRunwayUITests/MonobankConnectionUITests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -155,6 +157,7 @@
 				A00200010001000100010016 /* Tests/CashRunwayUITests/CashRunwayUITestCase.swift */,
 				A00200010001000100010017 /* Tests/CashRunwayUITests/TransactionCRUDUITests.swift */,
 				A00200010001000100010018 /* Tests/CashRunwayUITests/TransactionOverviewUITests.swift */,
+				A0020001000100010001001A /* Tests/CashRunwayUITests/MonobankConnectionUITests.swift */,
 			);
 			name = Tests;
 			sourceTree = "<group>";
@@ -315,6 +318,7 @@
 				A00100010001000100010014 /* Tests/CashRunwayUITests/CashRunwayUITestCase.swift in Sources */,
 				A00100010001000100010015 /* Tests/CashRunwayUITests/TransactionCRUDUITests.swift in Sources */,
 				A00100010001000100010016 /* Tests/CashRunwayUITests/TransactionOverviewUITests.swift in Sources */,
+				A00100010001000100010017 /* Tests/CashRunwayUITests/MonobankConnectionUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -320,6 +320,36 @@ public struct BankSyncResult: Codable, Hashable, Sendable {
     }
 }
 
+public struct MonobankAccountConnectionSelection: Hashable, Sendable {
+    public var account: MonobankAccount
+    public var walletID: UUID
+    public var isEnabled: Bool
+
+    public init(account: MonobankAccount, walletID: UUID, isEnabled: Bool) {
+        self.account = account
+        self.walletID = walletID
+        self.isEnabled = isEnabled
+    }
+}
+
+public struct BankConnectionStatusSnapshot: Hashable, Sendable {
+    public var integration: BankIntegration?
+    public var enabledAccountCount: Int
+    public var syncStartAt: Date?
+    public var lastSuccessfulSyncAt: Date?
+    public var lastSyncError: String?
+    public var importedExpenseCount: Int
+
+    public init(integration: BankIntegration?, enabledAccountCount: Int, syncStartAt: Date?, lastSuccessfulSyncAt: Date?, lastSyncError: String?, importedExpenseCount: Int) {
+        self.integration = integration
+        self.enabledAccountCount = enabledAccountCount
+        self.syncStartAt = syncStartAt
+        self.lastSuccessfulSyncAt = lastSuccessfulSyncAt
+        self.lastSyncError = lastSyncError
+        self.importedExpenseCount = importedExpenseCount
+    }
+}
+
 public enum BankSyncError: Error, Equatable, LocalizedError, Sendable {
     case tokenInvalid
     case rateLimited

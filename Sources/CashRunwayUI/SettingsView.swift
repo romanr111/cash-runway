@@ -14,6 +14,7 @@ struct SettingsView: View {
     @State private var isLabelsPresented = false
     @State private var isTemplatesPresented = false
     @State private var isWalletsPresented = false
+    @State private var isMonobankConnectionPresented = false
     @State private var isImporterPresented = false
     @State private var isImportReviewPresented = false
     @State private var isDiagnosticsPresented = false
@@ -126,6 +127,23 @@ struct SettingsView: View {
                         .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
                     }
 
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Bank Connections")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(CashRunwayTheme.textMuted)
+                            .textCase(.uppercase)
+                            .padding(.horizontal, 4)
+
+                        VStack(spacing: 0) {
+                            moreRow(icon: "creditcard.fill", tint: "#1CC389", title: "Monobank", subtitle: monobankSubtitle) {
+                                isMonobankConnectionPresented = true
+                            }
+                            .accessibilityIdentifier(CashRunwayAccessibilityID.settingsMonobankRow)
+                        }
+                        .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
+                    }
+
                     #if DEBUG
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Debug")
@@ -160,6 +178,9 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $isWalletsPresented) {
                 WalletManagementView(model: model)
+            }
+            .sheet(isPresented: $isMonobankConnectionPresented) {
+                MonobankConnectionView(model: model)
             }
             .sheet(isPresented: $isImportReviewPresented) {
                 CSVImportReviewView(
@@ -372,6 +393,26 @@ struct SettingsView: View {
 
     private var rowDivider: some View {
         Divider().overlay(CashRunwayTheme.line).padding(.leading, 72)
+    }
+
+    private var monobankSubtitle: String {
+        let status = model.monobankConnectionStatus()
+        guard let integration = status.integration, integration.status != .disabled else {
+            return "Connect cards and import new expenses automatically"
+        }
+        if integration.status == .tokenInvalid || integration.status == .syncFailed || status.lastSyncError != nil {
+            return "Sync failed · Tap to fix"
+        }
+        if let lastSync = status.lastSuccessfulSyncAt {
+            return "\(status.enabledAccountCount) cards connected · Last sync \(relativeFormatter.localizedString(for: lastSync, relativeTo: Date()))"
+        }
+        return "\(status.enabledAccountCount) cards connected · Waiting for first sync"
+    }
+
+    private var relativeFormatter: RelativeDateTimeFormatter {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        return formatter
     }
 
     private func moreRow(icon: String, tint: String, title: String, subtitle: String, action: @escaping () -> Void) -> some View {
@@ -796,6 +837,488 @@ private struct ScheduledTransactionsView: View {
                 RecurringTemplateEditorView(model: model, template: $templateDraft)
             }
         }
+    }
+}
+
+private enum MonobankWizardStep {
+    case intro
+    case token
+    case accounts
+    case confirmation
+}
+
+private struct MonobankConnectionView: View {
+    @Bindable var model: CashRunwayAppModel
+
+    var body: some View {
+        let status = model.monobankConnectionStatus()
+        if let integration = status.integration, integration.status != .disabled {
+            MonobankConnectionStatusView(model: model, status: status)
+        } else {
+            MonobankConnectionWizardView(model: model)
+        }
+    }
+}
+
+private struct MonobankConnectionWizardView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Bindable var model: CashRunwayAppModel
+    @State private var step: MonobankWizardStep = .intro
+    @State private var token = ""
+    @State private var clientInfo: MonobankClientInfo?
+    @State private var enabledAccountIDs: Set<String> = []
+    @State private var selectedWalletIDs: [String: UUID] = [:]
+    @State private var validationError: String?
+    @State private var connectionError: String?
+    @State private var isValidating = false
+    @State private var isConnecting = false
+    @State private var syncStartAt = Date()
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                switch step {
+                case .intro:
+                    MonobankTokenIntroView {
+                        step = .token
+                    }
+                case .token:
+                    MonobankTokenStepView(
+                        token: $token,
+                        isValidating: isValidating,
+                        error: validationError,
+                        onValidate: validateToken
+                    )
+                case .accounts:
+                    MonobankAccountSelectionView(
+                        model: model,
+                        accounts: clientInfo?.accounts ?? [],
+                        enabledAccountIDs: $enabledAccountIDs,
+                        selectedWalletIDs: $selectedWalletIDs,
+                        onContinue: {
+                            syncStartAt = Date()
+                            step = .confirmation
+                        }
+                    )
+                case .confirmation:
+                    MonobankStartConfirmationView(
+                        syncStartAt: syncStartAt,
+                        isConnecting: isConnecting,
+                        error: connectionError,
+                        onStart: startSyncing
+                    )
+                }
+            }
+            .navigationTitle("Monobank")
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+        }
+    }
+
+    private func validateToken() {
+        guard !isValidating else { return }
+        validationError = nil
+        isValidating = true
+        Task { @MainActor in
+            do {
+                let info = try await model.validateMonobankToken(token)
+                clientInfo = info
+                let uahIDs = Set(info.accounts.filter { $0.currencyCode == 980 }.map(\.id))
+                enabledAccountIDs = uahIDs
+                let fallbackWalletID = model.wallets.first?.id
+                selectedWalletIDs = Dictionary(uniqueKeysWithValues: info.accounts.compactMap { account in
+                    guard account.currencyCode == 980, let fallbackWalletID else { return nil }
+                    return (account.id, fallbackWalletID)
+                })
+                step = .accounts
+            } catch {
+                validationError = error.localizedDescription
+            }
+            isValidating = false
+        }
+    }
+
+    private func startSyncing() {
+        guard !isConnecting else { return }
+        connectionError = nil
+        isConnecting = true
+        syncStartAt = Date()
+        Task { @MainActor in
+            do {
+                let selections = (clientInfo?.accounts ?? []).map { account in
+                    MonobankAccountConnectionSelection(
+                        account: account,
+                        walletID: selectedWalletIDs[account.id] ?? model.wallets.first?.id ?? UUID(),
+                        isEnabled: enabledAccountIDs.contains(account.id)
+                    )
+                }
+                _ = try await model.connectMonobank(token: token, selections: selections, syncStartAt: syncStartAt)
+            } catch {
+                connectionError = error.localizedDescription
+            }
+            isConnecting = false
+        }
+    }
+}
+
+private struct MonobankTokenIntroView: View {
+    let onContinue: () -> Void
+
+    var body: some View {
+        Form {
+            Section {
+                Text("Cash Runway will import only new Monobank card expenses after connection.")
+                Text("Old bank history will not be imported.")
+                Text("Existing Cash Runway transactions will not be changed.")
+                Text("Income will not be imported.")
+                Text("Your Monobank token stays on this iPhone.")
+            } header: {
+                Text("Connect Monobank")
+            }
+
+            Section {
+                Button("Continue", action: onContinue)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .accessibilityIdentifier(CashRunwayAccessibilityID.monobankIntroContinueButton)
+            }
+        }
+    }
+}
+
+private struct MonobankTokenStepView: View {
+    @Binding var token: String
+    let isValidating: Bool
+    let error: String?
+    let onValidate: () -> Void
+
+    var body: some View {
+        Form {
+            Section {
+                SecureField("Personal API token", text: $token)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .accessibilityIdentifier(CashRunwayAccessibilityID.monobankTokenField)
+                #if canImport(UIKit)
+                Button("Paste from Clipboard") {
+                    token = UIPasteboard.general.string ?? token
+                }
+                #endif
+                Button(isValidating ? "Validating..." : "Validate Token", action: onValidate)
+                    .disabled(token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isValidating)
+                    .accessibilityIdentifier(CashRunwayAccessibilityID.monobankValidateButton)
+            }
+
+            if let error {
+                Section("Validation Error") {
+                    Text(error)
+                        .foregroundStyle(CashRunwayTheme.negative)
+                        .accessibilityIdentifier(CashRunwayAccessibilityID.monobankValidationError)
+                }
+            }
+        }
+    }
+}
+
+private struct MonobankAccountSelectionView: View {
+    @Bindable var model: CashRunwayAppModel
+    let accounts: [MonobankAccount]
+    @Binding var enabledAccountIDs: Set<String>
+    @Binding var selectedWalletIDs: [String: UUID]
+    let onContinue: () -> Void
+
+    var body: some View {
+        Form {
+            Section("Cards") {
+                ForEach(accounts, id: \.id) { account in
+                    if account.currencyCode == 980 {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Toggle(accountTitle(account), isOn: Binding(
+                                get: { enabledAccountIDs.contains(account.id) },
+                                set: { isEnabled in
+                                    if isEnabled {
+                                        enabledAccountIDs.insert(account.id)
+                                    } else {
+                                        enabledAccountIDs.remove(account.id)
+                                    }
+                                }
+                            ))
+                            .accessibilityIdentifier(CashRunwayAccessibilityID.monobankAccountToggle(account.id))
+                            Picker("Map to wallet", selection: Binding(
+                                get: { selectedWalletIDs[account.id] ?? model.wallets.first?.id ?? UUID() },
+                                set: { selectedWalletIDs[account.id] = $0 }
+                            )) {
+                                ForEach(model.wallets) { wallet in
+                                    Text(wallet.name).tag(wallet.id)
+                                }
+                            }
+                            Button("Create Monobank wallet") {
+                                createWallet(for: account)
+                            }
+                        }
+                        .accessibilityIdentifier(CashRunwayAccessibilityID.monobankAccountRow(account.id))
+                    } else {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(accountTitle(account))
+                            Text("Not supported in MVP")
+                                .font(.footnote)
+                                .foregroundStyle(CashRunwayTheme.textSecondary)
+                        }
+                        .accessibilityIdentifier(CashRunwayAccessibilityID.monobankAccountRow(account.id))
+                    }
+                }
+            }
+
+            Section {
+                Button("Continue", action: onContinue)
+                    .disabled(!hasEnabledMappedAccount)
+                    .accessibilityIdentifier(CashRunwayAccessibilityID.monobankAccountsContinueButton)
+            } footer: {
+                Text("Only selected UAH card accounts will sync.")
+            }
+        }
+    }
+
+    private var hasEnabledMappedAccount: Bool {
+        accounts.contains { account in
+            account.currencyCode == 980 && enabledAccountIDs.contains(account.id) && selectedWalletIDs[account.id] != nil
+        }
+    }
+
+    private func accountTitle(_ account: MonobankAccount) -> String {
+        let type = (account.type?.isEmpty == false ? account.type! : "Card").capitalized
+        let suffix = account.maskedPan?.first.map { " ****\(String($0.suffix(4)))" } ?? ""
+        let currency = account.currencyCode == 980 ? "UAH" : String(account.currencyCode)
+        return "\(type) card\(suffix) · \(currency)"
+    }
+
+    private func createWallet(for account: MonobankAccount) {
+        let suffix = account.maskedPan?.first.map { " ****\(String($0.suffix(4)))" } ?? ""
+        let type = (account.type?.isEmpty == false ? account.type! : "Card").capitalized
+        let wallet = Wallet(
+            id: UUID(),
+            name: "Monobank \(type)\(suffix)",
+            kind: .card,
+            colorHex: "#1CC389",
+            iconName: "creditcard.fill",
+            startingBalanceMinor: 0,
+            currentBalanceMinor: 0,
+            isArchived: false,
+            sortOrder: model.wallets.count,
+            createdAt: .now,
+            updatedAt: .now
+        )
+        selectedWalletIDs[account.id] = wallet.id
+        model.saveWallet(wallet)
+    }
+}
+
+private struct MonobankStartConfirmationView: View {
+    let syncStartAt: Date
+    let isConnecting: Bool
+    let error: String?
+    let onStart: () -> Void
+
+    var body: some View {
+        Form {
+            Section("Sync starts from now") {
+                summaryRow("Start time", value: Self.dateFormatter.string(from: syncStartAt))
+            }
+
+            Section("Cash Runway will import") {
+                Text("New Monobank expenses after \(Self.dateFormatter.string(from: syncStartAt))")
+                Text("Only selected UAH card accounts")
+                Text("Only outgoing expenses")
+            }
+
+            Section("Cash Runway will not") {
+                Text("Import old bank history")
+                Text("Import income")
+                Text("Modify existing manual, CSV, or recurring transactions")
+            }
+
+            if let error {
+                Section("Connection Error") {
+                    Text(error)
+                        .foregroundStyle(CashRunwayTheme.negative)
+                        .accessibilityIdentifier(CashRunwayAccessibilityID.monobankConnectionError)
+                }
+            }
+
+            Section {
+                Button(isConnecting ? "Starting..." : "Start syncing new expenses", action: onStart)
+                    .disabled(isConnecting)
+                    .accessibilityIdentifier(CashRunwayAccessibilityID.monobankStartSyncButton)
+            }
+        }
+    }
+
+    private func summaryRow(_ title: String, value: String) -> some View {
+        HStack {
+            Text(title)
+            Spacer()
+            Text(value)
+                .foregroundStyle(CashRunwayTheme.textSecondary)
+        }
+    }
+
+    private static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .medium
+        return formatter
+    }()
+}
+
+private struct MonobankConnectionStatusView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Bindable var model: CashRunwayAppModel
+    let status: BankConnectionStatusSnapshot
+    @State private var isSyncing = false
+    @State private var isAccountManagementPresented = false
+    @State private var isDisconnectConfirmationPresented = false
+
+    var body: some View {
+        let currentStatus = model.monobankConnectionStatus()
+        NavigationStack {
+            Form {
+                Section {
+                    summaryRow("Connected accounts", value: "\(currentStatus.enabledAccountCount)")
+                    summaryRow("Sync starts from", value: dateText(currentStatus.syncStartAt))
+                    summaryRow("Last successful sync", value: dateText(currentStatus.lastSuccessfulSyncAt))
+                    summaryRow("Imported expenses", value: "\(currentStatus.importedExpenseCount)", valueIdentifier: CashRunwayAccessibilityID.monobankImportedExpensesValue)
+                    if let message = model.bankSyncMessage ?? currentStatus.lastSyncError {
+                        summaryRow("Last result", value: message, valueIdentifier: CashRunwayAccessibilityID.monobankLastResultValue)
+                    } else {
+                        summaryRow("Last result", value: "success", valueIdentifier: CashRunwayAccessibilityID.monobankLastResultValue)
+                    }
+                } header: {
+                    Text("Monobank connected")
+                        .accessibilityIdentifier(CashRunwayAccessibilityID.monobankStatusScreen)
+                }
+
+                Section("Diagnostics") {
+                    summaryRow("Provider", value: "Monobank")
+                    summaryRow("Enabled accounts", value: "\(currentStatus.enabledAccountCount)")
+                    summaryRow("Sync start", value: dateText(currentStatus.syncStartAt))
+                    summaryRow("Last sync", value: dateText(currentStatus.lastSuccessfulSyncAt))
+                    summaryRow("Imported expenses", value: "\(currentStatus.importedExpenseCount)")
+                }
+
+                Section {
+                    Button(isSyncing ? "Syncing..." : "Sync now") {
+                        syncNow()
+                    }
+                    .disabled(isSyncing)
+                    .accessibilityIdentifier(CashRunwayAccessibilityID.monobankSyncNowButton)
+                    Button("Manage accounts") {
+                        isAccountManagementPresented = true
+                    }
+                    .accessibilityIdentifier(CashRunwayAccessibilityID.monobankManageAccountsButton)
+                    Button("Disconnect", role: .destructive) {
+                        isDisconnectConfirmationPresented = true
+                    }
+                    .accessibilityIdentifier(CashRunwayAccessibilityID.monobankDisconnectButton)
+                }
+            }
+            .navigationTitle("Monobank")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+            .alert("Disconnect Monobank?", isPresented: $isDisconnectConfirmationPresented) {
+                Button("Cancel", role: .cancel) {}
+                Button("Disconnect", role: .destructive) {
+                    if let integration = status.integration {
+                        model.disconnectBankIntegration(integration.id)
+                    }
+                }
+            } message: {
+                Text("Imported transactions stay in Cash Runway. Only future Monobank sync is disabled on this iPhone.")
+            }
+            .sheet(isPresented: $isAccountManagementPresented) {
+                if let integration = currentStatus.integration {
+                    MonobankAccountManagementView(model: model, integrationID: integration.id)
+                }
+            }
+        }
+    }
+
+    private func syncNow() {
+        guard !isSyncing else { return }
+        isSyncing = true
+        Task { @MainActor in
+            await model.syncMonobankNow()
+            isSyncing = false
+        }
+    }
+
+    private func summaryRow(_ title: String, value: String, valueIdentifier: String? = nil) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title)
+                .foregroundStyle(CashRunwayTheme.textSecondary)
+            Spacer(minLength: 16)
+            if let valueIdentifier {
+                Text(value)
+                    .multilineTextAlignment(.trailing)
+                    .foregroundStyle(CashRunwayTheme.textPrimary)
+                    .accessibilityIdentifier(valueIdentifier)
+            } else {
+                Text(value)
+                    .multilineTextAlignment(.trailing)
+                    .foregroundStyle(CashRunwayTheme.textPrimary)
+            }
+        }
+    }
+
+    private func dateText(_ date: Date?) -> String {
+        guard let date else { return "Never" }
+        return Self.dateFormatter.string(from: date)
+    }
+
+    private static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .medium
+        return formatter
+    }()
+}
+
+private struct MonobankAccountManagementView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Bindable var model: CashRunwayAppModel
+    let integrationID: UUID
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Connected accounts") {
+                    ForEach(model.monobankConnectedAccounts(integrationID: integrationID)) { account in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(account.displayName)
+                            Text(accountSummary(account))
+                                .font(.footnote)
+                                .foregroundStyle(CashRunwayTheme.textSecondary)
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Manage accounts")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+
+    private func accountSummary(_ account: BankAccount) -> String {
+        let walletName = model.wallets.first(where: { $0.id == account.walletID })?.name ?? "Unknown wallet"
+        let state = account.isEnabled ? "Enabled" : "Disabled"
+        return "\(state) · \(walletName)"
     }
 }
 
