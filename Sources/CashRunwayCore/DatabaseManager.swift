@@ -70,6 +70,12 @@ public protocol KeychainStoring: Sendable {
     func delete(account: String)
 }
 
+public protocol BankTokenStore: Sendable {
+    func readToken(account: String) throws -> String?
+    func writeToken(_ token: String, account: String) throws
+    func deleteToken(account: String) throws
+}
+
 public final class KeychainStore: KeychainStoring, @unchecked Sendable {
     private let service: String
     private let accessibility: CFString
@@ -128,6 +134,30 @@ public final class KeychainStore: KeychainStoring, @unchecked Sendable {
             kSecAttrAccount: account,
         ]
         SecItemDelete(query as CFDictionary)
+    }
+}
+
+public final class KeychainBankTokenStore: BankTokenStore, @unchecked Sendable {
+    private let keychain: any KeychainStoring
+
+    public init(keychain: any KeychainStoring) {
+        self.keychain = keychain
+    }
+
+    public func readToken(account: String) throws -> String? {
+        guard let data = try keychain.read(account: account) else { return nil }
+        guard let token = String(data: data, encoding: .utf8) else {
+            throw KeychainStoreError.invalidStoredData(account)
+        }
+        return token
+    }
+
+    public func writeToken(_ token: String, account: String) throws {
+        try keychain.write(Data(token.utf8), account: account)
+    }
+
+    public func deleteToken(account: String) throws {
+        keychain.delete(account: account)
     }
 }
 
@@ -606,6 +636,86 @@ public final class DatabaseManager: @unchecked Sendable {
             try db.execute(sql: "ALTER TABLE transactions ADD COLUMN import_job_id TEXT")
             try db.execute(sql: "ALTER TABLE transactions ADD COLUMN import_fingerprint TEXT")
             try db.execute(sql: "CREATE UNIQUE INDEX idx_transactions_import_fingerprint ON transactions(import_fingerprint) WHERE import_fingerprint IS NOT NULL")
+        }
+
+        migrator.registerMigration("v3_bank_sync") { db in
+            try db.create(table: "bank_integrations") { table in
+                table.column("id", .text).primaryKey()
+                table.column("provider", .text).notNull()
+                table.column("display_name", .text).notNull()
+                table.column("status", .text).notNull()
+                table.column("sync_start_at", .datetime).notNull()
+                table.column("token_keychain_account", .text).notNull()
+                table.column("last_client_info_sync_at", .datetime)
+                table.column("last_successful_sync_at", .datetime)
+                table.column("last_sync_error", .text)
+                table.column("created_at", .datetime).notNull()
+                table.column("updated_at", .datetime).notNull()
+            }
+
+            try db.create(table: "bank_accounts") { table in
+                table.column("id", .text).primaryKey()
+                table.column("integration_id", .text).notNull()
+                table.column("provider", .text).notNull()
+                table.column("provider_account_id", .text).notNull()
+                table.column("wallet_id", .text).notNull()
+                table.column("display_name", .text).notNull()
+                table.column("account_type", .text)
+                table.column("currency_code", .integer).notNull()
+                table.column("masked_pan", .text)
+                table.column("iban", .text)
+                table.column("is_enabled", .boolean).notNull().defaults(to: true)
+                table.column("sync_start_at", .datetime).notNull()
+                table.column("last_successful_sync_at", .datetime)
+                table.column("last_statement_item_time", .integer)
+                table.column("created_at", .datetime).notNull()
+                table.column("updated_at", .datetime).notNull()
+                table.uniqueKey(["integration_id", "provider_account_id"])
+            }
+
+            try db.create(table: "bank_transaction_imports") { table in
+                table.column("id", .text).primaryKey()
+                table.column("provider", .text).notNull()
+                table.column("integration_id", .text).notNull()
+                table.column("bank_account_id", .text).notNull()
+                table.column("provider_account_id", .text).notNull()
+                table.column("provider_statement_item_id", .text).notNull()
+                table.column("statement_time", .integer).notNull()
+                table.column("amount_minor_signed", .integer).notNull()
+                table.column("operation_amount_minor_signed", .integer)
+                table.column("currency_code", .integer).notNull()
+                table.column("mcc", .integer)
+                table.column("original_mcc", .integer)
+                table.column("description", .text)
+                table.column("comment", .text)
+                table.column("counter_name", .text)
+                table.column("counter_iban", .text)
+                table.column("receipt_id", .text)
+                table.column("hold", .boolean)
+                table.column("raw_json", .text).notNull()
+                table.column("cash_runway_transaction_id", .text)
+                table.column("import_status", .text).notNull()
+                table.column("created_at", .datetime).notNull()
+                table.column("updated_at", .datetime).notNull()
+                table.uniqueKey(["provider", "provider_account_id", "provider_statement_item_id"])
+            }
+
+            try db.create(table: "bank_category_rules") { table in
+                table.column("id", .text).primaryKey()
+                table.column("provider", .text).notNull()
+                table.column("rule_type", .text).notNull()
+                table.column("merchant_pattern", .text)
+                table.column("mcc", .integer)
+                table.column("category_id", .text).notNull()
+                table.column("confidence", .integer).notNull().defaults(to: 100)
+                table.column("created_at", .datetime).notNull()
+                table.column("updated_at", .datetime).notNull()
+            }
+
+            try db.create(index: "idx_bank_accounts_integration", on: "bank_accounts", columns: ["integration_id"])
+            try db.create(index: "idx_bank_imports_account_time", on: "bank_transaction_imports", columns: ["bank_account_id", "statement_time"])
+            try db.create(index: "idx_bank_imports_cash_transaction", on: "bank_transaction_imports", columns: ["cash_runway_transaction_id"])
+            try db.create(index: "idx_bank_category_rules_provider_type", on: "bank_category_rules", columns: ["provider", "rule_type"])
         }
 
         return migrator

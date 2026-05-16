@@ -10,6 +10,313 @@ private struct AggregateContribution {
     let categoryID: UUID?
 }
 
+public protocol MonobankClient: Sendable {
+    func clientInfo() async throws -> MonobankClientInfo
+    func statement(accountID: String, from: Date, to: Date) async throws -> [MonobankStatementItem]
+}
+
+public func statementWindows(from: Date, to: Date) -> [DateInterval] {
+    guard from < to else { return [] }
+    let maxDuration = 31.0 * 24.0 * 60.0 * 60.0
+    var windows: [DateInterval] = []
+    var start = from
+    while start < to {
+        let end = min(start.addingTimeInterval(maxDuration), to)
+        windows.append(DateInterval(start: start, end: end))
+        start = end
+    }
+    return windows
+}
+
+public final class MonobankPersonalAPIClient: MonobankClient, @unchecked Sendable {
+    private let tokenStore: any BankTokenStore
+    private let tokenAccount: String
+    private let baseURL: URL
+    private let session: URLSession
+    private let decoder: JSONDecoder
+
+    public init(
+        tokenStore: any BankTokenStore,
+        tokenAccount: String,
+        baseURL: URL = URL(string: "https://api.monobank.ua")!,
+        session: URLSession = .shared
+    ) {
+        self.tokenStore = tokenStore
+        self.tokenAccount = tokenAccount
+        self.baseURL = baseURL
+        self.session = session
+        decoder = JSONDecoder()
+    }
+
+    public func clientInfo() async throws -> MonobankClientInfo {
+        try await get(baseURL.appendingPathComponent("personal").appendingPathComponent("client-info"))
+    }
+
+    public func statement(accountID: String, from: Date, to: Date) async throws -> [MonobankStatementItem] {
+        guard to.timeIntervalSince(from) <= 31 * 24 * 60 * 60 else {
+            throw CashRunwayError.validation("Monobank statement window must not exceed 31 days.")
+        }
+        let accountPath = accountID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? accountID
+        let url = baseURL
+            .appendingPathComponent("personal")
+            .appendingPathComponent("statement")
+            .appendingPathComponent(accountPath)
+            .appendingPathComponent(String(Int(from.timeIntervalSince1970)))
+            .appendingPathComponent(String(Int(to.timeIntervalSince1970)))
+        return try await get(url)
+    }
+
+    private func get<T: Decodable>(_ url: URL) async throws -> T {
+        guard let token = try tokenStore.readToken(account: tokenAccount), !token.isEmpty else {
+            throw BankSyncError.tokenInvalid
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue(token, forHTTPHeaderField: "X-Token")
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            throw BankSyncError.transient(error.localizedDescription)
+        }
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw BankSyncError.invalidResponse
+        }
+        switch httpResponse.statusCode {
+        case 200..<300:
+            do {
+                return try decoder.decode(T.self, from: data)
+            } catch {
+                throw BankSyncError.invalidResponse
+            }
+        case 401, 403:
+            throw BankSyncError.tokenInvalid
+        case 429:
+            throw BankSyncError.rateLimited
+        case 500..<600:
+            throw BankSyncError.transient("Monobank API temporarily unavailable.")
+        default:
+            throw BankSyncError.invalidResponse
+        }
+    }
+}
+
+public final class BankSyncService: @unchecked Sendable {
+    private let repository: CashRunwayRepository
+    private let client: any MonobankClient
+    private let now: @Sendable () -> Date
+
+    public init(
+        repository: CashRunwayRepository,
+        client: any MonobankClient,
+        now: @escaping @Sendable () -> Date = Date.init
+    ) {
+        self.repository = repository
+        self.client = client
+        self.now = now
+    }
+
+    public func syncOnDemand() async throws -> BankSyncResult {
+        var result = BankSyncResult()
+        for integration in try repository.activeBankIntegrations() {
+            do {
+                let integrationResult = try await sync([integration])
+                result.importedCount += integrationResult.importedCount
+                result.skippedCount += integrationResult.skippedCount
+                result.syncedAccountCount += integrationResult.syncedAccountCount
+            } catch BankSyncError.tokenInvalid {
+                continue
+            }
+        }
+        return result
+    }
+
+    public func syncIntegration(_ integrationID: UUID) async throws -> BankSyncResult {
+        guard let integration = try repository.bankIntegrations().first(where: { $0.id == integrationID }) else {
+            throw CashRunwayError.notFound
+        }
+        guard integration.status == .active else {
+            return BankSyncResult()
+        }
+        return try await sync([integration])
+    }
+
+    private func sync(_ integrations: [BankIntegration]) async throws -> BankSyncResult {
+        var result = BankSyncResult()
+        for integration in integrations {
+            for account in try repository.enabledBankAccounts(integrationID: integration.id) {
+                guard account.currencyCode == 980 else { continue }
+                let lowerBound = integration.syncStartAt
+                let from = max(account.lastSuccessfulSyncAt?.addingTimeInterval(-6 * 60 * 60) ?? lowerBound, lowerBound)
+                let to = now()
+
+                for window in statementWindows(from: from, to: to) {
+                    let items: [MonobankStatementItem]
+                    do {
+                        items = try await client.statement(accountID: account.providerAccountID, from: window.start, to: window.end)
+                    } catch BankSyncError.tokenInvalid {
+                        try markTokenInvalid(integration)
+                        throw BankSyncError.tokenInvalid
+                    }
+
+                    let importable = items.filter { item in
+                        Date(timeIntervalSince1970: TimeInterval(item.time)) >= lowerBound
+                            && item.amount < 0
+                            && item.currencyCode == 980
+                    }
+                    result.skippedCount += items.count - importable.count
+                    let importResult = try repository.importMonobankExpenseItems(importable, account: account, integration: integration)
+                    result.importedCount += importResult.importedCount
+                    result.skippedCount += importResult.skippedCount
+                }
+
+                try repository.markBankAccountSynced(account.id, at: to)
+                result.syncedAccountCount += 1
+            }
+        }
+        return result
+    }
+
+    private func markTokenInvalid(_ integration: BankIntegration) throws {
+        var updated = integration
+        updated.status = .tokenInvalid
+        updated.lastSyncError = BankSyncError.tokenInvalid.localizedDescription
+        updated.updatedAt = now()
+        try repository.saveBankIntegration(updated)
+    }
+}
+
+public final class BankCategoryMapper: @unchecked Sendable {
+    private let repository: CashRunwayRepository
+
+    public init(repository: CashRunwayRepository) {
+        self.repository = repository
+    }
+
+    public func resolve(
+        merchant: String?,
+        description: String,
+        mcc: Int?,
+        originalMcc: Int?
+    ) throws -> UUID {
+        try repository.databaseManager.dbQueue.read { db in
+            try BankCategoryResolution.resolve(
+                db,
+                provider: .monobank,
+                merchant: merchant,
+                description: description,
+                mcc: mcc,
+                originalMcc: originalMcc
+            )
+        }
+    }
+}
+
+private enum BankCategoryResolution {
+    static func resolve(
+        _ db: Database,
+        provider: BankProvider,
+        merchant: String?,
+        description: String,
+        mcc: Int?,
+        originalMcc: Int?
+    ) throws -> UUID {
+        if let ruleCategoryID = try merchantRuleCategoryID(db, provider: provider, merchant: merchant, description: description) {
+            return ruleCategoryID
+        }
+        if let ruleCategoryID = try mccRuleCategoryID(db, provider: provider, mcc: mcc, originalMcc: originalMcc) {
+            return ruleCategoryID
+        }
+        for code in [mcc, originalMcc].compactMap({ $0 }) {
+            if let categoryName = builtInCategoryName(mcc: code),
+               let categoryID = try categoryID(db, named: categoryName) {
+                return categoryID
+            }
+        }
+        if let fallbackID = try categoryID(db, named: "Other Expense") {
+            return fallbackID
+        }
+        throw CashRunwayError.notFound
+    }
+
+    private static func merchantRuleCategoryID(_ db: Database, provider: BankProvider, merchant: String?, description: String) throws -> UUID? {
+        let haystack = [merchant, description]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+            .joined(separator: " ")
+        guard !haystack.isEmpty else { return nil }
+
+        let rows = try Row.fetchAll(
+            db,
+            sql: """
+            SELECT merchant_pattern, category_id
+            FROM bank_category_rules
+            WHERE provider = ? AND rule_type = 'merchant' AND merchant_pattern IS NOT NULL
+            ORDER BY confidence DESC, created_at
+            """,
+            arguments: [provider.rawValue]
+        )
+        for row in rows {
+            let pattern = (row["merchant_pattern"] as String).trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if !pattern.isEmpty, haystack.contains(pattern) {
+                return UUID(uuidString: row["category_id"])
+            }
+        }
+        return nil
+    }
+
+    private static func mccRuleCategoryID(_ db: Database, provider: BankProvider, mcc: Int?, originalMcc: Int?) throws -> UUID? {
+        let codes = Set([mcc, originalMcc].compactMap { $0 })
+        guard !codes.isEmpty else { return nil }
+        let rows = try Row.fetchAll(
+            db,
+            sql: """
+            SELECT mcc, category_id
+            FROM bank_category_rules
+            WHERE provider = ? AND rule_type = 'mcc' AND mcc IS NOT NULL
+            ORDER BY confidence DESC, created_at
+            """,
+            arguments: [provider.rawValue]
+        )
+        for row in rows where codes.contains(row["mcc"] as Int) {
+            return UUID(uuidString: row["category_id"])
+        }
+        return nil
+    }
+
+    private static func builtInCategoryName(mcc: Int?) -> String? {
+        guard let mcc else { return nil }
+        return switch mcc {
+        case 5411, 5422, 5441, 5451, 5462, 5499:
+            "Groceries"
+        case 5811, 5812, 5813, 5814:
+            "Restaurants"
+        case 4111, 4112, 4121, 4131, 4789:
+            "Transport"
+        case 5912, 8011, 8021, 8062, 8099:
+            "Health"
+        case 5311, 5399, 5611, 5621, 5651, 5699, 5732:
+            "Shopping"
+        case 7832, 7922, 7991, 7996, 7999:
+            "Entertainment"
+        case 3000...3299, 3500...3999, 4411, 4511, 4722, 7011:
+            "Travel"
+        default:
+            nil
+        }
+    }
+
+    private static func categoryID(_ db: Database, named name: String) throws -> UUID? {
+        try String.fetchOne(
+            db,
+            sql: "SELECT id FROM categories WHERE kind = ? AND is_archived = 0 AND name = ?",
+            arguments: [CategoryKind.expense.rawValue, name]
+        ).flatMap(UUID.init(uuidString:))
+    }
+}
+
 public final class CashRunwayRepository: @unchecked Sendable {
     public let databaseManager: DatabaseManager
 
@@ -123,6 +430,219 @@ public final class CashRunwayRepository: @unchecked Sendable {
     public func labels() throws -> [Label] {
         try databaseManager.dbQueue.read { db in
             try Row.fetchAll(db, sql: "SELECT * FROM labels ORDER BY name").map(Self.label)
+        }
+    }
+
+    public func bankIntegrations() throws -> [BankIntegration] {
+        try databaseManager.dbQueue.read { db in
+            try Row.fetchAll(db, sql: "SELECT * FROM bank_integrations ORDER BY created_at, display_name").map(Self.bankIntegration)
+        }
+    }
+
+    public func activeBankIntegrations() throws -> [BankIntegration] {
+        try databaseManager.dbQueue.read { db in
+            try Row.fetchAll(
+                db,
+                sql: "SELECT * FROM bank_integrations WHERE status = ? ORDER BY created_at, display_name",
+                arguments: [BankIntegrationStatus.active.rawValue]
+            ).map(Self.bankIntegration)
+        }
+    }
+
+    public func bankAccounts(integrationID: UUID) throws -> [BankAccount] {
+        try databaseManager.dbQueue.read { db in
+            try Row.fetchAll(
+                db,
+                sql: "SELECT * FROM bank_accounts WHERE integration_id = ? ORDER BY display_name",
+                arguments: [integrationID.uuidString]
+            ).map(Self.bankAccount)
+        }
+    }
+
+    public func enabledBankAccounts(integrationID: UUID) throws -> [BankAccount] {
+        try databaseManager.dbQueue.read { db in
+            try Row.fetchAll(
+                db,
+                sql: "SELECT * FROM bank_accounts WHERE integration_id = ? AND is_enabled = 1 ORDER BY display_name",
+                arguments: [integrationID.uuidString]
+            ).map(Self.bankAccount)
+        }
+    }
+
+    public func saveBankIntegration(_ integration: BankIntegration) throws {
+        try databaseManager.dbQueue.write { db in
+            try db.execute(
+                sql: """
+                INSERT INTO bank_integrations (
+                    id, provider, display_name, status, sync_start_at, token_keychain_account,
+                    last_client_info_sync_at, last_successful_sync_at, last_sync_error, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    provider = excluded.provider,
+                    display_name = excluded.display_name,
+                    status = excluded.status,
+                    sync_start_at = bank_integrations.sync_start_at,
+                    token_keychain_account = excluded.token_keychain_account,
+                    last_client_info_sync_at = excluded.last_client_info_sync_at,
+                    last_successful_sync_at = excluded.last_successful_sync_at,
+                    last_sync_error = excluded.last_sync_error,
+                    updated_at = excluded.updated_at
+                """,
+                arguments: [
+                    integration.id.uuidString,
+                    integration.provider.rawValue,
+                    integration.displayName,
+                    integration.status.rawValue,
+                    integration.syncStartAt,
+                    integration.tokenKeychainAccount,
+                    integration.lastClientInfoSyncAt,
+                    integration.lastSuccessfulSyncAt,
+                    integration.lastSyncError,
+                    integration.createdAt,
+                    integration.updatedAt,
+                ]
+            )
+        }
+    }
+
+    public func saveBankAccount(_ account: BankAccount) throws {
+        try databaseManager.dbQueue.write { db in
+            try db.execute(
+                sql: """
+                INSERT INTO bank_accounts (
+                    id, integration_id, provider, provider_account_id, wallet_id, display_name,
+                    account_type, currency_code, masked_pan, iban, is_enabled, sync_start_at,
+                    last_successful_sync_at, last_statement_item_time, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    integration_id = excluded.integration_id,
+                    provider = excluded.provider,
+                    provider_account_id = excluded.provider_account_id,
+                    wallet_id = excluded.wallet_id,
+                    display_name = excluded.display_name,
+                    account_type = excluded.account_type,
+                    currency_code = excluded.currency_code,
+                    masked_pan = excluded.masked_pan,
+                    iban = excluded.iban,
+                    is_enabled = excluded.is_enabled,
+                    sync_start_at = bank_accounts.sync_start_at,
+                    last_successful_sync_at = excluded.last_successful_sync_at,
+                    last_statement_item_time = excluded.last_statement_item_time,
+                    updated_at = excluded.updated_at
+                """,
+                arguments: [
+                    account.id.uuidString,
+                    account.integrationID.uuidString,
+                    account.provider.rawValue,
+                    account.providerAccountID,
+                    account.walletID.uuidString,
+                    account.displayName,
+                    account.accountType,
+                    account.currencyCode,
+                    account.maskedPAN,
+                    account.iban,
+                    account.isEnabled,
+                    account.syncStartAt,
+                    account.lastSuccessfulSyncAt,
+                    account.lastStatementItemTime,
+                    account.createdAt,
+                    account.updatedAt,
+                ]
+            )
+        }
+    }
+
+    public func markBankAccountSynced(_ accountID: UUID, at date: Date) throws {
+        try databaseManager.dbQueue.write { db in
+            try db.execute(
+                sql: """
+                UPDATE bank_accounts
+                SET last_successful_sync_at = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                arguments: [date, date, accountID.uuidString]
+            )
+        }
+    }
+
+    public func existingBankImport(provider: BankProvider, providerAccountID: String, statementItemID: String) throws -> BankTransactionImport? {
+        try databaseManager.dbQueue.read { db in
+            try existingBankImport(db, provider: provider, providerAccountID: providerAccountID, statementItemID: statementItemID)
+        }
+    }
+
+    public func importBankExpense(
+        provider: BankProvider,
+        integration: BankIntegration,
+        account: BankAccount,
+        externalItem: BankExternalExpenseItem,
+        draft: TransactionDraft
+    ) throws {
+        throw CashRunwayError.validation("Bank expense import is not implemented yet.")
+    }
+
+    public func importMonobankExpenseItems(
+        _ items: [MonobankStatementItem],
+        account: BankAccount,
+        integration: BankIntegration
+    ) throws -> BankSyncImportResult {
+        try databaseManager.dbQueue.write { db in
+            var result = BankSyncImportResult()
+            let lowerBound = max(integration.syncStartAt, account.syncStartAt)
+
+            for item in items {
+                let occurredAt = Date(timeIntervalSince1970: TimeInterval(item.time))
+                guard occurredAt >= lowerBound, item.amount < 0, item.currencyCode == 980 else {
+                    result.skippedCount += 1
+                    continue
+                }
+                if try existingBankImport(db, provider: .monobank, providerAccountID: account.providerAccountID, statementItemID: item.id) != nil {
+                    result.skippedCount += 1
+                    continue
+                }
+
+                let transactionID = UUID()
+                let importID = UUID()
+                let now = Date()
+                let categoryID = try BankCategoryResolution.resolve(
+                    db,
+                    provider: .monobank,
+                    merchant: item.counterName,
+                    description: item.description,
+                    mcc: item.mcc,
+                    originalMcc: item.originalMcc
+                )
+                let draft = TransactionDraft(
+                    id: transactionID,
+                    kind: .expense,
+                    walletID: account.walletID,
+                    amountMinor: abs(item.amount),
+                    occurredAt: occurredAt,
+                    categoryID: categoryID,
+                    merchant: item.counterName ?? item.description,
+                    note: item.comment ?? "",
+                    source: .bankSync
+                )
+
+                try validate(draft)
+                try saveSingleTransaction(db, draft: draft)
+                try insertBankTransactionImport(
+                    db,
+                    id: importID,
+                    provider: .monobank,
+                    integrationID: integration.id,
+                    bankAccountID: account.id,
+                    providerAccountID: account.providerAccountID,
+                    item: item,
+                    cashRunwayTransactionID: transactionID,
+                    now: now
+                )
+                result.importedCount += 1
+            }
+
+            return result
         }
     }
 
@@ -2254,6 +2774,136 @@ public final class CashRunwayRepository: @unchecked Sendable {
             colorHex: row["color_hex"],
             createdAt: row["created_at"],
             updatedAt: row["updated_at"]
+        )
+    }
+
+    private static func bankIntegration(_ row: Row) throws -> BankIntegration {
+        BankIntegration(
+            id: UUID(uuidString: row["id"])!,
+            provider: BankProvider(rawValue: row["provider"]) ?? .monobank,
+            displayName: row["display_name"],
+            status: BankIntegrationStatus(rawValue: row["status"]) ?? .syncFailed,
+            syncStartAt: row["sync_start_at"],
+            tokenKeychainAccount: row["token_keychain_account"],
+            lastClientInfoSyncAt: row["last_client_info_sync_at"],
+            lastSuccessfulSyncAt: row["last_successful_sync_at"],
+            lastSyncError: row["last_sync_error"],
+            createdAt: row["created_at"],
+            updatedAt: row["updated_at"]
+        )
+    }
+
+    private static func bankAccount(_ row: Row) throws -> BankAccount {
+        BankAccount(
+            id: UUID(uuidString: row["id"])!,
+            integrationID: UUID(uuidString: row["integration_id"])!,
+            provider: BankProvider(rawValue: row["provider"]) ?? .monobank,
+            providerAccountID: row["provider_account_id"],
+            walletID: UUID(uuidString: row["wallet_id"])!,
+            displayName: row["display_name"],
+            accountType: row["account_type"],
+            currencyCode: row["currency_code"],
+            maskedPAN: row["masked_pan"],
+            iban: row["iban"],
+            isEnabled: row["is_enabled"],
+            syncStartAt: row["sync_start_at"],
+            lastSuccessfulSyncAt: row["last_successful_sync_at"],
+            lastStatementItemTime: row["last_statement_item_time"],
+            createdAt: row["created_at"],
+            updatedAt: row["updated_at"]
+        )
+    }
+
+    private static func bankTransactionImport(_ row: Row) throws -> BankTransactionImport {
+        BankTransactionImport(
+            id: UUID(uuidString: row["id"])!,
+            provider: BankProvider(rawValue: row["provider"]) ?? .monobank,
+            integrationID: UUID(uuidString: row["integration_id"])!,
+            bankAccountID: UUID(uuidString: row["bank_account_id"])!,
+            providerAccountID: row["provider_account_id"],
+            providerStatementItemID: row["provider_statement_item_id"],
+            statementTime: row["statement_time"],
+            amountMinorSigned: row["amount_minor_signed"],
+            operationAmountMinorSigned: row["operation_amount_minor_signed"],
+            currencyCode: row["currency_code"],
+            mcc: row["mcc"],
+            originalMCC: row["original_mcc"],
+            description: row["description"],
+            comment: row["comment"],
+            counterName: row["counter_name"],
+            counterIBAN: row["counter_iban"],
+            receiptID: row["receipt_id"],
+            hold: row["hold"],
+            rawJSON: row["raw_json"],
+            cashRunwayTransactionID: (row["cash_runway_transaction_id"] as String?).flatMap(UUID.init(uuidString:)),
+            importStatus: BankTransactionImportStatus(rawValue: row["import_status"]) ?? .failed,
+            createdAt: row["created_at"],
+            updatedAt: row["updated_at"]
+        )
+    }
+
+    private func existingBankImport(_ db: Database, provider: BankProvider, providerAccountID: String, statementItemID: String) throws -> BankTransactionImport? {
+        guard let row = try Row.fetchOne(
+            db,
+            sql: """
+            SELECT * FROM bank_transaction_imports
+            WHERE provider = ? AND provider_account_id = ? AND provider_statement_item_id = ?
+            """,
+            arguments: [provider.rawValue, providerAccountID, statementItemID]
+        ) else {
+            return nil
+        }
+        return try Self.bankTransactionImport(row)
+    }
+
+    private func insertBankTransactionImport(
+        _ db: Database,
+        id: UUID,
+        provider: BankProvider,
+        integrationID: UUID,
+        bankAccountID: UUID,
+        providerAccountID: String,
+        item: MonobankStatementItem,
+        cashRunwayTransactionID: UUID,
+        now: Date
+    ) throws {
+        let rawJSON = String(data: try JSONEncoder().encode(item), encoding: .utf8) ?? "{}"
+        try db.execute(
+            sql: """
+            INSERT INTO bank_transaction_imports (
+                id, provider, integration_id, bank_account_id, provider_account_id,
+                provider_statement_item_id, statement_time, amount_minor_signed,
+                operation_amount_minor_signed, currency_code, mcc, original_mcc,
+                description, comment, counter_name, counter_iban, receipt_id, hold,
+                raw_json, cash_runway_transaction_id, import_status, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            arguments: [
+                id.uuidString,
+                provider.rawValue,
+                integrationID.uuidString,
+                bankAccountID.uuidString,
+                providerAccountID,
+                item.id,
+                item.time,
+                item.amount,
+                item.operationAmount,
+                item.currencyCode,
+                item.mcc,
+                item.originalMcc,
+                item.description,
+                item.comment,
+                item.counterName,
+                item.counterIban,
+                item.receiptId,
+                item.hold,
+                rawJSON,
+                cashRunwayTransactionID.uuidString,
+                BankTransactionImportStatus.imported.rawValue,
+                now,
+                now,
+            ]
         )
     }
 

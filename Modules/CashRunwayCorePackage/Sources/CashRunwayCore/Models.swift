@@ -35,7 +35,309 @@ public enum TransactionKind: String, CaseIterable, Codable, Sendable {
 public enum TransactionSource: String, CaseIterable, Codable, Sendable {
     case manual
     case recurring
+    case bankSync = "bank_sync"
     case importCSV = "import_csv"
+}
+
+public enum BankProvider: String, Codable, Sendable {
+    case monobank
+}
+
+public enum BankIntegrationStatus: String, Codable, Sendable {
+    case active
+    case disabled
+    case tokenInvalid
+    case syncFailed
+}
+
+public enum BankTransactionImportStatus: String, Codable, Sendable {
+    case imported
+    case skipped
+    case failed
+}
+
+public struct BankIntegration: Identifiable, Codable, Hashable, Sendable {
+    public var id: UUID
+    public var provider: BankProvider
+    public var displayName: String
+    public var status: BankIntegrationStatus
+    public var syncStartAt: Date
+    public var tokenKeychainAccount: String
+    public var lastClientInfoSyncAt: Date?
+    public var lastSuccessfulSyncAt: Date?
+    public var lastSyncError: String?
+    public var createdAt: Date
+    public var updatedAt: Date
+
+    public init(id: UUID, provider: BankProvider, displayName: String, status: BankIntegrationStatus, syncStartAt: Date, tokenKeychainAccount: String, lastClientInfoSyncAt: Date?, lastSuccessfulSyncAt: Date?, lastSyncError: String?, createdAt: Date, updatedAt: Date) {
+        self.id = id
+        self.provider = provider
+        self.displayName = displayName
+        self.status = status
+        self.syncStartAt = syncStartAt
+        self.tokenKeychainAccount = tokenKeychainAccount
+        self.lastClientInfoSyncAt = lastClientInfoSyncAt
+        self.lastSuccessfulSyncAt = lastSuccessfulSyncAt
+        self.lastSyncError = lastSyncError
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}
+
+public struct BankAccount: Identifiable, Codable, Hashable, Sendable {
+    public var id: UUID
+    public var integrationID: UUID
+    public var provider: BankProvider
+    public var providerAccountID: String
+    public var walletID: UUID
+    public var displayName: String
+    public var accountType: String?
+    public var currencyCode: Int
+    public var maskedPAN: String?
+    public var iban: String?
+    public var isEnabled: Bool
+    public var syncStartAt: Date
+    public var lastSuccessfulSyncAt: Date?
+    public var lastStatementItemTime: Int?
+    public var createdAt: Date
+    public var updatedAt: Date
+
+    public init(id: UUID, integrationID: UUID, provider: BankProvider, providerAccountID: String, walletID: UUID, displayName: String, accountType: String?, currencyCode: Int, maskedPAN: String?, iban: String?, isEnabled: Bool, syncStartAt: Date, lastSuccessfulSyncAt: Date?, lastStatementItemTime: Int?, createdAt: Date, updatedAt: Date) {
+        self.id = id
+        self.integrationID = integrationID
+        self.provider = provider
+        self.providerAccountID = providerAccountID
+        self.walletID = walletID
+        self.displayName = displayName
+        self.accountType = accountType
+        self.currencyCode = currencyCode
+        self.maskedPAN = maskedPAN
+        self.iban = iban
+        self.isEnabled = isEnabled
+        self.syncStartAt = syncStartAt
+        self.lastSuccessfulSyncAt = lastSuccessfulSyncAt
+        self.lastStatementItemTime = lastStatementItemTime
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}
+
+public struct BankTransactionImport: Identifiable, Codable, Hashable, Sendable {
+    public var id: UUID
+    public var provider: BankProvider
+    public var integrationID: UUID
+    public var bankAccountID: UUID
+    public var providerAccountID: String
+    public var providerStatementItemID: String
+    public var statementTime: Int
+    public var amountMinorSigned: Int64
+    public var operationAmountMinorSigned: Int64?
+    public var currencyCode: Int
+    public var mcc: Int?
+    public var originalMCC: Int?
+    public var description: String?
+    public var comment: String?
+    public var counterName: String?
+    public var counterIBAN: String?
+    public var receiptID: String?
+    public var hold: Bool?
+    public var rawJSON: String
+    public var cashRunwayTransactionID: UUID?
+    public var importStatus: BankTransactionImportStatus
+    public var createdAt: Date
+    public var updatedAt: Date
+
+    public init(id: UUID, provider: BankProvider, integrationID: UUID, bankAccountID: UUID, providerAccountID: String, providerStatementItemID: String, statementTime: Int, amountMinorSigned: Int64, operationAmountMinorSigned: Int64?, currencyCode: Int, mcc: Int?, originalMCC: Int?, description: String?, comment: String?, counterName: String?, counterIBAN: String?, receiptID: String?, hold: Bool?, rawJSON: String, cashRunwayTransactionID: UUID?, importStatus: BankTransactionImportStatus, createdAt: Date, updatedAt: Date) {
+        self.id = id
+        self.provider = provider
+        self.integrationID = integrationID
+        self.bankAccountID = bankAccountID
+        self.providerAccountID = providerAccountID
+        self.providerStatementItemID = providerStatementItemID
+        self.statementTime = statementTime
+        self.amountMinorSigned = amountMinorSigned
+        self.operationAmountMinorSigned = operationAmountMinorSigned
+        self.currencyCode = currencyCode
+        self.mcc = mcc
+        self.originalMCC = originalMCC
+        self.description = description
+        self.comment = comment
+        self.counterName = counterName
+        self.counterIBAN = counterIBAN
+        self.receiptID = receiptID
+        self.hold = hold
+        self.rawJSON = rawJSON
+        self.cashRunwayTransactionID = cashRunwayTransactionID
+        self.importStatus = importStatus
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}
+
+public struct BankCategoryRule: Identifiable, Codable, Hashable, Sendable {
+    public var id: UUID
+    public var provider: BankProvider
+    public var ruleType: String
+    public var merchantPattern: String?
+    public var mcc: Int?
+    public var categoryID: UUID
+    public var confidence: Int
+    public var createdAt: Date
+    public var updatedAt: Date
+
+    public init(id: UUID, provider: BankProvider, ruleType: String, merchantPattern: String?, mcc: Int?, categoryID: UUID, confidence: Int = 100, createdAt: Date, updatedAt: Date) {
+        self.id = id
+        self.provider = provider
+        self.ruleType = ruleType
+        self.merchantPattern = merchantPattern
+        self.mcc = mcc
+        self.categoryID = categoryID
+        self.confidence = confidence
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}
+
+public struct BankExternalExpenseItem: Codable, Hashable, Sendable {
+    public var providerStatementItemID: String
+    public var statementTime: Int
+    public var amountMinorSigned: Int64
+    public var operationAmountMinorSigned: Int64?
+    public var currencyCode: Int
+    public var mcc: Int?
+    public var originalMCC: Int?
+    public var description: String?
+    public var comment: String?
+    public var counterName: String?
+    public var counterIBAN: String?
+    public var receiptID: String?
+    public var hold: Bool?
+    public var rawJSON: String
+
+    public init(providerStatementItemID: String, statementTime: Int, amountMinorSigned: Int64, operationAmountMinorSigned: Int64?, currencyCode: Int, mcc: Int?, originalMCC: Int?, description: String?, comment: String?, counterName: String?, counterIBAN: String?, receiptID: String?, hold: Bool?, rawJSON: String) {
+        self.providerStatementItemID = providerStatementItemID
+        self.statementTime = statementTime
+        self.amountMinorSigned = amountMinorSigned
+        self.operationAmountMinorSigned = operationAmountMinorSigned
+        self.currencyCode = currencyCode
+        self.mcc = mcc
+        self.originalMCC = originalMCC
+        self.description = description
+        self.comment = comment
+        self.counterName = counterName
+        self.counterIBAN = counterIBAN
+        self.receiptID = receiptID
+        self.hold = hold
+        self.rawJSON = rawJSON
+    }
+}
+
+public struct MonobankStatementItem: Codable, Hashable, Sendable {
+    public var id: String
+    public var time: Int
+    public var description: String
+    public var mcc: Int?
+    public var originalMcc: Int?
+    public var amount: Int64
+    public var operationAmount: Int64?
+    public var currencyCode: Int
+    public var commissionRate: Int64?
+    public var cashbackAmount: Int64?
+    public var balance: Int64?
+    public var hold: Bool?
+    public var receiptId: String?
+    public var comment: String?
+    public var counterEdrpou: String?
+    public var counterIban: String?
+    public var counterName: String?
+
+    public init(id: String, time: Int, description: String, mcc: Int?, originalMcc: Int?, amount: Int64, operationAmount: Int64?, currencyCode: Int, commissionRate: Int64?, cashbackAmount: Int64?, balance: Int64?, hold: Bool?, receiptId: String?, comment: String?, counterEdrpou: String?, counterIban: String?, counterName: String?) {
+        self.id = id
+        self.time = time
+        self.description = description
+        self.mcc = mcc
+        self.originalMcc = originalMcc
+        self.amount = amount
+        self.operationAmount = operationAmount
+        self.currencyCode = currencyCode
+        self.commissionRate = commissionRate
+        self.cashbackAmount = cashbackAmount
+        self.balance = balance
+        self.hold = hold
+        self.receiptId = receiptId
+        self.comment = comment
+        self.counterEdrpou = counterEdrpou
+        self.counterIban = counterIban
+        self.counterName = counterName
+    }
+}
+
+public struct MonobankClientInfo: Decodable, Hashable, Sendable {
+    public var name: String
+    public var accounts: [MonobankAccount]
+
+    public init(name: String, accounts: [MonobankAccount]) {
+        self.name = name
+        self.accounts = accounts
+    }
+}
+
+public struct MonobankAccount: Decodable, Hashable, Sendable {
+    public var id: String
+    public var type: String?
+    public var currencyCode: Int
+    public var maskedPan: [String]?
+    public var iban: String?
+
+    public init(id: String, type: String?, currencyCode: Int, maskedPan: [String]?, iban: String?) {
+        self.id = id
+        self.type = type
+        self.currencyCode = currencyCode
+        self.maskedPan = maskedPan
+        self.iban = iban
+    }
+}
+
+public struct BankSyncImportResult: Codable, Hashable, Sendable {
+    public var importedCount: Int
+    public var skippedCount: Int
+
+    public init(importedCount: Int = 0, skippedCount: Int = 0) {
+        self.importedCount = importedCount
+        self.skippedCount = skippedCount
+    }
+}
+
+public struct BankSyncResult: Codable, Hashable, Sendable {
+    public var importedCount: Int
+    public var skippedCount: Int
+    public var syncedAccountCount: Int
+
+    public init(importedCount: Int = 0, skippedCount: Int = 0, syncedAccountCount: Int = 0) {
+        self.importedCount = importedCount
+        self.skippedCount = skippedCount
+        self.syncedAccountCount = syncedAccountCount
+    }
+}
+
+public enum BankSyncError: Error, Equatable, LocalizedError, Sendable {
+    case tokenInvalid
+    case rateLimited
+    case transient(String)
+    case invalidResponse
+
+    public var errorDescription: String? {
+        switch self {
+        case .tokenInvalid:
+            "Bank token is invalid."
+        case .rateLimited:
+            "Bank API rate limit reached."
+        case let .transient(message):
+            message
+        case .invalidResponse:
+            "Bank API returned an invalid response."
+        }
+    }
 }
 
 public enum RecurringTemplateKind: String, CaseIterable, Codable, Sendable {

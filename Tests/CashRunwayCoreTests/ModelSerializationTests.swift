@@ -207,6 +207,7 @@ struct ModelSerializationTests {
         #expect(WalletKind.cash.rawValue == "cash")
         #expect(CategoryKind.expense.rawValue == "expense")
         #expect(TransactionKind.transferOut.rawValue == "transfer_out")
+        #expect(TransactionSource.bankSync.rawValue == "bank_sync")
         #expect(TransactionSource.importCSV.rawValue == "import_csv")
         #expect(RecurringTemplateKind.transfer.rawValue == "transfer")
         #expect(RecurrenceRuleType.monthly.rawValue == "monthly")
