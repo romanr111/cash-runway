@@ -59,8 +59,21 @@ jobs:
           echo "destination=${destination}" >> "${GITHUB_OUTPUT}"
           echo "Using ${destination}"
 
-      - name: Run Swift package tests
-        run: swift test
+      - name: Run unit tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          swift test \
+            --filter '(ModelSerializationTests|UtilityAndModelTests|BankCategoryMapperTests|BankConnectionServiceTests|BankSyncServiceTests)' \
+            2>&1 | tee swift-unit-test.log
+
+      - name: Run integration tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          swift test \
+            --skip '(ModelSerializationTests|UtilityAndModelTests|BankCategoryMapperTests|BankConnectionServiceTests|BankSyncServiceTests)' \
+            2>&1 | tee swift-integration-test.log
 
       - name: Build app
         shell: bash
@@ -75,7 +88,22 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             2>&1 | tee xcodebuild.log | grep -E '(warning:|error:|BUILD SUCCEEDED|BUILD FAILED)'
 
-      - name: Run Xcode scheme tests
+      - name: Install SwiftLint
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v swiftlint >/dev/null 2>&1; then
+            brew install swiftlint
+          fi
+          swiftlint version
+
+      - name: Run static analysis
+        shell: bash
+        run: |
+          set -euo pipefail
+          swiftlint lint --reporter github-actions-logging 2>&1 | tee swiftlint.log
+
+      - name: Run UI E2E tests
         shell: bash
         run: |
           set -euo pipefail
@@ -85,6 +113,7 @@ jobs:
             -scheme "${SCHEME}" \
             -sdk iphonesimulator \
             -destination "${{ steps.simulator.outputs.destination }}" \
+            -only-testing:CashRunwayUITests \
             -resultBundlePath TestResults/CashRunway.xcresult \
             CODE_SIGNING_ALLOWED=NO \
             2>&1 | tee xcode-test.log | grep -E '(warning:|error:|Test Suite|Test Case|passed|failed|TEST SUCCEEDED|TEST FAILED|BUILD SUCCEEDED|BUILD FAILED)'
@@ -95,7 +124,10 @@ jobs:
         with:
           name: ios-ci-failure-logs
           path: |
+            swift-unit-test.log
+            swift-integration-test.log
             xcodebuild.log
+            swiftlint.log
             xcode-test.log
             TestResults
           if-no-files-found: ignore
