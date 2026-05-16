@@ -1,0 +1,9 @@
+included:
+  - AppHost
+  - Modules/CashRunwayCorePackage/Sources
+  - Sources
+  - Tests
+
+excluded:
+  - Vendor
+  - .build
