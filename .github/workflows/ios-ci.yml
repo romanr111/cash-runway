@@ -114,71 +114,11 @@ jobs:
           path: swift-integration-test.log
           if-no-files-found: ignore
 
-  ios-app-build:
-    name: iOS App Build
-    runs-on: macos-26
-    timeout-minutes: 90
-    needs: integration-tests
-
-    steps:
-      - name: Check out PR branch
-        uses: actions/checkout@v5
-        with:
-          repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-
-      - name: Show toolchain
-        run: |
-          xcodebuild -version
-          swift --version
-          xcrun simctl list devices available | grep 'iPhone' || true
-
-      - name: Pick iPhone simulator
-        id: simulator
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if xcrun simctl list devices available | grep -q 'iPhone 17 ('; then
-            destination='platform=iOS Simulator,name=iPhone 17'
-          else
-            device_name="$(xcrun simctl list devices available | awk -F'[()]' '/iPhone/ && /Shutdown|Booted/ { sub(/^[[:space:]]+/, "", $1); print $1; exit }')"
-            if [[ -z "${device_name}" ]]; then
-              echo 'No available iPhone simulator found' >&2
-              exit 1
-            fi
-            destination="platform=iOS Simulator,name=${device_name}"
-          fi
-
-          echo "destination=${destination}" >> "${GITHUB_OUTPUT}"
-          echo "Using ${destination}"
-
-      - name: Build app
-        shell: bash
-        run: |
-          set -euo pipefail
-          xcodebuild \
-            -project "${PROJECT}" \
-            -scheme "${SCHEME}" \
-            -sdk iphonesimulator \
-            -destination "${{ steps.simulator.outputs.destination }}" \
-            clean build \
-            CODE_SIGNING_ALLOWED=NO \
-            2>&1 | tee xcodebuild.log | grep -E '(warning:|error:|BUILD SUCCEEDED|BUILD FAILED)'
-
-      - name: Upload iOS build logs
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-build-logs
-          path: xcodebuild.log
-          if-no-files-found: ignore
-
   e2e-tests:
     name: E2E Tests
     runs-on: macos-26
     timeout-minutes: 90
-    needs: ios-app-build
+    needs: integration-tests
 
     steps:
       - name: Check out PR branch
@@ -218,15 +158,40 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p TestResults
-          xcodebuild test \
+          log_filter='warning:|error:|Test Suite|Test Case|passed|failed'
+          log_filter="${log_filter}|TEST SUCCEEDED|TEST FAILED|BUILD SUCCEEDED|BUILD FAILED"
+          xcodebuild build-for-testing \
             -project "${PROJECT}" \
             -scheme "${SCHEME}" \
             -sdk iphonesimulator \
             -destination "${{ steps.simulator.outputs.destination }}" \
-            -only-testing:CashRunwayUITests \
-            -resultBundlePath TestResults/CashRunway.xcresult \
+            -derivedDataPath DerivedData \
             CODE_SIGNING_ALLOWED=NO \
-            2>&1 | tee xcode-test.log | grep -E '(warning:|error:|Test Suite|Test Case|passed|failed|TEST SUCCEEDED|TEST FAILED|BUILD SUCCEEDED|BUILD FAILED)'
+            2>&1 | tee xcode-build-for-testing.log | grep -E '(warning:|error:|BUILD SUCCEEDED|BUILD FAILED)'
+
+          run_ui_suite() {
+            local suite="$1"
+            local bundle_name="$2"
+
+            xcodebuild test-without-building \
+              -project "${PROJECT}" \
+              -scheme "${SCHEME}" \
+              -sdk iphonesimulator \
+              -destination "${{ steps.simulator.outputs.destination }}" \
+              -derivedDataPath DerivedData \
+              -only-testing:"${suite}" \
+              -test-timeouts-enabled YES \
+              -default-test-execution-time-allowance 120 \
+              -maximum-test-execution-time-allowance 180 \
+              -collect-test-diagnostics on-failure \
+              -resultBundlePath "TestResults/${bundle_name}.xcresult" \
+              CODE_SIGNING_ALLOWED=NO \
+              2>&1 | tee "xcode-test-${bundle_name}.log" | grep -E "${log_filter}"
+          }
+
+          run_ui_suite "CashRunwayUITests/MonobankConnectionUITests" "monobank"
+          run_ui_suite "CashRunwayUITests/OverviewFlowUITests" "overview"
+          run_ui_suite "CashRunwayUITests/TransactionFlowUITests" "transactions"
 
       - name: Upload E2E test results
         if: failure()
@@ -234,6 +199,7 @@ jobs:
         with:
           name: e2e-test-results
           path: |
-            xcode-test.log
+            xcode-build-for-testing.log
+            xcode-test-*.log
             TestResults
           if-no-files-found: ignore
