@@ -163,7 +163,14 @@ final class TransactionFlowUITests: CashRunwayUITestCase {
         assertSwitchIsOn(app.switches["Save as recurring template"])
         tapSheetDoneButton(identifier: CashRunwayUITestIdentifiers.transactionRecurringSheetDoneButton)
 
-        app.buttons[CashRunwayUITestIdentifiers.transactionSaveButton].tap()
+        // Scroll to ensure the Save button is fully visible after sheet dismissals.
+        let saveButton = app.buttons[CashRunwayUITestIdentifiers.transactionSaveButton]
+        XCTAssertTrue(saveButton.waitForExistence(timeout: 5))
+        if !saveButton.isHittable {
+            app.swipeUp()
+            _ = saveButton.waitForExistence(timeout: 3)
+        }
+        saveButton.tap()
         assertTransactionRowExists(note: note)
 
         openTransactionRow(note: note)
