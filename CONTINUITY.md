@@ -18,8 +18,8 @@ Rules:
 
 - Goal: Finish the first-launch data behavior change and publish it as a PR into `origin/main`.
 - Success criteria: Fresh first launch no longer creates fake starter wallets/budgets/transactions, fixture and UI-test paths seed their own test data, validation passes, and a PR is open against `origin/main`.
-- Current state: The `codex/stop-fake-data` branch was rebased onto `origin/main`, local validation passed, and the branch was ready to push for PR creation.
-- Next action: Commit the final test/continuity fixes, then push and open the PR.
+- Current state: PR `#10` was opened from `codex/stop-fake-data` into `main` after local validation passed.
+- Next action: Wait for GitHub Actions on PR `#10`, then merge when checks are green.
 - Open questions: None.
 - Merge status: not-merged.
 - Worktree reason: isolated-feature.
@@ -51,6 +51,7 @@ Rules:
 - 2026-05-17 [VERIFY] Full `swift test` passed 219 tests in 21 suites after 131.489s.
 - 2026-05-17 [VERIFY] iPhone 17 simulator clean build ended `** BUILD SUCCEEDED **`.
 - 2026-05-17 [VERIFY] iPhone 17 simulator launch succeeded as `dev.roman.cashrunway: 29261`; screenshot showed Timeline loaded with empty/no-data state.
+- 2026-05-17 [TOOL] Pushed `codex/stop-fake-data` and opened PR `https://github.com/romanr111/cash-runway/pull/10` into `main`.
 - 2026-05-15 [CODE] Changed `seedIfNeeded()` so fresh databases create default categories only; fake starter wallets, budgets, and transactions are no longer created on first launch.
 - 2026-05-15 [CODE] Updated fixture, UI-test, and unit-test setup paths to seed wallets explicitly when tests need transaction-capable data.
 - 2026-05-15 [CODE] Added zero-wallet UI guards and empty states so first launch remains usable without fake data.
