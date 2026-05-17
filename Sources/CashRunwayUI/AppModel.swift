@@ -46,6 +46,7 @@ public final class CashRunwayAppModel {
     public var errorMessage: String?
     public var bankSyncMessage: String?
     public var isLoading = false
+    public private(set) var hasBootstrapped = false
     public private(set) var latestTransactionMonthKey: Int?
     private var foregroundRefreshTask: Task<Void, Never>?
 
@@ -112,6 +113,7 @@ public final class CashRunwayAppModel {
             try repository.runMaintenance()
             try repository.refreshRecurringInstances()
             await reloadAll()
+            hasBootstrapped = true
             // LEGACY_DISABLED_APP_LOCK:
             // App Lock bootstrap check is disabled for MVP.
             // if let configuration = lockStore.configuration(), configuration.isEnabled {
