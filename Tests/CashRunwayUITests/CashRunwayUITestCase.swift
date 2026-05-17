@@ -23,11 +23,21 @@ class CashRunwayUITestCase: XCTestCase {
         app.launch()
 
         self.app = app
-        XCTAssertTrue(
-            app.buttons[CashRunwayUITestIdentifiers.transactionAddButton].waitForExistence(timeout: 10),
-            "Timeline did not finish bootstrapping."
-        )
+        XCTAssertTrue(waitForTimelineBootstrap(app: app, timeout: 10), "Timeline did not finish bootstrapping.")
         return app
+    }
+
+    private func waitForTimelineBootstrap(app: XCUIApplication, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        let transactionAddButton = app.buttons[CashRunwayUITestIdentifiers.transactionAddButton]
+        let zeroWalletEmptyState = app.staticTexts["Create your first wallet"]
+        while Date() < deadline {
+            if transactionAddButton.exists || zeroWalletEmptyState.exists {
+                return true
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        }
+        return transactionAddButton.exists || zeroWalletEmptyState.exists
     }
 
     func openAddTransaction(file: StaticString = #filePath, line: UInt = #line) {
