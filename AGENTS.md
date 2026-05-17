@@ -47,7 +47,8 @@
 ### Build and launch verification gates
 Every iOS task must pass ALL gates before being marked done, in this order:
 
-1. `swift test` → all tests pass.
+1. `swift test` (unit + integration tests only, exclude E2E/UI tests) → all targeted tests pass.
+   E2E/UI tests are only run in CI/CD pipelines; agents must not run them locally.
 2. `xcodebuild -scheme <scheme> -sdk iphonesimulator \
      -destination 'platform=iOS Simulator,name=iPhone 17' \
      clean build 2>&1 | tail -5`
@@ -98,6 +99,8 @@ Prefer `ReadFile` with `line_offset` over full-file reads for files > 500 lines.
 **Do not add, modify, or stabilize UI tests unless the user explicitly asks.**
 Historical evidence: XCUITest stabilization consumed multiple sessions with fragile accessibility-tree workarounds (non-hittable labels, toolbar button disambiguation, sheet identifier issues) for marginal coverage gains. Fast unit tests in `CashRunwayCoreTests` provide better ROI.
 
+**E2E/UI tests are exclusively a CI/CD pipeline responsibility; agents must never run them locally.**
+
 If UI tests are explicitly requested:
 - Use the existing `UITestLaunchConfiguration` harness in `AppHost/UITestRuntime.swift`.
 - Prefer accessibility identifiers on stable SwiftUI views (buttons, list rows) over toolbar/sheet identifiers, which have proven unstable.
@@ -110,7 +113,7 @@ Real-device builds, forensics, and `devicectl` launches are **slow and token-exp
 
 ### Development speed rules
 - Native iOS tooling is the default for this repo. Use host Swift/Xcode/iOS Simulator workflows; do not create Docker/container workflows for normal Cash Runway work unless explicitly asked.
-- Use targeted checks during implementation, then run the full required gates before merge/publish. Core-only changes start with focused `swift test --filter ...`; UI-only changes start with filtered simulator `xcodebuild`; DB/keychain/persistence/security changes require focused tests, full `swift test`, simulator build, and boot/log check.
+- Use targeted checks during implementation, then run the full required gates before merge/publish. Core-only changes start with focused `swift test --filter ...`; UI-only changes start with filtered simulator `xcodebuild`; DB/keychain/persistence/security changes require focused unit/integration tests, full unit/integration `swift test`, simulator build, and boot/log check.
 - Before broad exploration, use the Code location quick reference above. For large files, use `rg -n` plus line-window reads instead of reading whole files.
 - UI tests are opt-in and targeted. When explicitly working on them, use deterministic `CASH_RUNWAY_UI_TEST_MODE` / `UITEST-*` data and inspect the live accessibility tree or logs before changing UI code for a failing selector.
 - For confirmed real-device issues, preserve evidence first when data may be at risk, verify device unlock/trust, and prefer plain `devicectl` launch/timing before Xcode/LLDB-heavy debugging.
@@ -139,3 +142,9 @@ For a final success confirmation, `tail -5` is sufficient.
 - Disable tests with `@Test(.disabled("reason"))`, not by commenting out.
 - Prefer `TestSupport.makeRepository()` and `TestSupport.makeLocation()` for isolated DBs.
 - Use `TestKeychainStore` instead of the global keychain to avoid cross-test collisions.
+
+### Test execution policy
+- **Never run full regression** (unfiltered `swift test`, full UI/E2E suite) in remote pipelines/CI or locally.
+- **Allowed locally**: Full unit tests, full integration tests, individual failed tests, or `--filter` targeted runs.
+- **E2E/UI tests**: Only run in CI/CD pipelines; agents must never run them locally.
+- Re-run only failing targeted tests locally to verify fixes — not full suites.
