@@ -13,16 +13,31 @@ struct CashRunwayAppRuntime {
             do {
                 return try configuration.makeRuntime()
             } catch {
-                return CashRunwayAppRuntime(model: nil, startupError: error.localizedDescription, onboardingStore: .standard, bypassOnboarding: false)
+                return CashRunwayAppRuntime(
+                    model: nil,
+                    startupError: error.localizedDescription,
+                    onboardingStore: .standard,
+                    bypassOnboarding: false
+                )
             }
         }
         #endif
 
         do {
             let model = try CashRunwayAppModel.live()
-            return CashRunwayAppRuntime(model: model, startupError: nil, onboardingStore: .standard, bypassOnboarding: false)
+            return CashRunwayAppRuntime(
+                model: model,
+                startupError: nil,
+                onboardingStore: .standard,
+                bypassOnboarding: false
+            )
         } catch {
-            return CashRunwayAppRuntime(model: nil, startupError: error.localizedDescription, onboardingStore: .standard, bypassOnboarding: false)
+            return CashRunwayAppRuntime(
+                model: nil,
+                startupError: error.localizedDescription,
+                onboardingStore: .standard,
+                bypassOnboarding: false
+            )
         }
     }
 }
@@ -39,14 +54,20 @@ private struct UITestLaunchConfiguration {
         let environment = ProcessInfo.processInfo.environment
         guard environment["CASH_RUNWAY_UI_TEST_MODE"] == "1" else { return nil }
 
-        let scenario = Scenario(rawValue: environment["CASH_RUNWAY_UI_TEST_SCENARIO"] ?? Scenario.transactionCore.rawValue)
+        let scenario = Scenario(
+            rawValue: environment["CASH_RUNWAY_UI_TEST_SCENARIO"]
+                ?? Scenario.transactionCore.rawValue
+        )
         let databasePath = environment["CASH_RUNWAY_UI_TEST_DB_PATH"] ?? "cash-runway-ui-tests.sqlite"
 
         return UITestLaunchConfiguration(
             scenario: scenario,
             databaseURL: Self.resolveDatabaseURL(databasePath),
             shouldReset: environment["CASH_RUNWAY_UI_TEST_RESET"] == "1",
-            monobankMode: UITestMonobankMode(rawValue: environment["CASH_RUNWAY_UI_TEST_MONOBANK_MODE"] ?? UITestMonobankMode.happyPath.rawValue) ?? .happyPath
+            monobankMode: UITestMonobankMode(
+                rawValue: environment["CASH_RUNWAY_UI_TEST_MONOBANK_MODE"]
+                    ?? UITestMonobankMode.happyPath.rawValue
+            ) ?? .happyPath
         )
     }
 
@@ -180,8 +201,14 @@ private final class UITestMonobankTokenValidator: MonobankTokenValidating, @unch
         return MonobankClientInfo(
             name: "UITest Monobank User",
             accounts: [
-                MonobankAccount(id: "uitest-uah-card", type: "black", currencyCode: 980, maskedPan: ["4444333322221111"], iban: nil),
-                MonobankAccount(id: "uitest-usd-card", type: "white", currencyCode: 840, maskedPan: ["5555666677778888"], iban: nil),
+                MonobankAccount(
+                    id: "uitest-uah-card", type: "black",
+                    currencyCode: 980, maskedPan: ["4444333322221111"], iban: nil
+                ),
+                MonobankAccount(
+                    id: "uitest-usd-card", type: "white",
+                    currencyCode: 840, maskedPan: ["5555666677778888"], iban: nil
+                ),
             ]
         )
     }
@@ -256,12 +283,24 @@ private final class UITestBankSyncPerformer: BankSyncPerforming, @unchecked Send
     private func statementItems(for integration: BankIntegration, attempt: Int) -> [MonobankStatementItem] {
         let startTime = Int(integration.syncStartAt.timeIntervalSince1970)
         var items = [
-            statementItem(id: "uitest-old-history", time: startTime - 60, amount: -7_777, description: "UITEST old history", comment: "UITEST-MONO-OLD"),
-            statementItem(id: "uitest-income", time: startTime + 5, amount: 9_999, description: "UITEST income", comment: "UITEST-MONO-INCOME"),
-            statementItem(id: "uitest-new-expense", time: startTime + 30, amount: -1_234, description: "UITEST Monobank Merchant", comment: "UITEST-MONO-NEW"),
+            statementItem(
+                id: "uitest-old-history", time: startTime - 60,
+                amount: -7_777, description: "UITEST old history", comment: "UITEST-MONO-OLD"
+            ),
+            statementItem(
+                id: "uitest-income", time: startTime + 5,
+                amount: 9_999, description: "UITEST income", comment: "UITEST-MONO-INCOME"
+            ),
+            statementItem(
+                id: "uitest-new-expense", time: startTime + 30,
+                amount: -1_234, description: "UITEST Monobank Merchant", comment: "UITEST-MONO-NEW"
+            ),
         ]
         if mode == .foregroundNewExpense || (mode == .firstSyncFailsThenRecovers && attempt > 1) {
-            items.append(statementItem(id: "uitest-later-expense", time: startTime + 120, amount: -2_345, description: "UITEST Foreground Merchant", comment: "UITEST-MONO-FOREGROUND"))
+            items.append(statementItem(
+                id: "uitest-later-expense", time: startTime + 120,
+                amount: -2_345, description: "UITEST Foreground Merchant", comment: "UITEST-MONO-FOREGROUND"
+            ))
         }
         return items
     }
