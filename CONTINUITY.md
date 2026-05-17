@@ -18,8 +18,8 @@ Rules:
 
 - Goal: Finish the first-launch data behavior change and publish it as a PR into `origin/main`.
 - Success criteria: Fresh first launch no longer creates fake starter wallets/budgets/transactions, fixture and UI-test paths seed their own test data, validation passes, and a PR is open against `origin/main`.
-- Current state: The `codex/stop-fake-data` worktree was being rebased onto `origin/main` with conflicts resolved toward current-main continuity and explicit fixture seeding.
-- Next action: Continue the rebase, run validation, then push and open the PR.
+- Current state: The `codex/stop-fake-data` branch was rebased onto `origin/main`, local validation passed, and the branch was ready to push for PR creation.
+- Next action: Commit the final test/continuity fixes, then push and open the PR.
 - Open questions: None.
 - Merge status: not-merged.
 - Worktree reason: isolated-feature.
@@ -45,6 +45,12 @@ Rules:
 - 2026-05-17 [TOOL] Started from the preserved clean worktree `/Users/roman/.codex/worktrees/cash-runway-stop-fake-data` on `codex/stop-fake-data`.
 - 2026-05-17 [TOOL] Confirmed no open GitHub PR existed for the branch before publishing.
 - 2026-05-17 [CODE] Rebased the feature branch onto current `origin/main` and resolved first-pass conflicts in `CONTINUITY.md` and `CSVEdgeCaseTests.swift`.
+- 2026-05-17 [CODE] Completed the rebase as commits `c80d4ac` and `fc43bea`; second-pass conflicts kept current-main bank sync, backup/restore, and UI-test keychain behavior while preserving explicit fixture-wallet seeding.
+- 2026-05-17 [FIX] Updated post-main BankSync and CSV idempotency tests to seed fixture wallets explicitly now that fresh `seedIfNeeded()` no longer creates wallets.
+- 2026-05-17 [VERIFY] Focused affected suite run passed 51 tests across `CSVIdempotencyTests`, `BankSyncImportTests`, `BankSyncServiceTests`, `BankConnectionServiceTests`, `BankSyncSchemaTests`, and `RepositoryUncoveredTests`.
+- 2026-05-17 [VERIFY] Full `swift test` passed 219 tests in 21 suites after 131.489s.
+- 2026-05-17 [VERIFY] iPhone 17 simulator clean build ended `** BUILD SUCCEEDED **`.
+- 2026-05-17 [VERIFY] iPhone 17 simulator launch succeeded as `dev.roman.cashrunway: 29261`; screenshot showed Timeline loaded with empty/no-data state.
 - 2026-05-15 [CODE] Changed `seedIfNeeded()` so fresh databases create default categories only; fake starter wallets, budgets, and transactions are no longer created on first launch.
 - 2026-05-15 [CODE] Updated fixture, UI-test, and unit-test setup paths to seed wallets explicitly when tests need transaction-capable data.
 - 2026-05-15 [CODE] Added zero-wallet UI guards and empty states so first launch remains usable without fake data.
@@ -54,4 +60,7 @@ Rules:
 - 2026-05-17 [TOOL] `git worktree list` showed primary checkout plus `/Users/roman/.codex/worktrees/cash-runway-stop-fake-data`.
 - 2026-05-17 [TOOL] `gh auth status` confirmed GitHub CLI authentication for `romanr111`.
 - 2026-05-17 [TOOL] `git rebase origin/main` stopped on `CONTINUITY.md` and `Tests/CashRunwayCoreTests/CSVEdgeCaseTests.swift`; conflicts were resolved manually.
+- 2026-05-17 [TOOL] `diff -rq Sources/CashRunwayCore Modules/CashRunwayCorePackage/Sources/CashRunwayCore` returned clean after rebase.
+- 2026-05-17 [TOOL] Local `swiftlint` executable was not installed, so local SwiftLint validation was skipped; GitHub Actions will run repository lint.
+- 2026-05-17 [TOOL] Simulator startup log check found no crash/fatal/exception/error lines for `CashRunway`; only a non-fatal AMFI simulator message matched the broad predicate.
 - 2026-05-17 [CODE] Decision: preserve current-main concise continuity format and discard stale legacy ledger blocks during conflict resolution.

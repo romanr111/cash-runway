@@ -7,6 +7,7 @@ struct BankConnectionServiceTests {
     @Test func tokenValidationCallsClientInfoOnly() async throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let validator = FakeMonobankTokenValidator(
             info: MonobankClientInfo(name: "Test User", accounts: [Self.uahAccount(id: "account-1")])
         )
@@ -27,6 +28,7 @@ struct BankConnectionServiceTests {
     @Test func finalConfirmationCreatesActiveIntegrationAndSelectedUAHAccounts() async throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let keychain = TestKeychainStore()
         let tokenStore = KeychainBankTokenStore(keychain: keychain)
         let syncStartAt = Date(timeIntervalSince1970: 1_800_000_000)
@@ -65,6 +67,7 @@ struct BankConnectionServiceTests {
     @Test func connectionFailureRollsBackRowsAndDeletesStoredToken() async throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let keychain = TestKeychainStore()
         let walletID = try #require(try repository.wallets().first?.id)
         let service = MonobankConnectionService(
@@ -93,6 +96,7 @@ struct BankConnectionServiceTests {
     @Test func enabledAccountRequiresExistingWalletMapping() async throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let service = MonobankConnectionService(
             repository: repository,
             tokenStore: KeychainBankTokenStore(keychain: TestKeychainStore()),
@@ -115,6 +119,7 @@ struct BankConnectionServiceTests {
     @Test func successfulSyncClearsPreviousErrorAndUpdatesIntegrationStatus() async throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let syncStartAt = Date(timeIntervalSince1970: 1_800_000_000)
         let now = syncStartAt.addingTimeInterval(60)
         let walletID = try #require(try repository.wallets().first?.id)
@@ -192,6 +197,7 @@ struct BankConnectionServiceTests {
     @Test func disconnectDisablesIntegrationAndKeepsImportedTransactions() async throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let keychain = TestKeychainStore()
         let tokenStore = KeychainBankTokenStore(keychain: keychain)
         let syncStartAt = Date(timeIntervalSince1970: 1_800_000_000)
@@ -228,6 +234,7 @@ struct BankConnectionServiceTests {
     @Test func learningMerchantCategoryRuleAffectsFutureImports() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let syncStartAt = Date(timeIntervalSince1970: 1_800_000_000)
         let walletID = try #require(try repository.wallets().first?.id)
         let groceries = try #require(try repository.categories(kind: .expense).first { $0.name == "Groceries" })

@@ -86,6 +86,7 @@ struct BankSyncSchemaTests {
     @Test func bankAccountsCanBeSavedAndFilteredByEnabledState() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let walletID = try #require(try repository.wallets().first?.id)
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         let integrationID = UUID()
@@ -216,6 +217,7 @@ struct BankSyncSchemaTests {
     @Test func bankSchemaChangesPreserveExistingTransactionSources() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let walletID = try #require(try repository.wallets().first?.id)
         let expenseCategoryID = try #require(try repository.categories(kind: .expense).first?.id)
         let incomeCategoryID = try #require(try repository.categories(kind: .income).first?.id)

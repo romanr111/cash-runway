@@ -114,7 +114,7 @@ struct RepositoryUncoveredTests {
         let outRow = try #require(pairRows.first { ($0["type"] as String) == "transfer_out" })
         let inRow = try #require(pairRows.first { ($0["type"] as String) == "transfer_in" })
         let outID = try #require(UUID(uuidString: outRow["id"]))
-        let inID = try #require(UUID(uuidString: inRow["id"]))
+        _ = try #require(UUID(uuidString: inRow["id"]))
 
         // Delete from transfer_out side
         try repository.deleteTransaction(id: outID)

@@ -8,6 +8,7 @@ struct BankSyncImportTests {
     @Test func importsNegativeUAHMonobankItemAfterSyncStart() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let setup = try makeBankSetup(repository: repository)
 
         let result = try repository.importMonobankExpenseItems(
@@ -52,6 +53,7 @@ struct BankSyncImportTests {
     @Test func skipsOldPositiveZeroAndNonUAHMonobankItems() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let setup = try makeBankSetup(repository: repository)
 
         let result = try repository.importMonobankExpenseItems(
@@ -76,6 +78,7 @@ struct BankSyncImportTests {
     @Test func dedupesSameMonobankStatementItemID() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let setup = try makeBankSetup(repository: repository)
         let item = monobankItem(
             id: "duplicate-statement",
@@ -100,6 +103,7 @@ struct BankSyncImportTests {
     @Test func bankImportDoesNotModifyExistingTransactionsWithSameDateAmountMerchant() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let setup = try makeBankSetup(repository: repository)
         let categories = try repository.categories(kind: .expense)
         let categoryID = try #require(categories.first?.id)
