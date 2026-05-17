@@ -139,3 +139,8 @@ For a final success confirmation, `tail -5` is sufficient.
 - Disable tests with `@Test(.disabled("reason"))`, not by commenting out.
 - Prefer `TestSupport.makeRepository()` and `TestSupport.makeLocation()` for isolated DBs.
 - Use `TestKeychainStore` instead of the global keychain to avoid cross-test collisions.
+
+### Test execution policy
+- **Never run full regression** (`swift test` without filters) in remote pipelines/CI.
+- Run only failed tests (or `--filter` targets) locally; full regression is CI's job.
+- Re-run only failing tests locally to verify — not the entire suite.
