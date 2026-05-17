@@ -11,6 +11,7 @@ final class MonobankConnectionUITests: CashRunwayUITestCase {
         XCTAssertTrue(app.staticTexts["White card ****8888 · 840"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Not supported in MVP"].waitForExistence(timeout: 5))
 
+        createMonobankWallet()
         app.buttons[CashRunwayUITestIdentifiers.monobankAccountsContinueButton].tap()
         app.buttons[CashRunwayUITestIdentifiers.monobankStartSyncButton].tap()
 
@@ -50,6 +51,7 @@ final class MonobankConnectionUITests: CashRunwayUITestCase {
 
         openMonobankConnection()
         completeTokenValidation()
+        createMonobankWallet()
         app.buttons[CashRunwayUITestIdentifiers.monobankAccountsContinueButton].tap()
         app.buttons[CashRunwayUITestIdentifiers.monobankStartSyncButton].tap()
 
@@ -85,5 +87,11 @@ final class MonobankConnectionUITests: CashRunwayUITestCase {
         hideKeyboardIfNeeded()
         app.buttons[CashRunwayUITestIdentifiers.monobankValidateButton].tap()
         XCTAssertTrue(app.staticTexts["Black card ****1111 · UAH"].waitForExistence(timeout: 5), file: file, line: line)
+    }
+
+    private func createMonobankWallet(file: StaticString = #filePath, line: UInt = #line) {
+        let createWalletButton = app.buttons["Create Monobank wallet"].firstMatch
+        XCTAssertTrue(createWalletButton.waitForExistence(timeout: 5), file: file, line: line)
+        createWalletButton.tap()
     }
 }
