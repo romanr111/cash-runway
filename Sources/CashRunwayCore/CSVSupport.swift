@@ -91,7 +91,9 @@ public final class CSVService: @unchecked Sendable {
                 guard kind != .transfer else {
                     throw CashRunwayError.validation("Transfer rows are not supported for CSV import.")
                 }
-                let walletID = parseWalletID(row: row, mapping: mapping, headerIndex: headerIndex, wallets: wallets)
+                guard let walletID = parseWalletID(row: row, mapping: mapping, headerIndex: headerIndex, wallets: wallets) else {
+                    throw CashRunwayError.validation("Wallet ID not found for CSV row.")
+                }
                 let merchant = cell(row, mapping.merchantColumn, headerIndex)
                 let note = cell(row, mapping.noteColumn, headerIndex)
                 let rawCategoryName = normalizedCategoryName(cell(row, mapping.categoryColumn, headerIndex))
@@ -338,7 +340,7 @@ public final class CSVService: @unchecked Sendable {
         return mapping.defaultKind
     }
 
-    private func parseWalletID(row: [String], mapping: CSVImportMapping, headerIndex: [String: Int], wallets: [Wallet]) -> UUID {
+    private func parseWalletID(row: [String], mapping: CSVImportMapping, headerIndex: [String: Int], wallets: [Wallet]) -> UUID? {
         let raw = cell(row, mapping.walletColumn, headerIndex)
         guard !raw.isEmpty else { return mapping.walletID }
         return wallets.first(where: { $0.name.caseInsensitiveCompare(raw) == .orderedSame })?.id ?? mapping.walletID
