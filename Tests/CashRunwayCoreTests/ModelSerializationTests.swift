@@ -189,18 +189,18 @@ struct ModelSerializationTests {
     }
 
     @Test func transactionQueryEquatable() {
-        var a = TransactionQuery()
-        var b = TransactionQuery()
-        #expect(a == b)
+        var queryA = TransactionQuery()
+        var queryB = TransactionQuery()
+        #expect(queryA == queryB)
 
-        a.searchText = "foo"
-        #expect(a != b)
+        queryA.searchText = "foo"
+        #expect(queryA != queryB)
 
-        b.searchText = "foo"
-        #expect(a == b)
+        queryB.searchText = "foo"
+        #expect(queryA == queryB)
 
-        a.walletID = UUID()
-        #expect(a != b)
+        queryA.walletID = UUID()
+        #expect(queryA != queryB)
     }
 
     @Test func enumRawValueStability() {

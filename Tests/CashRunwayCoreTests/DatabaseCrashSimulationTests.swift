@@ -14,15 +14,15 @@ struct DatabaseCrashSimulationTests {
         let wallets = try repository.wallets()
         let category = try #require(try repository.categories(kind: .expense).first)
 
-        for i in 0..<20 {
+        for index in 0..<20 {
             try repository.saveTransaction(
                 TransactionDraft(
                     kind: .expense,
                     walletID: wallets[0].id,
-                    amountMinor: Int64(500 * (i + 1)),
+                    amountMinor: Int64(500 * (index + 1)),
                     occurredAt: .now,
                     categoryID: category.id,
-                    merchant: "Crash test \(i)",
+                    merchant: "Crash test \(index)",
                     note: ""
                 )
             )

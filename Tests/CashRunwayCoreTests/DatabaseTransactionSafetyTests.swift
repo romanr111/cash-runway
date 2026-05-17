@@ -45,15 +45,15 @@ struct DatabaseTransactionSafetyTests {
         let wallets = try repository.wallets()
         #expect(wallets.count >= 2)
 
-        for i in 0..<20 {
+        for index in 0..<20 {
             try repository.saveTransaction(
                 TransactionDraft(
                     kind: .transfer,
                     walletID: wallets[0].id,
                     destinationWalletID: wallets[1].id,
-                    amountMinor: Int64(1_000 * (i + 1)),
+                    amountMinor: Int64(1_000 * (index + 1)),
                     occurredAt: .now,
-                    merchant: "Transfer \(i)",
+                    merchant: "Transfer \(index)",
                     note: ""
                 )
             )

@@ -991,7 +991,9 @@ struct CashRunwayCoreTests {
         #expect(result.job.invalidRows == 1)
         #expect(result.rowErrors.first?.rowNumber == 3)
     }
+}
 
+extension CashRunwayCoreTests {
     @Test func attachedWalletCSVFixtureImportsWithoutRowLossWhenPresent() throws {
         let fixtureURL = URL(fileURLWithPath: "/Users/roman/Downloads/transactions_export_2026-04-27_wallet.csv")
         guard FileManager.default.fileExists(atPath: fixtureURL.path) else {

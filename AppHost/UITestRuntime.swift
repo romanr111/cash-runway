@@ -55,7 +55,6 @@ private struct UITestLaunchConfiguration {
     let shouldReset: Bool
     let monobankMode: UITestMonobankMode
 
-    private let keychainService = "dev.roman.cashrunway.uitest"
     private let defaultsSuiteName = "dev.roman.cashrunway.uitest"
 
     var onboardingStore: UserDefaults {
@@ -63,7 +62,7 @@ private struct UITestLaunchConfiguration {
     }
 
     func makeRuntime() throws -> CashRunwayAppRuntime {
-        let keychain = KeychainStore(service: keychainService)
+        let keychain = UITestKeychainStore()
         // LEGACY_DISABLED_APP_LOCK:
         // App Lock is disabled for MVP.
         // keychain.delete(account: "app-lock-config")
@@ -81,7 +80,7 @@ private struct UITestLaunchConfiguration {
                 directoryName: "CashRunwayUITests"
             ),
             allowsDestructiveRecovery: true,
-            keychainService: keychainService
+            keychain: keychain
         )
         let repository = CashRunwayRepository(databaseManager: databaseManager)
         try repository.seedIfNeeded()
@@ -91,8 +90,8 @@ private struct UITestLaunchConfiguration {
         // App Lock is disabled for MVP.
         // let lockStore = AppLockStore(keychain: keychain)
         let model: CashRunwayAppModel
+        let tokenStore = KeychainBankTokenStore(keychain: keychain)
         if scenario == .monobankFirstStart {
-            let tokenStore = KeychainBankTokenStore(keychain: keychain)
             model = CashRunwayAppModel(
                 repository: repository,
                 bankTokenStore: tokenStore,
@@ -100,7 +99,12 @@ private struct UITestLaunchConfiguration {
                 monobankTokenValidator: UITestMonobankTokenValidator(mode: monobankMode)
             )
         } else {
-            model = CashRunwayAppModel(repository: repository)
+            model = CashRunwayAppModel(
+                repository: repository,
+                bankTokenStore: tokenStore,
+                bankSyncPerformer: UITestBankSyncPerformer(repository: repository, mode: monobankMode),
+                monobankTokenValidator: UITestMonobankTokenValidator(mode: monobankMode)
+            )
         }
         return CashRunwayAppRuntime(
             model: model,
@@ -129,6 +133,29 @@ private struct UITestLaunchConfiguration {
             return URL(fileURLWithPath: rawPath)
         }
         return FileManager.default.temporaryDirectory.appendingPathComponent(rawPath)
+    }
+}
+
+private final class UITestKeychainStore: KeychainStoring, @unchecked Sendable {
+    private let lock = NSLock()
+    private var items: [String: Data] = [:]
+
+    func read(account: String) throws -> Data? {
+        lock.lock()
+        defer { lock.unlock() }
+        return items[account]
+    }
+
+    func write(_ data: Data, account: String) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        items[account] = data
+    }
+
+    func delete(account: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        items.removeValue(forKey: account)
     }
 }
 

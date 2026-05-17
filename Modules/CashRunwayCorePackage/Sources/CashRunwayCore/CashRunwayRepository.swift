@@ -613,7 +613,9 @@ public final class CashRunwayRepository: @unchecked Sendable {
     public convenience init(allowsDestructiveRecovery: Bool = false) throws {
         try self.init(databaseManager: DatabaseManager(allowsDestructiveRecovery: allowsDestructiveRecovery))
     }
+}
 
+extension CashRunwayRepository {
     public func seedIfNeeded() throws {
         try databaseManager.dbQueue.write { db in
             let count = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM wallets") ?? 0
@@ -1453,6 +1455,9 @@ public final class CashRunwayRepository: @unchecked Sendable {
         }
     }
 
+}
+
+extension CashRunwayRepository {
     public func timelineSnapshot(monthKey: Int, walletID: UUID? = nil, query: TransactionQuery = .init(), period: TimelinePeriod = .month) throws -> TimelineSnapshot {
         try databaseManager.dbQueue.read { db in
             let effectiveWalletID = walletID ?? query.walletID
@@ -1566,19 +1571,19 @@ public final class CashRunwayRepository: @unchecked Sendable {
         var byYear: [Int: (income: Int64, expense: Int64)] = [:]
         for row in rows {
             let month: Int = row["month_key"]
-            let y = month / 100
-            var current = byYear[y] ?? (0, 0)
+            let yearKey = month / 100
+            var current = byYear[yearKey] ?? (0, 0)
             current.income += row["income_minor"]
             current.expense += row["expense_minor"]
-            byYear[y] = current
+            byYear[yearKey] = current
         }
-        return years.map { y in
-            let values = byYear[y] ?? (0, 0)
+        return years.map { yearKey in
+            let values = byYear[yearKey] ?? (0, 0)
             return TimelineBarPoint(
-                periodKey: y,
+                periodKey: yearKey,
                 incomeMinor: values.income,
                 expenseMinor: values.expense,
-                xLabel: "\(y)"
+                xLabel: "\(yearKey)"
             )
         }
     }
@@ -1926,6 +1931,9 @@ public final class CashRunwayRepository: @unchecked Sendable {
         }
     }
 
+}
+
+extension CashRunwayRepository {
     public func reorderCategories(kind: CategoryKind, orderedCategoryIDs: [UUID]) throws {
         try databaseManager.dbQueue.write { db in
             for (index, id) in orderedCategoryIDs.enumerated() {
@@ -2346,6 +2354,9 @@ public final class CashRunwayRepository: @unchecked Sendable {
         }
     }
 
+}
+
+extension CashRunwayRepository {
     private func saveSingleTransaction(_ db: Database, draft: TransactionDraft, updateDerivedData: Bool = true) throws {
         let now = Date()
         let id = draft.id ?? UUID()

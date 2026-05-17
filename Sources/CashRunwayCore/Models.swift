@@ -102,7 +102,24 @@ public struct BankAccount: Identifiable, Codable, Hashable, Sendable {
     public var createdAt: Date
     public var updatedAt: Date
 
-    public init(id: UUID, integrationID: UUID, provider: BankProvider, providerAccountID: String, walletID: UUID, displayName: String, accountType: String?, currencyCode: Int, maskedPAN: String?, iban: String?, isEnabled: Bool, syncStartAt: Date, lastSuccessfulSyncAt: Date?, lastStatementItemTime: Int?, createdAt: Date, updatedAt: Date) {
+    public init(
+        id: UUID,
+        integrationID: UUID,
+        provider: BankProvider,
+        providerAccountID: String,
+        walletID: UUID,
+        displayName: String,
+        accountType: String?,
+        currencyCode: Int,
+        maskedPAN: String?,
+        iban: String?,
+        isEnabled: Bool,
+        syncStartAt: Date,
+        lastSuccessfulSyncAt: Date?,
+        lastStatementItemTime: Int?,
+        createdAt: Date,
+        updatedAt: Date
+    ) {
         self.id = id
         self.integrationID = integrationID
         self.provider = provider
@@ -147,7 +164,31 @@ public struct BankTransactionImport: Identifiable, Codable, Hashable, Sendable {
     public var createdAt: Date
     public var updatedAt: Date
 
-    public init(id: UUID, provider: BankProvider, integrationID: UUID, bankAccountID: UUID, providerAccountID: String, providerStatementItemID: String, statementTime: Int, amountMinorSigned: Int64, operationAmountMinorSigned: Int64?, currencyCode: Int, mcc: Int?, originalMCC: Int?, description: String?, comment: String?, counterName: String?, counterIBAN: String?, receiptID: String?, hold: Bool?, rawJSON: String, cashRunwayTransactionID: UUID?, importStatus: BankTransactionImportStatus, createdAt: Date, updatedAt: Date) {
+    public init(
+        id: UUID,
+        provider: BankProvider,
+        integrationID: UUID,
+        bankAccountID: UUID,
+        providerAccountID: String,
+        providerStatementItemID: String,
+        statementTime: Int,
+        amountMinorSigned: Int64,
+        operationAmountMinorSigned: Int64?,
+        currencyCode: Int,
+        mcc: Int?,
+        originalMCC: Int?,
+        description: String?,
+        comment: String?,
+        counterName: String?,
+        counterIBAN: String?,
+        receiptID: String?,
+        hold: Bool?,
+        rawJSON: String,
+        cashRunwayTransactionID: UUID?,
+        importStatus: BankTransactionImportStatus,
+        createdAt: Date,
+        updatedAt: Date
+    ) {
         self.id = id
         self.provider = provider
         self.integrationID = integrationID
@@ -214,7 +255,22 @@ public struct BankExternalExpenseItem: Codable, Hashable, Sendable {
     public var hold: Bool?
     public var rawJSON: String
 
-    public init(providerStatementItemID: String, statementTime: Int, amountMinorSigned: Int64, operationAmountMinorSigned: Int64?, currencyCode: Int, mcc: Int?, originalMCC: Int?, description: String?, comment: String?, counterName: String?, counterIBAN: String?, receiptID: String?, hold: Bool?, rawJSON: String) {
+    public init(
+        providerStatementItemID: String,
+        statementTime: Int,
+        amountMinorSigned: Int64,
+        operationAmountMinorSigned: Int64?,
+        currencyCode: Int,
+        mcc: Int?,
+        originalMCC: Int?,
+        description: String?,
+        comment: String?,
+        counterName: String?,
+        counterIBAN: String?,
+        receiptID: String?,
+        hold: Bool?,
+        rawJSON: String
+    ) {
         self.providerStatementItemID = providerStatementItemID
         self.statementTime = statementTime
         self.amountMinorSigned = amountMinorSigned
@@ -251,7 +307,25 @@ public struct MonobankStatementItem: Codable, Hashable, Sendable {
     public var counterIban: String?
     public var counterName: String?
 
-    public init(id: String, time: Int, description: String, mcc: Int?, originalMcc: Int?, amount: Int64, operationAmount: Int64?, currencyCode: Int, commissionRate: Int64?, cashbackAmount: Int64?, balance: Int64?, hold: Bool?, receiptId: String?, comment: String?, counterEdrpou: String?, counterIban: String?, counterName: String?) {
+    public init(
+        id: String,
+        time: Int,
+        description: String,
+        mcc: Int?,
+        originalMcc: Int?,
+        amount: Int64,
+        operationAmount: Int64?,
+        currencyCode: Int,
+        commissionRate: Int64?,
+        cashbackAmount: Int64?,
+        balance: Int64?,
+        hold: Bool?,
+        receiptId: String?,
+        comment: String?,
+        counterEdrpou: String?,
+        counterIban: String?,
+        counterName: String?
+    ) {
         self.id = id
         self.time = time
         self.description = description
@@ -503,7 +577,27 @@ public struct CashRunwayTransaction: Identifiable, Codable, Hashable, Sendable {
     public var createdAt: Date
     public var updatedAt: Date
 
-    public init(id: UUID, walletID: UUID, type: TransactionKind, linkedTransferID: UUID?, amountMinor: Int64, occurredAt: Date, localDayKey: Int, localMonthKey: Int, categoryID: UUID?, merchant: String?, note: String?, isDeleted: Bool, source: TransactionSource, recurringTemplateID: UUID?, recurringInstanceID: UUID?, importJobID: UUID? = nil, importFingerprint: String? = nil, createdAt: Date, updatedAt: Date) {
+    public init(
+        id: UUID,
+        walletID: UUID,
+        type: TransactionKind,
+        linkedTransferID: UUID?,
+        amountMinor: Int64,
+        occurredAt: Date,
+        localDayKey: Int,
+        localMonthKey: Int,
+        categoryID: UUID?,
+        merchant: String?,
+        note: String?,
+        isDeleted: Bool,
+        source: TransactionSource,
+        recurringTemplateID: UUID?,
+        recurringInstanceID: UUID?,
+        importJobID: UUID? = nil,
+        importFingerprint: String? = nil,
+        createdAt: Date,
+        updatedAt: Date
+    ) {
         self.id = id
         self.walletID = walletID
         self.type = type
@@ -566,7 +660,25 @@ public struct RecurringTemplate: Identifiable, Codable, Hashable, Sendable {
     public var createdAt: Date
     public var updatedAt: Date
 
-    public init(id: UUID, kind: RecurringTemplateKind, walletID: UUID, counterpartyWalletID: UUID?, amountMinor: Int64, categoryID: UUID?, merchant: String?, note: String?, ruleType: RecurrenceRuleType, ruleInterval: Int, dayOfMonth: Int?, weekday: Int?, startDate: Date, endDate: Date?, isActive: Bool, createdAt: Date, updatedAt: Date) {
+    public init(
+        id: UUID,
+        kind: RecurringTemplateKind,
+        walletID: UUID,
+        counterpartyWalletID: UUID?,
+        amountMinor: Int64,
+        categoryID: UUID?,
+        merchant: String?,
+        note: String?,
+        ruleType: RecurrenceRuleType,
+        ruleInterval: Int,
+        dayOfMonth: Int?,
+        weekday: Int?,
+        startDate: Date,
+        endDate: Date?,
+        isActive: Bool,
+        createdAt: Date,
+        updatedAt: Date
+    ) {
         self.id = id
         self.kind = kind
         self.walletID = walletID
