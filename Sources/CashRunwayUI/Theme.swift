@@ -60,10 +60,10 @@ extension Color {
         let scanner = Scanner(string: hex)
         var value: UInt64 = 0
         scanner.scanHexInt64(&value)
-        let r = Double((value >> 16) & 0xff) / 255
-        let g = Double((value >> 8) & 0xff) / 255
-        let b = Double(value & 0xff) / 255
-        self.init(red: r, green: g, blue: b)
+        let redComponent = Double((value >> 16) & 0xff) / 255
+        let greenComponent = Double((value >> 8) & 0xff) / 255
+        let blueComponent = Double(value & 0xff) / 255
+        self.init(red: redComponent, green: greenComponent, blue: blueComponent)
     }
 }
 

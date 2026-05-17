@@ -37,15 +37,15 @@ struct DatabaseWALTests {
         let wallets = try repository.wallets()
         let category = try #require(try repository.categories(kind: .expense).first)
 
-        for i in 0..<10 {
+        for index in 0..<10 {
             try repository.saveTransaction(
                 TransactionDraft(
                     kind: .expense,
                     walletID: wallets[0].id,
-                    amountMinor: Int64(1_000 * (i + 1)),
+                    amountMinor: Int64(1_000 * (index + 1)),
                     occurredAt: .now,
                     categoryID: category.id,
-                    merchant: "WAL commit \(i)",
+                    merchant: "WAL commit \(index)",
                     note: ""
                 )
             )
@@ -71,15 +71,15 @@ struct DatabaseWALTests {
         let wallets = try repository.wallets()
         let category = try #require(try repository.categories(kind: .expense).first)
 
-        for i in 0..<10 {
+        for index in 0..<10 {
             try repository.saveTransaction(
                 TransactionDraft(
                     kind: .expense,
                     walletID: wallets[0].id,
-                    amountMinor: Int64(1_000 * (i + 1)),
+                    amountMinor: Int64(1_000 * (index + 1)),
                     occurredAt: .now,
                     categoryID: category.id,
-                    merchant: "WAL recovery \(i)",
+                    merchant: "WAL recovery \(index)",
                     note: ""
                 )
             )

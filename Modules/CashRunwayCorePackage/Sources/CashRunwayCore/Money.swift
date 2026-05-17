@@ -55,4 +55,3 @@ public enum MoneyFormatter {
         return "\(sign)\(absolute / 100).\(String(format: "%02d", absolute % 100))"
     }
 }
-

@@ -12,18 +12,18 @@ struct DatabaseConcurrencyTests {
         let incomeCategory = try #require(try repository.categories(kind: .income).first)
 
         try await withThrowingTaskGroup(of: Void.self) { group in
-            for i in 0..<10 {
+            for index in 0..<10 {
                 group.addTask {
-                    let kind: TransactionDraft.Kind = i.isMultiple(of: 2) ? .expense : .income
+                    let kind: TransactionDraft.Kind = index.isMultiple(of: 2) ? .expense : .income
                     let category = kind == .expense ? expenseCategory : incomeCategory
                     try repository.saveTransaction(
                         TransactionDraft(
                             kind: kind,
-                            walletID: wallets[i % wallets.count].id,
-                            amountMinor: Int64(1_000 * (i + 1)),
+                            walletID: wallets[index % wallets.count].id,
+                            amountMinor: Int64(1_000 * (index + 1)),
                             occurredAt: .now,
                             categoryID: category.id,
-                            merchant: "Concurrent \(i)",
+                            merchant: "Concurrent \(index)",
                             note: ""
                         )
                     )
@@ -43,15 +43,15 @@ struct DatabaseConcurrencyTests {
         let category = try #require(try repository.categories(kind: .expense).first)
 
         let writeTask = Task.detached {
-            for i in 0..<50 {
+            for index in 0..<50 {
                 try repository.saveTransaction(
                     TransactionDraft(
                         kind: .expense,
                         walletID: wallets[0].id,
-                        amountMinor: Int64(100 * (i + 1)),
+                        amountMinor: Int64(100 * (index + 1)),
                         occurredAt: .now,
                         categoryID: category.id,
-                        merchant: "Batch \(i)",
+                        merchant: "Batch \(index)",
                         note: ""
                     )
                 )

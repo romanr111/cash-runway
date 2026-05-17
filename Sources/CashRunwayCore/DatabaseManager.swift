@@ -380,6 +380,7 @@ public final class DatabaseManager: @unchecked Sendable {
         }
     }
 
+    // swiftlint:disable:next function_body_length
     private static func makeMigrator() -> DatabaseMigrator {
         var migrator = DatabaseMigrator()
         migrator.registerMigration("v1_schema") { db in

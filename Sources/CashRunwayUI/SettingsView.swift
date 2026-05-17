@@ -777,7 +777,25 @@ private struct WalletManagementView: View {
 private struct ScheduledTransactionsView: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var model: CashRunwayAppModel
-    @State private var templateDraft = RecurringTemplate(id: UUID(), kind: .expense, walletID: UUID(), counterpartyWalletID: nil, amountMinor: 0, categoryID: nil, merchant: nil, note: nil, ruleType: .monthly, ruleInterval: 1, dayOfMonth: 1, weekday: nil, startDate: .now, endDate: nil, isActive: true, createdAt: .now, updatedAt: .now)
+    @State private var templateDraft = RecurringTemplate(
+        id: UUID(),
+        kind: .expense,
+        walletID: UUID(),
+        counterpartyWalletID: nil,
+        amountMinor: 0,
+        categoryID: nil,
+        merchant: nil,
+        note: nil,
+        ruleType: .monthly,
+        ruleInterval: 1,
+        dayOfMonth: 1,
+        weekday: nil,
+        startDate: .now,
+        endDate: nil,
+        isActive: true,
+        createdAt: .now,
+        updatedAt: .now
+    )
     @State private var isEditorPresented = false
 
     var body: some View {
