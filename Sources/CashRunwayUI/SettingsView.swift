@@ -87,7 +87,7 @@ struct SettingsView: View {
 
                         VStack(spacing: 0) {
                             moreRow(icon: "tray.and.arrow.down.fill", tint: "#5FD4BF", title: "Import CSV", subtitle: "Map and load bank exports") {
-                                if model.wallets.isEmpty {
+                                if model.hasBootstrapped && model.wallets.isEmpty {
                                     model.errorMessage = "Create at least one wallet before importing CSV."
                                 } else {
                                     isImporterPresented = true
@@ -465,7 +465,25 @@ struct SettingsView: View {
 
     private func defaultMapping(headers: [String], preset: CSVPreset) -> CSVImportMapping {
         // Import CSV is blocked at the UI level when no wallets exist.
-        let walletID = model.wallets.first?.id ?? UUID()
+        guard let walletID = model.wallets.first?.id else {
+            // UI blocks CSV import when wallets are empty; this is a safety net
+            return CSVImportMapping(
+                dateColumn: headers.first ?? "",
+                amountColumn: nil,
+                debitColumn: nil,
+                creditColumn: nil,
+                merchantColumn: nil,
+                noteColumn: nil,
+                categoryColumn: nil,
+                labelsColumn: nil,
+                walletID: nil,
+                defaultKind: .expense,
+                typeColumn: nil,
+                walletColumn: nil,
+                currencyColumn: nil,
+                authorColumn: nil
+            )
+        }
         let dateColumn = header(named: ["Дата операції", "Date", "date"], in: headers) ?? headers.first ?? ""
         let amountColumn = header(named: ["Сума в грн", "Amount", "amount", "sum"], in: headers)
         let debitColumn = header(named: ["Debit", "debit", "Витрати"], in: headers)

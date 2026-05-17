@@ -21,7 +21,7 @@ struct TransactionsView: View {
                             .font(.system(size: 20, weight: .bold, design: .rounded))
                             .foregroundStyle(CashRunwayTheme.textPrimary)
 
-                        if model.wallets.isEmpty {
+                        if model.hasBootstrapped && model.wallets.isEmpty {
                             ContentUnavailableView(
                                 "Create a wallet to start tracking transactions",
                                 systemImage: "wallet.pass.fill",

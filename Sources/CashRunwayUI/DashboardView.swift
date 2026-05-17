@@ -19,7 +19,7 @@ struct DashboardView: View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 24) {
-                    if model.wallets.isEmpty {
+                    if model.hasBootstrapped && model.wallets.isEmpty {
                         emptyState
                     } else {
                         hero

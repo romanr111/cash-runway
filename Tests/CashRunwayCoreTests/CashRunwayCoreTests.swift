@@ -1627,7 +1627,7 @@ extension CashRunwayCoreTests {
         #expect(categories.count > 0, "Fresh install should create default categories.")
     }
 
-    @Test func seedIfNeededPreservesLegacySeededWallets() throws {
+    @Test func seedIfNeededPreservesExistingWallets() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
         try TestSupport.seedFixtureWallets(into: repository)

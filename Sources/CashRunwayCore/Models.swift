@@ -1442,7 +1442,7 @@ public struct CSVImportMapping: Sendable {
     public var categoryColumn: String?
     public var labelsColumn: String?
     public var authorColumn: String?
-    public var walletID: UUID
+    public var walletID: UUID?
     public var defaultKind: TransactionDraft.Kind
 
     public init(
@@ -1454,7 +1454,7 @@ public struct CSVImportMapping: Sendable {
         noteColumn: String?,
         categoryColumn: String?,
         labelsColumn: String?,
-        walletID: UUID,
+        walletID: UUID?,
         defaultKind: TransactionDraft.Kind,
         typeColumn: String? = nil,
         walletColumn: String? = nil,
