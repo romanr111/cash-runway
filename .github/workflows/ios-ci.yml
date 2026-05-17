@@ -21,10 +21,104 @@ env:
   SCHEME: CashRunway
 
 jobs:
-  build-and-test:
-    name: Build and test
+  static-analysis:
+    name: Static Analysis
+    runs-on: macos-26
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out PR branch
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - name: Install SwiftLint
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v swiftlint >/dev/null 2>&1; then
+            brew install swiftlint
+          fi
+          swiftlint version
+
+      - name: Run static analysis
+        shell: bash
+        run: |
+          set -euo pipefail
+          swiftlint lint --reporter github-actions-logging 2>&1 | tee swiftlint.log
+
+      - name: Upload static analysis logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: static-analysis-logs
+          path: swiftlint.log
+          if-no-files-found: ignore
+
+  unit-tests:
+    name: Unit Tests
+    runs-on: macos-26
+    timeout-minutes: 30
+    needs: static-analysis
+
+    steps:
+      - name: Check out PR branch
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - name: Run unit tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          swift test \
+            --filter '(ModelSerializationTests|UtilityAndModelTests|BankCategoryMapperTests|BankConnectionServiceTests|BankSyncServiceTests)' \
+            2>&1 | tee swift-unit-test.log
+
+      - name: Upload unit test logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-logs
+          path: swift-unit-test.log
+          if-no-files-found: ignore
+
+  integration-tests:
+    name: Integration Tests
     runs-on: macos-26
     timeout-minutes: 90
+    needs: unit-tests
+
+    steps:
+      - name: Check out PR branch
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - name: Run integration tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          swift test \
+            --skip '(ModelSerializationTests|UtilityAndModelTests|BankCategoryMapperTests|BankConnectionServiceTests|BankSyncServiceTests)' \
+            2>&1 | tee swift-integration-test.log
+
+      - name: Upload integration test logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-logs
+          path: swift-integration-test.log
+          if-no-files-found: ignore
+
+  ios-app-build:
+    name: iOS App Build
+    runs-on: macos-26
+    timeout-minutes: 90
+    needs: integration-tests
 
     steps:
       - name: Check out PR branch
@@ -59,22 +153,6 @@ jobs:
           echo "destination=${destination}" >> "${GITHUB_OUTPUT}"
           echo "Using ${destination}"
 
-      - name: Run unit tests
-        shell: bash
-        run: |
-          set -euo pipefail
-          swift test \
-            --filter '(ModelSerializationTests|UtilityAndModelTests|BankCategoryMapperTests|BankConnectionServiceTests|BankSyncServiceTests)' \
-            2>&1 | tee swift-unit-test.log
-
-      - name: Run integration tests
-        shell: bash
-        run: |
-          set -euo pipefail
-          swift test \
-            --skip '(ModelSerializationTests|UtilityAndModelTests|BankCategoryMapperTests|BankConnectionServiceTests|BankSyncServiceTests)' \
-            2>&1 | tee swift-integration-test.log
-
       - name: Build app
         shell: bash
         run: |
@@ -88,20 +166,52 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             2>&1 | tee xcodebuild.log | grep -E '(warning:|error:|BUILD SUCCEEDED|BUILD FAILED)'
 
-      - name: Install SwiftLint
-        shell: bash
-        run: |
-          set -euo pipefail
-          if ! command -v swiftlint >/dev/null 2>&1; then
-            brew install swiftlint
-          fi
-          swiftlint version
+      - name: Upload iOS build logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build-logs
+          path: xcodebuild.log
+          if-no-files-found: ignore
 
-      - name: Run static analysis
+  e2e-tests:
+    name: E2E Tests
+    runs-on: macos-26
+    timeout-minutes: 90
+    needs: ios-app-build
+
+    steps:
+      - name: Check out PR branch
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+          xcrun simctl list devices available | grep 'iPhone' || true
+
+      - name: Pick iPhone simulator
+        id: simulator
         shell: bash
         run: |
           set -euo pipefail
-          swiftlint lint --reporter github-actions-logging 2>&1 | tee swiftlint.log
+
+          if xcrun simctl list devices available | grep -q 'iPhone 17 ('; then
+            destination='platform=iOS Simulator,name=iPhone 17'
+          else
+            device_name="$(xcrun simctl list devices available | awk -F'[()]' '/iPhone/ && /Shutdown|Booted/ { sub(/^[[:space:]]+/, "", $1); print $1; exit }')"
+            if [[ -z "${device_name}" ]]; then
+              echo 'No available iPhone simulator found' >&2
+              exit 1
+            fi
+            destination="platform=iOS Simulator,name=${device_name}"
+          fi
+
+          echo "destination=${destination}" >> "${GITHUB_OUTPUT}"
+          echo "Using ${destination}"
 
       - name: Run UI E2E tests
         shell: bash
@@ -118,16 +228,12 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             2>&1 | tee xcode-test.log | grep -E '(warning:|error:|Test Suite|Test Case|passed|failed|TEST SUCCEEDED|TEST FAILED|BUILD SUCCEEDED|BUILD FAILED)'
 
-      - name: Upload failure logs
+      - name: Upload E2E test results
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: ios-ci-failure-logs
+          name: e2e-test-results
           path: |
-            swift-unit-test.log
-            swift-integration-test.log
-            xcodebuild.log
-            swiftlint.log
             xcode-test.log
             TestResults
           if-no-files-found: ignore
