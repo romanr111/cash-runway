@@ -19,6 +19,7 @@ struct BankSyncServiceTests {
     @Test func syncIntegrationQueriesFromSyncStartAndImportsOnlyEligibleItems() async throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let syncStartAt = Date(timeIntervalSince1970: 1_700_000_000)
         let now = syncStartAt.addingTimeInterval(60 * 60)
         let setup = try makeBankSetup(repository: repository, syncStartAt: syncStartAt)
@@ -48,6 +49,7 @@ struct BankSyncServiceTests {
     @Test func invalidTokenMarksIntegrationTokenInvalid() async throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let setup = try makeBankSetup(repository: repository, syncStartAt: Date(timeIntervalSince1970: 1_700_000_000))
         let client = FakeMonobankClient(error: BankSyncError.tokenInvalid)
         let service = BankSyncService(repository: repository, client: client, now: { Date(timeIntervalSince1970: 1_800_000_000) })
@@ -63,6 +65,7 @@ struct BankSyncServiceTests {
     @Test func syncOnDemandContinuesPastInvalidTokenIntegration() async throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let syncStartAt = Date(timeIntervalSince1970: 1_700_000_000)
         let now = syncStartAt.addingTimeInterval(60 * 60)
         let invalidSetup = try makeBankSetup(
@@ -111,6 +114,7 @@ struct BankSyncServiceTests {
     @Test func rateLimitReturnsSafeErrorWithoutDisablingIntegration() async throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let setup = try makeBankSetup(repository: repository, syncStartAt: Date(timeIntervalSince1970: 1_700_000_000))
         let client = FakeMonobankClient(error: BankSyncError.rateLimited)
         let service = BankSyncService(repository: repository, client: client, now: { Date(timeIntervalSince1970: 1_800_000_000) })
@@ -126,6 +130,7 @@ struct BankSyncServiceTests {
     @Test func runningSyncTwiceCreatesNoDuplicateTransactions() async throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let syncStartAt = Date(timeIntervalSince1970: 1_700_000_000)
         let now = syncStartAt.addingTimeInterval(60 * 60)
         let setup = try makeBankSetup(repository: repository, syncStartAt: syncStartAt)

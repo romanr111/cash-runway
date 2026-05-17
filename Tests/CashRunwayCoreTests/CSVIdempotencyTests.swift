@@ -8,6 +8,7 @@ struct CSVIdempotencyTests {
     @Test func csvImportRetryDoesNotDuplicateTransactions() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let walletID = try #require(try repository.wallets().first?.id)
 
         let row = PreparedImportRow(
@@ -53,6 +54,7 @@ struct CSVIdempotencyTests {
     @Test func csvImportRetryDoesNotChangeWalletBalance() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let walletID = try #require(try repository.wallets().first?.id)
         let balanceBefore = try #require(try repository.wallets().first?.currentBalanceMinor)
 
@@ -101,6 +103,7 @@ struct CSVIdempotencyTests {
     @Test func csvImportReportsDuplicateRows() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let walletID = try #require(try repository.wallets().first?.id)
 
         let rows = (0..<3).map { index in
@@ -145,6 +148,7 @@ struct CSVIdempotencyTests {
     @Test func csvImportSkipsDuplicatesWithinSameFile() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let walletID = try #require(try repository.wallets().first?.id)
 
         let rows = [
@@ -200,6 +204,7 @@ struct CSVIdempotencyTests {
     @Test func csvImportFailureRollsBackInsertedTransactions() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let walletID = try #require(try repository.wallets().first?.id)
 
         let rows = [
@@ -255,6 +260,7 @@ struct CSVIdempotencyTests {
     @Test func csvImportFailureRollsBackCreatedCategoriesAndLabels() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let walletID = try #require(try repository.wallets().first?.id)
         let categoriesBefore = try repository.categories().count
         let labelsBefore = try repository.labels().count
@@ -314,6 +320,7 @@ struct CSVIdempotencyTests {
     @Test func csvImportFailureDoesNotChangeWalletBalance() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let walletID = try #require(try repository.wallets().first?.id)
         let balanceBefore = try #require(try repository.wallets().first?.currentBalanceMinor)
 
@@ -370,6 +377,7 @@ struct CSVIdempotencyTests {
     @Test func csvImportFailureDoesNotChangeAggregates() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let walletID = try #require(try repository.wallets().first?.id)
 
         // Seed an existing transaction to create aggregate state
@@ -441,6 +449,7 @@ struct CSVIdempotencyTests {
     @Test func csvImportFailureDoesNotLeaveFTSRows() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let walletID = try #require(try repository.wallets().first?.id)
 
         let rows = [
@@ -496,6 +505,7 @@ struct CSVIdempotencyTests {
     @Test func csvImportInvalidRowsDoNotBlockValidRows() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let walletID = try #require(try repository.wallets().first?.id)
 
         let text = "Date,Amount,Note\n2025-01-01,100,Valid\ninvalid-date,200,Bad\n2025-01-03,300,Valid"
@@ -522,6 +532,7 @@ struct CSVIdempotencyTests {
     @Test func csvImportFingerprintDoesNotIncludeFileName() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let walletID = try #require(try repository.wallets().first?.id)
 
         let row = PreparedImportRow(
@@ -563,6 +574,7 @@ struct CSVIdempotencyTests {
     @Test func csvImportReportsCorrectInvalidRowCountWhenManyRowsFail() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
         let walletID = try #require(try repository.wallets().first?.id)
         let service = CSVService(repository: repository)
 
