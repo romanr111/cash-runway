@@ -89,13 +89,27 @@ class CashRunwayUITestCase: XCTestCase {
     }
 
     func selectWallet(_ name: String, file: StaticString = #filePath, line: UInt = #line) {
-        selectMenuOption(menuIdentifier: CashRunwayUITestIdentifiers.timelineWalletMenu, option: name, file: file, line: line)
+        selectMenuOption(
+            menuIdentifier: CashRunwayUITestIdentifiers.timelineWalletMenu,
+            option: name,
+            optionIdentifier: CashRunwayUITestIdentifiers.timelineWallet(name),
+            file: file,
+            line: line
+        )
     }
 
-    func selectMenuOption(menuIdentifier: String, option: String, file: StaticString = #filePath, line: UInt = #line) {
+    func selectMenuOption(menuIdentifier: String, option: String, optionIdentifier: String? = nil, file: StaticString = #filePath, line: UInt = #line) {
         let menu = app.buttons[menuIdentifier]
         XCTAssertTrue(menu.waitForExistence(timeout: 5), file: file, line: line)
         menu.tap()
+
+        if let optionIdentifier {
+            let identifiedButton = app.buttons[optionIdentifier].firstMatch
+            if identifiedButton.waitForExistence(timeout: 2) {
+                identifiedButton.tap()
+                return
+            }
+        }
 
         let optionButton = app.buttons[option].firstMatch
         if optionButton.waitForExistence(timeout: 2) {
@@ -115,7 +129,13 @@ class CashRunwayUITestCase: XCTestCase {
     }
 
     func selectAllWallets(file: StaticString = #filePath, line: UInt = #line) {
-        selectMenuOption(menuIdentifier: CashRunwayUITestIdentifiers.timelineWalletMenu, option: "All Wallets", file: file, line: line)
+        selectMenuOption(
+            menuIdentifier: CashRunwayUITestIdentifiers.timelineWalletMenu,
+            option: "All Wallets",
+            optionIdentifier: CashRunwayUITestIdentifiers.timelineWallet("All Wallets"),
+            file: file,
+            line: line
+        )
     }
 
     func hideKeyboardIfNeeded() {
@@ -249,6 +269,10 @@ enum CashRunwayUITestIdentifiers {
     static let timelineSearchResetButton = "timeline.searchResetButton"
     static let timelineWalletMenu = "timeline.walletMenu"
     static let timelineCashFlowValue = "timeline.cashFlowValue"
+
+    static func timelineWallet(_ name: String) -> String {
+        "timeline.wallet.\(slug(name))"
+    }
 
     static let overviewOpenButton = "overview.openButton"
     static let overviewExpensesCard = "overview.expensesCard"

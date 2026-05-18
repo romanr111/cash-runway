@@ -179,14 +179,12 @@ struct DashboardView: View {
         HStack(spacing: 12) {
             Menu {
                 Button("All Wallets") {
-                    model.selectedWalletID = nil
-                    Task { await model.reloadAll() }
+                    Task { await model.selectWallet(nil) }
                 }
                 .accessibilityIdentifier(CashRunwayAccessibilityID.timelineWallet("All Wallets"))
                 ForEach(model.wallets) { wallet in
                     Button(wallet.name) {
-                        model.selectedWalletID = wallet.id
-                        Task { await model.reloadAll() }
+                        Task { await model.selectWallet(wallet.id) }
                     }
                     .accessibilityIdentifier(CashRunwayAccessibilityID.timelineWallet(wallet.name))
                 }

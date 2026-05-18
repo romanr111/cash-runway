@@ -148,6 +148,9 @@ public final class CashRunwayAppModel {
                 return (bars, snapshot)
             }.value
 
+            guard currentRefreshScopeMatches(monthKey: selectedMonthKey, walletID: selectedWalletID, period: selectedTimelinePeriod, query: query) else {
+                return false
+            }
             self.allBars = bars
             self.apply(snapshot)
             self.latestTransactionMonthKey = try? repository.latestTransactionMonthKey()
@@ -160,6 +163,13 @@ public final class CashRunwayAppModel {
             self.errorMessage = error.localizedDescription
             return false
         }
+    }
+
+    @discardableResult
+    public func selectWallet(_ walletID: UUID?) async -> Bool {
+        selectedWalletID = walletID
+        transactionQuery.walletID = walletID
+        return await reloadAll()
     }
 
     private func loadAllBars() throws {
