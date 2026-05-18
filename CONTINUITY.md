@@ -16,10 +16,10 @@ Rules:
 
 ## Snapshot
 
-- Goal: Add a minimal CI coverage report for Cash Runway core tests.
-- Success criteria: GitHub Actions has a dedicated `Coverage` job after integration tests, running in parallel with E2E, publishing a readable summary plus artifacts, and failing below 85% CashRunwayCore line coverage.
-- Current state: PR `#18` was squash-merged into `origin/main` as `a7bfae5`, and the feature branch was deleted on the remote.
-- Next action: Confirm the enforced 85% coverage gate on the next PR or manual `iOS CI` run.
+- Goal: Fix timeline loading state with race-condition-safe loading state management using TimelineReloadState with reload IDs.
+- Success criteria: Timeline reload properly handles concurrent reloads, DashboardView shows ProgressView during loading, TimelineReloadState tested including integration tests.
+- Current state: PR for `codex/timeline-loading-state` merged into `origin/main` as `be26456`, feature branch deleted on remote.
+- Next action: Monitor for any UI issues with the new loading state indicator.
 - Open questions: None.
 - Merge status: merged.
 
@@ -33,24 +33,21 @@ Rules:
 ## Working set
 
 - `CONTINUITY.md`
+- `Sources/CashRunwayCore/Models.swift`
+- `Sources/CashRunwayUI/AppModel.swift`
+- `Sources/CashRunwayUI/DashboardView.swift`
+- `Tests/CashRunwayCoreTests/UtilityAndModelTests.swift`
+- `Tests/CashRunwayCoreTests/AppModelTimelineLoadingTests.swift`
 
 ## Done (recent)
 
-- 2026-05-18 [REVIEW] Self-review of PR `#13` found no blockers; local validation had already passed and live checks had `Static Analysis` and `Unit Tests` passing when the user asked not to wait for the full pipeline.
-- 2026-05-18 [TOOL] Squash-merged PR `#13` into `main` as `20d587f`.
-- 2026-05-18 [TOOL] Removed `/Users/roman/.codex/worktrees/cash-runway-e2e-ci-optimization` and deleted local branch `codex/e2e-ci-optimization`.
-- 2026-05-18 [DECISION] Coverage v1 uses SwiftPM `swift test --enable-code-coverage` against product sources under `Modules/CashRunwayCorePackage/Sources/CashRunwayCore`, not `xcodebuild + xccov`, because the shared Xcode scheme currently drives UI tests.
-- 2026-05-18 [CHECK] Local coverage validation passed: `swift test --enable-code-coverage` ran 219 tests, generated `Coverage/coverage-summary.md`, and reported CashRunwayCore line coverage at 89.45%.
-- 2026-05-18 [TOOL] Opened PR `#18`: https://github.com/romanr111/cash-runway/pull/18
-- 2026-05-18 [DECISION] Coverage job must fail when CashRunwayCore line coverage is below 85%.
-- 2026-05-18 [TOOL] Squash-merged PR `#18` into `main` as `a7bfae5`; `origin/codex/ci-coverage-report` was pruned after merge.
-- 2026-05-17 [TOOL] Merged PR `#12` for `codex/cash-runway-lint-fix` into `main`, deleted its local/remote branches, and removed `/Users/roman/.codex/worktrees/cash-runway-lint-fix`.
+- 2026-05-18 [REVIEW] Detailed code review of PR `codex/timeline-loading-state` found no blockers; all validation gates passed (unit tests, build, mirroring check).
+- 2026-05-18 [TOOL] Added integration tests for timeline loading state in `AppModelTimelineLoadingTests.swift`.
+- 2026-05-18 [TOOL] Merged `codex/timeline-loading-state` into `main` as `be26456`; deleted remote branch and local worktree.
 
 ## Receipts
 
-- 2026-05-18 [TOOL] `git fetch --prune origin` moved `origin/main` from `cd8a309` to `20d587f` and pruned `origin/codex/e2e-ci-optimization`.
-- 2026-05-18 [TOOL] `git merge --ff-only origin/main` fast-forwarded the primary checkout to `20d587f` after stashing the prior local `CONTINUITY.md` cleanup note.
-- 2026-05-17 [TOOL] `xcodebuild -help` confirmed support for `-test-timeouts-enabled`, `-default-test-execution-time-allowance`, `-maximum-test-execution-time-allowance`, `build-for-testing`, and `test-without-building`.
-- 2026-05-17 [TOOL] `gh api repos/romanr111/cash-runway/branches/main/protection` returned `Branch not protected`, so removing the exact `iOS App Build` check name should not block branch protection.
-- 2026-05-17 [TOOL] Local `swiftlint` executable was not installed, so local SwiftLint validation was skipped; GitHub Actions will run repository lint.
-- 2026-05-17 [TOOL] `swift test` emitted existing GRDB Sendable warnings while compiling vendored code.
+- 2026-05-18 [TOOL] `swift test --filter AppModelTimelineLoadingTests` passed: 2 tests in 0.001 seconds.
+- 2026-05-18 [TOOL] `xcodebuild -scheme CashRunway -sdk iphonesimulator` build succeeded.
+- 2026-05-18 [TOOL] `git push origin main` succeeded after rebase.
+- 2026-05-18 [TOOL] Deleted remote branch `origin/codex/timeline-loading-state`.
