@@ -130,10 +130,14 @@ private enum DebugDataRecoveryAttempt {
             return "NOOP recovery_attempt reason=no_recovery_directory"
         }
 
-        let backups = try fileManager.contentsOfDirectory(at: recoveryDirectory, includingPropertiesForKeys: [.fileSizeKey])
+        let backups = try fileManager
+            .contentsOfDirectory(at: recoveryDirectory, includingPropertiesForKeys: [.fileSizeKey])
             .filter { url in
                 let name = url.lastPathComponent
-                return name.hasPrefix("cash-runway.sqlite.") && name.hasSuffix(".bak") && !name.contains("-wal") && !name.contains("-shm")
+                return name.hasPrefix("cash-runway.sqlite.")
+                    && name.hasSuffix(".bak")
+                    && !name.contains("-wal")
+                    && !name.contains("-shm")
             }
             .map { url -> (url: URL, size: Int) in
                 let values = try url.resourceValues(forKeys: [.fileSizeKey])
@@ -149,23 +153,32 @@ private enum DebugDataRecoveryAttempt {
         guard let backup = backups.first else {
             return "NOOP recovery_attempt reason=no_database_backup"
         }
+        let backupName = backup.url.lastPathComponent
 
         let keychain = KeychainStore(service: "dev.roman.cash-runway")
         guard let keyData = try keychain.read(account: "database-key"),
               let key = String(data: keyData, encoding: .utf8),
               !key.isEmpty
         else {
-            return "NOOP recovery_attempt reason=no_readable_database_key backup=\(backup.url.lastPathComponent) backup_bytes=\(backup.size)"
+            return
+                "NOOP recovery_attempt reason=no_readable_database_key " +
+                "backup=\(backupName) backup_bytes=\(backup.size)"
         }
 
         let activeProbe = try? probe(databaseURL, key: key)
         guard let backupProbe = try? probe(backup.url, key: key) else {
-            return "NOOP recovery_attempt reason=backup_not_decryptable_with_current_key backup=\(backup.url.lastPathComponent) backup_bytes=\(backup.size) active_transactions=\(activeProbe?.transactionCount ?? -1)"
+            return
+                "NOOP recovery_attempt reason=backup_not_decryptable_with_current_key " +
+                "backup=\(backupName) backup_bytes=\(backup.size) " +
+                "active_transactions=\(activeProbe?.transactionCount ?? -1)"
         }
 
         let activeTransactions = activeProbe?.transactionCount ?? -1
         guard backupProbe.transactionCount > activeTransactions else {
-            return "NOOP recovery_attempt reason=backup_not_better backup=\(backup.url.lastPathComponent) backup_transactions=\(backupProbe.transactionCount) active_transactions=\(activeTransactions)"
+            return
+                "NOOP recovery_attempt reason=backup_not_better " +
+                "backup=\(backupName) backup_transactions=\(backupProbe.transactionCount) " +
+                "active_transactions=\(activeTransactions)"
         }
 
         let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
@@ -175,7 +188,10 @@ private enum DebugDataRecoveryAttempt {
         for suffix in ["", "-wal", "-shm"] {
             let activeURL = URL(fileURLWithPath: databaseURL.path + suffix)
             guard fileManager.fileExists(atPath: activeURL.path) else { continue }
-            try fileManager.copyItem(at: activeURL, to: attemptDirectory.appendingPathComponent(activeURL.lastPathComponent))
+            try fileManager.copyItem(
+                at: activeURL,
+                to: attemptDirectory.appendingPathComponent(activeURL.lastPathComponent)
+            )
             try fileManager.removeItem(at: activeURL)
         }
 
@@ -189,27 +205,41 @@ private enum DebugDataRecoveryAttempt {
         }
 
         let restoredProbe = try probe(databaseURL, key: key)
-        return "RESTORED recovery_attempt backup=\(backup.url.lastPathComponent) backup_bytes=\(backup.size) restored_transactions=\(restoredProbe.transactionCount) restored_wallets=\(restoredProbe.walletCount) previous_active_transactions=\(activeTransactions)"
+        return
+            "RESTORED recovery_attempt " +
+            "backup=\(backupName) backup_bytes=\(backup.size) " +
+            "restored_transactions=\(restoredProbe.transactionCount) " +
+            "restored_wallets=\(restoredProbe.walletCount) " +
+            "previous_active_transactions=\(activeTransactions)"
     }
 
     private static func probe(_ url: URL, key: String) throws -> ProbeResult {
         var configuration = Configuration()
-        configuration.prepareDatabase { db in
-            try db.usePassphrase(key)
+        configuration.prepareDatabase { database in
+            try database.usePassphrase(key)
         }
 
         let queue = try DatabaseQueue(path: url.path, configuration: configuration)
-        return try queue.read { db in
+        return try queue.read { database in
             ProbeResult(
-                transactionCount: try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM transactions") ?? 0,
-                walletCount: try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM wallets") ?? 0
+                transactionCount: try Int.fetchOne(database, sql: "SELECT COUNT(*) FROM transactions") ?? 0,
+                walletCount: try Int.fetchOne(database, sql: "SELECT COUNT(*) FROM wallets") ?? 0
             )
         }
     }
 
     private static func write(_ report: String) throws {
-        let documents = try FileManager.default.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-        try report.write(to: documents.appendingPathComponent("recovery-attempt-report.txt"), atomically: true, encoding: .utf8)
+        let documents = try FileManager.default.url(
+            for: .documentDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        try report.write(
+            to: documents.appendingPathComponent("recovery-attempt-report.txt"),
+            atomically: true,
+            encoding: .utf8
+        )
     }
 }
 
@@ -232,7 +262,11 @@ private enum DebugCSVImportSelfTest {
     private static func run(csvPath: String) throws -> String {
         let csvURL = URL(fileURLWithPath: csvPath)
         let fileManager = FileManager.default
-        let workingDirectory = fileManager.temporaryDirectory.appendingPathComponent("CashRunwayImportSelfTest-\(UUID().uuidString)", isDirectory: true)
+        let workingDirectoryName = "CashRunwayImportSelfTest-\(UUID().uuidString)"
+        let workingDirectory = fileManager.temporaryDirectory.appendingPathComponent(
+            workingDirectoryName,
+            isDirectory: true
+        )
         try fileManager.createDirectory(at: workingDirectory, withIntermediateDirectories: true)
         defer { try? fileManager.removeItem(at: workingDirectory) }
 
@@ -278,9 +312,14 @@ private enum DebugCSVImportSelfTest {
                 authorColumn: "Author"
             )
         )
-        let importedCount = try repository.transactions(query: .init(), limit: nil).filter { $0.source == .importCSV }.count
+        let importedCount = try repository.transactions(query: .init(), limit: nil)
+            .filter { $0.source == .importCSV }
+            .count
         guard result.insertedTransactions == importedCount, importedCount > 0 else {
-            throw CashRunwayError.validation("Self-test import inserted \(result.insertedTransactions) rows but found \(importedCount).")
+            throw CashRunwayError.validation(
+                "Self-test import inserted \(result.insertedTransactions) rows " +
+                "but found \(importedCount)."
+            )
         }
         return "inserted=\(importedCount) file=\(csvURL.lastPathComponent)"
     }
@@ -288,7 +327,10 @@ private enum DebugCSVImportSelfTest {
     private static func write(_ output: String, to resultPath: String?) throws {
         guard let resultPath, !resultPath.isEmpty else { return }
         let resultURL = URL(fileURLWithPath: resultPath)
-        try FileManager.default.createDirectory(at: resultURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(
+            at: resultURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
         try Data(output.utf8).write(to: resultURL, options: .atomic)
     }
 }

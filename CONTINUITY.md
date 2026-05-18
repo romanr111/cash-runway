@@ -16,56 +16,36 @@ Rules:
 
 ## Snapshot
 
-- Goal: Finish the first-launch data behavior change and publish it as a PR into `origin/main`.
-- Success criteria: Fresh first launch no longer creates fake starter wallets/budgets/transactions, fixture and UI-test paths seed their own test data, validation passes, and a PR is open against `origin/main`.
-- Current state: PR `#10` had a local fix for the failing CI E2E Monobank UI tests, and targeted local Monobank UI validation passed.
-- Next action: Push the CI fix and confirm GitHub Actions reruns for PR `#10`.
+- Goal: Keep Cash Runway repo state clear and current in the primary checkout.
+- Success criteria: `CONTINUITY.md` reflects live Git state and preserves only current decisions and receipts.
+- Current state: PR `#13` was squash-merged into `origin/main`, and the local `codex/e2e-ci-optimization` worktree and branch were cleaned up.
+- Next action: Record any new repo changes here before editing files again.
 - Open questions: None.
-- Merge status: not-merged.
-- Worktree reason: isolated-feature.
+- Merge status: merged.
 
 ## Git context
 
 - Repo root: `/Users/roman/Documents/Development/Cash Runway`
-- Working directory: `/Users/roman/.codex/worktrees/cash-runway-stop-fake-data`
-- Branch: `codex/stop-fake-data`
+- Working directory: `/Users/roman/Documents/Development/Cash Runway`
+- Branch: `main`
 - Base branch: `origin/main`
 
 ## Working set
 
-- `AppHost/UITestRuntime.swift`
-- `Sources/CashRunwayCore/**`
-- `Modules/CashRunwayCorePackage/Sources/CashRunwayCore/**`
-- `Sources/CashRunwayUI/**`
-- `Tests/CashRunwayCoreTests/**`
 - `CONTINUITY.md`
 
 ## Done (recent)
 
-- 2026-05-17 [TOOL] Started from the preserved clean worktree `/Users/roman/.codex/worktrees/cash-runway-stop-fake-data` on `codex/stop-fake-data`.
-- 2026-05-17 [TOOL] Confirmed no open GitHub PR existed for the branch before publishing.
-- 2026-05-17 [CODE] Rebased the feature branch onto current `origin/main` and resolved first-pass conflicts in `CONTINUITY.md` and `CSVEdgeCaseTests.swift`.
-- 2026-05-17 [CODE] Completed the rebase as commits `c80d4ac` and `fc43bea`; second-pass conflicts kept current-main bank sync, backup/restore, and UI-test keychain behavior while preserving explicit fixture-wallet seeding.
-- 2026-05-17 [FIX] Updated post-main BankSync and CSV idempotency tests to seed fixture wallets explicitly now that fresh `seedIfNeeded()` no longer creates wallets.
-- 2026-05-17 [VERIFY] Focused affected suite run passed 51 tests across `CSVIdempotencyTests`, `BankSyncImportTests`, `BankSyncServiceTests`, `BankConnectionServiceTests`, `BankSyncSchemaTests`, and `RepositoryUncoveredTests`.
-- 2026-05-17 [VERIFY] Full `swift test` passed 219 tests in 21 suites after 131.489s.
-- 2026-05-17 [VERIFY] iPhone 17 simulator clean build ended `** BUILD SUCCEEDED **`.
-- 2026-05-17 [VERIFY] iPhone 17 simulator launch succeeded as `dev.roman.cashrunway: 29261`; screenshot showed Timeline loaded with empty/no-data state.
-- 2026-05-17 [TOOL] Pushed `codex/stop-fake-data` and opened PR `https://github.com/romanr111/cash-runway/pull/10` into `main`.
-- 2026-05-17 [FIX] Fixed PR `#10` E2E failure from run `25992692058` / job `76402468097`: the shared UI-test boot wait assumed `transaction.addButton`, but the Monobank first-start scenario now correctly starts with zero wallets and hides that button.
-- 2026-05-17 [FIX] Updated Monobank UI tests to create the Monobank wallet mapping from account selection before continuing to sync.
-- 2026-05-17 [VERIFY] Targeted `xcodebuild test -only-testing:CashRunwayUITests/MonobankConnectionUITests` passed 3 tests on iPhone 17 simulator.
-- 2026-05-15 [CODE] Changed `seedIfNeeded()` so fresh databases create default categories only; fake starter wallets, budgets, and transactions are no longer created on first launch.
-- 2026-05-15 [CODE] Updated fixture, UI-test, and unit-test setup paths to seed wallets explicitly when tests need transaction-capable data.
-- 2026-05-15 [CODE] Added zero-wallet UI guards and empty states so first launch remains usable without fake data.
+- 2026-05-18 [REVIEW] Self-review of PR `#13` found no blockers; local validation had already passed and live checks had `Static Analysis` and `Unit Tests` passing when the user asked not to wait for the full pipeline.
+- 2026-05-18 [TOOL] Squash-merged PR `#13` into `main` as `20d587f`.
+- 2026-05-18 [TOOL] Removed `/Users/roman/.codex/worktrees/cash-runway-e2e-ci-optimization` and deleted local branch `codex/e2e-ci-optimization`.
+- 2026-05-17 [TOOL] Merged PR `#12` for `codex/cash-runway-lint-fix` into `main`, deleted its local/remote branches, and removed `/Users/roman/.codex/worktrees/cash-runway-lint-fix`.
 
 ## Receipts
 
-- 2026-05-17 [TOOL] `git worktree list` showed primary checkout plus `/Users/roman/.codex/worktrees/cash-runway-stop-fake-data`.
-- 2026-05-17 [TOOL] `gh auth status` confirmed GitHub CLI authentication for `romanr111`.
-- 2026-05-17 [TOOL] `git rebase origin/main` stopped on `CONTINUITY.md` and `Tests/CashRunwayCoreTests/CSVEdgeCaseTests.swift`; conflicts were resolved manually.
-- 2026-05-17 [TOOL] `diff -rq Sources/CashRunwayCore Modules/CashRunwayCorePackage/Sources/CashRunwayCore` returned clean after rebase.
+- 2026-05-18 [TOOL] `git fetch --prune origin` moved `origin/main` from `cd8a309` to `20d587f` and pruned `origin/codex/e2e-ci-optimization`.
+- 2026-05-18 [TOOL] `git merge --ff-only origin/main` fast-forwarded the primary checkout to `20d587f` after stashing the prior local `CONTINUITY.md` cleanup note.
+- 2026-05-17 [TOOL] `xcodebuild -help` confirmed support for `-test-timeouts-enabled`, `-default-test-execution-time-allowance`, `-maximum-test-execution-time-allowance`, `build-for-testing`, and `test-without-building`.
+- 2026-05-17 [TOOL] `gh api repos/romanr111/cash-runway/branches/main/protection` returned `Branch not protected`, so removing the exact `iOS App Build` check name should not block branch protection.
 - 2026-05-17 [TOOL] Local `swiftlint` executable was not installed, so local SwiftLint validation was skipped; GitHub Actions will run repository lint.
-- 2026-05-17 [TOOL] Simulator startup log check found no crash/fatal/exception/error lines for `CashRunway`; only a non-fatal AMFI simulator message matched the broad predicate.
-- 2026-05-17 [TOOL] GitHub Actions E2E failure log showed all three Monobank UI tests failing at `CashRunwayUITestCase.swift:26` with `Timeline did not finish bootstrapping`; other UI suites passed.
-- 2026-05-17 [CODE] Decision: preserve current-main concise continuity format and discard stale legacy ledger blocks during conflict resolution.
+- 2026-05-17 [TOOL] `swift test` emitted existing GRDB Sendable warnings while compiling vendored code.

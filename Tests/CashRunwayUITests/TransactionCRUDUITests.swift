@@ -151,8 +151,7 @@ final class TransactionFlowUITests: CashRunwayUITestCase {
         app.buttons[CashRunwayUITestIdentifiers.transactionRepeatButton].tap()
         let recurringToggle = app.switches["Save as recurring template"]
         XCTAssertTrue(recurringToggle.waitForExistence(timeout: 5))
-        tapSwitch(recurringToggle)
-        assertSwitchIsOn(recurringToggle)
+        setSwitch(recurringToggle, on: true)
         tapSheetDoneButton(identifier: CashRunwayUITestIdentifiers.transactionRecurringSheetDoneButton)
 
         XCTAssertTrue(app.staticTexts[CashRunwayUITestIdentifiers.transactionRepeatSummary].waitForExistence(timeout: 5))
@@ -290,18 +289,60 @@ final class TransactionFlowUITests: CashRunwayUITestCase {
     }
 
     private func assertSwitchIsOn(_ element: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
-        let value = (element.value as? String ?? "").lowercased()
-        XCTAssertFalse(["0", "off", "false", "not selected"].contains(value), file: file, line: line)
+        XCTAssertTrue(
+            waitForSwitch(element, toBeOn: true, timeout: 3),
+            "Switch did not become on. value=\(switchValue(element))",
+            file: file,
+            line: line
+        )
     }
 
     private func assertSwitchIsOff(_ element: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
-        let value = (element.value as? String ?? "").lowercased()
-        XCTAssertTrue(["0", "off", "false", "not selected"].contains(value), file: file, line: line)
+        XCTAssertTrue(
+            waitForSwitch(element, toBeOn: false, timeout: 3),
+            "Switch did not become off. value=\(switchValue(element))",
+            file: file,
+            line: line
+        )
     }
 
-    private func tapSwitch(_ element: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
+    private func setSwitch(
+        _ element: XCUIElement,
+        on expectedValue: Bool,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        if switchIsOn(element) == expectedValue {
+            return
+        }
+
         XCTAssertTrue(element.isHittable, "Switch is not hittable.", file: file, line: line)
         element.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+        XCTAssertTrue(
+            waitForSwitch(element, toBeOn: expectedValue, timeout: 5),
+            "Switch value did not change after tap. value=\(switchValue(element))",
+            file: file,
+            line: line
+        )
+    }
+
+    private func waitForSwitch(_ element: XCUIElement, toBeOn expectedValue: Bool, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if switchIsOn(element) == expectedValue {
+                return true
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        }
+        return switchIsOn(element) == expectedValue
+    }
+
+    private func switchIsOn(_ element: XCUIElement) -> Bool {
+        !["0", "off", "false", "not selected", ""].contains(switchValue(element))
+    }
+
+    private func switchValue(_ element: XCUIElement) -> String {
+        (element.value as? String ?? "").lowercased()
     }
 
     private func labeledControl(named identifier: String) -> XCUIElement {
