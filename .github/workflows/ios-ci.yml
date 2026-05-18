@@ -144,6 +144,7 @@ jobs:
           require "json"
 
           report = JSON.parse(File.read("Coverage/coverage.json"))
+          minimum_percent = 85.0
           source_root = "/Modules/CashRunwayCorePackage/Sources/CashRunwayCore/"
           files = report.fetch("data").first.fetch("files").select do |file|
             file.fetch("filename").include?(source_root)
@@ -159,9 +160,13 @@ jobs:
             .first(5)
 
           summary = +"# Coverage\n\n"
-          summary << "| Scope | Line coverage | Covered lines | Executable lines |\n"
-          summary << "| --- | ---: | ---: | ---: |\n"
-          summary << format("| CashRunwayCore | %.2f%% | %d | %d |\n\n", percent, covered_lines, total_lines)
+          summary << "| Scope | Line coverage | Minimum | Covered lines | Executable lines |\n"
+          summary << "| --- | ---: | ---: | ---: | ---: |\n"
+          summary << format("| CashRunwayCore | %.2f%% | %.2f%% | %d | %d |\n\n",
+                            percent,
+                            minimum_percent,
+                            covered_lines,
+                            total_lines)
 
           if low_files.any?
             summary << "## Lowest-covered product files\n\n"
@@ -180,6 +185,13 @@ jobs:
 
           File.write("Coverage/coverage-summary.md", summary)
           File.open(ENV.fetch("GITHUB_STEP_SUMMARY"), "a") { |file| file.write(summary) }
+
+          if percent < minimum_percent
+            warn format("CashRunwayCore line coverage %.2f%% is below the %.2f%% minimum.",
+                        percent,
+                        minimum_percent)
+            exit 1
+          end
           RUBY
 
       - name: Upload coverage artifacts
