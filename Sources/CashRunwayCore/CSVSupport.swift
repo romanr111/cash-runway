@@ -9,29 +9,31 @@ public enum CSVPreset: String, CaseIterable, Sendable {
     case generic = "Generic CSV"
 }
 
-public func importFingerprint(
-    sourceName: String,
-    walletID: UUID,
-    kind: TransactionDraft.Kind,
-    occurredAt: Date,
-    amountMinor: Int64,
-    merchant: String?,
-    note: String?,
-    categoryName: String?,
-    currency: String?
-) -> String {
-    let normalizedMerchant = (merchant ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-    let normalizedNote = (note ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-    let normalizedCategory = (categoryName ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-    let normalizedCurrency = (currency ?? "").trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-    let kindString = kind.rawValue
-    let dateString = ISO8601DateFormatter().string(from: occurredAt)
+private struct ImportFingerprintInput {
+    let sourceName: String
+    let walletID: UUID
+    let kind: TransactionDraft.Kind
+    let occurredAt: Date
+    let amountMinor: Int64
+    let merchant: String?
+    let note: String?
+    let categoryName: String?
+    let currency: String?
+}
+
+private func importFingerprint(_ input: ImportFingerprintInput) -> String {
+    let normalizedMerchant = (input.merchant ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    let normalizedNote = (input.note ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    let normalizedCategory = (input.categoryName ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    let normalizedCurrency = (input.currency ?? "").trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+    let kindString = input.kind.rawValue
+    let dateString = ISO8601DateFormatter().string(from: input.occurredAt)
     let components = [
-        sourceName,
-        walletID.uuidString,
+        input.sourceName,
+        input.walletID.uuidString,
         kindString,
         dateString,
-        String(amountMinor),
+        String(input.amountMinor),
         normalizedMerchant,
         normalizedNote,
         normalizedCategory,
@@ -53,12 +55,26 @@ public final class CSVService: @unchecked Sendable {
         let text = try decode(data: data)
         let rows = parseRows(text)
         guard let headers = rows.first else { throw CashRunwayError.validation("CSV file is empty.") }
-        return CSVImportPreview(headers: headers, sampleRows: Array(rows.dropFirst().prefix(5)), totalRows: max(rows.count - 1, 0))
+        return CSVImportPreview(
+            headers: headers,
+            sampleRows: Array(rows.dropFirst().prefix(5)),
+            totalRows: max(rows.count - 1, 0)
+        )
     }
 
     public func detectPreset(headers: [String]) -> CSVPreset {
         let lowercased = Set(headers.map { $0.lowercased() })
-        if lowercased.isSuperset(of: ["date", "wallet", "type", "category name", "amount", "currency", "note", "labels", "author"]) {
+        if lowercased.isSuperset(of: [
+            "date",
+            "wallet",
+            "type",
+            "category name",
+            "amount",
+            "currency",
+            "note",
+            "labels",
+            "author"
+        ]) {
             return .cashRunwayWallet
         }
         if lowercased.contains("дата операції") || lowercased.contains("сума в грн") {
@@ -91,7 +107,12 @@ public final class CSVService: @unchecked Sendable {
                 guard kind != .transfer else {
                     throw CashRunwayError.validation("Transfer rows are not supported for CSV import.")
                 }
-                guard let walletID = parseWalletID(row: row, mapping: mapping, headerIndex: headerIndex, wallets: wallets) else {
+                guard let walletID = parseWalletID(
+                    row: row,
+                    mapping: mapping,
+                    headerIndex: headerIndex,
+                    wallets: wallets
+                ) else {
                     throw CashRunwayError.validation("Wallet ID not found for CSV row.")
                 }
                 let merchant = cell(row, mapping.merchantColumn, headerIndex)
@@ -101,15 +122,17 @@ public final class CSVService: @unchecked Sendable {
                 let currency = normalizedCurrency(cell(row, mapping.currencyColumn, headerIndex))
                 let appearance = rawCategoryName.flatMap { importedCategoryAppearance(for: $0, kind: kind) }
                 let fingerprint = importFingerprint(
-                    sourceName: sourceName,
-                    walletID: walletID,
-                    kind: kind,
-                    occurredAt: date,
-                    amountMinor: abs(signedAmount),
-                    merchant: merchant,
-                    note: note,
-                    categoryName: rawCategoryName,
-                    currency: currency
+                    .init(
+                        sourceName: sourceName,
+                        walletID: walletID,
+                        kind: kind,
+                        occurredAt: date,
+                        amountMinor: abs(signedAmount),
+                        merchant: merchant,
+                        note: note,
+                        categoryName: rawCategoryName,
+                        currency: currency
+                    )
                 )
                 let draft = TransactionDraft(
                     kind: kind,
@@ -153,7 +176,18 @@ public final class CSVService: @unchecked Sendable {
     public func exportCSV(query: TransactionQuery = .init()) throws -> String {
         var exportQuery = query
         exportQuery.kinds = query.kinds.subtracting([.transfer])
-        let header = ["Date", "Wallet", "Type", "Category name", "Merchant", "Amount", "Currency", "Note", "Labels", "Author"]
+        let header = [
+            "Date",
+            "Wallet",
+            "Type",
+            "Category name",
+            "Merchant",
+            "Amount",
+            "Currency",
+            "Note",
+            "Labels",
+            "Author"
+        ]
         guard !exportQuery.kinds.isEmpty else {
             return header.joined(separator: ",")
         }
@@ -180,7 +214,9 @@ public final class CSVService: @unchecked Sendable {
         if let utf8 = String(data: data, encoding: .utf8) {
             return utf8
         }
-        let cfEncoding = CFStringConvertEncodingToNSStringEncoding(CFStringEncoding(CFStringEncodings.windowsCyrillic.rawValue))
+        let cfEncoding = CFStringConvertEncodingToNSStringEncoding(
+            CFStringEncoding(CFStringEncodings.windowsCyrillic.rawValue)
+        )
         if let cp1251 = String(data: data, encoding: String.Encoding(rawValue: cfEncoding)) {
             return cp1251
         }
@@ -320,7 +356,12 @@ public final class CSVService: @unchecked Sendable {
         throw CashRunwayError.validation("Could not parse amount.")
     }
 
-    private func parseKind(row: [String], mapping: CSVImportMapping, headerIndex: [String: Int], signedAmount: Int64) -> TransactionDraft.Kind {
+    private func parseKind(
+        row: [String],
+        mapping: CSVImportMapping,
+        headerIndex: [String: Int],
+        signedAmount: Int64
+    ) -> TransactionDraft.Kind {
         let raw = cell(row, mapping.typeColumn, headerIndex).lowercased()
         if raw == "income" || raw == "inflow" || raw == "credit" {
             return .income
@@ -340,7 +381,12 @@ public final class CSVService: @unchecked Sendable {
         return mapping.defaultKind
     }
 
-    private func parseWalletID(row: [String], mapping: CSVImportMapping, headerIndex: [String: Int], wallets: [Wallet]) -> UUID? {
+    private func parseWalletID(
+        row: [String],
+        mapping: CSVImportMapping,
+        headerIndex: [String: Int],
+        wallets: [Wallet]
+    ) -> UUID? {
         let raw = cell(row, mapping.walletColumn, headerIndex)
         guard !raw.isEmpty else { return mapping.walletID }
         return wallets.first(where: { $0.name.caseInsensitiveCompare(raw) == .orderedSame })?.id ?? mapping.walletID
@@ -355,7 +401,10 @@ public final class CSVService: @unchecked Sendable {
         }
     }
 
-    private func importedCategoryAppearance(for name: String, kind: TransactionDraft.Kind) -> ImportedCategoryAppearance? {
+    private func importedCategoryAppearance(
+        for name: String,
+        kind: TransactionDraft.Kind
+    ) -> ImportedCategoryAppearance? {
         let normalizedName = normalizedKeywordText(name)
         let rules = kind == .income ? Self.incomeAppearanceRules : Self.expenseAppearanceRules
         return rules.first { rule in
@@ -411,27 +460,263 @@ public final class CSVService: @unchecked Sendable {
     }
 
     private static let expenseAppearanceRules: [ImportedCategoryAppearanceRule] = [
-        .init(keywords: ["relationship", "dating", "romance", "love", "отношен", "стосунк", "кохан"], iconName: "heart.fill", colorHex: "#FF5E57"),
-        .init(keywords: ["food", "drink", "grocer", "product", "supermarket", "продукт", "еда", "їжа", "харч", "напит", "напій"], iconName: "fork.knife", colorHex: "#B78B4A"),
-        .init(keywords: ["restaurant", "cafe", "coffee", "ресторан", "кафе", "кофе", "кава"], iconName: "cup.and.saucer.fill", colorHex: "#64D1D5"),
-        .init(keywords: ["transport", "taxi", "metro", "bus", "tram", "транспорт", "такси", "таксі", "метро", "автобус", "проезд", "проїзд"], iconName: "tram.fill", colorHex: "#FFC400"),
-        .init(keywords: ["rent", "housing", "home", "apartment", "аренд", "оренд", "жиль", "житл", "квартир"], iconName: "house.fill", colorHex: "#E5862F"),
-        .init(keywords: ["bill", "utilit", "electric", "water", "gas", "internet", "счет", "счёт", "рахунк", "коммун", "комун", "свет", "світло", "вода", "газ", "інтернет"], iconName: "bolt.fill", colorHex: "#6FD03B"),
-        .init(keywords: ["health", "doctor", "pharmacy", "clinic", "мед", "врач", "лікар", "аптек", "здоров"], iconName: "cross.case.fill", colorHex: "#E96176"),
-        .init(keywords: ["shopping", "clothes", "market", "покуп", "магазин", "одеж", "одяг"], iconName: "bag.fill", colorHex: "#5FD4BF"),
-        .init(keywords: ["entertain", "movie", "cinema", "game", "развлеч", "кіно", "кино", "ігри", "игры"], iconName: "theatermasks.fill", colorHex: "#FFA600"),
-        .init(keywords: ["education", "school", "course", "book", "обуч", "образов", "освіт", "навчан", "курс", "книг"], iconName: "graduationcap.fill", colorHex: "#4A80C1"),
-        .init(keywords: ["travel", "flight", "hotel", "trip", "поезд", "подорож", "путеше", "отель", "готел", "авиа", "авіа"], iconName: "airplane", colorHex: "#EE5DA7"),
-        .init(keywords: ["gift", "present", "подар"], iconName: "gift.fill", colorHex: "#FF5E57"),
-        .init(keywords: ["pet", "cat", "dog", "animal", "питом", "живот", "тварин", "кіт", "кот", "собак"], iconName: "pawprint.fill", colorHex: "#B78B4A"),
+        .init(
+            keywords: [
+                "relationship",
+                "dating",
+                "romance",
+                "love",
+                "отношен",
+                "стосунк",
+                "кохан"
+            ],
+            iconName: "heart.fill",
+            colorHex: "#FF5E57"
+        ),
+        .init(
+            keywords: [
+                "food",
+                "drink",
+                "grocer",
+                "product",
+                "supermarket",
+                "продукт",
+                "еда",
+                "їжа",
+                "харч",
+                "напит",
+                "напій"
+            ],
+            iconName: "fork.knife",
+            colorHex: "#B78B4A"
+        ),
+        .init(
+            keywords: [
+                "restaurant",
+                "cafe",
+                "coffee",
+                "ресторан",
+                "кафе",
+                "кофе",
+                "кава"
+            ],
+            iconName: "cup.and.saucer.fill",
+            colorHex: "#64D1D5"
+        ),
+        .init(
+            keywords: [
+                "transport",
+                "taxi",
+                "metro",
+                "bus",
+                "tram",
+                "транспорт",
+                "такси",
+                "таксі",
+                "метро",
+                "автобус",
+                "проезд",
+                "проїзд"
+            ],
+            iconName: "tram.fill",
+            colorHex: "#FFC400"
+        ),
+        .init(
+            keywords: [
+                "rent",
+                "housing",
+                "home",
+                "apartment",
+                "аренд",
+                "оренд",
+                "жиль",
+                "житл",
+                "квартир"
+            ],
+            iconName: "house.fill",
+            colorHex: "#E5862F"
+        ),
+        .init(
+            keywords: [
+                "bill",
+                "utilit",
+                "electric",
+                "water",
+                "gas",
+                "internet",
+                "счет",
+                "счёт",
+                "рахунк",
+                "коммун",
+                "комун",
+                "свет",
+                "світло",
+                "вода",
+                "газ",
+                "інтернет"
+            ],
+            iconName: "bolt.fill",
+            colorHex: "#6FD03B"
+        ),
+        .init(
+            keywords: [
+                "health",
+                "doctor",
+                "pharmacy",
+                "clinic",
+                "мед",
+                "врач",
+                "лікар",
+                "аптек",
+                "здоров"
+            ],
+            iconName: "cross.case.fill",
+            colorHex: "#E96176"
+        ),
+        .init(
+            keywords: [
+                "shopping",
+                "clothes",
+                "market",
+                "покуп",
+                "магазин",
+                "одеж",
+                "одяг"
+            ],
+            iconName: "bag.fill",
+            colorHex: "#5FD4BF"
+        ),
+        .init(
+            keywords: [
+                "entertain",
+                "movie",
+                "cinema",
+                "game",
+                "развлеч",
+                "кіно",
+                "кино",
+                "ігри",
+                "игры"
+            ],
+            iconName: "theatermasks.fill",
+            colorHex: "#FFA600"
+        ),
+        .init(
+            keywords: [
+                "education",
+                "school",
+                "course",
+                "book",
+                "обуч",
+                "образов",
+                "освіт",
+                "навчан",
+                "курс",
+                "книг"
+            ],
+            iconName: "graduationcap.fill",
+            colorHex: "#4A80C1"
+        ),
+        .init(
+            keywords: [
+                "travel",
+                "flight",
+                "hotel",
+                "trip",
+                "поезд",
+                "подорож",
+                "путеше",
+                "отель",
+                "готел",
+                "авиа",
+                "авіа"
+            ],
+            iconName: "airplane",
+            colorHex: "#EE5DA7"
+        ),
+        .init(
+            keywords: [
+                "gift",
+                "present",
+                "подар"
+            ],
+            iconName: "gift.fill",
+            colorHex: "#FF5E57"
+        ),
+        .init(
+            keywords: [
+                "pet",
+                "cat",
+                "dog",
+                "animal",
+                "питом",
+                "живот",
+                "тварин",
+                "кіт",
+                "кот",
+                "собак"
+            ],
+            iconName: "pawprint.fill",
+            colorHex: "#B78B4A"
+        ),
     ]
 
     private static let incomeAppearanceRules: [ImportedCategoryAppearanceRule] = [
-        .init(keywords: ["salary", "wage", "payroll", "зарплат", "заробіт", "заробот"], iconName: "banknote.fill", colorHex: "#2AAAD2"),
-        .init(keywords: ["bonus", "бонус", "прем"], iconName: "crown.fill", colorHex: "#F7A72A"),
-        .init(keywords: ["gift", "present", "подар"], iconName: "gift.fill", colorHex: "#FF5E57"),
-        .init(keywords: ["refund", "cashback", "reimbursement", "возврат", "поверн", "кешбек"], iconName: "arrow.uturn.backward.circle.fill", colorHex: "#16C790"),
-        .init(keywords: ["freelance", "project", "side", "contract", "фриланс", "проект", "контракт"], iconName: "briefcase.fill", colorHex: "#2AAAD2"),
+        .init(
+            keywords: [
+                "salary",
+                "wage",
+                "payroll",
+                "зарплат",
+                "заробіт",
+                "заробот"
+            ],
+            iconName: "banknote.fill",
+            colorHex: "#2AAAD2"
+        ),
+        .init(
+            keywords: [
+                "bonus",
+                "бонус",
+                "прем"
+            ],
+            iconName: "crown.fill",
+            colorHex: "#F7A72A"
+        ),
+        .init(
+            keywords: [
+                "gift",
+                "present",
+                "подар"
+            ],
+            iconName: "gift.fill",
+            colorHex: "#FF5E57"
+        ),
+        .init(
+            keywords: [
+                "refund",
+                "cashback",
+                "reimbursement",
+                "возврат",
+                "поверн",
+                "кешбек"
+            ],
+            iconName: "arrow.uturn.backward.circle.fill",
+            colorHex: "#16C790"
+        ),
+        .init(
+            keywords: [
+                "freelance",
+                "project",
+                "side",
+                "contract",
+                "фриланс",
+                "проект",
+                "контракт"
+            ],
+            iconName: "briefcase.fill",
+            colorHex: "#2AAAD2"
+        ),
     ]
 
     private func escape(_ value: String) -> String {
