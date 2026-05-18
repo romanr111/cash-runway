@@ -110,6 +110,23 @@ struct UtilityAndModelTests {
         #expect(TimelinePeriod.year.displayName == "By years")
     }
 
+    @Test func timelineReloadStateKeepsLoadingUntilLatestReloadFinishes() {
+        var state = TimelineReloadState()
+
+        let firstReload = state.beginReload()
+        let secondReload = state.beginReload()
+
+        #expect(state.isLoading)
+        #expect(!state.canApply(reloadID: firstReload))
+
+        state.finishReload(reloadID: firstReload)
+        #expect(state.isLoading)
+
+        #expect(state.canApply(reloadID: secondReload))
+        state.finishReload(reloadID: secondReload)
+        #expect(!state.isLoading)
+    }
+
     @Test func transactionListItemDisplayTitle() {
         let item1 = TransactionListItem(
             id: UUID(), walletName: "W", amountMinor: 100, occurredAt: .now,

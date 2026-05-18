@@ -484,6 +484,28 @@ public enum TimelinePeriod: String, CaseIterable, Sendable {
     }
 }
 
+public struct TimelineReloadState: Equatable, Sendable {
+    public private(set) var isLoading = false
+    private var latestReloadID = 0
+
+    public init() {}
+
+    public mutating func beginReload() -> Int {
+        latestReloadID += 1
+        isLoading = true
+        return latestReloadID
+    }
+
+    public func canApply(reloadID: Int) -> Bool {
+        reloadID == latestReloadID
+    }
+
+    public mutating func finishReload(reloadID: Int) {
+        guard canApply(reloadID: reloadID) else { return }
+        isLoading = false
+    }
+}
+
 public struct Wallet: Identifiable, Codable, Hashable, Sendable {
     public var id: UUID
     public var name: String
