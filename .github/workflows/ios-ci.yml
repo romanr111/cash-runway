@@ -114,6 +114,82 @@ jobs:
           path: swift-integration-test.log
           if-no-files-found: ignore
 
+  coverage:
+    name: Coverage
+    runs-on: macos-26
+    timeout-minutes: 90
+    needs: integration-tests
+
+    steps:
+      - name: Check out PR branch
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - name: Run coverage tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p Coverage
+          swift test --enable-code-coverage 2>&1 | tee Coverage/swift-coverage-test.log
+          coverage_path="$(swift test --show-codecov-path)"
+          cp "${coverage_path}" Coverage/coverage.json
+
+      - name: Generate coverage summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          ruby <<'RUBY'
+          require "json"
+
+          report = JSON.parse(File.read("Coverage/coverage.json"))
+          source_root = "/Modules/CashRunwayCorePackage/Sources/CashRunwayCore/"
+          files = report.fetch("data").first.fetch("files").select do |file|
+            file.fetch("filename").include?(source_root)
+          end
+
+          total_lines = files.sum { |file| file.dig("summary", "lines", "count").to_i }
+          covered_lines = files.sum { |file| file.dig("summary", "lines", "covered").to_i }
+          percent = total_lines.positive? ? (covered_lines.to_f / total_lines * 100.0) : 0.0
+
+          low_files = files
+            .select { |file| file.dig("summary", "lines", "count").to_i.positive? }
+            .sort_by { |file| [file.dig("summary", "lines", "percent").to_f, -file.dig("summary", "lines", "count").to_i] }
+            .first(5)
+
+          summary = +"# Coverage\n\n"
+          summary << "| Scope | Line coverage | Covered lines | Executable lines |\n"
+          summary << "| --- | ---: | ---: | ---: |\n"
+          summary << format("| CashRunwayCore | %.2f%% | %d | %d |\n\n", percent, covered_lines, total_lines)
+
+          if low_files.any?
+            summary << "## Lowest-covered product files\n\n"
+            summary << "| File | Line coverage | Covered lines | Executable lines |\n"
+            summary << "| --- | ---: | ---: | ---: |\n"
+            low_files.each do |file|
+              lines = file.fetch("summary").fetch("lines")
+              relative_path = file.fetch("filename").split("/Cash Runway/").last
+              summary << format("| `%s` | %.2f%% | %d | %d |\n",
+                                relative_path,
+                                lines.fetch("percent").to_f,
+                                lines.fetch("covered").to_i,
+                                lines.fetch("count").to_i)
+            end
+          end
+
+          File.write("Coverage/coverage-summary.md", summary)
+          File.open(ENV.fetch("GITHUB_STEP_SUMMARY"), "a") { |file| file.write(summary) }
+          RUBY
+
+      - name: Upload coverage artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: Coverage
+          if-no-files-found: ignore
+
   e2e-tests:
     name: E2E Tests
     runs-on: macos-26
