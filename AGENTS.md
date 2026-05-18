@@ -38,6 +38,7 @@
 - Add or update tests for changed business logic, parsing, persistence, networking, or security-sensitive behavior.
 - Prefer fast unit tests over broad UI tests.
 - Do not add UI tests unless the project already has them or the task asks for them.
+- Run `swiftlint lint` locally when available; otherwise use CI static analysis as the fallback source of truth.
 - Run the strongest available validation before completion:
   - package tests if available
   - app/unit test scheme if available

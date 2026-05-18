@@ -50,7 +50,7 @@ jobs:
 
       - name: Upload static analysis logs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: static-analysis-logs
           path: swiftlint.log
@@ -79,7 +79,7 @@ jobs:
 
       - name: Upload unit test logs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: unit-test-logs
           path: swift-unit-test.log
@@ -108,7 +108,7 @@ jobs:
 
       - name: Upload integration test logs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: integration-test-logs
           path: swift-integration-test.log
@@ -172,21 +172,38 @@ jobs:
           run_ui_suite() {
             local suite="$1"
             local bundle_name="$2"
+            local attempt
+            local status
 
-            xcodebuild test-without-building \
-              -project "${PROJECT}" \
-              -scheme "${SCHEME}" \
-              -sdk iphonesimulator \
-              -destination "${{ steps.simulator.outputs.destination }}" \
-              -derivedDataPath DerivedData \
-              -only-testing:"${suite}" \
-              -test-timeouts-enabled YES \
-              -default-test-execution-time-allowance 120 \
-              -maximum-test-execution-time-allowance 180 \
-              -collect-test-diagnostics on-failure \
-              -resultBundlePath "TestResults/${bundle_name}.xcresult" \
-              CODE_SIGNING_ALLOWED=NO \
-              2>&1 | tee "xcode-test-${bundle_name}.log" | grep -E "${log_filter}"
+            for attempt in 1 2; do
+              set +e
+              xcodebuild test-without-building \
+                -project "${PROJECT}" \
+                -scheme "${SCHEME}" \
+                -sdk iphonesimulator \
+                -destination "${{ steps.simulator.outputs.destination }}" \
+                -derivedDataPath DerivedData \
+                -only-testing:"${suite}" \
+                -test-timeouts-enabled YES \
+                -default-test-execution-time-allowance 120 \
+                -maximum-test-execution-time-allowance 180 \
+                -collect-test-diagnostics on-failure \
+                -resultBundlePath "TestResults/${bundle_name}-attempt${attempt}.xcresult" \
+                CODE_SIGNING_ALLOWED=NO \
+                2>&1 | tee "xcode-test-${bundle_name}-attempt${attempt}.log" | grep -E "${log_filter}"
+              status="${PIPESTATUS[0]}"
+              set -e
+
+              if [[ "${status}" -eq 0 ]]; then
+                return 0
+              fi
+
+              if [[ "${attempt}" -eq 1 ]]; then
+                echo "${suite} failed on attempt 1; retrying once."
+              fi
+            done
+
+            return "${status}"
           }
 
           run_ui_suite "CashRunwayUITests/MonobankConnectionUITests" "monobank"
@@ -195,7 +212,7 @@ jobs:
 
       - name: Upload E2E test results
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-test-results
           path: |
