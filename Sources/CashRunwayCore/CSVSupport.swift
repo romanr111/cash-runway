@@ -37,13 +37,15 @@ private func importFingerprint(_ input: ImportFingerprintInput) -> String {
         normalizedMerchant,
         normalizedNote,
         normalizedCategory,
-        normalizedCurrency,
+        normalizedCurrency
     ]
     let input = components.joined(separator: "|")
     let hash = SHA256.hash(data: Data(input.utf8))
     return hash.compactMap { String(format: "%02x", $0) }.joined()
 }
 
+// CSV import/export intentionally keeps its parser and category heuristics together.
+// swiftlint:disable:next type_body_length
 public final class CSVService: @unchecked Sendable {
     private let repository: CashRunwayRepository
 
@@ -204,7 +206,7 @@ public final class CSVService: @unchecked Sendable {
                 "UAH",
                 item.note,
                 item.labels.map(\.name).joined(separator: "|"),
-                "",
+                ""
             ].map(escape).joined(separator: ",")
         }
         return ([header.joined(separator: ",")] + lines).joined(separator: "\n")
@@ -658,7 +660,7 @@ public final class CSVService: @unchecked Sendable {
             ],
             iconName: "pawprint.fill",
             colorHex: "#B78B4A"
-        ),
+        )
     ]
 
     private static let incomeAppearanceRules: [ImportedCategoryAppearanceRule] = [
@@ -716,7 +718,7 @@ public final class CSVService: @unchecked Sendable {
             ],
             iconName: "briefcase.fill",
             colorHex: "#2AAAD2"
-        ),
+        )
     ]
 
     private func escape(_ value: String) -> String {
