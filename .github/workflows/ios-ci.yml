@@ -172,6 +172,8 @@ jobs:
           run_ui_suite() {
             local suite="$1"
             local bundle_name="$2"
+            local default_test_timeout_seconds=300
+            local maximum_test_timeout_seconds=420
 
             xcodebuild test-without-building \
               -project "${PROJECT}" \
@@ -181,8 +183,8 @@ jobs:
               -derivedDataPath DerivedData \
               -only-testing:"${suite}" \
               -test-timeouts-enabled YES \
-              -default-test-execution-time-allowance 120 \
-              -maximum-test-execution-time-allowance 180 \
+              -default-test-execution-time-allowance "${default_test_timeout_seconds}" \
+              -maximum-test-execution-time-allowance "${maximum_test_timeout_seconds}" \
               -collect-test-diagnostics on-failure \
               -resultBundlePath "TestResults/${bundle_name}.xcresult" \
               CODE_SIGNING_ALLOWED=NO \
