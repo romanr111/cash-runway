@@ -19,7 +19,7 @@ Rules:
 - Goal: Add a minimal CI coverage report for Cash Runway core tests.
 - Success criteria: GitHub Actions has a dedicated `Coverage` job after integration tests, running in parallel with E2E, publishing a readable summary plus artifacts, and failing below 85% CashRunwayCore line coverage.
 - Current state: PR `#18` was squash-merged into `origin/main` as `a7bfae5`, and the feature branch was deleted on the remote.
-- Next action: Monitor the post-merge GitHub Actions run for the first enforced 85% coverage gate result.
+- Next action: Confirm the enforced 85% coverage gate on the next PR or manual `iOS CI` run.
 - Open questions: None.
 - Merge status: merged.
 
