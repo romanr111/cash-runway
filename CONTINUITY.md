@@ -18,8 +18,8 @@ Rules:
 
 - Goal: Fix PR `#15` E2E failures without broad UI-test churn.
 - Success criteria: CI no longer fails the Monobank E2E class because a long first test trips XCTest's 2-minute allowance or leaves the app hard to terminate, and local non-UI validation passes.
-- Current state: The failed Monobank E2E artifact showed a cold automation-session setup consumed about 99 seconds before app interaction, so the 120-second per-test allowance was too low for the first test on GitHub runners.
-- Next action: Validate the workflow-only timeout adjustment, commit it, and push PR `#15`.
+- Current state: PR `#15` branch `codex/e2e-overview-wallet-filter-fix` included the Monobank E2E timeout fix and was pushed through commit `15cff97`.
+- Next action: Let GitHub Actions run the targeted PR checks; do not wait for the full pipeline unless explicitly requested.
 - Open questions: None.
 - Merge status: not-merged.
 
@@ -48,6 +48,8 @@ Rules:
 - 2026-05-18 [TOOL] Simulator launch smoke check installed and launched `dev.roman.cashrunway` on iPhone 17 as PID `89158`.
 - 2026-05-18 [TOOL] Opened PR `#15` for `codex/e2e-overview-wallet-filter-fix`.
 - 2026-05-18 [CODE] Raised E2E per-test timeout allowances in `.github/workflows/ios-ci.yml` from 120/180 seconds to 300/420 seconds.
+- 2026-05-18 [CHECK] `git diff --check` and Python YAML parsing passed for the workflow-only timeout adjustment.
+- 2026-05-18 [TOOL] Committed `15cff97` (`Raise E2E test timeout allowance`) and pushed it to `origin/codex/e2e-overview-wallet-filter-fix`.
 - 2026-05-18 [REVIEW] Self-review of PR `#13` found no blockers; local validation had already passed and live checks had `Static Analysis` and `Unit Tests` passing when the user asked not to wait for the full pipeline.
 - 2026-05-18 [TOOL] Squash-merged PR `#13` into `main` as `20d587f`.
 - 2026-05-18 [TOOL] Removed `/Users/roman/.codex/worktrees/cash-runway-e2e-ci-optimization` and deleted local branch `codex/e2e-ci-optimization`.
