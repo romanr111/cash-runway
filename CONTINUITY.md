@@ -18,8 +18,8 @@ Rules:
 
 - Goal: Add a minimal CI coverage report for Cash Runway core tests.
 - Success criteria: GitHub Actions has a dedicated `Coverage` job after integration tests, running in parallel with E2E and publishing a readable summary plus artifacts without enforcing a threshold.
-- Current state: Branch `codex/ci-coverage-report` added and locally validated a SwiftPM coverage job in `.github/workflows/ios-ci.yml`.
-- Next action: Open a PR so GitHub Actions can publish the first coverage baseline.
+- Current state: PR `#18` is open for the SwiftPM coverage job on branch `codex/ci-coverage-report`.
+- Next action: Watch PR `#18` CI for the first GitHub Actions coverage baseline.
 - Open questions: None.
 - Merge status: merged.
 
@@ -42,6 +42,7 @@ Rules:
 - 2026-05-18 [TOOL] Removed `/Users/roman/.codex/worktrees/cash-runway-e2e-ci-optimization` and deleted local branch `codex/e2e-ci-optimization`.
 - 2026-05-18 [DECISION] Coverage v1 uses SwiftPM `swift test --enable-code-coverage` against product sources under `Modules/CashRunwayCorePackage/Sources/CashRunwayCore`, not `xcodebuild + xccov`, because the shared Xcode scheme currently drives UI tests.
 - 2026-05-18 [CHECK] Local coverage validation passed: `swift test --enable-code-coverage` ran 219 tests, generated `Coverage/coverage-summary.md`, and reported CashRunwayCore line coverage at 89.45%.
+- 2026-05-18 [TOOL] Opened PR `#18`: https://github.com/romanr111/cash-runway/pull/18
 - 2026-05-17 [TOOL] Merged PR `#12` for `codex/cash-runway-lint-fix` into `main`, deleted its local/remote branches, and removed `/Users/roman/.codex/worktrees/cash-runway-lint-fix`.
 
 ## Receipts
