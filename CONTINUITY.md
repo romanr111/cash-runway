@@ -16,10 +16,10 @@ Rules:
 
 ## Snapshot
 
-- Goal: Keep Cash Runway repo state clear and current in the primary checkout.
-- Success criteria: `CONTINUITY.md` reflects live Git state and preserves only current decisions and receipts.
-- Current state: PR `#13` was squash-merged into `origin/main`, and the local `codex/e2e-ci-optimization` worktree and branch were cleaned up.
-- Next action: Record any new repo changes here before editing files again.
+- Goal: Add a minimal CI coverage report for Cash Runway core tests.
+- Success criteria: GitHub Actions has a dedicated `Coverage` job after integration tests, running in parallel with E2E, publishing a readable summary plus artifacts, and failing below 85% CashRunwayCore line coverage.
+- Current state: PR `#18` is being updated to enforce an 85% minimum coverage threshold before merge.
+- Next action: Push the threshold update, confirm PR checks, then merge PR `#18`.
 - Open questions: None.
 - Merge status: merged.
 
@@ -27,11 +27,12 @@ Rules:
 
 - Repo root: `/Users/roman/Documents/Development/Cash Runway`
 - Working directory: `/Users/roman/Documents/Development/Cash Runway`
-- Branch: `main`
+- Branch: `codex/ci-coverage-report`
 - Base branch: `origin/main`
 
 ## Working set
 
+- `.github/workflows/ios-ci.yml`
 - `CONTINUITY.md`
 
 ## Done (recent)
@@ -39,6 +40,10 @@ Rules:
 - 2026-05-18 [REVIEW] Self-review of PR `#13` found no blockers; local validation had already passed and live checks had `Static Analysis` and `Unit Tests` passing when the user asked not to wait for the full pipeline.
 - 2026-05-18 [TOOL] Squash-merged PR `#13` into `main` as `20d587f`.
 - 2026-05-18 [TOOL] Removed `/Users/roman/.codex/worktrees/cash-runway-e2e-ci-optimization` and deleted local branch `codex/e2e-ci-optimization`.
+- 2026-05-18 [DECISION] Coverage v1 uses SwiftPM `swift test --enable-code-coverage` against product sources under `Modules/CashRunwayCorePackage/Sources/CashRunwayCore`, not `xcodebuild + xccov`, because the shared Xcode scheme currently drives UI tests.
+- 2026-05-18 [CHECK] Local coverage validation passed: `swift test --enable-code-coverage` ran 219 tests, generated `Coverage/coverage-summary.md`, and reported CashRunwayCore line coverage at 89.45%.
+- 2026-05-18 [TOOL] Opened PR `#18`: https://github.com/romanr111/cash-runway/pull/18
+- 2026-05-18 [DECISION] Coverage job must fail when CashRunwayCore line coverage is below 85%.
 - 2026-05-17 [TOOL] Merged PR `#12` for `codex/cash-runway-lint-fix` into `main`, deleted its local/remote branches, and removed `/Users/roman/.codex/worktrees/cash-runway-lint-fix`.
 
 ## Receipts
