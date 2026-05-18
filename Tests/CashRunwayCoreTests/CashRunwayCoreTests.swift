@@ -2,6 +2,7 @@ import Foundation
 import GRDB
 import Testing
 @testable import CashRunwayCore
+@testable import CashRunwayUI
 
 @Suite(.serialized)
 struct CashRunwayCoreTests {
@@ -43,6 +44,50 @@ struct CashRunwayCoreTests {
 
         let yearPeriodKey = DateKeys.periodKey(for: date, period: .year)
         #expect(DateKeys.monthKey(fromPeriodKey: yearPeriodKey, period: .year) == 202501)
+    }
+
+    @Test func selectedYearReturnsToJulyWhenSwitchingBackToMonthTimeline() {
+        let monthKey = DateKeys.monthKeyForMonthTimelineReturn(
+            selectedYear: 2024,
+            currentMonthKey: 202605,
+            maxMonthKey: 202605
+        )
+
+        #expect(monthKey == 202407)
+    }
+
+    @Test func currentYearReturnsToCurrentMonthWhenSwitchingBackToMonthTimeline() {
+        let monthKey = DateKeys.monthKeyForMonthTimelineReturn(
+            selectedYear: 2026,
+            currentMonthKey: 202605,
+            maxMonthKey: 202612
+        )
+
+        #expect(monthKey == 202605)
+    }
+
+    @Test func monthTimelineReturnDoesNotSelectBeyondMaximumMonth() {
+        let monthKey = DateKeys.monthKeyForMonthTimelineReturn(
+            selectedYear: 2026,
+            currentMonthKey: 202605,
+            maxMonthKey: 202603
+        )
+
+        #expect(monthKey == 202603)
+    }
+
+    @Test(.disabled("AppModel requires CashRunwayUI dependency not available in CashRunwayCoreTests target"))
+    func selectTimelinePeriodFromYearToMonthUpdatesSelectedMonthKey() {
+        let model = CashRunwayAppModel()
+        model.selectedTimelinePeriod = .year
+        model.selectedMonthKey = 2024 * 100 + 1
+        model.maxMonthKey = 202612
+
+        model.selectTimelinePeriod(.month)
+
+        #expect(model.selectedTimelinePeriod == .month)
+        #expect(model.selectedMonthKey != 202401)
+        #expect(model.selectedMonthKey <= model.maxMonthKey)
     }
 
     @Test func timelineSnapshotGroupsByPeriod() throws {

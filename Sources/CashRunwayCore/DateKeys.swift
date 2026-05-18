@@ -48,6 +48,12 @@ public enum DateKeys {
         }
     }
 
+    public static func monthKeyForMonthTimelineReturn(selectedYear: Int, currentMonthKey: Int, maxMonthKey: Int) -> Int {
+        let currentYear = currentMonthKey / 100
+        let month = selectedYear == currentYear ? currentMonthKey % 100 : 7
+        return min(selectedYear * 100 + month, maxMonthKey)
+    }
+
     public static func startOfMonth(for monthKey: Int) -> Date {
         let year = monthKey / 100
         let month = monthKey % 100
