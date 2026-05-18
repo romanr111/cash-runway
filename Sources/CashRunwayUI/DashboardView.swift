@@ -198,7 +198,7 @@ struct DashboardView: View {
             Menu {
                 ForEach(TimelinePeriod.allCases, id: \.self) { period in
                     Button(period.displayName) {
-                        model.selectedTimelinePeriod = period
+                        model.selectTimelinePeriod(period)
                         Task { await model.reloadAll() }
                     }
                 }

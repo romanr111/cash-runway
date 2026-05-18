@@ -214,6 +214,18 @@ public final class CashRunwayAppModel {
         reloadTimeline()
     }
 
+    public func selectTimelinePeriod(_ period: TimelinePeriod) {
+        guard selectedTimelinePeriod != period else { return }
+        if selectedTimelinePeriod == .year, period == .month {
+            selectedMonthKey = DateKeys.monthKeyForMonthTimelineReturn(
+                selectedYear: selectedMonthKey / 100,
+                currentMonthKey: DateKeys.monthKey(for: .now),
+                maxMonthKey: maxMonthKey
+            )
+        }
+        selectedTimelinePeriod = period
+    }
+
     public func reloadTimeline() {
         Task {
             await reloadSnapshotsAsync()
