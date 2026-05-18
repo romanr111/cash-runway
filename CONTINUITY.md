@@ -18,8 +18,8 @@ Rules:
 
 - Goal: Add a minimal CI coverage report for Cash Runway core tests.
 - Success criteria: GitHub Actions has a dedicated `Coverage` job after integration tests, running in parallel with E2E, publishing a readable summary plus artifacts, and failing below 85% CashRunwayCore line coverage.
-- Current state: PR `#18` is being updated to enforce an 85% minimum coverage threshold before merge.
-- Next action: Push the threshold update, confirm PR checks, then merge PR `#18`.
+- Current state: PR `#18` was squash-merged into `origin/main` as `a7bfae5`, and the feature branch was deleted on the remote.
+- Next action: Monitor the post-merge GitHub Actions run for the first enforced 85% coverage gate result.
 - Open questions: None.
 - Merge status: merged.
 
@@ -27,12 +27,11 @@ Rules:
 
 - Repo root: `/Users/roman/Documents/Development/Cash Runway`
 - Working directory: `/Users/roman/Documents/Development/Cash Runway`
-- Branch: `codex/ci-coverage-report`
+- Branch: `main`
 - Base branch: `origin/main`
 
 ## Working set
 
-- `.github/workflows/ios-ci.yml`
 - `CONTINUITY.md`
 
 ## Done (recent)
@@ -44,6 +43,7 @@ Rules:
 - 2026-05-18 [CHECK] Local coverage validation passed: `swift test --enable-code-coverage` ran 219 tests, generated `Coverage/coverage-summary.md`, and reported CashRunwayCore line coverage at 89.45%.
 - 2026-05-18 [TOOL] Opened PR `#18`: https://github.com/romanr111/cash-runway/pull/18
 - 2026-05-18 [DECISION] Coverage job must fail when CashRunwayCore line coverage is below 85%.
+- 2026-05-18 [TOOL] Squash-merged PR `#18` into `main` as `a7bfae5`; `origin/codex/ci-coverage-report` was pruned after merge.
 - 2026-05-17 [TOOL] Merged PR `#12` for `codex/cash-runway-lint-fix` into `main`, deleted its local/remote branches, and removed `/Users/roman/.codex/worktrees/cash-runway-lint-fix`.
 
 ## Receipts
