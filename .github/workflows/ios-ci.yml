@@ -172,8 +172,8 @@ jobs:
           run_ui_suite() {
             local suite="$1"
             local bundle_name="$2"
-            local default_test_timeout_seconds=300
-            local maximum_test_timeout_seconds=420
+            local default_test_timeout_seconds="${3:-120}"
+            local maximum_test_timeout_seconds="${4:-180}"
 
             xcodebuild test-without-building \
               -project "${PROJECT}" \
@@ -191,7 +191,7 @@ jobs:
               2>&1 | tee "xcode-test-${bundle_name}.log" | grep -E "${log_filter}"
           }
 
-          run_ui_suite "CashRunwayUITests/MonobankConnectionUITests" "monobank"
+          run_ui_suite "CashRunwayUITests/MonobankConnectionUITests" "monobank" 240 300
           run_ui_suite "CashRunwayUITests/OverviewFlowUITests" "overview"
           run_ui_suite "CashRunwayUITests/TransactionFlowUITests" "transactions"
 

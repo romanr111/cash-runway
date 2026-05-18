@@ -1054,6 +1054,7 @@ private struct MonobankTokenStepView: View {
                 Button("Paste from Clipboard") {
                     token = UIPasteboard.general.string ?? token
                 }
+                .accessibilityIdentifier(CashRunwayAccessibilityID.monobankPasteTokenButton)
                 #endif
                 Button(isValidating ? "Validating..." : "Validate Token", action: onValidate)
                     .disabled(token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isValidating)
