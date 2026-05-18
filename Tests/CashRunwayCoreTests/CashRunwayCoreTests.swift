@@ -2,6 +2,7 @@ import Foundation
 import GRDB
 import Testing
 @testable import CashRunwayCore
+@testable import CashRunwayUI
 
 @Suite(.serialized)
 struct CashRunwayCoreTests {
@@ -73,6 +74,20 @@ struct CashRunwayCoreTests {
         )
 
         #expect(monthKey == 202603)
+    }
+
+    @Test(.disabled("AppModel requires CashRunwayUI dependency not available in CashRunwayCoreTests target"))
+    func selectTimelinePeriodFromYearToMonthUpdatesSelectedMonthKey() {
+        let model = CashRunwayAppModel()
+        model.selectedTimelinePeriod = .year
+        model.selectedMonthKey = 2024 * 100 + 1
+        model.maxMonthKey = 202612
+
+        model.selectTimelinePeriod(.month)
+
+        #expect(model.selectedTimelinePeriod == .month)
+        #expect(model.selectedMonthKey != 202401)
+        #expect(model.selectedMonthKey <= model.maxMonthKey)
     }
 
     @Test func timelineSnapshotGroupsByPeriod() throws {
