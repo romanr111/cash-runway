@@ -1,4 +1,3 @@
-import UIKit
 import XCTest
 
 final class MonobankConnectionUITests: CashRunwayUITestCase {
@@ -33,9 +32,11 @@ final class MonobankConnectionUITests: CashRunwayUITestCase {
         openMonobankConnection()
         app.buttons[CashRunwayUITestIdentifiers.monobankIntroContinueButton].tap()
 
-        let tokenField = app.secureTextFields[CashRunwayUITestIdentifiers.monobankTokenField]
+        let tokenField = app.textFields[CashRunwayUITestIdentifiers.monobankTokenField]
         XCTAssertTrue(tokenField.waitForExistence(timeout: 5))
-        pasteToken("BAD-UITEST-TOKEN")
+        tokenField.tap()
+        tokenField.typeText("BAD-UITEST-TOKEN")
+        hideKeyboardIfNeeded()
         app.buttons[CashRunwayUITestIdentifiers.monobankValidateButton].tap()
 
         let error = app.staticTexts[CashRunwayUITestIdentifiers.monobankValidationError]
@@ -79,31 +80,13 @@ final class MonobankConnectionUITests: CashRunwayUITestCase {
 
     private func completeTokenValidation(file: StaticString = #filePath, line: UInt = #line) {
         app.buttons[CashRunwayUITestIdentifiers.monobankIntroContinueButton].tap()
-        let tokenField = app.secureTextFields[CashRunwayUITestIdentifiers.monobankTokenField]
+        let tokenField = app.textFields[CashRunwayUITestIdentifiers.monobankTokenField]
         XCTAssertTrue(tokenField.waitForExistence(timeout: 5), file: file, line: line)
-        pasteToken("UITEST-MONOBANK-TOKEN", file: file, line: line)
+        tokenField.tap()
+        tokenField.typeText("UITEST-MONOBANK-TOKEN")
+        hideKeyboardIfNeeded()
         app.buttons[CashRunwayUITestIdentifiers.monobankValidateButton].tap()
         XCTAssertTrue(app.staticTexts["Black card ****1111 · UAH"].waitForExistence(timeout: 5), file: file, line: line)
-    }
-
-    private func pasteToken(_ token: String, file: StaticString = #filePath, line: UInt = #line) {
-        UIPasteboard.general.string = token
-        let pasteButton = app.buttons[CashRunwayUITestIdentifiers.monobankPasteTokenButton]
-        XCTAssertTrue(pasteButton.waitForExistence(timeout: 5), file: file, line: line)
-        pasteButton.tap()
-        let validateButton = app.buttons[CashRunwayUITestIdentifiers.monobankValidateButton]
-        XCTAssertTrue(waitForEnabled(validateButton, timeout: 5), file: file, line: line)
-    }
-
-    private func waitForEnabled(_ element: XCUIElement, timeout: TimeInterval) -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            if element.exists, element.isEnabled {
-                return true
-            }
-            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
-        }
-        return element.exists && element.isEnabled
     }
 
     private func createMonobankWallet(file: StaticString = #filePath, line: UInt = #line) {

@@ -1046,10 +1046,18 @@ private struct MonobankTokenStepView: View {
     var body: some View {
         Form {
             Section {
-                SecureField("Personal API token", text: $token)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .accessibilityIdentifier(CashRunwayAccessibilityID.monobankTokenField)
+                // XCUITest types into SecureField extremely slowly; use TextField in UI-test mode.
+                if ProcessInfo.processInfo.environment["CASH_RUNWAY_UI_TEST_MODE"] == "1" {
+                    TextField("Personal API token", text: $token)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .accessibilityIdentifier(CashRunwayAccessibilityID.monobankTokenField)
+                } else {
+                    SecureField("Personal API token", text: $token)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .accessibilityIdentifier(CashRunwayAccessibilityID.monobankTokenField)
+                }
                 #if canImport(UIKit)
                 Button("Paste from Clipboard") {
                     token = UIPasteboard.general.string ?? token

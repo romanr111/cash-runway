@@ -284,7 +284,6 @@ enum CashRunwayUITestIdentifiers {
     static let settingsMonobankRow = "settings.monobank.row"
     static let monobankIntroContinueButton = "monobank.intro.continueButton"
     static let monobankTokenField = "monobank.token.field"
-    static let monobankPasteTokenButton = "monobank.token.pasteButton"
     static let monobankValidateButton = "monobank.token.validateButton"
     static let monobankValidationError = "monobank.token.validationError"
     static let monobankAccountsContinueButton = "monobank.accounts.continueButton"
