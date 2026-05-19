@@ -32,7 +32,7 @@ final class MonobankConnectionUITests: CashRunwayUITestCase {
         openMonobankConnection()
         app.buttons[CashRunwayUITestIdentifiers.monobankIntroContinueButton].tap()
 
-        let tokenField = app.secureTextFields[CashRunwayUITestIdentifiers.monobankTokenField]
+        let tokenField = app.textFields[CashRunwayUITestIdentifiers.monobankTokenField]
         XCTAssertTrue(tokenField.waitForExistence(timeout: 5))
         tokenField.tap()
         tokenField.typeText("BAD-UITEST-TOKEN")
@@ -80,7 +80,7 @@ final class MonobankConnectionUITests: CashRunwayUITestCase {
 
     private func completeTokenValidation(file: StaticString = #filePath, line: UInt = #line) {
         app.buttons[CashRunwayUITestIdentifiers.monobankIntroContinueButton].tap()
-        let tokenField = app.secureTextFields[CashRunwayUITestIdentifiers.monobankTokenField]
+        let tokenField = app.textFields[CashRunwayUITestIdentifiers.monobankTokenField]
         XCTAssertTrue(tokenField.waitForExistence(timeout: 5), file: file, line: line)
         tokenField.tap()
         tokenField.typeText("UITEST-MONOBANK-TOKEN")
