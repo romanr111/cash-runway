@@ -20,12 +20,10 @@ final class TransactionFlowUITests: CashRunwayUITestCase {
 
         let amountField = app.textFields[CashRunwayUITestIdentifiers.transactionAmountField]
         XCTAssertTrue(amountField.waitForExistence(timeout: 3))
-        amountField.tap()
-        amountField.typeText("123.45")
+        amountField.clearAndEnterText("123.45")
 
         let noteField = app.textFields[CashRunwayUITestIdentifiers.transactionNoteField]
-        noteField.tap()
-        noteField.typeText(note)
+        noteField.clearAndEnterText(note)
         hideKeyboardIfNeeded()
 
         app.buttons[CashRunwayUITestIdentifiers.transactionSaveButton].tap()
@@ -69,9 +67,7 @@ final class TransactionFlowUITests: CashRunwayUITestCase {
 
         amountField.clearAndEnterText("19.50")
         let noteField = app.textFields[CashRunwayUITestIdentifiers.transactionNoteField]
-        noteField.tap()
-        noteField.typeText(note)
-        hideKeyboardIfNeeded()
+        noteField.clearAndEnterText(note)
 
         app.buttons[CashRunwayUITestIdentifiers.transactionSaveButton].tap()
         assertTransactionRowExists(note: note)
@@ -83,11 +79,9 @@ final class TransactionFlowUITests: CashRunwayUITestCase {
         openAddTransaction()
         app.buttons[CashRunwayUITestIdentifiers.transactionCategory("Groceries")].tap()
         let amountField = app.textFields[CashRunwayUITestIdentifiers.transactionAmountField]
-        amountField.tap()
-        amountField.typeText("9.99")
+        amountField.clearAndEnterText("9.99")
         let noteField = app.textFields[CashRunwayUITestIdentifiers.transactionNoteField]
-        noteField.tap()
-        noteField.typeText(note)
+        noteField.clearAndEnterText(note)
         hideKeyboardIfNeeded()
 
         app.buttons[CashRunwayUITestIdentifiers.transactionCloseButton].tap()
@@ -190,12 +184,10 @@ final class TransactionFlowUITests: CashRunwayUITestCase {
         app.buttons[CashRunwayUITestIdentifiers.transactionCategory("Groceries")].tap()
 
         let amountField = app.textFields[CashRunwayUITestIdentifiers.transactionAmountField]
-        amountField.tap()
-        amountField.typeText("18.20")
+        amountField.clearAndEnterText("18.20")
 
         let noteField = app.textFields[CashRunwayUITestIdentifiers.transactionNoteField]
-        noteField.tap()
-        noteField.typeText(note)
+        noteField.clearAndEnterText(note)
         hideKeyboardIfNeeded()
 
         app.buttons[CashRunwayUITestIdentifiers.transactionDateYesterdayButton].tap()
@@ -259,8 +251,7 @@ final class TransactionFlowUITests: CashRunwayUITestCase {
     }
 
     func testTransferRequiresDestinationWalletAndDoesNotExposeCategories() {
-        // Fresh launch to avoid state accumulation from previous tests in this class
-        launchApp()
+        prepareSharedApp()
         let note = "UITEST-TRANSFER-001"
         openAddTransaction()
         let kindPicker = app.segmentedControls[CashRunwayUITestIdentifiers.transactionKindPicker]

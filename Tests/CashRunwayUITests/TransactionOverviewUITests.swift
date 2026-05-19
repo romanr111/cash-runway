@@ -55,11 +55,9 @@ final class OverviewFlowUITests: CashRunwayUITestCase {
         openAddTransaction()
         app.buttons[CashRunwayUITestIdentifiers.transactionCategory("Groceries")].tap()
         let amountField = app.textFields[CashRunwayUITestIdentifiers.transactionAmountField]
-        amountField.tap()
-        amountField.typeText("77.70")
+        amountField.clearAndEnterText("77.70")
         let noteField = app.textFields[CashRunwayUITestIdentifiers.transactionNoteField]
-        noteField.tap()
-        noteField.typeText(note)
+        noteField.clearAndEnterText(note)
         hideKeyboardIfNeeded()
         app.buttons[CashRunwayUITestIdentifiers.transactionSaveButton].tap()
 

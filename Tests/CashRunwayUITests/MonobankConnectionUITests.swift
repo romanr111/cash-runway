@@ -35,9 +35,7 @@ final class MonobankConnectionUITests: CashRunwayUITestCase {
 
         let tokenField = app.textFields[CashRunwayUITestIdentifiers.monobankTokenField]
         XCTAssertTrue(tokenField.waitForExistence(timeout: 3))
-        tokenField.tap()
-        tokenField.typeText("BAD-UITEST-TOKEN")
-        hideKeyboardIfNeeded()
+        tokenField.clearAndEnterText("BAD-UITEST-TOKEN")
         app.buttons[CashRunwayUITestIdentifiers.monobankValidateButton].tap()
 
         let error = app.staticTexts[CashRunwayUITestIdentifiers.monobankValidationError]
@@ -83,9 +81,7 @@ final class MonobankConnectionUITests: CashRunwayUITestCase {
         app.buttons[CashRunwayUITestIdentifiers.monobankIntroContinueButton].tap()
         let tokenField = app.textFields[CashRunwayUITestIdentifiers.monobankTokenField]
         XCTAssertTrue(tokenField.waitForExistence(timeout: 3), file: file, line: line)
-        tokenField.tap()
-        tokenField.typeText("UITEST-MONOBANK-TOKEN")
-        hideKeyboardIfNeeded()
+        tokenField.clearAndEnterText("UITEST-MONOBANK-TOKEN")
         app.buttons[CashRunwayUITestIdentifiers.monobankValidateButton].tap()
         XCTAssertTrue(app.staticTexts["Black card ****1111 · UAH"].waitForExistence(timeout: 3), file: file, line: line)
     }
