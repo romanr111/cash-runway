@@ -8,19 +8,13 @@ struct RepositoryCRUDTests {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
 
-        let wallet = Wallet(
-            id: UUID(),
-            name: "Test Wallet",
-            kind: .cash,
-            colorHex: "#FF0000",
-            iconName: "dollarsign.circle",
-            startingBalanceMinor: 100_000,
-            currentBalanceMinor: 100_000,
-            isArchived: false,
-            sortOrder: 99,
-            createdAt: .now,
-            updatedAt: .now
-        )
+        let wallet = WalletBuilder()
+            .with(name: "Test Wallet")
+            .with(kind: .cash)
+            .with(startingBalanceMinor: 100_000)
+            .with(currentBalanceMinor: 100_000)
+            .with(sortOrder: 99)
+            .build()
         try repository.saveWallet(wallet)
 
         var wallets = try repository.wallets()
@@ -44,19 +38,13 @@ struct RepositoryCRUDTests {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
 
-        let category = Category(
-            id: UUID(),
-            name: "Test Category",
-            kind: .expense,
-            iconName: "star",
-            colorHex: "#00FF00",
-            parentID: nil,
-            isSystem: false,
-            isArchived: false,
-            sortOrder: 999,
-            createdAt: .now,
-            updatedAt: .now
-        )
+        let category = CategoryBuilder()
+            .with(name: "Test Category")
+            .with(kind: .expense)
+            .with(iconName: "star")
+            .with(colorHex: "#00FF00")
+            .with(sortOrder: 999)
+            .build()
         try repository.saveCategory(category)
 
         var categories = try repository.categories(kind: .expense)

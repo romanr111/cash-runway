@@ -13,13 +13,30 @@ struct DatabaseBackupTests {
         let incomeCategory = try #require(try repository.categories(kind: .income).first)
 
         try repository.saveTransaction(
-            TransactionDraft(kind: .expense, walletID: wallets[0].id, amountMinor: 5_000, occurredAt: .now, categoryID: expenseCategory.id, merchant: "A", note: "")
+            TransactionBuilder()
+                .with(walletID: wallets[0].id)
+                .with(amountMinor: 5_000)
+                .with(categoryID: expenseCategory.id)
+                .with(merchant: "A")
+                .build()
         )
         try repository.saveTransaction(
-            TransactionDraft(kind: .income, walletID: wallets[0].id, amountMinor: 10_000, occurredAt: .now, categoryID: incomeCategory.id, merchant: "B", note: "")
+            TransactionBuilder()
+                .with(kind: .income)
+                .with(walletID: wallets[0].id)
+                .with(amountMinor: 10_000)
+                .with(categoryID: incomeCategory.id)
+                .with(merchant: "B")
+                .build()
         )
         try repository.saveTransaction(
-            TransactionDraft(kind: .transfer, walletID: wallets[0].id, destinationWalletID: wallets[1].id, amountMinor: 2_000, occurredAt: .now, merchant: "C", note: "")
+            TransactionBuilder()
+                .with(kind: .transfer)
+                .with(walletID: wallets[0].id)
+                .with(destinationWalletID: wallets[1].id)
+                .with(amountMinor: 2_000)
+                .with(merchant: "C")
+                .build()
         )
 
         let expectedNonTransferCount = try repository.databaseManager.dbQueue.read { db in
@@ -40,20 +57,17 @@ struct DatabaseBackupTests {
         try TestSupport.seedFixtureWallets(into: repository)
         let walletID = try #require(try repository.wallets().first?.id)
         let category = try #require(try repository.categories(kind: .expense).first)
-        let label = Label(id: UUID(), name: "Trip", colorHex: "#1CC389", createdAt: .now, updatedAt: .now)
+        let label = LabelBuilder().with(name: "Trip").with(colorHex: "#1CC389").build()
         try repository.saveLabel(label)
 
         try repository.saveTransaction(
-            TransactionDraft(
-                kind: .expense,
-                walletID: walletID,
-                amountMinor: 3_000,
-                occurredAt: .now,
-                categoryID: category.id,
-                labelIDs: [label.id],
-                merchant: "Labeled",
-                note: ""
-            )
+            TransactionBuilder()
+                .with(walletID: walletID)
+                .with(amountMinor: 3_000)
+                .with(categoryID: category.id)
+                .with(labelIDs: [label.id])
+                .with(merchant: "Labeled")
+                .build()
         )
 
         let service = CSVService(repository: repository)
@@ -72,10 +86,20 @@ struct DatabaseBackupTests {
         let service = CSVService(repository: repository)
 
         try repository.saveTransaction(
-            TransactionDraft(kind: .expense, walletID: wallet.id, amountMinor: 2_500, occurredAt: .now, categoryID: category.id, merchant: "R1", note: "")
+            TransactionBuilder()
+                .with(walletID: wallet.id)
+                .with(amountMinor: 2_500)
+                .with(categoryID: category.id)
+                .with(merchant: "R1")
+                .build()
         )
         try repository.saveTransaction(
-            TransactionDraft(kind: .expense, walletID: wallet.id, amountMinor: 1_500, occurredAt: .now, categoryID: category.id, merchant: "R2", note: "")
+            TransactionBuilder()
+                .with(walletID: wallet.id)
+                .with(amountMinor: 1_500)
+                .with(categoryID: category.id)
+                .with(merchant: "R2")
+                .build()
         )
 
         let exported = try service.exportCSV()
