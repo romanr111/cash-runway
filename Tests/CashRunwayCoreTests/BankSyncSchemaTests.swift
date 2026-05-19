@@ -223,33 +223,37 @@ struct BankSyncSchemaTests {
         let incomeCategoryID = try #require(try repository.categories(kind: .income).first?.id)
         let now = Date(timeIntervalSince1970: 1_800_000_000)
 
-        try repository.saveTransaction(TransactionDraft(
-            kind: .expense,
-            walletID: walletID,
-            amountMinor: 1_000,
-            occurredAt: now,
-            categoryID: expenseCategoryID,
-            merchant: "Manual",
-            source: .manual
-        ))
-        try repository.saveTransaction(TransactionDraft(
-            kind: .expense,
-            walletID: walletID,
-            amountMinor: 2_000,
-            occurredAt: now,
-            categoryID: expenseCategoryID,
-            merchant: "CSV",
-            source: .importCSV
-        ))
-        try repository.saveTransaction(TransactionDraft(
-            kind: .income,
-            walletID: walletID,
-            amountMinor: 3_000,
-            occurredAt: now,
-            categoryID: incomeCategoryID,
-            merchant: "Recurring",
-            source: .recurring
-        ))
+        try repository.saveTransaction(
+            TransactionBuilder()
+                .with(walletID: walletID)
+                .with(amountMinor: 1_000)
+                .with(occurredAt: now)
+                .with(categoryID: expenseCategoryID)
+                .with(merchant: "Manual")
+                .with(source: .manual)
+                .build()
+        )
+        try repository.saveTransaction(
+            TransactionBuilder()
+                .with(walletID: walletID)
+                .with(amountMinor: 2_000)
+                .with(occurredAt: now)
+                .with(categoryID: expenseCategoryID)
+                .with(merchant: "CSV")
+                .with(source: .importCSV)
+                .build()
+        )
+        try repository.saveTransaction(
+            TransactionBuilder()
+                .with(kind: .income)
+                .with(walletID: walletID)
+                .with(amountMinor: 3_000)
+                .with(occurredAt: now)
+                .with(categoryID: incomeCategoryID)
+                .with(merchant: "Recurring")
+                .with(source: .recurring)
+                .build()
+        )
 
         let counts = try transactionCountsBySource(repository)
         #expect(counts["manual"] == 1)

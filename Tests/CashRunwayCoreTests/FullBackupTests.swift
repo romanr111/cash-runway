@@ -242,38 +242,41 @@ struct FullBackupTests {
         let expenseCategory = try #require(try repository.categories(kind: .expense).first)
         let incomeCategory = try #require(try repository.categories(kind: .income).first)
         let now = Date(timeIntervalSince1970: 1_768_435_200)
-        let label = Label(id: UUID(), name: "Backup Label", colorHex: "#123456", createdAt: now, updatedAt: now)
+        let label = LabelBuilder().with(name: "Backup Label").with(colorHex: "#123456").build()
         try repository.saveLabel(label)
 
-        try repository.saveTransaction(TransactionDraft(
-            kind: .expense,
-            walletID: wallets[0].id,
-            amountMinor: 12_345,
-            occurredAt: now,
-            categoryID: expenseCategory.id,
-            labelIDs: [label.id],
-            merchant: "Backup Grocery",
-            note: "Has label"
-        ))
-        try repository.saveTransaction(TransactionDraft(
-            kind: .income,
-            walletID: wallets[0].id,
-            amountMinor: 50_000,
-            occurredAt: now,
-            categoryID: incomeCategory.id,
-            merchant: "Backup Salary",
-            note: ""
-        ))
-        try repository.saveTransaction(TransactionDraft(
-            kind: .transfer,
-            walletID: wallets[0].id,
-            destinationWalletID: wallets[1].id,
-            amountMinor: 7_500,
-            occurredAt: now,
-            labelIDs: [label.id],
-            merchant: "Backup Transfer",
-            note: ""
-        ))
+        try repository.saveTransaction(
+            TransactionBuilder()
+                .with(walletID: wallets[0].id)
+                .with(amountMinor: 12_345)
+                .with(occurredAt: now)
+                .with(categoryID: expenseCategory.id)
+                .with(labelIDs: [label.id])
+                .with(merchant: "Backup Grocery")
+                .with(note: "Has label")
+                .build()
+        )
+        try repository.saveTransaction(
+            TransactionBuilder()
+                .with(kind: .income)
+                .with(walletID: wallets[0].id)
+                .with(amountMinor: 50_000)
+                .with(occurredAt: now)
+                .with(categoryID: incomeCategory.id)
+                .with(merchant: "Backup Salary")
+                .build()
+        )
+        try repository.saveTransaction(
+            TransactionBuilder()
+                .with(kind: .transfer)
+                .with(walletID: wallets[0].id)
+                .with(destinationWalletID: wallets[1].id)
+                .with(amountMinor: 7_500)
+                .with(occurredAt: now)
+                .with(labelIDs: [label.id])
+                .with(merchant: "Backup Transfer")
+                .build()
+        )
 
         let budget = Budget(id: UUID(), categoryID: expenseCategory.id, monthKey: DateKeys.monthKey(for: now), limitMinor: 100_000, isArchived: false, createdAt: now, updatedAt: now)
         try repository.saveBudget(budget)

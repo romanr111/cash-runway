@@ -6,39 +6,48 @@ import Testing
 struct UtilityAndModelTests {
     // MARK: - MoneyFormatter
 
-    @Test func moneyParsingRejectsOverflow() throws {
-        #expect(throws: MoneyError.self) {
-            try MoneyFormatter.parseMinorUnits("99999999999999999999999999999.99")
+    @Test(arguments: [
+        ("123,45", 12_345),
+        ("-99.30", -9_930),
+        ("0", 0),
+        ("0.01", 1),
+        ("999999.99", 99_999_999),
+        ("1", 100),
+        ("-1", -100),
+        ("123.45", 12_345),
+        ("0.00", 0),
+    ])
+    func parseMinorUnitsValid(input: String, expected: Int64) throws {
+        #expect(try MoneyFormatter.parseMinorUnits(input) == expected)
+    }
+
+    @Test(arguments: [
+        ("99999999999999999999999999999.99", MoneyError.self),
+        ("abc", MoneyError.self),
+        ("", MoneyError.self),
+    ])
+    func parseMinorUnitsInvalid(input: String, errorType: MoneyError.Type) {
+        #expect(throws: errorType) {
+            try MoneyFormatter.parseMinorUnits(input)
         }
     }
 
-    @Test func moneyParsingRejectsInvalidInput() throws {
-        #expect(throws: MoneyError.invalidAmount("abc")) {
-            try MoneyFormatter.parseMinorUnits("abc")
-        }
-        #expect(throws: MoneyError.invalidAmount("")) {
-            try MoneyFormatter.parseMinorUnits("")
-        }
-    }
-
-    @Test func moneyParsingHandlesNormalValues() throws {
-        #expect(try MoneyFormatter.parseMinorUnits("123,45") == 12_345)
-        #expect(try MoneyFormatter.parseMinorUnits("-99.30") == -9_930)
-        #expect(try MoneyFormatter.parseMinorUnits("0") == 0)
-        #expect(try MoneyFormatter.parseMinorUnits("0.01") == 1)
+    @Test(arguments: [
+        (12_345, "123.45"),
+        (-9_930, "-99.30"),
+        (0, "0.00"),
+        (5, "0.05"),
+        (100, "1.00"),
+        (-1, "-0.01"),
+    ])
+    func plainStringFormatting(value: Int64, expected: String) {
+        #expect(MoneyFormatter.plainString(from: value) == expected)
     }
 
     @Test func moneyStringFormatting() {
         let result = MoneyFormatter.string(from: 12_345)
         #expect(result.contains("123"))
         #expect(result.contains("45"))
-    }
-
-    @Test func moneyPlainStringHandlesNormalValues() {
-        #expect(MoneyFormatter.plainString(from: 12_345) == "123.45")
-        #expect(MoneyFormatter.plainString(from: -9_930) == "-99.30")
-        #expect(MoneyFormatter.plainString(from: 0) == "0.00")
-        #expect(MoneyFormatter.plainString(from: 5) == "0.05")
     }
 
     @Test func moneyPlainStringHandlesInt64Min() {
@@ -77,8 +86,13 @@ struct UtilityAndModelTests {
         #expect(!label.isEmpty)
     }
 
-    @Test func periodLabelForYear() {
-        #expect(DateKeys.periodLabel(periodKey: 2025, period: .year) == "2025")
+    @Test(arguments: [
+        (2025, TimelinePeriod.year, "2025"),
+        (202501, TimelinePeriod.month, "January 2025"),
+        (202512, TimelinePeriod.month, "December 2025"),
+    ])
+    func periodLabel(periodKey: Int, period: TimelinePeriod, expected: String) {
+        #expect(DateKeys.periodLabel(periodKey: periodKey, period: period) == expected)
     }
 
     @Test func startOfMonthEdgeCase() {
@@ -89,20 +103,41 @@ struct UtilityAndModelTests {
         #expect(components.day == 1)
     }
 
-    // MARK: - Models
-
-    @Test func transactionKindWalletDeltaSign() {
-        #expect(TransactionKind.expense.walletDeltaSign == -1)
-        #expect(TransactionKind.transferOut.walletDeltaSign == -1)
-        #expect(TransactionKind.income.walletDeltaSign == 1)
-        #expect(TransactionKind.transferIn.walletDeltaSign == 1)
+    @Test(arguments: [
+        (2024, 2, 29),  // leap year
+        (2023, 2, 28),  // non-leap year
+        (2024, 12, 31), // year end
+        (2024, 1, 1),   // year start
+    ])
+    func startOfMonthForVariousDates(year: Int, month: Int, day: Int) {
+        let monthKey = year * 100 + month
+        let date = DateKeys.startOfMonth(for: monthKey)
+        let components = Calendar(identifier: .gregorian).dateComponents([.year, .month, .day], from: date)
+        #expect(components.year == year)
+        #expect(components.month == month)
+        #expect(components.day == 1)
     }
 
-    @Test func transactionKindAffectsCategorySpend() {
-        #expect(TransactionKind.expense.affectsCategorySpend == true)
-        #expect(TransactionKind.income.affectsCategorySpend == false)
-        #expect(TransactionKind.transferOut.affectsCategorySpend == false)
-        #expect(TransactionKind.transferIn.affectsCategorySpend == false)
+    // MARK: - Models
+
+    @Test(arguments: [
+        (TransactionKind.expense, -1),
+        (TransactionKind.transferOut, -1),
+        (TransactionKind.income, 1),
+        (TransactionKind.transferIn, 1),
+    ])
+    func transactionKindWalletDeltaSign(kind: TransactionKind, expected: Int) {
+        #expect(kind.walletDeltaSign == expected)
+    }
+
+    @Test(arguments: [
+        (TransactionKind.expense, true),
+        (TransactionKind.income, false),
+        (TransactionKind.transferOut, false),
+        (TransactionKind.transferIn, false),
+    ])
+    func transactionKindAffectsCategorySpend(kind: TransactionKind, expected: Bool) {
+        #expect(kind.affectsCategorySpend == expected)
     }
 
     @Test func timelinePeriodDisplayName() {

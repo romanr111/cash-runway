@@ -110,15 +110,16 @@ struct BankSyncImportTests {
         let occurredAt = setup.syncStartAt.addingTimeInterval(60)
 
         for source in [TransactionSource.manual, .importCSV, .recurring] {
-            try repository.saveTransaction(TransactionDraft(
-                kind: .expense,
-                walletID: setup.account.walletID,
-                amountMinor: 2_500,
-                occurredAt: occurredAt,
-                categoryID: categoryID,
-                merchant: "Merchant",
-                source: source
-            ))
+            try repository.saveTransaction(
+                TransactionBuilder()
+                    .with(walletID: setup.account.walletID)
+                    .with(amountMinor: 2_500)
+                    .with(occurredAt: occurredAt)
+                    .with(categoryID: categoryID)
+                    .with(merchant: "Merchant")
+                    .with(source: source)
+                    .build()
+            )
         }
 
         let result = try repository.importMonobankExpenseItems(
