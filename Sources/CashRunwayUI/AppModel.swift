@@ -46,9 +46,11 @@ public final class CashRunwayAppModel {
     public var errorMessage: String?
     public var bankSyncMessage: String?
     public var isLoading = false
+    public private(set) var isTimelineLoading = false
     public private(set) var hasBootstrapped = false
     public private(set) var latestTransactionMonthKey: Int?
     private var foregroundRefreshTask: Task<Void, Never>?
+    private var timelineReloadState = TimelineReloadState()
 
     public var currentCashFlowMinor: Int64 {
         let selectedBar = allBars.first(where: {
@@ -224,18 +226,34 @@ public final class CashRunwayAppModel {
         reloadTimeline()
     }
 
+    public func selectTimelinePeriod(_ period: TimelinePeriod) {
+        guard selectedTimelinePeriod != period else { return }
+        if selectedTimelinePeriod == .year, period == .month {
+            selectedMonthKey = DateKeys.monthKeyForMonthTimelineReturn(
+                selectedYear: selectedMonthKey / 100,
+                currentMonthKey: DateKeys.monthKey(for: .now),
+                maxMonthKey: maxMonthKey
+            )
+        }
+        selectedTimelinePeriod = period
+    }
+
     public func reloadTimeline() {
+        let reloadID = beginTimelineReload()
         Task {
-            await reloadSnapshotsAsync()
+            await reloadSnapshotsAsync(reloadID: reloadID)
         }
     }
 
-    private func reloadSnapshotsAsync() async {
+    private func reloadSnapshotsAsync(reloadID: Int) async {
         let targetMonthKey = self.selectedMonthKey
         let targetWalletID = self.selectedWalletID
         let targetPeriod = self.selectedTimelinePeriod
         var targetQuery = self.transactionQuery
         targetQuery.walletID = targetWalletID
+        defer {
+            finishTimelineReload(reloadID: reloadID)
+        }
 
         let cacheKey = overviewCacheKey(monthKey: targetMonthKey, walletID: targetWalletID)
         if let cached = overviewSnapshotCache[cacheKey] {
@@ -256,7 +274,8 @@ public final class CashRunwayAppModel {
 
             guard selectedMonthKey == targetMonthKey,
                   selectedWalletID == targetWalletID,
-                  selectedTimelinePeriod == targetPeriod else { return }
+                  selectedTimelinePeriod == targetPeriod,
+                  timelineReloadState.canApply(reloadID: reloadID) else { return }
 
             budgets = mutable.budgets
             transactions = mutable.transactions
@@ -272,6 +291,17 @@ public final class CashRunwayAppModel {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    private func beginTimelineReload() -> Int {
+        let reloadID = timelineReloadState.beginReload()
+        isTimelineLoading = timelineReloadState.isLoading
+        return reloadID
+    }
+
+    private func finishTimelineReload(reloadID: Int) {
+        timelineReloadState.finishReload(reloadID: reloadID)
+        isTimelineLoading = timelineReloadState.isLoading
     }
 
     private func setCachedOverview(_ overview: OverviewSnapshot, monthKey: Int, walletID: UUID?) {

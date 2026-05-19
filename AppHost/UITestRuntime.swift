@@ -208,7 +208,7 @@ private final class UITestMonobankTokenValidator: MonobankTokenValidating, @unch
                 MonobankAccount(
                     id: "uitest-usd-card", type: "white",
                     currencyCode: 840, maskedPan: ["5555666677778888"], iban: nil
-                ),
+                )
             ]
         )
     }
@@ -294,7 +294,7 @@ private final class UITestBankSyncPerformer: BankSyncPerforming, @unchecked Send
             statementItem(
                 id: "uitest-new-expense", time: startTime + 30,
                 amount: -1_234, description: "UITEST Monobank Merchant", comment: "UITEST-MONO-NEW"
-            ),
+            )
         ]
         if mode == .foregroundNewExpense || (mode == .firstSyncFailsThenRecovers && attempt > 1) {
             items.append(statementItem(
@@ -309,7 +309,13 @@ private final class UITestBankSyncPerformer: BankSyncPerforming, @unchecked Send
         integration.syncStartAt.addingTimeInterval(TimeInterval(180 + attempt))
     }
 
-    private func statementItem(id: String, time: Int, amount: Int64, description: String, comment: String) -> MonobankStatementItem {
+    private func statementItem(
+        id: String,
+        time: Int,
+        amount: Int64,
+        description: String,
+        comment: String
+    ) -> MonobankStatementItem {
         MonobankStatementItem(
             id: id,
             time: time,

@@ -45,6 +45,36 @@ struct CashRunwayCoreTests {
         #expect(DateKeys.monthKey(fromPeriodKey: yearPeriodKey, period: .year) == 202501)
     }
 
+    @Test func selectedYearReturnsToJulyWhenSwitchingBackToMonthTimeline() {
+        let monthKey = DateKeys.monthKeyForMonthTimelineReturn(
+            selectedYear: 2024,
+            currentMonthKey: 202605,
+            maxMonthKey: 202605
+        )
+
+        #expect(monthKey == 202407)
+    }
+
+    @Test func currentYearReturnsToCurrentMonthWhenSwitchingBackToMonthTimeline() {
+        let monthKey = DateKeys.monthKeyForMonthTimelineReturn(
+            selectedYear: 2026,
+            currentMonthKey: 202605,
+            maxMonthKey: 202612
+        )
+
+        #expect(monthKey == 202605)
+    }
+
+    @Test func monthTimelineReturnDoesNotSelectBeyondMaximumMonth() {
+        let monthKey = DateKeys.monthKeyForMonthTimelineReturn(
+            selectedYear: 2026,
+            currentMonthKey: 202605,
+            maxMonthKey: 202603
+        )
+
+        #expect(monthKey == 202603)
+    }
+
     @Test func timelineSnapshotGroupsByPeriod() throws {
         let location = TestSupport.makeLocation()
         let manager = try DatabaseManager(locationProvider: location)

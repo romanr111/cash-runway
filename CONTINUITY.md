@@ -16,10 +16,10 @@ Rules:
 
 ## Snapshot
 
-- Goal: Fix PR `#15` E2E failures without broad UI-test churn.
-- Success criteria: CI no longer fails the Monobank E2E class because a long first test trips XCTest's 2-minute allowance or leaves the app hard to terminate, and local non-UI validation passes.
-- Current state: The Monobank UI test now pastes fake tokens through the existing clipboard UI path, and only the Monobank E2E suite receives an increased 240/300-second timeout allowance.
-- Next action: Re-run static checks for the narrowed workflow change, then commit and push PR `#15`.
+- Goal: Resolve PR `#15` conflicts after `origin/main` gained timeline-loading and CI workflow updates.
+- Success criteria: PR `#15` contains current `origin/main`, keeps the stale-wallet-filter and Monobank E2E fixes, and local non-UI validation passes without running UI/E2E tests.
+- Current state: PR `#15` conflicts were resolved locally, non-UI validation passed, and the branch was ready for merge commit/push.
+- Next action: Commit the resolved merge and push PR `#15`.
 - Open questions: None.
 - Merge status: not-merged.
 
@@ -33,12 +33,21 @@ Rules:
 ## Working set
 
 - `CONTINUITY.md`
+- `.github/workflows/ios-ci.yml`
+- `Sources/CashRunwayUI/AccessibilityIdentifiers.swift`
 - `Sources/CashRunwayUI/AppModel.swift`
 - `Sources/CashRunwayUI/DashboardView.swift`
 - `Tests/CashRunwayUITests/CashRunwayUITestCase.swift`
+- `Tests/CashRunwayUITests/MonobankConnectionUITests.swift`
 
 ## Done (recent)
 
+- 2026-05-19 [CODE] Resolved PR `#15` workflow conflict by preserving retry-once E2E execution from `origin/main` and Monobank-specific timeout overrides from the PR branch.
+- 2026-05-19 [CODE] Removed an invalid disabled `CashRunwayAppModel` SwiftPM test and `CashRunwayUI` import from `CashRunwayCoreTests.swift`; the test target only depends on `CashRunwayCore`.
+- 2026-05-19 [CHECK] Conflict-resolution validation passed: `git diff --check`, Python YAML parse, mirrored-core diff, focused SwiftPM tests (53 tests), simulator `xcodebuild clean build`, and launch smoke check.
+- 2026-05-18 [REVIEW] Detailed code review of PR `codex/timeline-loading-state` found no blockers; all validation gates passed (unit tests, build, mirroring check).
+- 2026-05-18 [TOOL] Added integration tests for timeline loading state in `AppModelTimelineLoadingTests.swift`.
+- 2026-05-18 [TOOL] Merged `codex/timeline-loading-state` into `main` as `be26456`; deleted remote branch and local worktree.
 - 2026-05-18 [TOOL] Downloaded failed E2E artifacts for run `26002715288` to `/tmp/cash-runway-e2e-26002715288`.
 - 2026-05-18 [DECISION] Root cause was scoped to stale `reloadAll()` results: the CI log showed the `timeline.wallet.savings` option was tapped, but old all-wallet rows remained visible.
 - 2026-05-18 [CODE] Added a stale-scope guard to `reloadAll()`, routed Dashboard wallet menu actions through `selectWallet(_:)`, and made UI-test menu selection prefer stable wallet option identifiers.
@@ -61,6 +70,14 @@ Rules:
 
 ## Receipts
 
+- 2026-05-19 [TOOL] `gh pr view 15` reported `mergeable=CONFLICTING` and `mergeStateStatus=DIRTY` before conflict resolution.
+- 2026-05-19 [TOOL] `git merge --no-edit origin/main` conflicted only in `.github/workflows/ios-ci.yml` and `CONTINUITY.md`; `AppModel.swift` and `DashboardView.swift` auto-merged.
+- 2026-05-19 [FAILURE] Focused `swift test --filter '(ModelSerializationTests|UtilityAndModelTests|BankCategoryMapperTests|BankConnectionServiceTests|BankSyncServiceTests|BankSyncImportTests|AppModelTimelineLoadingTests)'` initially failed because `CashRunwayCoreTests.swift` imported nonexistent SwiftPM module `CashRunwayUI`.
+- 2026-05-19 [TOOL] `xcodebuild -project CashRunway.xcodeproj -scheme CashRunway -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' clean build CODE_SIGNING_ALLOWED=NO` passed with `** BUILD SUCCEEDED **`.
+- 2026-05-19 [TOOL] Simulator launch smoke check installed and launched `dev.roman.cashrunway` on iPhone 17 as PID `56437`.
+- 2026-05-18 [TOOL] `swift test --filter AppModelTimelineLoadingTests` passed: 2 tests in 0.001 seconds.
+- 2026-05-18 [TOOL] `xcodebuild -scheme CashRunway -sdk iphonesimulator` build succeeded for timeline-loading-state.
+- 2026-05-18 [TOOL] `git push origin main` succeeded after timeline-loading-state rebase.
 - 2026-05-18 [TOOL] `git fetch --prune origin` moved `origin/main` from `cd8a309` to `20d587f` and pruned `origin/codex/e2e-ci-optimization`.
 - 2026-05-18 [TOOL] `git merge --ff-only origin/main` fast-forwarded the primary checkout to `20d587f` after stashing the prior local `CONTINUITY.md` cleanup note.
 - 2026-05-18 [FAILURE] Run `26002715288`, job `76429296272`, failed `OverviewFlowUITests.testSearchAndWalletFilterCanBeClearedWithoutLosingFeedState` at `TransactionOverviewUITests.swift:28`.

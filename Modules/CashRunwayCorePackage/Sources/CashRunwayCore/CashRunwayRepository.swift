@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import Foundation
 import GRDB
 
@@ -1713,6 +1714,7 @@ extension CashRunwayRepository {
         return "\(abbreviation)\n\(year)"
     }
 
+    // swiftlint:disable:next function_body_length
     public func overviewSnapshot(monthKey: Int, walletID: UUID? = nil) throws -> OverviewSnapshot {
         try databaseManager.dbQueue.read { db in
             let months = Self.monthWindow(endingAt: monthKey, count: 6)
@@ -1979,8 +1981,13 @@ extension CashRunwayRepository {
             let transaction = try Self.transaction(transactionRow)
 
             var transactionsToDelete = [transaction]
-            if (transaction.type == .transferOut || transaction.type == .transferIn), let linkedID = transaction.linkedTransferID,
-               let linkedRow = try Row.fetchOne(db, sql: "SELECT * FROM transactions WHERE id = ?", arguments: [linkedID.uuidString]) {
+            if transaction.type == .transferOut || transaction.type == .transferIn,
+               let linkedID = transaction.linkedTransferID,
+               let linkedRow = try Row.fetchOne(
+                db,
+                sql: "SELECT * FROM transactions WHERE id = ?",
+                arguments: [linkedID.uuidString]
+               ) {
                 transactionsToDelete.append(try Self.transaction(linkedRow))
             }
 
@@ -2616,6 +2623,7 @@ extension CashRunwayRepository {
         }
     }
 
+    // swiftlint:disable:next cyclomatic_complexity
     private func listTransactions(_ db: Database, query: TransactionQuery, limit: Int? = 300) throws -> [TransactionListItem] {
         var conditions = ["t.is_deleted = 0", "t.type != 'transfer_in'"]
         var arguments: [String: any DatabaseValueConvertible] = [:]
@@ -2956,6 +2964,7 @@ extension CashRunwayRepository {
         try db.execute(sql: "DELETE FROM wallets")
     }
 
+    // swiftlint:disable:next function_body_length
     private func insertBackupSourceData(_ backup: CashRunwayBackup, into db: Database) throws {
         for wallet in backup.wallets {
             try db.execute(

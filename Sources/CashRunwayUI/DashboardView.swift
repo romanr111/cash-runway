@@ -160,12 +160,23 @@ struct DashboardView: View {
             }
 
             VStack(spacing: 6) {
-                Text(MoneyFormatter.string(from: model.currentCashFlowMinor))
-                    .font(.system(size: 42, weight: .bold, design: .rounded))
-                    .foregroundStyle(CashRunwayTheme.textPrimary)
-                    .multilineTextAlignment(.center)
-                    .animation(.smooth, value: model.currentCashFlowMinor)
-                    .accessibilityIdentifier(CashRunwayAccessibilityID.timelineCashFlowValue)
+                Group {
+                    if model.isTimelineLoading {
+                        ProgressView()
+                            .controlSize(.regular)
+                            .accessibilityLabel("Loading cash flow")
+                    } else {
+                        Text(MoneyFormatter.string(from: model.currentCashFlowMinor))
+                            .font(.system(size: 42, weight: .bold, design: .rounded))
+                            .foregroundStyle(CashRunwayTheme.textPrimary)
+                            .multilineTextAlignment(.center)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.72)
+                            .accessibilityIdentifier(CashRunwayAccessibilityID.timelineCashFlowValue)
+                    }
+                }
+                .frame(height: 52)
+                .frame(maxWidth: .infinity)
                 Text("Cash Flow")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(CashRunwayTheme.textMuted)
@@ -196,7 +207,7 @@ struct DashboardView: View {
             Menu {
                 ForEach(TimelinePeriod.allCases, id: \.self) { period in
                     Button(period.displayName) {
-                        model.selectedTimelinePeriod = period
+                        model.selectTimelinePeriod(period)
                         Task { await model.reloadAll() }
                     }
                 }

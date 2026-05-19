@@ -50,7 +50,7 @@ jobs:
 
       - name: Upload static analysis logs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: static-analysis-logs
           path: swiftlint.log
@@ -79,7 +79,7 @@ jobs:
 
       - name: Upload unit test logs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: unit-test-logs
           path: swift-unit-test.log
@@ -108,10 +108,98 @@ jobs:
 
       - name: Upload integration test logs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: integration-test-logs
           path: swift-integration-test.log
+          if-no-files-found: ignore
+
+  coverage:
+    name: Coverage
+    runs-on: macos-26
+    timeout-minutes: 90
+    needs: integration-tests
+
+    steps:
+      - name: Check out PR branch
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - name: Run coverage tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p Coverage
+          swift test --enable-code-coverage 2>&1 | tee Coverage/swift-coverage-test.log
+          coverage_path="$(swift test --show-codecov-path)"
+          cp "${coverage_path}" Coverage/coverage.json
+
+      - name: Generate coverage summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          ruby <<'RUBY'
+          require "json"
+
+          report = JSON.parse(File.read("Coverage/coverage.json"))
+          minimum_percent = 85.0
+          source_root = "/Modules/CashRunwayCorePackage/Sources/CashRunwayCore/"
+          files = report.fetch("data").first.fetch("files").select do |file|
+            file.fetch("filename").include?(source_root)
+          end
+
+          total_lines = files.sum { |file| file.dig("summary", "lines", "count").to_i }
+          covered_lines = files.sum { |file| file.dig("summary", "lines", "covered").to_i }
+          percent = total_lines.positive? ? (covered_lines.to_f / total_lines * 100.0) : 0.0
+
+          low_files = files
+            .select { |file| file.dig("summary", "lines", "count").to_i.positive? }
+            .sort_by { |file| [file.dig("summary", "lines", "percent").to_f, -file.dig("summary", "lines", "count").to_i] }
+            .first(5)
+
+          summary = +"# Coverage\n\n"
+          summary << "| Scope | Line coverage | Minimum | Covered lines | Executable lines |\n"
+          summary << "| --- | ---: | ---: | ---: | ---: |\n"
+          summary << format("| CashRunwayCore | %.2f%% | %.2f%% | %d | %d |\n\n",
+                            percent,
+                            minimum_percent,
+                            covered_lines,
+                            total_lines)
+
+          if low_files.any?
+            summary << "## Lowest-covered product files\n\n"
+            summary << "| File | Line coverage | Covered lines | Executable lines |\n"
+            summary << "| --- | ---: | ---: | ---: |\n"
+            low_files.each do |file|
+              lines = file.fetch("summary").fetch("lines")
+              relative_path = file.fetch("filename").split("/Cash Runway/").last
+              summary << format("| `%s` | %.2f%% | %d | %d |\n",
+                                relative_path,
+                                lines.fetch("percent").to_f,
+                                lines.fetch("covered").to_i,
+                                lines.fetch("count").to_i)
+            end
+          end
+
+          File.write("Coverage/coverage-summary.md", summary)
+          File.open(ENV.fetch("GITHUB_STEP_SUMMARY"), "a") { |file| file.write(summary) }
+
+          if percent < minimum_percent
+            warn format("CashRunwayCore line coverage %.2f%% is below the %.2f%% minimum.",
+                        percent,
+                        minimum_percent)
+            exit 1
+          end
+          RUBY
+
+      - name: Upload coverage artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: Coverage
           if-no-files-found: ignore
 
   e2e-tests:
@@ -174,21 +262,38 @@ jobs:
             local bundle_name="$2"
             local default_test_timeout_seconds="${3:-120}"
             local maximum_test_timeout_seconds="${4:-180}"
+            local attempt
+            local status
 
-            xcodebuild test-without-building \
-              -project "${PROJECT}" \
-              -scheme "${SCHEME}" \
-              -sdk iphonesimulator \
-              -destination "${{ steps.simulator.outputs.destination }}" \
-              -derivedDataPath DerivedData \
-              -only-testing:"${suite}" \
-              -test-timeouts-enabled YES \
-              -default-test-execution-time-allowance "${default_test_timeout_seconds}" \
-              -maximum-test-execution-time-allowance "${maximum_test_timeout_seconds}" \
-              -collect-test-diagnostics on-failure \
-              -resultBundlePath "TestResults/${bundle_name}.xcresult" \
-              CODE_SIGNING_ALLOWED=NO \
-              2>&1 | tee "xcode-test-${bundle_name}.log" | grep -E "${log_filter}"
+            for attempt in 1 2; do
+              set +e
+              xcodebuild test-without-building \
+                -project "${PROJECT}" \
+                -scheme "${SCHEME}" \
+                -sdk iphonesimulator \
+                -destination "${{ steps.simulator.outputs.destination }}" \
+                -derivedDataPath DerivedData \
+                -only-testing:"${suite}" \
+                -test-timeouts-enabled YES \
+                -default-test-execution-time-allowance "${default_test_timeout_seconds}" \
+                -maximum-test-execution-time-allowance "${maximum_test_timeout_seconds}" \
+                -collect-test-diagnostics on-failure \
+                -resultBundlePath "TestResults/${bundle_name}-attempt${attempt}.xcresult" \
+                CODE_SIGNING_ALLOWED=NO \
+                2>&1 | tee "xcode-test-${bundle_name}-attempt${attempt}.log" | grep -E "${log_filter}"
+              status="${PIPESTATUS[0]}"
+              set -e
+
+              if [[ "${status}" -eq 0 ]]; then
+                return 0
+              fi
+
+              if [[ "${attempt}" -eq 1 ]]; then
+                echo "${suite} failed on attempt 1; retrying once."
+              fi
+            done
+
+            return "${status}"
           }
 
           run_ui_suite "CashRunwayUITests/MonobankConnectionUITests" "monobank" 240 300
@@ -197,7 +302,7 @@ jobs:
 
       - name: Upload E2E test results
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-test-results
           path: |
