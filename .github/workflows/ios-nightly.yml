@@ -1,0 +1,422 @@
+name: iOS Nightly
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      run_coverage:
+        description: 'Run coverage job'
+        type: boolean
+        default: true
+      run_e2e:
+        description: 'Run E2E UI tests'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-nightly-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PROJECT: CashRunway.xcodeproj
+  SCHEME: CashRunway
+
+jobs:
+  static-analysis:
+    name: Static Analysis
+    runs-on: macos-26
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Install SwiftLint
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v swiftlint >/dev/null 2>&1; then
+            brew install swiftlint
+          fi
+          swiftlint version
+
+      - name: Run static analysis
+        shell: bash
+        run: |
+          set -euo pipefail
+          swiftlint lint --reporter github-actions-logging 2>&1 | tee swiftlint.log
+
+      - name: Upload static analysis logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: static-analysis-logs
+          path: swiftlint.log
+          if-no-files-found: ignore
+
+  unit-tests:
+    name: Unit Tests
+    runs-on: macos-26
+    timeout-minutes: 30
+    needs: static-analysis
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Cache SwiftPM packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.swiftpm/cache
+          key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-
+
+      - name: Run unit tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          swift test \
+            --filter '(ModelSerializationTests|UtilityAndModelTests|BankCategoryMapperTests|BankConnectionServiceTests|BankSyncServiceTests)' \
+            2>&1 | tee swift-unit-test.log
+
+      - name: Upload unit test logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: unit-test-logs
+          path: swift-unit-test.log
+          if-no-files-found: ignore
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: macos-26
+    timeout-minutes: 90
+    needs: unit-tests
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Cache SwiftPM packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.swiftpm/cache
+          key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-
+
+      - name: Run integration tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          swift test \
+            --skip '(ModelSerializationTests|UtilityAndModelTests|BankCategoryMapperTests|BankConnectionServiceTests|BankSyncServiceTests)' \
+            2>&1 | tee swift-integration-test.log
+
+      - name: Upload integration test logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: integration-test-logs
+          path: swift-integration-test.log
+          if-no-files-found: ignore
+
+  coverage:
+    name: Coverage
+    runs-on: macos-26
+    timeout-minutes: 90
+    needs: integration-tests
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_coverage }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Cache SwiftPM packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.swiftpm/cache
+          key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-
+
+      - name: Run coverage tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p Coverage
+          swift test --enable-code-coverage 2>&1 | tee Coverage/swift-coverage-test.log
+          coverage_path="$(swift test --show-codecov-path)"
+          cp "${coverage_path}" Coverage/coverage.json
+
+      - name: Generate coverage summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          ruby <<'RUBY'
+          require "json"
+
+          report = JSON.parse(File.read("Coverage/coverage.json"))
+          minimum_percent = 85.0
+          source_root = "/Modules/CashRunwayCorePackage/Sources/CashRunwayCore/"
+          files = report.fetch("data").first.fetch("files").select do |file|
+            file.fetch("filename").include?(source_root)
+          end
+
+          total_lines = files.sum { |file| file.dig("summary", "lines", "count").to_i }
+          covered_lines = files.sum { |file| file.dig("summary", "lines", "covered").to_i }
+          percent = total_lines.positive? ? (covered_lines.to_f / total_lines * 100.0) : 0.0
+
+          low_files = files
+            .select { |file| file.dig("summary", "lines", "count").to_i.positive? }
+            .sort_by { |file| [file.dig("summary", "lines", "percent").to_f, -file.dig("summary", "lines", "count").to_i] }
+            .first(5)
+
+          summary = +"# Coverage\n\n"
+          summary << "| Scope | Line coverage | Minimum | Covered lines | Executable lines |\n"
+          summary << "| --- | ---: | ---: | ---: | ---: |\n"
+          summary << format("| CashRunwayCore | %.2f%% | %.2f%% | %d | %d |\n\n",
+                            percent,
+                            minimum_percent,
+                            covered_lines,
+                            total_lines)
+
+          if low_files.any?
+            summary << "## Lowest-covered product files\n\n"
+            summary << "| File | Line coverage | Covered lines | Executable lines |\n"
+            summary << "| --- | ---: | ---: | ---: |\n"
+            low_files.each do |file|
+              lines = file.fetch("summary").fetch("lines")
+              relative_path = file.fetch("filename").split("/Cash Runway/").last
+              summary << format("| `%s` | %.2f%% | %d | %d |\n",
+                                relative_path,
+                                lines.fetch("percent").to_f,
+                                lines.fetch("covered").to_i,
+                                lines.fetch("count").to_i)
+            end
+          end
+
+          File.write("Coverage/coverage-summary.md", summary)
+          File.open(ENV.fetch("GITHUB_STEP_SUMMARY"), "a") { |file| file.write(summary) }
+
+          if percent < minimum_percent
+            warn format("CashRunwayCore line coverage %.2f%% is below the %.2f%% minimum.",
+                        percent,
+                        minimum_percent)
+            exit 1
+          end
+          RUBY
+
+      - name: Upload coverage artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: Coverage
+          if-no-files-found: ignore
+
+  build-e2e:
+    name: Build for E2E Tests
+    runs-on: macos-26
+    timeout-minutes: 30
+    needs: unit-tests
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_e2e }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Cache SwiftPM packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.swiftpm/cache
+          key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-
+
+      - name: Pick iPhone simulator
+        id: simulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          if xcrun simctl list devices available | grep -q 'iPhone 17 ('; then
+            destination='platform=iOS Simulator,name=iPhone 17'
+          else
+            device_name="$(xcrun simctl list devices available | awk -F'[()]' '/iPhone/ && /Shutdown|Booted/ { sub(/^[[:space:]]+/, "", $1); print $1; exit }')"
+            if [[ -z "${device_name}" ]]; then
+              echo 'No available iPhone simulator found' >&2
+              exit 1
+            fi
+            destination="platform=iOS Simulator,name=${device_name}"
+          fi
+          echo "destination=${destination}" >> "${GITHUB_OUTPUT}"
+          echo "Using ${destination}"
+
+      - name: Build for testing
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild build-for-testing \
+            -project "${PROJECT}" \
+            -scheme "${SCHEME}" \
+            -sdk iphonesimulator \
+            -destination "${{ steps.simulator.outputs.destination }}" \
+            -derivedDataPath DerivedData \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Archive build products
+        run: |
+          set -euo pipefail
+          tar -czf e2e-build.tar.gz DerivedData
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-build
+          path: e2e-build.tar.gz
+          retention-days: 1
+
+  e2e-test-shards:
+    name: E2E Tests (${{ matrix.label }})
+    runs-on: macos-26
+    timeout-minutes: 60
+    needs:
+      - integration-tests
+      - build-e2e
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_e2e }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: monobank
+            label: Monobank
+            suite: CashRunwayUITests/MonobankConnectionUITests
+          - shard: overview
+            label: Overview
+            suite: CashRunwayUITests/OverviewFlowUITests
+          - shard: transactions
+            label: Transactions
+            suite: CashRunwayUITests/TransactionFlowUITests
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+          xcrun simctl list devices available | grep 'iPhone' || true
+
+      - name: Pick iPhone simulator
+        id: simulator
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if xcrun simctl list devices available | grep -q 'iPhone 17 ('; then
+            destination='platform=iOS Simulator,name=iPhone 17'
+          else
+            device_name="$(xcrun simctl list devices available | awk -F'[()]' '/iPhone/ && /Shutdown|Booted/ { sub(/^[[:space:]]+/, "", $1); print $1; exit }')"
+            if [[ -z "${device_name}" ]]; then
+              echo 'No available iPhone simulator found' >&2
+              exit 1
+            fi
+            destination="platform=iOS Simulator,name=${device_name}"
+          fi
+
+          echo "destination=${destination}" >> "${GITHUB_OUTPUT}"
+          echo "Using ${destination}"
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: e2e-build
+
+      - name: Extract build artifact
+        run: |
+          set -euo pipefail
+          tar -xzf e2e-build.tar.gz
+
+      - name: Run UI E2E tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p TestResults
+          log_filter='warning:|error:|Test Suite|Test Case|passed|failed'
+          log_filter="${log_filter}|TEST SUCCEEDED|TEST FAILED|BUILD SUCCEEDED|BUILD FAILED"
+
+          run_ui_suite() {
+            local suite="$1"
+            local bundle_name="$2"
+            local default_test_timeout_seconds="${3:-120}"
+            local maximum_test_timeout_seconds="${4:-180}"
+            local attempt
+            local status
+
+            for attempt in 1 2; do
+              set +e
+              xcodebuild test-without-building \
+                -project "${PROJECT}" \
+                -scheme "${SCHEME}" \
+                -sdk iphonesimulator \
+                -destination "${{ steps.simulator.outputs.destination }}" \
+                -derivedDataPath DerivedData \
+                -only-testing:"${suite}" \
+                -test-timeouts-enabled YES \
+                -default-test-execution-time-allowance "${default_test_timeout_seconds}" \
+                -maximum-test-execution-time-allowance "${maximum_test_timeout_seconds}" \
+                -collect-test-diagnostics on-failure \
+                -resultBundlePath "TestResults/${bundle_name}-attempt${attempt}.xcresult" \
+                CODE_SIGNING_ALLOWED=NO \
+                2>&1 | tee "xcode-test-${bundle_name}-attempt${attempt}.log" | grep -E "${log_filter}"
+              status="${PIPESTATUS[0]}"
+              set -e
+
+              if [[ "${status}" -eq 0 ]]; then
+                return 0
+              fi
+
+              if [[ "${attempt}" -eq 1 ]]; then
+                echo "${suite} failed on attempt 1; retrying once."
+              fi
+            done
+
+            return "${status}"
+          }
+
+          run_ui_suite "${{ matrix.suite }}" "${{ matrix.shard }}" ${{ matrix.shard == 'transactions' && '180 300' || '' }}
+
+      - name: Upload E2E test results
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-test-results-${{ matrix.shard }}
+          path: |
+            xcode-build-for-testing-*.log
+            xcode-test-*.log
+            TestResults
+          if-no-files-found: ignore
+
+  e2e-tests:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: e2e-test-shards
+    if: ${{ always() && (github.event_name != 'workflow_dispatch' || inputs.run_e2e) }}
+
+    steps:
+      - name: Check E2E shard results
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ needs['e2e-test-shards'].result }}" != "success" ]]; then
+            echo "E2E shard result: ${{ needs['e2e-test-shards'].result }}"
+            exit 1
+          fi
+          echo "All E2E shards passed."
