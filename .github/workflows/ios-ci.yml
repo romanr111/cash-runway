@@ -202,11 +202,24 @@ jobs:
           path: Coverage
           if-no-files-found: ignore
 
-  e2e-tests:
-    name: E2E Tests
+  e2e-test-shards:
+    name: E2E Tests (${{ matrix.label }})
     runs-on: macos-26
     timeout-minutes: 90
     needs: integration-tests
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: monobank
+            label: Monobank
+            suite: CashRunwayUITests/MonobankConnectionUITests
+          - shard: overview
+            label: Overview
+            suite: CashRunwayUITests/OverviewFlowUITests
+          - shard: transactions
+            label: Transactions
+            suite: CashRunwayUITests/TransactionFlowUITests
 
     steps:
       - name: Check out PR branch
@@ -255,7 +268,7 @@ jobs:
             -destination "${{ steps.simulator.outputs.destination }}" \
             -derivedDataPath DerivedData \
             CODE_SIGNING_ALLOWED=NO \
-            2>&1 | tee xcode-build-for-testing.log | grep -E '(warning:|error:|BUILD SUCCEEDED|BUILD FAILED)'
+            2>&1 | tee "xcode-build-for-testing-${{ matrix.shard }}.log" | grep -E '(warning:|error:|BUILD SUCCEEDED|BUILD FAILED)'
 
           run_ui_suite() {
             local suite="$1"
@@ -296,17 +309,33 @@ jobs:
             return "${status}"
           }
 
-          run_ui_suite "CashRunwayUITests/MonobankConnectionUITests" "monobank" 240 300
-          run_ui_suite "CashRunwayUITests/OverviewFlowUITests" "overview"
-          run_ui_suite "CashRunwayUITests/TransactionFlowUITests" "transactions"
+          run_ui_suite "${{ matrix.suite }}" "${{ matrix.shard }}"
 
       - name: Upload E2E test results
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: e2e-test-results
+          name: e2e-test-results-${{ matrix.shard }}
           path: |
-            xcode-build-for-testing.log
+            xcode-build-for-testing-*.log
             xcode-test-*.log
             TestResults
           if-no-files-found: ignore
+
+  e2e-tests:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: e2e-test-shards
+    if: always()
+
+    steps:
+      - name: Check E2E shard results
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ needs['e2e-test-shards'].result }}" != "success" ]]; then
+            echo "E2E shard result: ${{ needs['e2e-test-shards'].result }}"
+            exit 1
+          fi
+          echo "All E2E shards passed."
