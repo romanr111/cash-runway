@@ -16,32 +16,30 @@ Rules:
 
 ## Snapshot
 
-- Goal: Resolve PR `#15` conflicts after `origin/main` gained timeline-loading and CI workflow updates.
-- Success criteria: PR `#15` contains current `origin/main`, keeps the stale-wallet-filter and Monobank E2E fixes, and local non-UI validation passes without running UI/E2E tests.
-- Current state: PR `#15` conflicts were resolved locally, non-UI validation passed, and the branch was ready for merge commit/push.
-- Next action: Commit the resolved merge and push PR `#15`.
+- Goal: Fix Monobank UI test failures in PR `#15` and merge.
+- Success criteria: All Monobank E2E tests pass locally, unit tests pass, simulator build succeeds, branch merged and cleaned up.
+- Current state: PR `#15` merged into `main`. Root cause (UIPasteboard cross-process deadlock in simulator) fixed by using TextField in UI-test mode. All 3 Monobank tests pass (15-29s each).
+- Next action: Push `main` to origin, delete `codex/e2e-overview-wallet-filter-fix` branch and worktree.
 - Open questions: None.
-- Merge status: not-merged.
+- Merge status: merged.
 
 ## Git context
 
 - Repo root: `/Users/roman/Documents/Development/Cash Runway`
-- Working directory: `/Users/roman/.codex/worktrees/cash-runway-e2e-overview-wallet-filter-fix`
-- Branch: `codex/e2e-overview-wallet-filter-fix`
+- Working directory: `/Users/roman/Documents/Development/Cash Runway`
+- Branch: `main`
 - Base branch: `origin/main`
+- Merge status: merged
 
 ## Working set
 
 - `CONTINUITY.md`
-- `.github/workflows/ios-ci.yml`
-- `Sources/CashRunwayUI/AccessibilityIdentifiers.swift`
-- `Sources/CashRunwayUI/AppModel.swift`
-- `Sources/CashRunwayUI/DashboardView.swift`
-- `Tests/CashRunwayUITests/CashRunwayUITestCase.swift`
-- `Tests/CashRunwayUITests/MonobankConnectionUITests.swift`
 
 ## Done (recent)
 
+- 2026-05-19 [CODE] Fixed Monobank UI test failures by replacing `UIPasteboard`-based `pasteToken` helper with a UI-test-mode `TextField` and direct `typeText` entry.
+- 2026-05-19 [CHECK] All 3 Monobank UI tests passed locally (15-29s each); `swift test` passed (225 tests); simulator build succeeded.
+- 2026-05-19 [TOOL] Merged PR `#15` (`codex/e2e-overview-wallet-filter-fix`) into `main`.
 - 2026-05-19 [CODE] Resolved PR `#15` workflow conflict by preserving retry-once E2E execution from `origin/main` and Monobank-specific timeout overrides from the PR branch.
 - 2026-05-19 [CODE] Removed an invalid disabled `CashRunwayAppModel` SwiftPM test and `CashRunwayUI` import from `CashRunwayCoreTests.swift`; the test target only depends on `CashRunwayCore`.
 - 2026-05-19 [CHECK] Conflict-resolution validation passed: `git diff --check`, Python YAML parse, mirrored-core diff, focused SwiftPM tests (53 tests), simulator `xcodebuild clean build`, and launch smoke check.
@@ -72,6 +70,7 @@ Rules:
 
 - 2026-05-19 [TOOL] `gh pr view 15` reported `mergeable=CONFLICTING` and `mergeStateStatus=DIRTY` before conflict resolution.
 - 2026-05-19 [TOOL] `git merge --no-edit origin/main` conflicted only in `.github/workflows/ios-ci.yml` and `CONTINUITY.md`; `AppModel.swift` and `DashboardView.swift` auto-merged.
+- 2026-05-19 [DECISION] Root cause of Monobank UI test hangs identified: `UIPasteboard.general.string` accessed in the app process after being written from the XCUITest runner process triggers a ~60s iOS Simulator pasteboard cross-process deadlock.
 - 2026-05-19 [FAILURE] Focused `swift test --filter '(ModelSerializationTests|UtilityAndModelTests|BankCategoryMapperTests|BankConnectionServiceTests|BankSyncServiceTests|BankSyncImportTests|AppModelTimelineLoadingTests)'` initially failed because `CashRunwayCoreTests.swift` imported nonexistent SwiftPM module `CashRunwayUI`.
 - 2026-05-19 [TOOL] `xcodebuild -project CashRunway.xcodeproj -scheme CashRunway -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' clean build CODE_SIGNING_ALLOWED=NO` passed with `** BUILD SUCCEEDED **`.
 - 2026-05-19 [TOOL] Simulator launch smoke check installed and launched `dev.roman.cashrunway` on iPhone 17 as PID `56437`.
