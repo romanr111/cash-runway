@@ -18,9 +18,9 @@ Rules:
 
 - Goal: Optimize `TransactionFlowUITests` runtime in CI (currently ~8 min / ~476s).
 - Success criteria: Transaction shard runs significantly faster in CI without flakiness; build passes; all 14 UI tests pass.
-- Current state: PR `#20` branch `feat/ui-test-class-level-launch` has class-level app launch (14→6 launches) plus animation-disable and timeout-reduction optimizations committed locally.
-- Next action: Push the latest optimization commit to the PR branch and let CI validate.
-- Open questions: Whether the animation disable + timeout reduction is sufficient to bring the Transactions shard under ~5 minutes.
+- Current state: PR `#20` branch `feat/ui-test-class-level-launch` has class-level app launch (14→6 launches), global animation disable, timeout reduction 5s→3s, build-once CI artifact sharing, setValue replacing typeText, and scroll-to-top in returnToRoot(). All changes pushed to PR branch.
+- Next action: Monitor CI run on PR #20 for shard timing comparison against baseline.
+- Open questions: Whether the combined optimizations bring Monobank shard from ~15m to under ~7m and Transactions shard from ~8m to under ~5m.
 - Merge status: not-merged.
 
 ## Git context
