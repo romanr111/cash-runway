@@ -368,7 +368,7 @@ jobs:
             return "${status}"
           }
 
-          run_ui_suite "${{ matrix.suite }}" "${{ matrix.shard }}"
+          run_ui_suite "${{ matrix.suite }}" "${{ matrix.shard }}" ${{ matrix.shard == 'transactions' && '180 300' || '' }}
 
       - name: Upload E2E test results
         if: failure()

@@ -89,10 +89,6 @@ class CashRunwayUITestCase: XCTestCase {
         let timelineTab = app.tabBars.buttons["Timeline"]
         if timelineTab.exists {
             timelineTab.tap()
-            // Reset any accumulated scroll offset so the FAB is hittable.
-            for _ in 0..<6 {
-                app.swipeDown()
-            }
             let addButton = app.buttons[CashRunwayUITestIdentifiers.transactionAddButton]
             let deadline = Date().addingTimeInterval(3)
             while Date() < deadline {
