@@ -1,26 +1,33 @@
 import XCTest
 
+@MainActor
 final class TransactionFlowUITests: CashRunwayUITestCase {
+    override class func setUp() {
+        launchSharedApp(reset: true, scenario: "transaction_core", dbPath: "cash-runway-transaction-flow.sqlite")
+    }
+
+    override func setUpWithError() throws {
+        try super.setUpWithError()
+    }
+
     func testAddExpenseTransactionHappyPath() {
+        prepareSharedApp()
         let note = "UITEST-GROCERIES-001"
-        launchApp()
 
         openAddTransaction()
         XCTAssertTrue(app.otherElements[CashRunwayUITestIdentifiers.transactionCategorySheet].exists)
         app.buttons[CashRunwayUITestIdentifiers.transactionCategory("Groceries")].tap()
 
         let amountField = app.textFields[CashRunwayUITestIdentifiers.transactionAmountField]
-        XCTAssertTrue(amountField.waitForExistence(timeout: 5))
-        amountField.tap()
-        amountField.typeText("123.45")
+        XCTAssertTrue(amountField.waitForExistence(timeout: 3))
+        amountField.clearAndEnterText("123.45")
 
         let noteField = app.textFields[CashRunwayUITestIdentifiers.transactionNoteField]
-        noteField.tap()
-        noteField.typeText(note)
+        noteField.clearAndEnterText(note)
         hideKeyboardIfNeeded()
 
         app.buttons[CashRunwayUITestIdentifiers.transactionSaveButton].tap()
-        XCTAssertTrue(app.buttons[CashRunwayUITestIdentifiers.transactionSaveButton].waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.buttons[CashRunwayUITestIdentifiers.transactionSaveButton].waitForNonExistence(timeout: 3))
 
         assertTransactionRowExists(note: note)
         let savedRow = app.buttons[CashRunwayUITestIdentifiers.transactionRow(note: note)]
@@ -30,23 +37,22 @@ final class TransactionFlowUITests: CashRunwayUITestCase {
 
         openTransactionRow(note: note)
         let amountRow = app.descendants(matching: .any).matching(identifier: CashRunwayUITestIdentifiers.transactionDetailsAmountRow).firstMatch
-        XCTAssertTrue(amountRow.waitForExistence(timeout: 5))
+        XCTAssertTrue(amountRow.waitForExistence(timeout: 3))
         XCTAssertTrue(amountRow.label.contains(moneyString(12_345)))
-        XCTAssertTrue(app.staticTexts[note].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Groceries"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Main Wallet"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts[note].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Groceries"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Main Wallet"].waitForExistence(timeout: 3))
     }
 
     func testAddTransactionInvalidAmountShowsRecoverableError() {
+        prepareSharedApp()
         let note = "UITEST-INVALID-RECOVERY-001"
-        launchApp()
-
         openAddTransaction()
         app.buttons[CashRunwayUITestIdentifiers.transactionCategory("Groceries")].tap()
 
         app.buttons[CashRunwayUITestIdentifiers.transactionSaveButton].tap()
         let amountError = app.staticTexts[CashRunwayUITestIdentifiers.transactionValidationAmount]
-        XCTAssertTrue(amountError.waitForExistence(timeout: 5))
+        XCTAssertTrue(amountError.waitForExistence(timeout: 3))
         XCTAssertEqual(amountError.label, "Enter a valid amount greater than zero.")
         XCTAssertTrue(app.buttons[CashRunwayUITestIdentifiers.transactionSaveButton].exists)
         XCTAssertTrue(app.buttons[CashRunwayUITestIdentifiers.transactionCloseButton].exists)
@@ -54,15 +60,14 @@ final class TransactionFlowUITests: CashRunwayUITestCase {
         let amountField = app.textFields[CashRunwayUITestIdentifiers.transactionAmountField]
         amountField.clearAndEnterText("0")
         app.buttons[CashRunwayUITestIdentifiers.transactionSaveButton].tap()
-        XCTAssertTrue(amountError.waitForExistence(timeout: 5))
+        XCTAssertTrue(amountError.waitForExistence(timeout: 3))
         XCTAssertEqual(amountError.label, "Enter a valid amount greater than zero.")
         XCTAssertTrue(app.buttons[CashRunwayUITestIdentifiers.transactionSaveButton].exists)
         XCTAssertTrue(app.buttons[CashRunwayUITestIdentifiers.transactionCloseButton].exists)
 
         amountField.clearAndEnterText("19.50")
         let noteField = app.textFields[CashRunwayUITestIdentifiers.transactionNoteField]
-        noteField.tap()
-        noteField.typeText(note)
+        noteField.clearAndEnterText(note)
         hideKeyboardIfNeeded()
 
         app.buttons[CashRunwayUITestIdentifiers.transactionSaveButton].tap()
@@ -70,62 +75,57 @@ final class TransactionFlowUITests: CashRunwayUITestCase {
     }
 
     func testDismissComposerDoesNotCreateTransaction() {
+        prepareSharedApp()
         let note = "UITEST-DISMISS-001"
-        launchApp()
-
         openAddTransaction()
         app.buttons[CashRunwayUITestIdentifiers.transactionCategory("Groceries")].tap()
         let amountField = app.textFields[CashRunwayUITestIdentifiers.transactionAmountField]
-        amountField.tap()
-        amountField.typeText("9.99")
+        amountField.clearAndEnterText("9.99")
         let noteField = app.textFields[CashRunwayUITestIdentifiers.transactionNoteField]
-        noteField.tap()
-        noteField.typeText(note)
+        noteField.clearAndEnterText(note)
         hideKeyboardIfNeeded()
 
         app.buttons[CashRunwayUITestIdentifiers.transactionCloseButton].tap()
-        XCTAssertTrue(app.buttons[CashRunwayUITestIdentifiers.transactionCloseButton].waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.buttons[CashRunwayUITestIdentifiers.transactionCloseButton].waitForNonExistence(timeout: 3))
         XCTAssertTrue(app.buttons[CashRunwayUITestIdentifiers.transactionAddButton].exists)
         assertTransactionRowDoesNotExist(note: note)
     }
 
     func testSwitchingTransactionKindsKeepsDraftValid() {
-        launchApp()
-
+        prepareSharedApp()
         openAddTransaction()
         let kindPicker = app.segmentedControls[CashRunwayUITestIdentifiers.transactionKindPicker]
-        XCTAssertTrue(kindPicker.waitForExistence(timeout: 5))
+        XCTAssertTrue(kindPicker.waitForExistence(timeout: 3))
 
         app.buttons[CashRunwayUITestIdentifiers.transactionCategory("Groceries")].tap()
-        XCTAssertTrue(app.staticTexts["Groceries"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Groceries"].waitForExistence(timeout: 3))
 
         app.buttons[CashRunwayUITestIdentifiers.transactionCategoryButton].tap()
-        XCTAssertTrue(kindPicker.waitForExistence(timeout: 5))
+        XCTAssertTrue(kindPicker.waitForExistence(timeout: 3))
         kindPicker.buttons["Income"].tap()
-        XCTAssertTrue(app.buttons[CashRunwayUITestIdentifiers.transactionCategory("Salary")].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons[CashRunwayUITestIdentifiers.transactionCategory("Salary")].waitForExistence(timeout: 3))
         XCTAssertFalse(app.buttons[CashRunwayUITestIdentifiers.transactionCategory("Groceries")].exists)
 
-        XCTAssertTrue(app.buttons[CashRunwayUITestIdentifiers.transactionCategory("Salary")].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons[CashRunwayUITestIdentifiers.transactionCategory("Salary")].waitForExistence(timeout: 3))
 
         kindPicker.buttons["Transfer"].tap()
-        XCTAssertTrue(app.staticTexts["Transfers do not use categories."].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Transfers do not use categories."].waitForExistence(timeout: 3))
         XCTAssertFalse(app.buttons[CashRunwayUITestIdentifiers.transactionCategory("Salary")].exists)
-        XCTAssertTrue(app.buttons[CashRunwayUITestIdentifiers.transactionTransferDestinationMenu].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons[CashRunwayUITestIdentifiers.transactionTransferDestinationMenu].waitForExistence(timeout: 3))
 
         kindPicker.buttons["Expenses"].tap()
-        XCTAssertTrue(app.buttons[CashRunwayUITestIdentifiers.transactionCategory("Groceries")].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons[CashRunwayUITestIdentifiers.transactionCategory("Groceries")].waitForExistence(timeout: 3))
         XCTAssertFalse(app.buttons[CashRunwayUITestIdentifiers.transactionTransferDestinationMenu].exists)
     }
 
     func testComposerPreservesDraftWhenOpeningLabelsAndRepeatSheets() {
+        prepareSharedApp()
         let note = "UITEST-DRAFT-SHEETS-001"
-        launchApp()
-
         openAddTransaction()
         app.buttons[CashRunwayUITestIdentifiers.transactionCategory("Groceries")].tap()
 
         let amountField = app.textFields[CashRunwayUITestIdentifiers.transactionAmountField]
-        XCTAssertTrue(amountField.waitForExistence(timeout: 5))
+        XCTAssertTrue(amountField.waitForExistence(timeout: 3))
         amountField.clearAndEnterText("27.40")
 
         let noteField = app.textFields[CashRunwayUITestIdentifiers.transactionNoteField]
@@ -139,9 +139,9 @@ final class TransactionFlowUITests: CashRunwayUITestCase {
 
         XCTAssertEqual((app.textFields[CashRunwayUITestIdentifiers.transactionAmountField].value as? String) ?? "", "27.40")
         XCTAssertEqual((app.textFields[CashRunwayUITestIdentifiers.transactionNoteField].value as? String) ?? "", note)
-        XCTAssertTrue(app.staticTexts[CashRunwayUITestIdentifiers.transactionLabelsSummary].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts[CashRunwayUITestIdentifiers.transactionLabelsSummary].waitForExistence(timeout: 3))
         XCTAssertEqual(app.staticTexts[CashRunwayUITestIdentifiers.transactionLabelsSummary].label, "UITEST-LABEL-001")
-        XCTAssertTrue(app.staticTexts["Main Wallet"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Main Wallet"].waitForExistence(timeout: 3))
 
         app.buttons[CashRunwayUITestIdentifiers.transactionLabelsButton].tap()
         let reopenedLabelControl = labeledControl(named: "UITEST-LABEL-001")
@@ -150,48 +150,45 @@ final class TransactionFlowUITests: CashRunwayUITestCase {
 
         app.buttons[CashRunwayUITestIdentifiers.transactionRepeatButton].tap()
         let recurringToggle = app.switches["Save as recurring template"]
-        XCTAssertTrue(recurringToggle.waitForExistence(timeout: 5))
+        XCTAssertTrue(recurringToggle.waitForExistence(timeout: 3))
         setSwitch(recurringToggle, on: true)
         tapSheetDoneButton(identifier: CashRunwayUITestIdentifiers.transactionRecurringSheetDoneButton)
 
-        XCTAssertTrue(app.staticTexts[CashRunwayUITestIdentifiers.transactionRepeatSummary].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts[CashRunwayUITestIdentifiers.transactionRepeatSummary].waitForExistence(timeout: 3))
         XCTAssertEqual(app.staticTexts[CashRunwayUITestIdentifiers.transactionRepeatSummary].label, "Monthly every 1")
 
         app.buttons[CashRunwayUITestIdentifiers.transactionRepeatButton].tap()
-        XCTAssertTrue(app.switches["Save as recurring template"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.switches["Save as recurring template"].waitForExistence(timeout: 3))
         assertSwitchIsOn(app.switches["Save as recurring template"])
         tapSheetDoneButton(identifier: CashRunwayUITestIdentifiers.transactionRecurringSheetDoneButton)
 
         // Scroll to ensure the Save button is fully visible after sheet dismissals.
         let saveButton = app.buttons[CashRunwayUITestIdentifiers.transactionSaveButton]
-        XCTAssertTrue(saveButton.waitForExistence(timeout: 5))
+        XCTAssertTrue(saveButton.waitForExistence(timeout: 3))
         if !saveButton.isHittable {
             app.swipeUp()
-            _ = saveButton.waitForExistence(timeout: 3)
+            _ = saveButton.waitForExistence(timeout: 2)
         }
         saveButton.tap()
         assertTransactionRowExists(note: note)
 
         openTransactionRow(note: note)
-        XCTAssertTrue(app.staticTexts[note].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["UITEST-LABEL-001"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Main Wallet"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts[note].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["UITEST-LABEL-001"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Main Wallet"].waitForExistence(timeout: 3))
     }
 
     func testDateShortcutsChangeSavedTransactionDate() {
+        prepareSharedApp()
         let note = "UITEST-DATE-001"
-        launchApp()
-
         openAddTransaction()
         app.buttons[CashRunwayUITestIdentifiers.transactionCategory("Groceries")].tap()
 
         let amountField = app.textFields[CashRunwayUITestIdentifiers.transactionAmountField]
-        amountField.tap()
-        amountField.typeText("18.20")
+        amountField.clearAndEnterText("18.20")
 
         let noteField = app.textFields[CashRunwayUITestIdentifiers.transactionNoteField]
-        noteField.tap()
-        noteField.typeText(note)
+        noteField.clearAndEnterText(note)
         hideKeyboardIfNeeded()
 
         app.buttons[CashRunwayUITestIdentifiers.transactionDateYesterdayButton].tap()
@@ -209,17 +206,16 @@ final class TransactionFlowUITests: CashRunwayUITestCase {
     }
 
     func testEditTransactionUpdatesExistingRow() {
+        prepareSharedApp()
         let originalNote = "UITEST-EDIT-001"
         let updatedNote = "UITEST-EDIT-001-UPDATED"
-        launchApp()
-
         openTransactionRow(note: originalNote)
         app.buttons[CashRunwayUITestIdentifiers.transactionDetailsEditButton].tap()
 
-        XCTAssertTrue(app.staticTexts["Edit Transaction"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.textFields[CashRunwayUITestIdentifiers.transactionAmountField].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Edit Transaction"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.textFields[CashRunwayUITestIdentifiers.transactionAmountField].waitForExistence(timeout: 3))
         XCTAssertEqual((app.textFields[CashRunwayUITestIdentifiers.transactionNoteField].value as? String) ?? "", originalNote)
-        XCTAssertTrue(app.staticTexts["Main Wallet"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Main Wallet"].waitForExistence(timeout: 3))
 
         let amountField = app.textFields[CashRunwayUITestIdentifiers.transactionAmountField]
         amountField.clearAndEnterText("88.80")
@@ -229,7 +225,7 @@ final class TransactionFlowUITests: CashRunwayUITestCase {
         hideKeyboardIfNeeded()
 
         app.buttons[CashRunwayUITestIdentifiers.transactionCategoryButton].tap()
-        XCTAssertTrue(app.otherElements[CashRunwayUITestIdentifiers.transactionCategorySheet].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.otherElements[CashRunwayUITestIdentifiers.transactionCategorySheet].waitForExistence(timeout: 3))
         app.buttons[CashRunwayUITestIdentifiers.transactionCategory("Groceries")].tap()
 
         app.buttons[CashRunwayUITestIdentifiers.transactionDateTodayButton].tap()
@@ -244,31 +240,36 @@ final class TransactionFlowUITests: CashRunwayUITestCase {
 
         openTransactionRow(note: updatedNote)
         let amountRow = app.descendants(matching: .any).matching(identifier: CashRunwayUITestIdentifiers.transactionDetailsAmountRow).firstMatch
-        XCTAssertTrue(amountRow.waitForExistence(timeout: 5))
+        XCTAssertTrue(amountRow.waitForExistence(timeout: 3))
         XCTAssertTrue(amountRow.label.contains(moneyString(8_880)))
-        XCTAssertTrue(app.staticTexts["Groceries"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts[updatedNote].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Groceries"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts[updatedNote].waitForExistence(timeout: 3))
+
+        // Dismiss detail view to leave app in clean state for subsequent tests
+        app.buttons[CashRunwayUITestIdentifiers.transactionDetailsDoneButton].tap()
+        _ = app.buttons[CashRunwayUITestIdentifiers.transactionDetailsDoneButton].waitForNonExistence(timeout: 2)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.3))
     }
 
     func testTransferRequiresDestinationWalletAndDoesNotExposeCategories() {
-        let note = "UITEST-TRANSFER-001"
+        // Fresh launch to avoid state accumulation from previous tests in this class
         launchApp()
-
+        let note = "UITEST-TRANSFER-001"
         openAddTransaction()
         let kindPicker = app.segmentedControls[CashRunwayUITestIdentifiers.transactionKindPicker]
-        XCTAssertTrue(kindPicker.waitForExistence(timeout: 5))
+        XCTAssertTrue(kindPicker.waitForExistence(timeout: 3))
         kindPicker.buttons["Transfer"].tap()
 
-        XCTAssertTrue(app.staticTexts["Transfers do not use categories."].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Transfers do not use categories."].waitForExistence(timeout: 3))
         XCTAssertFalse(app.buttons[CashRunwayUITestIdentifiers.transactionCategory("Groceries")].exists)
-        XCTAssertTrue(app.buttons[CashRunwayUITestIdentifiers.transactionCategorySheetDoneButton].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons[CashRunwayUITestIdentifiers.transactionCategorySheetDoneButton].waitForExistence(timeout: 3))
         app.buttons[CashRunwayUITestIdentifiers.transactionCategorySheetDoneButton].tap()
 
-        XCTAssertTrue(app.buttons[CashRunwayUITestIdentifiers.transactionTransferDestinationMenu].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons[CashRunwayUITestIdentifiers.transactionTransferDestinationMenu].waitForExistence(timeout: 3))
         XCTAssertTrue(app.buttons[CashRunwayUITestIdentifiers.transactionTransferDestinationMenu].label.contains("Savings"))
 
         let amountField = app.textFields[CashRunwayUITestIdentifiers.transactionAmountField]
-        XCTAssertTrue(amountField.waitForExistence(timeout: 5))
+        XCTAssertTrue(amountField.waitForExistence(timeout: 3))
         amountField.clearAndEnterText("150.00")
         let noteField = app.textFields[CashRunwayUITestIdentifiers.transactionNoteField]
         noteField.clearAndEnterText(note)
@@ -278,13 +279,13 @@ final class TransactionFlowUITests: CashRunwayUITestCase {
         assertTransactionRowExists(note: note, walletName: "Main Wallet")
 
         openTransactionRow(note: note, walletName: "Main Wallet")
-        XCTAssertTrue(app.staticTexts["Destination"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Savings"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Destination"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Savings"].waitForExistence(timeout: 3))
         app.buttons[CashRunwayUITestIdentifiers.transactionDetailsEditButton].tap()
         XCTAssertTrue(app.buttons[CashRunwayUITestIdentifiers.transactionTransferDestinationMenu].label.contains("Savings"))
 
         app.buttons[CashRunwayUITestIdentifiers.transactionCategoryButton].tap()
-        XCTAssertTrue(app.staticTexts["Transfers do not use categories."].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Transfers do not use categories."].waitForExistence(timeout: 3))
         XCTAssertFalse(app.buttons[CashRunwayUITestIdentifiers.transactionCategory("Groceries")].exists)
     }
 
@@ -319,7 +320,7 @@ final class TransactionFlowUITests: CashRunwayUITestCase {
         XCTAssertTrue(element.isHittable, "Switch is not hittable.", file: file, line: line)
         element.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
         XCTAssertTrue(
-            waitForSwitch(element, toBeOn: expectedValue, timeout: 5),
+            waitForSwitch(element, toBeOn: expectedValue, timeout: 3),
             "Switch value did not change after tap. value=\(switchValue(element))",
             file: file,
             line: line
@@ -365,13 +366,13 @@ final class TransactionFlowUITests: CashRunwayUITestCase {
                 fileName: "/tmp/cashrunway-labels-sheet-debug.txt",
                 note: "Missing labels sheet container for \(identifier)"
             )
-            XCTAssertTrue(scrollView.waitForExistence(timeout: 5), "Missing labels sheet container.")
+            XCTAssertTrue(scrollView.waitForExistence(timeout: 3), "Missing labels sheet container.")
             sheetContainer = scrollView
         }
 
         let control = sheetContainer.buttons[identifier].firstMatch
         XCTAssertTrue(
-            control.waitForExistence(timeout: 5),
+            control.waitForExistence(timeout: 3),
             "Missing button \(identifier) inside labels sheet. buttons=\(sheetContainer.buttons.matching(identifier: identifier).count) staticTexts=\(sheetContainer.staticTexts.matching(identifier: identifier).count)"
         )
 
@@ -419,7 +420,7 @@ final class TransactionFlowUITests: CashRunwayUITestCase {
         }
 
         let identifierButton = app.descendants(matching: .any).matching(identifier: identifier).firstMatch
-        XCTAssertTrue(identifierButton.waitForExistence(timeout: 5), "Could not find sheet Done button.", file: file, line: line)
+        XCTAssertTrue(identifierButton.waitForExistence(timeout: 3), "Could not find sheet Done button.", file: file, line: line)
         XCTAssertTrue(identifierButton.isHittable, "Sheet Done button is not hittable.", file: file, line: line)
         identifierButton.tap()
     }

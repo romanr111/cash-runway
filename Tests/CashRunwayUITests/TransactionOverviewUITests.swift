@@ -1,8 +1,17 @@
 import XCTest
 
+@MainActor
 final class OverviewFlowUITests: CashRunwayUITestCase {
+    override class func setUp() {
+        launchSharedApp(reset: true, scenario: "transaction_core", dbPath: "cash-runway-overview-flow.sqlite")
+    }
+
+    override func setUpWithError() throws {
+        try super.setUpWithError()
+    }
+
     func testSearchAndWalletFilterCanBeClearedWithoutLosingFeedState() {
-        launchApp()
+        prepareSharedApp()
 
         openSearch()
         let searchField = app.textFields[CashRunwayUITestIdentifiers.timelineSearchField]
@@ -36,9 +45,8 @@ final class OverviewFlowUITests: CashRunwayUITestCase {
     }
 
     func testSpendingOverviewReflectsNewExpenseAndCategoryDetailDrillsDown() {
+        prepareSharedApp()
         let note = "UITEST-OVERVIEW-GROCERIES-001"
-        launchApp()
-
         openOverview()
         let initialExpensesLabel = app.buttons[CashRunwayUITestIdentifiers.overviewExpensesCard].label
         let initialGroceriesLabel = app.buttons[CashRunwayUITestIdentifiers.overviewCategory("Groceries")].label
@@ -47,11 +55,9 @@ final class OverviewFlowUITests: CashRunwayUITestCase {
         openAddTransaction()
         app.buttons[CashRunwayUITestIdentifiers.transactionCategory("Groceries")].tap()
         let amountField = app.textFields[CashRunwayUITestIdentifiers.transactionAmountField]
-        amountField.tap()
-        amountField.typeText("77.70")
+        amountField.clearAndEnterText("77.70")
         let noteField = app.textFields[CashRunwayUITestIdentifiers.transactionNoteField]
-        noteField.tap()
-        noteField.typeText(note)
+        noteField.clearAndEnterText(note)
         hideKeyboardIfNeeded()
         app.buttons[CashRunwayUITestIdentifiers.transactionSaveButton].tap()
 
@@ -59,25 +65,24 @@ final class OverviewFlowUITests: CashRunwayUITestCase {
         XCTAssertNotEqual(app.buttons[CashRunwayUITestIdentifiers.overviewExpensesCard].label, initialExpensesLabel)
         XCTAssertNotEqual(app.buttons[CashRunwayUITestIdentifiers.overviewCategory("Groceries")].label, initialGroceriesLabel)
         app.buttons[CashRunwayUITestIdentifiers.overviewCategory("Groceries")].tap()
-        XCTAssertTrue(app.navigationBars["Groceries"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Transactions"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Groceries"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Transactions"].waitForExistence(timeout: 3))
         assertStaticTextExists(note, allowScroll: true)
     }
 
     func testOverviewMonthNavigationUpdatesVisibleTotals() {
-        launchApp()
-
+        prepareSharedApp()
         openOverview()
         let initialExpensesLabel = app.buttons[CashRunwayUITestIdentifiers.overviewExpensesCard].label
-        XCTAssertTrue(app.buttons[CashRunwayUITestIdentifiers.overviewCategory("Groceries")].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons[CashRunwayUITestIdentifiers.overviewCategory("Groceries")].waitForExistence(timeout: 3))
 
         app.buttons[CashRunwayUITestIdentifiers.overviewMonthPreviousButton].tap()
         XCTAssertNotEqual(app.buttons[CashRunwayUITestIdentifiers.overviewExpensesCard].label, initialExpensesLabel)
         XCTAssertNotEqual(app.buttons[CashRunwayUITestIdentifiers.overviewExpensesCard].label, "")
-        XCTAssertTrue(app.buttons[CashRunwayUITestIdentifiers.overviewCategory("Groceries")].waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.buttons[CashRunwayUITestIdentifiers.overviewCategory("Groceries")].waitForNonExistence(timeout: 3))
 
         app.buttons[CashRunwayUITestIdentifiers.overviewMonthNextButton].tap()
         XCTAssertEqual(app.buttons[CashRunwayUITestIdentifiers.overviewExpensesCard].label, initialExpensesLabel)
-        XCTAssertTrue(app.buttons[CashRunwayUITestIdentifiers.overviewCategory("Groceries")].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons[CashRunwayUITestIdentifiers.overviewCategory("Groceries")].waitForExistence(timeout: 3))
     }
 }

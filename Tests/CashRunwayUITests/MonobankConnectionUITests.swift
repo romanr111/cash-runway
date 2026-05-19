@@ -1,15 +1,16 @@
 import XCTest
 
+@MainActor
 final class MonobankConnectionUITests: CashRunwayUITestCase {
     func testFirstStartMonobankConnectionImportsOnlyNewExpenses() {
-        launchApp(scenario: "monobank_first_start", monobankMode: "happy_path")
+        launchApp(reset: true, scenario: "monobank_first_start", monobankMode: "happy_path")
 
         openMonobankConnection()
         completeTokenValidation()
 
-        XCTAssertTrue(app.staticTexts["Black card ****1111 · UAH"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["White card ****8888 · 840"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Not supported in MVP"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Black card ****1111 · UAH"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["White card ****8888 · 840"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Not supported in MVP"].waitForExistence(timeout: 3))
 
         createMonobankWallet()
         app.buttons[CashRunwayUITestIdentifiers.monobankAccountsContinueButton].tap()
@@ -27,27 +28,26 @@ final class MonobankConnectionUITests: CashRunwayUITestCase {
     }
 
     func testInvalidMonobankTokenShowsRetryableValidationError() {
-        launchApp(scenario: "monobank_first_start", monobankMode: "invalid_token")
+        launchApp(reset: true, scenario: "monobank_first_start", monobankMode: "invalid_token")
 
         openMonobankConnection()
         app.buttons[CashRunwayUITestIdentifiers.monobankIntroContinueButton].tap()
 
         let tokenField = app.textFields[CashRunwayUITestIdentifiers.monobankTokenField]
-        XCTAssertTrue(tokenField.waitForExistence(timeout: 5))
-        tokenField.tap()
-        tokenField.typeText("BAD-UITEST-TOKEN")
+        XCTAssertTrue(tokenField.waitForExistence(timeout: 3))
+        tokenField.clearAndEnterText("BAD-UITEST-TOKEN")
         hideKeyboardIfNeeded()
         app.buttons[CashRunwayUITestIdentifiers.monobankValidateButton].tap()
 
         let error = app.staticTexts[CashRunwayUITestIdentifiers.monobankValidationError]
-        XCTAssertTrue(error.waitForExistence(timeout: 5))
+        XCTAssertTrue(error.waitForExistence(timeout: 3))
         XCTAssertTrue(error.label.contains("Bank token is invalid"))
         XCTAssertFalse(app.staticTexts["Monobank connected"].exists)
         XCTAssertTrue(app.buttons[CashRunwayUITestIdentifiers.monobankValidateButton].exists)
     }
 
     func testFirstSyncFailureCanRecoverWithManualSync() {
-        launchApp(scenario: "monobank_first_start", monobankMode: "first_sync_fails_then_recovers")
+        launchApp(reset: true, scenario: "monobank_first_start", monobankMode: "first_sync_fails_then_recovers")
 
         openMonobankConnection()
         completeTokenValidation()
@@ -57,7 +57,7 @@ final class MonobankConnectionUITests: CashRunwayUITestCase {
 
         XCTAssertTrue(app.staticTexts["Monobank connected"].waitForExistence(timeout: 10))
         let lastResult = app.staticTexts[CashRunwayUITestIdentifiers.monobankLastResultValue]
-        XCTAssertTrue(lastResult.waitForExistence(timeout: 5))
+        XCTAssertTrue(lastResult.waitForExistence(timeout: 3))
         XCTAssertTrue(lastResult.label.contains("UITEST first sync failed"))
 
         app.buttons[CashRunwayUITestIdentifiers.monobankSyncNowButton].tap()
@@ -73,25 +73,24 @@ final class MonobankConnectionUITests: CashRunwayUITestCase {
     private func openMonobankConnection(file: StaticString = #filePath, line: UInt = #line) {
         openMoreTab(file: file, line: line)
         let row = app.buttons[CashRunwayUITestIdentifiers.settingsMonobankRow]
-        XCTAssertTrue(row.waitForExistence(timeout: 5), file: file, line: line)
+        XCTAssertTrue(row.waitForExistence(timeout: 3), file: file, line: line)
         row.tap()
-        XCTAssertTrue(app.navigationBars["Monobank"].waitForExistence(timeout: 5), file: file, line: line)
+        XCTAssertTrue(app.navigationBars["Monobank"].waitForExistence(timeout: 3), file: file, line: line)
     }
 
     private func completeTokenValidation(file: StaticString = #filePath, line: UInt = #line) {
         app.buttons[CashRunwayUITestIdentifiers.monobankIntroContinueButton].tap()
         let tokenField = app.textFields[CashRunwayUITestIdentifiers.monobankTokenField]
-        XCTAssertTrue(tokenField.waitForExistence(timeout: 5), file: file, line: line)
-        tokenField.tap()
-        tokenField.typeText("UITEST-MONOBANK-TOKEN")
+        XCTAssertTrue(tokenField.waitForExistence(timeout: 3), file: file, line: line)
+        tokenField.clearAndEnterText("UITEST-MONOBANK-TOKEN")
         hideKeyboardIfNeeded()
         app.buttons[CashRunwayUITestIdentifiers.monobankValidateButton].tap()
-        XCTAssertTrue(app.staticTexts["Black card ****1111 · UAH"].waitForExistence(timeout: 5), file: file, line: line)
+        XCTAssertTrue(app.staticTexts["Black card ****1111 · UAH"].waitForExistence(timeout: 3), file: file, line: line)
     }
 
     private func createMonobankWallet(file: StaticString = #filePath, line: UInt = #line) {
         let createWalletButton = app.buttons["Create Monobank wallet"].firstMatch
-        XCTAssertTrue(createWalletButton.waitForExistence(timeout: 5), file: file, line: line)
+        XCTAssertTrue(createWalletButton.waitForExistence(timeout: 3), file: file, line: line)
         createWalletButton.tap()
     }
 }
