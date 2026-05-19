@@ -19,7 +19,7 @@ Rules:
 - Goal: Fix Monobank UI test failures in PR `#15` and merge.
 - Success criteria: All Monobank E2E tests pass locally, unit tests pass, simulator build succeeds, branch merged and cleaned up.
 - Current state: PR `#15` merged into `main`. Root cause (UIPasteboard cross-process deadlock in simulator) fixed by using TextField in UI-test mode. All 3 Monobank tests pass (15-29s each).
-- Next action: Push `main` to origin, delete `codex/e2e-overview-wallet-filter-fix` branch and worktree.
+- Next action: None.
 - Open questions: None.
 - Merge status: merged.
 
