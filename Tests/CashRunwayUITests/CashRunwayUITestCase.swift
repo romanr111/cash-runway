@@ -124,6 +124,11 @@ class CashRunwayUITestCase: XCTestCase {
     func openAddTransaction(file: StaticString = #filePath, line: UInt = #line) {
         let addButton = app.buttons[CashRunwayUITestIdentifiers.transactionAddButton]
         XCTAssertTrue(addButton.waitForExistence(timeout: 5), file: file, line: line)
+        if addButton.exists && !addButton.isHittable {
+            app.swipeUp()
+            _ = addButton.waitForExistence(timeout: 2)
+        }
+        XCTAssertTrue(addButton.isHittable, "Add button is not hittable.", file: file, line: line)
         addButton.tap()
 
         let categorySheet = app.otherElements[CashRunwayUITestIdentifiers.transactionCategorySheet]
@@ -421,6 +426,28 @@ extension XCUIElement {
             typeText(deleteString)
         }
         typeText(text)
+    }
+
+    /// Attempts fast text entry via KVC `setValue`, verifies the result, and falls back
+    /// to `clearAndEnterText` on mismatch. Use for plain text fields (amount, note, token).
+    ///
+    /// Note: verification uses exact string equality. If the field applies a formatter that
+    /// transforms the display text (e.g. adding a currency symbol), the fallback path is used.
+    func fastEnterText(_ text: String) {
+        tap()
+        setValue(text, forKey: "value")
+
+        // Small pause to let the value commit before reading it back
+        RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+
+        // Verify the value was set correctly
+        let committed = (value as? String) ?? ""
+        if committed == text {
+            return
+        }
+
+        // Fallback to reliable but slower path
+        clearAndEnterText(text)
     }
 
     @discardableResult

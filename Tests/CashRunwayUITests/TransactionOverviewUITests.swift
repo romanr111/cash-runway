@@ -16,7 +16,7 @@ final class OverviewFlowUITests: CashRunwayUITestCase {
         openSearch()
         let searchField = app.textFields[CashRunwayUITestIdentifiers.timelineSearchField]
         searchField.tap()
-        searchField.clearAndEnterText("SEARCH")
+        searchField.fastEnterText("SEARCH")
         app.buttons[CashRunwayUITestIdentifiers.timelineSearchApplyButton].tap()
 
         assertTransactionRowExists(note: "UITEST-SEARCH-001")
@@ -55,9 +55,9 @@ final class OverviewFlowUITests: CashRunwayUITestCase {
         openAddTransaction()
         app.buttons[CashRunwayUITestIdentifiers.transactionCategory("Groceries")].tap()
         let amountField = app.textFields[CashRunwayUITestIdentifiers.transactionAmountField]
-        amountField.clearAndEnterText("77.70")
+        amountField.fastEnterText("77.70")
         let noteField = app.textFields[CashRunwayUITestIdentifiers.transactionNoteField]
-        noteField.clearAndEnterText(note)
+        noteField.fastEnterText(note)
         hideKeyboardIfNeeded()
         app.buttons[CashRunwayUITestIdentifiers.transactionSaveButton].tap()
 

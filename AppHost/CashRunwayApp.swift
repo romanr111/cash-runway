@@ -3,6 +3,7 @@ import Darwin
 import Foundation
 import GRDB
 import SwiftUI
+import UIKit
 
 @main
 struct CashRunwayApp: App {
@@ -15,6 +16,9 @@ struct CashRunwayApp: App {
         DebugDataRecoveryAttempt.runIfRequested()
         DebugCSVImportSelfTest.runIfRequested()
         #endif
+        if ProcessInfo.processInfo.environment["CASH_RUNWAY_UI_TEST_MODE"] == "1" {
+            UIView.setAnimationsEnabled(false)
+        }
         runtime = CashRunwayAppRuntime.bootstrap()
         maintenanceCoordinator.register()
         maintenanceCoordinator.schedule()
