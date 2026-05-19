@@ -67,8 +67,8 @@ final class OverviewFlowUITests: CashRunwayUITestCase {
         XCTAssertNotEqual(app.buttons[CashRunwayUITestIdentifiers.overviewExpensesCard].label, initialExpensesLabel)
         XCTAssertNotEqual(app.buttons[CashRunwayUITestIdentifiers.overviewCategory("Groceries")].label, initialGroceriesLabel)
         app.buttons[CashRunwayUITestIdentifiers.overviewCategory("Groceries")].tap()
-        XCTAssertTrue(app.navigationBars["Groceries"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Transactions"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Groceries"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Transactions"].waitForExistence(timeout: 3))
         assertStaticTextExists(note, allowScroll: true)
     }
 
@@ -76,15 +76,15 @@ final class OverviewFlowUITests: CashRunwayUITestCase {
         prepareSharedApp()
         openOverview()
         let initialExpensesLabel = app.buttons[CashRunwayUITestIdentifiers.overviewExpensesCard].label
-        XCTAssertTrue(app.buttons[CashRunwayUITestIdentifiers.overviewCategory("Groceries")].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons[CashRunwayUITestIdentifiers.overviewCategory("Groceries")].waitForExistence(timeout: 3))
 
         app.buttons[CashRunwayUITestIdentifiers.overviewMonthPreviousButton].tap()
         XCTAssertNotEqual(app.buttons[CashRunwayUITestIdentifiers.overviewExpensesCard].label, initialExpensesLabel)
         XCTAssertNotEqual(app.buttons[CashRunwayUITestIdentifiers.overviewExpensesCard].label, "")
-        XCTAssertTrue(app.buttons[CashRunwayUITestIdentifiers.overviewCategory("Groceries")].waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.buttons[CashRunwayUITestIdentifiers.overviewCategory("Groceries")].waitForNonExistence(timeout: 3))
 
         app.buttons[CashRunwayUITestIdentifiers.overviewMonthNextButton].tap()
         XCTAssertEqual(app.buttons[CashRunwayUITestIdentifiers.overviewExpensesCard].label, initialExpensesLabel)
-        XCTAssertTrue(app.buttons[CashRunwayUITestIdentifiers.overviewCategory("Groceries")].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons[CashRunwayUITestIdentifiers.overviewCategory("Groceries")].waitForExistence(timeout: 3))
     }
 }

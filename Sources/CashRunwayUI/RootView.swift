@@ -56,6 +56,11 @@ public struct CashRunwayRootView: View {
                 startupErrorView
             }
         }
+        .transaction { transaction in
+            if ProcessInfo.processInfo.environment["CASH_RUNWAY_UI_TEST_MODE"] == "1" {
+                transaction.animation = nil
+            }
+        }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active,
                   model == nil,

@@ -152,12 +152,12 @@ class CashRunwayUITestCase: XCTestCase {
 
     func openTransactionRow(note: String, walletName: String? = nil, file: StaticString = #filePath, line: UInt = #line) {
         let row = transactionRowElement(note: note, walletName: walletName)
-        XCTAssertTrue(waitForTransactionRow(note: note, walletName: walletName, timeout: 5, allowScroll: true), "Missing transaction row for note \(note)", file: file, line: line)
+        XCTAssertTrue(waitForTransactionRow(note: note, walletName: walletName, timeout: 3, allowScroll: true), "Missing transaction row for note \(note)", file: file, line: line)
         row.tap()
     }
 
     func assertTransactionRowExists(note: String, walletName: String? = nil, allowScroll: Bool = false, file: StaticString = #filePath, line: UInt = #line) {
-        XCTAssertTrue(waitForTransactionRow(note: note, walletName: walletName, timeout: 5, allowScroll: allowScroll), file: file, line: line)
+        XCTAssertTrue(waitForTransactionRow(note: note, walletName: walletName, timeout: 3, allowScroll: allowScroll), file: file, line: line)
         if allowScroll {
             let row = transactionRowElement(note: note, walletName: walletName)
             XCTAssertTrue(row.isHittable, file: file, line: line)
@@ -181,7 +181,7 @@ class CashRunwayUITestCase: XCTestCase {
 
     func selectMenuOption(menuIdentifier: String, option: String, optionIdentifier: String? = nil, file: StaticString = #filePath, line: UInt = #line) {
         let menu = app.buttons[menuIdentifier]
-        XCTAssertTrue(menu.waitForExistence(timeout: 5), file: file, line: line)
+        XCTAssertTrue(menu.waitForExistence(timeout: 3), file: file, line: line)
         menu.tap()
 
         if let optionIdentifier {
@@ -199,13 +199,13 @@ class CashRunwayUITestCase: XCTestCase {
         }
 
         let menuItem = app.menuItems[option].firstMatch
-        if menuItem.waitForExistence(timeout: 5) {
+        if menuItem.waitForExistence(timeout: 3) {
             menuItem.tap()
             return
         }
 
         let staticText = app.staticTexts[option].firstMatch
-        XCTAssertTrue(staticText.waitForExistence(timeout: 5), file: file, line: line)
+        XCTAssertTrue(staticText.waitForExistence(timeout: 3), file: file, line: line)
         staticText.tap()
     }
 
@@ -227,7 +227,7 @@ class CashRunwayUITestCase: XCTestCase {
         ]
         for candidate in candidates where candidate.exists {
             candidate.tap()
-            _ = app.keyboards.firstMatch.waitForNonExistence(timeout: 5)
+            _ = app.keyboards.firstMatch.waitForNonExistence(timeout: 3)
             return
         }
     }
@@ -245,11 +245,11 @@ class CashRunwayUITestCase: XCTestCase {
     }
 
     func assertStaticTextExists(_ value: String, allowScroll: Bool = false, file: StaticString = #filePath, line: UInt = #line) {
-        XCTAssertTrue(waitForStaticText(value, timeout: 5, allowScroll: allowScroll), file: file, line: line)
+        XCTAssertTrue(waitForStaticText(value, timeout: 3, allowScroll: allowScroll), file: file, line: line)
     }
 
     func assertStaticTextDoesNotExist(_ value: String, file: StaticString = #filePath, line: UInt = #line) {
-        XCTAssertTrue(app.staticTexts[value].waitForNonExistence(timeout: 5), file: file, line: line)
+        XCTAssertTrue(app.staticTexts[value].waitForNonExistence(timeout: 3), file: file, line: line)
     }
 
     @discardableResult
