@@ -1,8 +1,9 @@
 import XCTest
 
+@MainActor
 final class MonobankConnectionUITests: CashRunwayUITestCase {
     func testFirstStartMonobankConnectionImportsOnlyNewExpenses() {
-        launchApp(scenario: "monobank_first_start", monobankMode: "happy_path")
+        launchApp(reset: true, scenario: "monobank_first_start", monobankMode: "happy_path")
 
         openMonobankConnection()
         completeTokenValidation()
@@ -27,7 +28,7 @@ final class MonobankConnectionUITests: CashRunwayUITestCase {
     }
 
     func testInvalidMonobankTokenShowsRetryableValidationError() {
-        launchApp(scenario: "monobank_first_start", monobankMode: "invalid_token")
+        launchApp(reset: true, scenario: "monobank_first_start", monobankMode: "invalid_token")
 
         openMonobankConnection()
         app.buttons[CashRunwayUITestIdentifiers.monobankIntroContinueButton].tap()
@@ -47,7 +48,7 @@ final class MonobankConnectionUITests: CashRunwayUITestCase {
     }
 
     func testFirstSyncFailureCanRecoverWithManualSync() {
-        launchApp(scenario: "monobank_first_start", monobankMode: "first_sync_fails_then_recovers")
+        launchApp(reset: true, scenario: "monobank_first_start", monobankMode: "first_sync_fails_then_recovers")
 
         openMonobankConnection()
         completeTokenValidation()

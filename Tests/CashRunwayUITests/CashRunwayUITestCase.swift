@@ -4,9 +4,14 @@ import XCTest
 class CashRunwayUITestCase: XCTestCase {
     var app: XCUIApplication!
 
+    /// Shared app instance used when a test class opts into class-level launch.
+    static var sharedApp: XCUIApplication?
+
     override func setUpWithError() throws {
         continueAfterFailure = false
     }
+
+    // MARK: - Per-test launch
 
     @discardableResult
     func launchApp(reset: Bool = true, scenario: String = "transaction_core", monobankMode: String? = nil) -> XCUIApplication {
@@ -23,11 +28,87 @@ class CashRunwayUITestCase: XCTestCase {
         app.launch()
 
         self.app = app
-        XCTAssertTrue(waitForTimelineBootstrap(app: app, timeout: 10), "Timeline did not finish bootstrapping.")
+        XCTAssertTrue(Self.waitForTimelineBootstrap(app: app, timeout: 10), "Timeline did not finish bootstrapping.")
         return app
     }
 
-    private func waitForTimelineBootstrap(app: XCUIApplication, timeout: TimeInterval) -> Bool {
+    // MARK: - Class-level launch
+
+    /// Launches the app once for the entire test class. Tests call `useSharedApp()` in `setUpWithError()`.
+    class func launchSharedApp(reset: Bool = true, scenario: String = "transaction_core", monobankMode: String? = nil, dbPath: String = "cash-runway-uitests.sqlite") {
+        let app = XCUIApplication()
+        app.launchEnvironment["CASH_RUNWAY_UI_TEST_MODE"] = "1"
+        app.launchEnvironment["CASH_RUNWAY_UI_TEST_DB_PATH"] = dbPath
+        app.launchEnvironment["CASH_RUNWAY_UI_TEST_SCENARIO"] = scenario
+        if let monobankMode {
+            app.launchEnvironment["CASH_RUNWAY_UI_TEST_MONOBANK_MODE"] = monobankMode
+        }
+        if reset {
+            app.launchEnvironment["CASH_RUNWAY_UI_TEST_RESET"] = "1"
+        }
+        app.launch()
+
+        let bootstrapped = waitForTimelineBootstrap(app: app, timeout: 10)
+        XCTAssertTrue(bootstrapped, "Timeline did not finish bootstrapping.")
+        sharedApp = app
+    }
+
+    func useSharedApp() {
+        guard let shared = Self.sharedApp else {
+            XCTFail("sharedApp is nil. Call launchSharedApp() in override class func setUp().")
+            return
+        }
+        app = shared
+    }
+
+    /// Navigates back to a known root state (Timeline tab, no sheets) between tests.
+    func returnToRoot() {
+        let closeButton = app.buttons[CashRunwayUITestIdentifiers.transactionCloseButton]
+        if closeButton.exists {
+            closeButton.tap()
+            _ = closeButton.waitForNonExistence(timeout: 2)
+        }
+
+        let backButton = app.navigationBars.firstMatch.buttons.element(boundBy: 0)
+        if backButton.exists {
+            backButton.tap()
+        }
+
+        let detailDoneButton = app.buttons[CashRunwayUITestIdentifiers.transactionDetailsDoneButton].firstMatch
+        if detailDoneButton.exists {
+            detailDoneButton.tap()
+            _ = detailDoneButton.waitForNonExistence(timeout: 2)
+        }
+
+        let doneButton = app.navigationBars.buttons["Done"].firstMatch
+        if doneButton.exists {
+            doneButton.tap()
+            _ = doneButton.waitForNonExistence(timeout: 2)
+        }
+
+        let timelineTab = app.tabBars.buttons["Timeline"]
+        if timelineTab.exists {
+            timelineTab.tap()
+            let addButton = app.buttons[CashRunwayUITestIdentifiers.transactionAddButton]
+            let deadline = Date().addingTimeInterval(3)
+            while Date() < deadline {
+                if addButton.isHittable {
+                    break
+                }
+                RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+            }
+        }
+    }
+
+    /// Call at the start of each test method when using class-level launch.
+    func prepareSharedApp() {
+        useSharedApp()
+        returnToRoot()
+    }
+
+    // MARK: - Helpers
+
+    fileprivate static func waitForTimelineBootstrap(app: XCUIApplication, timeout: TimeInterval) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         let transactionAddButton = app.buttons[CashRunwayUITestIdentifiers.transactionAddButton]
         let zeroWalletEmptyState = app.staticTexts["Create your first wallet"]
@@ -42,30 +123,30 @@ class CashRunwayUITestCase: XCTestCase {
 
     func openAddTransaction(file: StaticString = #filePath, line: UInt = #line) {
         let addButton = app.buttons[CashRunwayUITestIdentifiers.transactionAddButton]
-        XCTAssertTrue(addButton.waitForExistence(timeout: 5), file: file, line: line)
+        XCTAssertTrue(addButton.waitForExistence(timeout: 3), file: file, line: line)
         addButton.tap()
 
         let categorySheet = app.otherElements[CashRunwayUITestIdentifiers.transactionCategorySheet]
-        XCTAssertTrue(categorySheet.waitForExistence(timeout: 5), file: file, line: line)
+        XCTAssertTrue(categorySheet.waitForExistence(timeout: 3), file: file, line: line)
     }
 
     func openOverview(file: StaticString = #filePath, line: UInt = #line) {
         let button = app.buttons[CashRunwayUITestIdentifiers.overviewOpenButton]
-        XCTAssertTrue(button.waitForExistence(timeout: 5), file: file, line: line)
+        XCTAssertTrue(button.waitForExistence(timeout: 3), file: file, line: line)
         button.tap()
-        XCTAssertTrue(app.buttons[CashRunwayUITestIdentifiers.overviewExpensesCard].waitForExistence(timeout: 5), file: file, line: line)
+        XCTAssertTrue(app.buttons[CashRunwayUITestIdentifiers.overviewExpensesCard].waitForExistence(timeout: 3), file: file, line: line)
     }
 
     func openSearch(file: StaticString = #filePath, line: UInt = #line) {
         let button = app.buttons[CashRunwayUITestIdentifiers.timelineSearchButton]
-        XCTAssertTrue(button.waitForExistence(timeout: 5), file: file, line: line)
+        XCTAssertTrue(button.waitForExistence(timeout: 3), file: file, line: line)
         button.tap()
-        XCTAssertTrue(app.textFields[CashRunwayUITestIdentifiers.timelineSearchField].waitForExistence(timeout: 5), file: file, line: line)
+        XCTAssertTrue(app.textFields[CashRunwayUITestIdentifiers.timelineSearchField].waitForExistence(timeout: 3), file: file, line: line)
     }
 
     func openMoreTab(file: StaticString = #filePath, line: UInt = #line) {
         let moreTab = app.tabBars.buttons["More"]
-        XCTAssertTrue(moreTab.waitForExistence(timeout: 5), file: file, line: line)
+        XCTAssertTrue(moreTab.waitForExistence(timeout: 3), file: file, line: line)
         moreTab.tap()
     }
 

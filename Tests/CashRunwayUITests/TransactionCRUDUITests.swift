@@ -1,9 +1,18 @@
 import XCTest
 
+@MainActor
 final class TransactionFlowUITests: CashRunwayUITestCase {
+    override class func setUp() {
+        launchSharedApp(reset: true, scenario: "transaction_core", dbPath: "cash-runway-transaction-flow.sqlite")
+    }
+
+    override func setUpWithError() throws {
+        try super.setUpWithError()
+    }
+
     func testAddExpenseTransactionHappyPath() {
+        prepareSharedApp()
         let note = "UITEST-GROCERIES-001"
-        launchApp()
 
         openAddTransaction()
         XCTAssertTrue(app.otherElements[CashRunwayUITestIdentifiers.transactionCategorySheet].exists)
@@ -38,9 +47,8 @@ final class TransactionFlowUITests: CashRunwayUITestCase {
     }
 
     func testAddTransactionInvalidAmountShowsRecoverableError() {
+        prepareSharedApp()
         let note = "UITEST-INVALID-RECOVERY-001"
-        launchApp()
-
         openAddTransaction()
         app.buttons[CashRunwayUITestIdentifiers.transactionCategory("Groceries")].tap()
 
@@ -70,9 +78,8 @@ final class TransactionFlowUITests: CashRunwayUITestCase {
     }
 
     func testDismissComposerDoesNotCreateTransaction() {
+        prepareSharedApp()
         let note = "UITEST-DISMISS-001"
-        launchApp()
-
         openAddTransaction()
         app.buttons[CashRunwayUITestIdentifiers.transactionCategory("Groceries")].tap()
         let amountField = app.textFields[CashRunwayUITestIdentifiers.transactionAmountField]
@@ -90,8 +97,7 @@ final class TransactionFlowUITests: CashRunwayUITestCase {
     }
 
     func testSwitchingTransactionKindsKeepsDraftValid() {
-        launchApp()
-
+        prepareSharedApp()
         openAddTransaction()
         let kindPicker = app.segmentedControls[CashRunwayUITestIdentifiers.transactionKindPicker]
         XCTAssertTrue(kindPicker.waitForExistence(timeout: 5))
@@ -118,9 +124,8 @@ final class TransactionFlowUITests: CashRunwayUITestCase {
     }
 
     func testComposerPreservesDraftWhenOpeningLabelsAndRepeatSheets() {
+        prepareSharedApp()
         let note = "UITEST-DRAFT-SHEETS-001"
-        launchApp()
-
         openAddTransaction()
         app.buttons[CashRunwayUITestIdentifiers.transactionCategory("Groceries")].tap()
 
@@ -179,9 +184,8 @@ final class TransactionFlowUITests: CashRunwayUITestCase {
     }
 
     func testDateShortcutsChangeSavedTransactionDate() {
+        prepareSharedApp()
         let note = "UITEST-DATE-001"
-        launchApp()
-
         openAddTransaction()
         app.buttons[CashRunwayUITestIdentifiers.transactionCategory("Groceries")].tap()
 
@@ -209,10 +213,9 @@ final class TransactionFlowUITests: CashRunwayUITestCase {
     }
 
     func testEditTransactionUpdatesExistingRow() {
+        prepareSharedApp()
         let originalNote = "UITEST-EDIT-001"
         let updatedNote = "UITEST-EDIT-001-UPDATED"
-        launchApp()
-
         openTransactionRow(note: originalNote)
         app.buttons[CashRunwayUITestIdentifiers.transactionDetailsEditButton].tap()
 
@@ -248,12 +251,17 @@ final class TransactionFlowUITests: CashRunwayUITestCase {
         XCTAssertTrue(amountRow.label.contains(moneyString(8_880)))
         XCTAssertTrue(app.staticTexts["Groceries"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts[updatedNote].waitForExistence(timeout: 5))
+
+        // Dismiss detail view to leave app in clean state for subsequent tests
+        app.buttons[CashRunwayUITestIdentifiers.transactionDetailsDoneButton].tap()
+        _ = app.buttons[CashRunwayUITestIdentifiers.transactionDetailsDoneButton].waitForNonExistence(timeout: 2)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.5))
     }
 
     func testTransferRequiresDestinationWalletAndDoesNotExposeCategories() {
-        let note = "UITEST-TRANSFER-001"
+        // Fresh launch to avoid state accumulation from previous tests in this class
         launchApp()
-
+        let note = "UITEST-TRANSFER-001"
         openAddTransaction()
         let kindPicker = app.segmentedControls[CashRunwayUITestIdentifiers.transactionKindPicker]
         XCTAssertTrue(kindPicker.waitForExistence(timeout: 5))

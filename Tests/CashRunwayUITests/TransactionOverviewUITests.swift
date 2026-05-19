@@ -1,8 +1,17 @@
 import XCTest
 
+@MainActor
 final class OverviewFlowUITests: CashRunwayUITestCase {
+    override class func setUp() {
+        launchSharedApp(reset: true, scenario: "transaction_core", dbPath: "cash-runway-overview-flow.sqlite")
+    }
+
+    override func setUpWithError() throws {
+        try super.setUpWithError()
+    }
+
     func testSearchAndWalletFilterCanBeClearedWithoutLosingFeedState() {
-        launchApp()
+        prepareSharedApp()
 
         openSearch()
         let searchField = app.textFields[CashRunwayUITestIdentifiers.timelineSearchField]
@@ -36,9 +45,8 @@ final class OverviewFlowUITests: CashRunwayUITestCase {
     }
 
     func testSpendingOverviewReflectsNewExpenseAndCategoryDetailDrillsDown() {
+        prepareSharedApp()
         let note = "UITEST-OVERVIEW-GROCERIES-001"
-        launchApp()
-
         openOverview()
         let initialExpensesLabel = app.buttons[CashRunwayUITestIdentifiers.overviewExpensesCard].label
         let initialGroceriesLabel = app.buttons[CashRunwayUITestIdentifiers.overviewCategory("Groceries")].label
@@ -65,8 +73,7 @@ final class OverviewFlowUITests: CashRunwayUITestCase {
     }
 
     func testOverviewMonthNavigationUpdatesVisibleTotals() {
-        launchApp()
-
+        prepareSharedApp()
         openOverview()
         let initialExpensesLabel = app.buttons[CashRunwayUITestIdentifiers.overviewExpensesCard].label
         XCTAssertTrue(app.buttons[CashRunwayUITestIdentifiers.overviewCategory("Groceries")].waitForExistence(timeout: 5))
