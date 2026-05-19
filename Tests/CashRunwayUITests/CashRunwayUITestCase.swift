@@ -127,7 +127,7 @@ class CashRunwayUITestCase: XCTestCase {
 
     func openAddTransaction(file: StaticString = #filePath, line: UInt = #line) {
         let addButton = app.buttons[CashRunwayUITestIdentifiers.transactionAddButton]
-        XCTAssertTrue(addButton.waitForExistence(timeout: 3), file: file, line: line)
+        XCTAssertTrue(addButton.waitForExistence(timeout: 5), file: file, line: line)
         addButton.tap()
 
         let categorySheet = app.otherElements[CashRunwayUITestIdentifiers.transactionCategorySheet]
@@ -419,7 +419,12 @@ enum CashRunwayUITestIdentifiers {
 extension XCUIElement {
     func clearAndEnterText(_ text: String) {
         tap()
-        setValue(text)
+        let currentValue = value as? String ?? ""
+        if !currentValue.isEmpty {
+            let deleteString = String(repeating: XCUIKeyboardKey.delete.rawValue, count: currentValue.count)
+            typeText(deleteString)
+        }
+        typeText(text)
     }
 
     @discardableResult
