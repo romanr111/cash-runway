@@ -156,6 +156,198 @@ struct DatabaseTransactionSafetyTests {
         try TestSupport.assertCategoryTruth(repository)
     }
 
+    @Test func categoryMergeMovesDuplicateTransactionsAndHidesSource() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let walletID = try #require(try repository.wallets().first?.id)
+        let restaurants = try #require(try repository.categories(kind: .expense).first { $0.name == "Restaurants" })
+        let restaurant = CategoryBuilder()
+            .with(name: "Restaurant")
+            .with(kind: .expense)
+            .with(iconName: "fork.knife")
+            .with(colorHex: "#64D1D5")
+            .with(sortOrder: 999)
+            .build()
+        try repository.saveCategory(restaurant)
+
+        try repository.saveTransaction(
+            TransactionDraft(
+                kind: .expense,
+                walletID: walletID,
+                amountMinor: 4_200,
+                occurredAt: .now,
+                categoryID: restaurant.id,
+                merchant: "Corner Restaurant",
+                note: ""
+            )
+        )
+
+        try repository.mergeCategory(oldCategoryID: restaurant.id, into: restaurants.id)
+
+        let activeExpenseCategories = try repository.categories(kind: .expense)
+        #expect(activeExpenseCategories.contains { $0.id == restaurants.id })
+        #expect(activeExpenseCategories.contains { $0.id == restaurant.id } == false)
+
+        let managementItems = try repository.categoryManagementItems(kind: .expense)
+        let sourceItem = try #require(managementItems.first { $0.category.id == restaurant.id })
+        #expect(sourceItem.isVisible == false)
+
+        let mergedTransaction = try #require(try repository.transactions().first { $0.merchant == "Corner Restaurant" })
+        #expect(mergedTransaction.categoryName == "Restaurants")
+        let mergedDraft = try repository.transactionDraft(id: mergedTransaction.id)
+        #expect(mergedDraft.categoryID == restaurants.id)
+
+        try TestSupport.assertCategoryTruth(repository)
+    }
+
+    @Test func categoryMergeMovesRecurringAndBankRuleReferences() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let walletID = try #require(try repository.wallets().first?.id)
+        let restaurants = try #require(try repository.categories(kind: .expense).first { $0.name == "Restaurants" })
+        let restaurant = CategoryBuilder()
+            .with(name: "Restaurant")
+            .with(kind: .expense)
+            .with(sortOrder: 999)
+            .build()
+        try repository.saveCategory(restaurant)
+
+        let template = RecurringTemplate(
+            id: UUID(),
+            kind: .expense,
+            walletID: walletID,
+            counterpartyWalletID: nil,
+            amountMinor: 9_900,
+            categoryID: restaurant.id,
+            merchant: "Lunch plan",
+            note: "",
+            ruleType: .monthly,
+            ruleInterval: 1,
+            dayOfMonth: Calendar.current.component(.day, from: .now),
+            weekday: nil,
+            startDate: .now,
+            endDate: nil,
+            isActive: true,
+            createdAt: .now,
+            updatedAt: .now
+        )
+        try repository.saveRecurringTemplate(template)
+        try repository.refreshRecurringInstances()
+        var instance = try #require(try repository.recurringInstances().first { $0.templateID == template.id })
+        instance.overrideCategoryID = restaurant.id
+        instance.updatedAt = .now
+        try repository.saveRecurringInstance(instance)
+
+        try repository.databaseManager.dbQueue.write { db in
+            try db.execute(
+                sql: """
+                INSERT INTO bank_category_rules (
+                    id, provider, rule_type, merchant_pattern, mcc, category_id, confidence, created_at, updated_at
+                )
+                VALUES (?, ?, 'merchant', 'corner restaurant', NULL, ?, 100, ?, ?)
+                """,
+                arguments: [
+                    UUID().uuidString,
+                    BankProvider.monobank.rawValue,
+                    restaurant.id.uuidString,
+                    Date(timeIntervalSince1970: 1_800_000_000),
+                    Date(timeIntervalSince1970: 1_800_000_000),
+                ]
+            )
+        }
+
+        try repository.mergeCategory(oldCategoryID: restaurant.id, into: restaurants.id)
+
+        let mergedTemplate = try #require(try repository.recurringTemplates().first { $0.id == template.id })
+        #expect(mergedTemplate.categoryID == restaurants.id)
+        let mergedInstance = try #require(try repository.recurringInstances().first { $0.id == instance.id })
+        #expect(mergedInstance.overrideCategoryID == restaurants.id)
+        let mappedCategoryID = try BankCategoryMapper(repository: repository).resolve(
+            merchant: "Corner Restaurant",
+            description: "Lunch",
+            mcc: nil,
+            originalMcc: nil
+        )
+        #expect(mappedCategoryID == restaurants.id)
+    }
+
+    @Test func categoryMergeRecordsRemapAndAuditEntries() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        let restaurants = try #require(try repository.categories(kind: .expense).first { $0.name == "Restaurants" })
+        let restaurant = CategoryBuilder()
+            .with(name: "Restaurant")
+            .with(kind: .expense)
+            .build()
+        try repository.saveCategory(restaurant)
+
+        try repository.mergeCategory(oldCategoryID: restaurant.id, into: restaurants.id)
+
+        let records = try repository.databaseManager.dbQueue.read { db in
+            let remapCount = try Int.fetchOne(
+                db,
+                sql: "SELECT COUNT(*) FROM category_remaps WHERE old_category_id = ? AND new_category_id = ?",
+                arguments: [restaurant.id.uuidString, restaurants.id.uuidString]
+            ) ?? 0
+            let auditDiffJSON = try String.fetchOne(
+                db,
+                sql: "SELECT diff_json FROM audit_entries WHERE entity_type = 'category' AND entity_id = ? AND operation = 'remap'",
+                arguments: [restaurant.id.uuidString]
+            )
+            return (remapCount, auditDiffJSON)
+        }
+        #expect(records.0 == 1)
+        let auditDiffJSON = try #require(records.1)
+        #expect(auditDiffJSON.contains("\"from\":\"\(restaurant.id.uuidString)\""))
+        #expect(auditDiffJSON.contains("\"to\":\"\(restaurants.id.uuidString)\""))
+    }
+
+    @Test func categoryMergeRejectsInvalidCategoryPairs() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        let restaurants = try #require(try repository.categories(kind: .expense).first { $0.name == "Restaurants" })
+        let salary = try #require(try repository.categories(kind: .income).first { $0.name == "Salary" })
+
+        #expect(throws: CashRunwayError.validation("Choose two different categories to merge.")) {
+            try repository.mergeCategory(oldCategoryID: restaurants.id, into: restaurants.id)
+        }
+        #expect(throws: CashRunwayError.notFound) {
+            try repository.mergeCategory(oldCategoryID: UUID(), into: restaurants.id)
+        }
+        #expect(throws: CashRunwayError.validation("Categories must have the same type to merge.")) {
+            try repository.mergeCategory(oldCategoryID: restaurants.id, into: salary.id)
+        }
+
+        let activeRestaurants = try repository.categories(kind: .expense).filter { $0.id == restaurants.id }
+        #expect(activeRestaurants.count == 1)
+    }
+
+    @Test func categoryMergeRejectsHiddenDestination() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        let visibleSource = CategoryBuilder()
+            .with(name: "Restaurant")
+            .with(kind: .expense)
+            .build()
+        let hiddenDestination = CategoryBuilder()
+            .with(name: "Hidden Restaurants")
+            .with(kind: .expense)
+            .with(isArchived: true)
+            .build()
+        try repository.saveCategory(visibleSource)
+        try repository.saveCategory(hiddenDestination)
+
+        #expect(throws: CashRunwayError.validation("Destination category must be active.")) {
+            try repository.mergeCategory(oldCategoryID: visibleSource.id, into: hiddenDestination.id)
+        }
+
+        let activeCategories = try repository.categories(kind: .expense)
+        #expect(activeCategories.contains { $0.id == visibleSource.id })
+        #expect(activeCategories.contains { $0.id == hiddenDestination.id } == false)
+    }
+
     @Test func walletDeletionRemovesAllLinkedData() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()

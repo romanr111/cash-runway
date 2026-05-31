@@ -2002,6 +2002,31 @@ extension CashRunwayRepository {
 
     public func mergeCategory(oldCategoryID: UUID, into newCategoryID: UUID) throws {
         try databaseManager.dbQueue.write { db in
+            guard oldCategoryID != newCategoryID else {
+                throw CashRunwayError.validation("Choose two different categories to merge.")
+            }
+            guard let oldKind = try String.fetchOne(
+                db,
+                sql: "SELECT kind FROM categories WHERE id = ?",
+                arguments: [oldCategoryID.uuidString]
+            ),
+                  let newCategoryRow = try Row.fetchOne(
+                    db,
+                    sql: "SELECT kind, is_archived FROM categories WHERE id = ?",
+                    arguments: [newCategoryID.uuidString]
+                  )
+            else {
+                throw CashRunwayError.notFound
+            }
+            let newKind: String = newCategoryRow["kind"]
+            let newIsArchived: Bool = newCategoryRow["is_archived"]
+            guard oldKind == newKind else {
+                throw CashRunwayError.validation("Categories must have the same type to merge.")
+            }
+            guard !newIsArchived else {
+                throw CashRunwayError.validation("Destination category must be active.")
+            }
+
             let now = Date()
             let affectedMonths = Set(try Int.fetchAll(
                 db,
@@ -2011,6 +2036,22 @@ extension CashRunwayRepository {
             try db.execute(
                 sql: "UPDATE transactions SET category_id = ?, updated_at = ? WHERE category_id = ?",
                 arguments: [newCategoryID.uuidString, now, oldCategoryID.uuidString]
+            )
+            try db.execute(
+                sql: "UPDATE recurring_templates SET category_id = ?, updated_at = ? WHERE category_id = ?",
+                arguments: [newCategoryID.uuidString, now, oldCategoryID.uuidString]
+            )
+            try db.execute(
+                sql: "UPDATE recurring_instances SET override_category_id = ?, updated_at = ? WHERE override_category_id = ?",
+                arguments: [newCategoryID.uuidString, now, oldCategoryID.uuidString]
+            )
+            try db.execute(
+                sql: "UPDATE bank_category_rules SET category_id = ?, updated_at = ? WHERE category_id = ?",
+                arguments: [newCategoryID.uuidString, now, oldCategoryID.uuidString]
+            )
+            try db.execute(
+                sql: "UPDATE categories SET is_archived = 1, updated_at = ? WHERE id = ?",
+                arguments: [now, oldCategoryID.uuidString]
             )
             try db.execute(
                 sql: """
