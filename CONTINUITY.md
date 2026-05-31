@@ -16,46 +16,54 @@ Rules:
 
 ## Snapshot
 
-- Goal: Move coverage and E2E UI tests to a nightly workflow; optimize E2E text entry and test flows.
-- Success criteria: PR pipeline runs only fast checks; nightly workflow runs coverage + E2E; text entry is faster with fallback safety; all tests pass.
-- Current state: PR `#22` merged to `main`. Nightly workflow (`ios-nightly.yml`) runs at 03:00 UTC with optional manual dispatch. PR pipeline (`ios-ci.yml`) trimmed to static-analysis → unit-tests → integration-tests. `fastEnterText` helper added with KVC `setValue` + verification fallback. UIKit animations disabled in test mode. SPM package caching added. Branches and remotes cleaned up.
-- Next action: Monitor first nightly run for timing and `fastEnterText` fallback rate.
+- Goal: Implement the broader Warm Functional Ledger UI refresh for Cash Runway in an isolated worktree.
+- Success criteria: More/Settings, supporting management sheets, editors, transaction-adjacent surfaces, and import/backup/Monobank flows follow the refreshed UI language while preserving behavior, accessibility identifiers, data models, disabled/deprecated feature policy, and required iOS validation gates.
+- Current state: The combined UI refresh was committed, pushed, and opened as draft PR #23 from `/Users/roman/.codex/worktrees/cash-runway-broader-ui-refresh` on branch `codex/broader-ui-refresh`.
+- Next action: Review draft PR #23 and decide whether to mark it ready or merge it.
 - Open questions: None.
-- Merge status: merged.
+- Merge status: not-merged.
 
 ## Git context
 
 - Repo root: `/Users/roman/Documents/Development/Cash Runway`
-- Working directory: `/Users/roman/Documents/Development/Cash Runway`
-- Branch: `main`
+- Working directory: `/Users/roman/.codex/worktrees/cash-runway-broader-ui-refresh`
+- Branch: `codex/broader-ui-refresh`
 - Base branch: `origin/main`
-- Merge status: merged
+- Worktree reason: isolated-feature
+- Merge status: not-merged
 
 ## Working set
 
-- `.github/workflows/ios-nightly.yml`
-- `.github/workflows/ios-ci.yml`
-- `AppHost/CashRunwayApp.swift`
-- `Tests/CashRunwayUITests/CashRunwayUITestCase.swift`
-- `Tests/CashRunwayUITests/TransactionCRUDUITests.swift`
-- `Tests/CashRunwayUITests/TransactionOverviewUITests.swift`
-- `Tests/CashRunwayUITests/MonobankConnectionUITests.swift`
+- `Sources/CashRunwayUI/Theme.swift`
+- `Sources/CashRunwayUI/SettingsView.swift`
+- `Sources/CashRunwayUI/Editors.swift`
+- `Sources/CashRunwayUI/TransactionsView.swift`
+- `Sources/CashRunwayUI/DashboardView.swift`
+- `Sources/CashRunwayCore/Models.swift`
+- `Sources/CashRunwayCore/CSVSupport.swift`
+- `Modules/CashRunwayCorePackage/Sources/CashRunwayCore/Models.swift`
+- `Modules/CashRunwayCorePackage/Sources/CashRunwayCore/CSVSupport.swift`
+- `Tests/CashRunwayCoreTests/CashRunwayCoreTests.swift`
+- `Tests/CashRunwayCoreTests/UtilityAndModelTests.swift`
 - `CONTINUITY.md`
 
 ## Done (recent)
 
-- 2026-05-19 [MERGE] PR `#22` (`feat/nightly-ci-e2e-optimizations`) merged and pushed. Branch deleted locally and remotely.
-- 2026-05-19 [CLEANUP] PR `#20` branch `feat/ui-test-class-level-launch` deleted locally and remotely.
-- 2026-05-19 [CODE] Added `ios-nightly.yml`: scheduled + `workflow_dispatch` with `run_coverage` / `run_e2e` booleans.
-- 2026-05-19 [CODE] Trimmed `ios-ci.yml`: removed coverage, build-e2e, and E2E test jobs.
-- 2026-05-19 [CODE] Added `fastEnterText` to `XCUIElement`: KVC `setValue` with verification and `clearAndEnterText` fallback.
-- 2026-05-19 [CODE] Added local FAB fallback in `openAddTransaction()` when exists but not hittable.
-- 2026-05-19 [CODE] Refactored slow transaction tests: removed redundant waits, explicit cleanup, and scroll-to-save.
-- 2026-05-19 [CODE] Disabled UIKit animations in test mode via `UIView.setAnimationsEnabled(false)`.
-- 2026-05-19 [CODE] Added conservative SPM package caching (`~/.swiftpm/cache`) to CI workflows.
-- 2026-05-19 [CHECK] `swift test` passed (unit + integration). `xcodebuild clean build` and `build-for-testing` succeeded.
+- 2026-05-31 [SETUP] Created isolated worktree `/Users/roman/.codex/worktrees/cash-runway-broader-ui-refresh` on branch `codex/broader-ui-refresh`.
+- 2026-05-31 [PLAN] Broader UI refresh plan approved: Warm Functional Ledger, More + sheets first, preserve behavior and data interfaces.
+- 2026-05-31 [CHECK] Requested overview worktree/branch were missing; decided to combine by implementing Overview/Categories changes directly in `codex/broader-ui-refresh`.
+- 2026-05-31 [IMPLEMENTED] Refreshed shared theme tokens, Overview/Categories, category glyphs/catalog, More, management sheets, editors, transaction rows/details, and import/backup/Monobank presentation while preserving data interfaces.
+- 2026-05-31 [TEST] Added focused core coverage for refined default category appearances and contextual CSV import category styling.
+- 2026-05-31 [VALIDATED] `diff -rq Sources/CashRunwayCore Modules/CashRunwayCorePackage/Sources/CashRunwayCore`, `git diff --check`, `swift test`, and required iPhone 17 simulator clean build passed.
+- 2026-05-31 [SMOKE] Booted the app on iPhone 17 simulator and opened Timeline, Overview, category drill-down, More, Categories add/edit/save, Labels, Wallets, Scheduled Transactions, Monobank, Transaction Details, and Add Transaction without crash.
+- 2026-05-31 [REVIEW] Fixed major review findings: removed nested category row buttons, removed visible direct wallet deletion from management rows, and aligned CSV Food & Drink import color with the controlled palette in both mirrored core trees.
+- 2026-05-31 [REVALIDATED] Focused appearance tests, `diff -rq Sources/CashRunwayCore Modules/CashRunwayCorePackage/Sources/CashRunwayCore`, `git diff --check`, full `swift test`, required iPhone 17 clean build, and review smoke passed.
+- 2026-05-31 [PUBLISHED] Committed, pushed, and opened draft PR #23 for the combined UI refresh.
 
 ## Receipts
 
-- 2026-05-19 [PR] `#22` — ci+e2e: nightly workflow, fast text entry, UIKit animation disable
-- 2026-05-19 [COMMIT] `1aebf87` on `feat/nightly-ci-e2e-optimizations`
+- 2026-05-31 [DECISION] Use a separate worktree because primary checkout had local edits.
+- 2026-05-31 [BUILD] `xcodebuild -scheme CashRunway -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' clean build 2>&1 | tail -5` ended with `** BUILD SUCCEEDED **`.
+- 2026-05-31 [LOG] Review simulator log scan found no crash/error/warning matches.
+- 2026-05-31 [COMMIT] `Refresh Cash Runway UI surfaces`.
+- 2026-05-31 [PR] Draft PR #23: https://github.com/romanr111/cash-runway/pull/23.

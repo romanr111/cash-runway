@@ -964,6 +964,7 @@ struct CashRunwayCoreTests {
         2026-04-21T08:00:00Z,\(wallet.name),Expense,Отношения,,-50.00,UAH,Flowers,,ignored@example.com
         2026-04-22T09:00:00Z,\(wallet.name),Expense,Оренда,,-300.00,UAH,Flat,,ignored@example.com
         2026-04-23T10:00:00Z,\(wallet.name),Income,Фриланс,,400.00,UAH,Invoice,,ignored@example.com
+        2026-04-24T11:00:00Z,\(wallet.name),Expense,Supermarket,,-25.00,UAH,Groceries,,ignored@example.com
         """
 
         let result = try service.importCSV(
@@ -972,8 +973,11 @@ struct CashRunwayCoreTests {
             mapping: TestSupport.cashRunwayWalletMapping(walletID: wallet.id)
         )
 
-        #expect(result.insertedTransactions == 4)
+        #expect(result.insertedTransactions == 5)
         #expect(try repository.categories(kind: .expense).first(where: { $0.name == "Food & Drink" })?.iconName == "fork.knife")
+        #expect(try repository.categories(kind: .expense).first(where: { $0.name == "Food & Drink" })?.colorHex == "#B58B4A")
+        #expect(try repository.categories(kind: .expense).first(where: { $0.name == "Supermarket" })?.iconName == "basket.fill")
+        #expect(try repository.categories(kind: .expense).first(where: { $0.name == "Supermarket" })?.colorHex == "#21C596")
         #expect(try repository.categories(kind: .expense).first(where: { $0.name == "Отношения" })?.iconName == "heart.fill")
         #expect(try repository.categories(kind: .expense).first(where: { $0.name == "Оренда" })?.iconName == "house.fill")
         #expect(try repository.categories(kind: .income).first(where: { $0.name == "Фриланс" })?.iconName == "briefcase.fill")

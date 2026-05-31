@@ -185,6 +185,22 @@ struct UtilityAndModelTests {
         #expect(item3.displayTitle == "Income")
     }
 
+    @Test func defaultCategoryAppearancesUseRefinedSymbolSet() {
+        let categoriesByName = Dictionary(uniqueKeysWithValues: SeedCategories.all.map { ($0.name, $0) })
+
+        #expect(categoriesByName["Groceries"]?.iconName == "basket.fill")
+        #expect(categoriesByName["Groceries"]?.colorHex == "#21C596")
+        #expect(categoriesByName["Restaurants"]?.iconName == "fork.knife")
+        #expect(categoriesByName["Restaurants"]?.colorHex == "#5CCDC8")
+        #expect(categoriesByName["Education"]?.iconName == "book.closed.fill")
+        #expect(categoriesByName["Education"]?.colorHex == "#4D86C6")
+        #expect(categoriesByName["Travel"]?.colorHex == "#E85D8E")
+        #expect(categoriesByName["Other Expense"]?.iconName == "ellipsis.circle.fill")
+        #expect(categoriesByName["Salary"]?.iconName == "briefcase.fill")
+        #expect(categoriesByName["Other Income"]?.iconName == "plus.circle.fill")
+        #expect(categoriesByName["Other Income"]?.colorHex == "#88C95A")
+    }
+
     @Test func cashRunwayErrorDescriptions() {
         #expect(CashRunwayError.validation("bad").localizedDescription == "bad")
         #expect(CashRunwayError.notFound.localizedDescription.contains("not found"))

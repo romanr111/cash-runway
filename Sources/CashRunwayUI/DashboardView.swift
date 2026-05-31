@@ -457,17 +457,18 @@ private struct TimelineOverviewView: View {
 
     var body: some View {
         ScrollView(showsIndicators: false) {
-            VStack(spacing: 22) {
-                header
+            VStack(spacing: 20) {
+                overviewHero
                 filters
                 monthStrip
                 metricPicker
-                overviewChart
                 categoriesCard
+                overviewChart
                 labelsCard
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 16)
+            .padding(.bottom, 28)
         }
         .background(CashRunwayTheme.background)
         .navigationBarTitleDisplayMode(.inline)
@@ -504,9 +505,20 @@ private struct TimelineOverviewView: View {
         )
     }
 
-    private var header: some View {
-        Color.clear
-            .frame(height: 0)
+    private var overviewHero: some View {
+        VStack(spacing: 6) {
+            Text(chartValue(for: chartMetric))
+                .font(.system(size: 34, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(CashRunwayTheme.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+            Text(chartMetric.rawValue)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(CashRunwayTheme.textSecondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 4)
     }
 
     private var filters: some View {
@@ -523,10 +535,10 @@ private struct TimelineOverviewView: View {
                     }
                 }
             } label: {
-                pill(model.selectedWalletID.flatMap(walletName(for:)) ?? "All Wallets")
+                pill(model.selectedWalletID.flatMap(walletName(for:)) ?? "All Wallets", icon: "wallet.pass")
             }
 
-            pill("By months")
+            pill("By months", icon: "calendar")
         }
     }
 
@@ -608,16 +620,14 @@ private struct TimelineOverviewView: View {
     }
 
     private var metricPicker: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 12) {
+        VStack(spacing: 10) {
+            HStack(spacing: 8) {
                 ForEach(OverviewChartMetric.allCases, id: \.self) { metric in
-                    metricCard(title: metric.rawValue, value: chartValue(for: metric), isSelected: chartMetric == metric) {
-                        chartMetric = metric
-                    }
+                    metricCard(title: metric.rawValue, value: chartValue(for: metric), isSelected: chartMetric == metric) { chartMetric = metric }
                 }
             }
 
-            HStack(spacing: 12) {
+            HStack(spacing: 8) {
                 kindCard(title: "Expenses", value: MoneyFormatter.string(from: -(model.overviewSnapshot?.monthExpenseMinor ?? 0)), isSelected: categoryKind == .expense) {
                     categoryKind = .expense
                 }
@@ -699,23 +709,37 @@ private struct TimelineOverviewView: View {
 
     private var categoriesCard: some View {
         let categories = (model.overviewSnapshot?.categories ?? []).filter { $0.kind == categoryKind }
+        let topCategories = Array(categories.prefix(6))
         return VStack(alignment: .leading, spacing: 18) {
-            Text("Categories")
-                .font(.system(size: 22, weight: .bold, design: .rounded))
-                .foregroundStyle(CashRunwayTheme.textPrimary)
+            HStack {
+                Text("Categories")
+                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                    .foregroundStyle(CashRunwayTheme.textPrimary)
+                Spacer()
+                Button {
+                    showsCategoryManagement = true
+                } label: {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(CashRunwayTheme.textPrimary)
+                        .frame(width: 38, height: 38)
+                        .background(CashRunwayTheme.pill, in: Circle())
+                }
+                .buttonStyle(.plain)
+            }
 
             if categories.isEmpty {
                 Text("No category totals for this month.")
                     .font(.system(size: 15))
                     .foregroundStyle(CashRunwayTheme.textSecondary)
             } else {
-                ZStack {
+                ZStack(alignment: .center) {
                     Chart(categories) { item in
-                        SectorMark(angle: .value("Amount", item.amountMinor), innerRadius: .ratio(0.58))
+                        SectorMark(angle: .value("Amount", item.amountMinor), innerRadius: .ratio(0.54), angularInset: 1.5)
                             .foregroundStyle(CashRunwayTheme.categoryColor(item.colorHex))
                     }
                     .chartLegend(.hidden)
-                    .frame(height: 220)
+                    .frame(height: 268)
 
                     VStack(spacing: 4) {
                         Text(categoryKind == .expense ? MoneyFormatter.string(from: -(model.overviewSnapshot?.monthExpenseMinor ?? 0)) : MoneyFormatter.string(from: model.overviewSnapshot?.monthIncomeMinor ?? 0))
@@ -728,6 +752,25 @@ private struct TimelineOverviewView: View {
                             .foregroundStyle(CashRunwayTheme.textSecondary)
                     }
                     .frame(width: 116)
+                }
+
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 10)], spacing: 10) {
+                    ForEach(topCategories) { item in
+                        VStack(spacing: 6) {
+                            CategoryGlyph(iconName: item.iconName, colorHex: item.colorHex, size: 42)
+                            Text(OverviewDisplayFormatter.percentage(item.percentage))
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundStyle(CashRunwayTheme.categoryColor(item.colorHex))
+                            Text(item.name)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(CashRunwayTheme.textSecondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.72)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(CashRunwayTheme.pill, in: RoundedRectangle(cornerRadius: CashRunwayTheme.radiusS, style: .continuous))
+                    }
                 }
 
                 ForEach(categories) { item in
@@ -791,6 +834,8 @@ private struct TimelineOverviewView: View {
                 Text(item.name)
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(CashRunwayTheme.textPrimary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                 Text("\(transactionCountText(item.transactionCount)) · \(OverviewDisplayFormatter.percentage(item.percentage))")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(CashRunwayTheme.textSecondary)
@@ -890,13 +935,22 @@ private struct TimelineOverviewView: View {
         .buttonStyle(.plain)
     }
 
-    private func pill(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 15, weight: .semibold))
-            .foregroundStyle(CashRunwayTheme.textPrimary)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(CashRunwayTheme.pill, in: Capsule())
+    private func pill(_ text: String, icon: String? = nil) -> some View {
+        HStack(spacing: 7) {
+            if let icon {
+                Image(systemName: icon)
+                    .font(.system(size: 12, weight: .bold))
+            }
+            Text(text)
+                .lineLimit(1)
+            Image(systemName: "chevron.down")
+                .font(.system(size: 10, weight: .bold))
+        }
+        .font(.system(size: 15, weight: .semibold))
+        .foregroundStyle(CashRunwayTheme.textPrimary)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(CashRunwayTheme.pill, in: Capsule())
     }
 
     private func walletName(for id: UUID) -> String? {

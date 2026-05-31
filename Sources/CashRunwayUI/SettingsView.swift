@@ -47,122 +47,83 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 24) {
                     ScreenTitle(title: "More")
 
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Settings")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(CashRunwayTheme.textMuted)
-                            .textCase(.uppercase)
-                            .padding(.horizontal, 4)
+                    moreStatusCard
 
-                        VStack(spacing: 0) {
-                            moreRow(icon: "square.grid.2x2", tint: "#64D1D5", title: "Categories", subtitle: "Manage visibility, order, and merges") {
-                                isCategoryManagementPresented = true
-                            }
-                            rowDivider
-                            moreRow(icon: "tag.fill", tint: "#F7A72A", title: "Labels", subtitle: "\(model.labels.count) labels") {
-                                isLabelsPresented = true
-                            }
-                            rowDivider
-                            moreRow(icon: "repeat", tint: "#1CC389", title: "Scheduled Transactions", subtitle: "\(model.templates.count) templates") {
-                                isTemplatesPresented = true
-                            }
-                            rowDivider
-                            staticRow(icon: "banknote.fill", tint: "#4A80C1", title: "Main Currency", value: "UAH")
-                            rowDivider
-                            moreRow(icon: "wallet.pass.fill", tint: "#60788A", title: "Manual Wallets", subtitle: "\(model.wallets.count) wallets") {
-                                isWalletsPresented = true
-                            }
-                            rowDivider
+                    operationSection("Manage") {
+                        operationButton(icon: "square.grid.2x2", tint: CashRunwayTheme.manageTint, title: "Categories", subtitle: "Visibility, order, icons, and merges", trailing: "\(model.expenseCategories.count + model.incomeCategories.count)") {
+                            isCategoryManagementPresented = true
                         }
-                        .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
+                        rowDivider
+                        operationButton(icon: "tag.fill", tint: CashRunwayTheme.warning, title: "Labels", subtitle: "Organize cross-category transaction groups", trailing: "\(model.labels.count)") {
+                            isLabelsPresented = true
+                        }
+                        rowDivider
+                        operationButton(icon: "repeat", tint: CashRunwayTheme.accent, title: "Scheduled Transactions", subtitle: "Recurring templates and upcoming occurrences", trailing: "\(model.templates.count)") {
+                            isTemplatesPresented = true
+                        }
+                        rowDivider
+                        operationButton(icon: "wallet.pass.fill", tint: CashRunwayTheme.textSecondary, title: "Manual Wallets", subtitle: "Cash, card, and account balances", trailing: "\(model.wallets.count)") {
+                            isWalletsPresented = true
+                        }
+                        rowDivider
+                        OperationRow(icon: "banknote.fill", tint: CashRunwayTheme.dataTint, title: "Main Currency", subtitle: "Used for all totals and imports", trailing: "UAH", showsChevron: false)
                     }
 
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Data")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(CashRunwayTheme.textMuted)
-                            .textCase(.uppercase)
-                            .padding(.horizontal, 4)
-
-                        VStack(spacing: 0) {
-                            moreRow(icon: "tray.and.arrow.down.fill", tint: "#5FD4BF", title: "Import CSV", subtitle: "Map and load bank exports") {
-                                if model.hasBootstrapped && model.wallets.isEmpty {
-                                    model.errorMessage = "Create at least one wallet before importing CSV."
-                                } else {
-                                    isImporterPresented = true
-                                }
+                    operationSection("Data Safety") {
+                        operationButton(icon: "tray.and.arrow.down.fill", tint: CashRunwayTheme.dataTint, title: "Import CSV", subtitle: "Map and load bank exports", trailing: nil) {
+                            if model.hasBootstrapped && model.wallets.isEmpty {
+                                model.errorMessage = "Create at least one wallet before importing CSV."
+                            } else {
+                                isImporterPresented = true
                             }
-                            rowDivider
-                            moreRow(icon: "square.and.arrow.up.fill", tint: "#E5862F", title: "Export CSV", subtitle: isExporting ? "Exporting…" : "Share the current filtered export") {
-                                guard !isExporting else { return }
-                                isExporting = true
-                                let service = model.csvService
-                                let query = model.transactionQuery
-                                Task.detached(priority: .userInitiated) {
-                                    do {
-                                        let csv = try service.exportCSV(query: query)
-                                        let url = FileManager.default.temporaryDirectory.appendingPathComponent("cash-runway-export.csv")
-                                        try csv.write(to: url, atomically: true, encoding: .utf8)
-                                        await MainActor.run {
-                                            exportFileURL = url
-                                            isExporterPresented = true
-                                            isExporting = false
-                                        }
-                                    } catch {
-                                        await MainActor.run {
-                                            model.errorMessage = error.localizedDescription
-                                            isExporting = false
-                                        }
+                        }
+                        rowDivider
+                        operationButton(icon: "square.and.arrow.up.fill", tint: CashRunwayTheme.warning, title: "Export CSV", subtitle: isExporting ? "Exporting..." : "Share the current filtered export", trailing: nil) {
+                            guard !isExporting else { return }
+                            isExporting = true
+                            let service = model.csvService
+                            let query = model.transactionQuery
+                            Task.detached(priority: .userInitiated) {
+                                do {
+                                    let csv = try service.exportCSV(query: query)
+                                    let url = FileManager.default.temporaryDirectory.appendingPathComponent("cash-runway-export.csv")
+                                    try csv.write(to: url, atomically: true, encoding: .utf8)
+                                    await MainActor.run {
+                                        exportFileURL = url
+                                        isExporterPresented = true
+                                        isExporting = false
+                                    }
+                                } catch {
+                                    await MainActor.run {
+                                        model.errorMessage = error.localizedDescription
+                                        isExporting = false
                                     }
                                 }
                             }
-                            rowDivider
-                            moreRow(icon: "externaldrive.fill", tint: "#4A80C1", title: "Import Full Backup", subtitle: "Replace data from JSON") {
-                                isBackupImporterPresented = true
-                            }
-                            rowDivider
-                            moreRow(icon: "externaldrive.badge.plus", tint: "#7A6FF0", title: "Export Full Backup", subtitle: isBackupExporting ? "Exporting…" : "Share unencrypted backup JSON") {
-                                guard !isBackupExporting else { return }
-                                isBackupExportWarningPresented = true
-                            }
                         }
-                        .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
+                        rowDivider
+                        operationButton(icon: "externaldrive.fill", tint: CashRunwayTheme.safetyTint, title: "Import Full Backup", subtitle: "Replace local data from JSON", trailing: nil) {
+                            isBackupImporterPresented = true
+                        }
+                        rowDivider
+                        operationButton(icon: "externaldrive.badge.plus", tint: CashRunwayTheme.safetyTint, title: "Export Full Backup", subtitle: isBackupExporting ? "Exporting..." : "Share unencrypted backup JSON", trailing: nil) {
+                            guard !isBackupExporting else { return }
+                            isBackupExportWarningPresented = true
+                        }
                     }
 
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Bank Connections")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(CashRunwayTheme.textMuted)
-                            .textCase(.uppercase)
-                            .padding(.horizontal, 4)
-
-                        VStack(spacing: 0) {
-                            moreRow(icon: "creditcard.fill", tint: "#1CC389", title: "Monobank", subtitle: monobankSubtitle) {
-                                isMonobankConnectionPresented = true
-                            }
-                            .accessibilityIdentifier(CashRunwayAccessibilityID.settingsMonobankRow)
+                    operationSection("Connections") {
+                        operationButton(icon: "creditcard.fill", tint: CashRunwayTheme.accent, title: "Monobank", subtitle: monobankSubtitle, trailing: monobankStatusLabel) {
+                            isMonobankConnectionPresented = true
                         }
-                        .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
+                        .accessibilityIdentifier(CashRunwayAccessibilityID.settingsMonobankRow)
                     }
 
                     #if DEBUG
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Debug")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(CashRunwayTheme.textMuted)
-                            .textCase(.uppercase)
-                            .padding(.horizontal, 4)
-
-                        VStack(spacing: 0) {
-                            moreRow(icon: "wrench.and.screwdriver.fill", tint: "#FF5E57", title: "Diagnostics", subtitle: "Counts and local state") {
-                                isDiagnosticsPresented = true
-                            }
+                    operationSection("Debug") {
+                        operationButton(icon: "wrench.and.screwdriver.fill", tint: CashRunwayTheme.negative, title: "Diagnostics", subtitle: "Counts and local state", trailing: nil) {
+                            isDiagnosticsPresented = true
                         }
-                        .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
                     }
                     #endif
                 }
@@ -257,6 +218,90 @@ struct SettingsView: View {
                 Text("This backup file contains unencrypted financial data. Anyone with access to it may be able to read your wallets, transactions, categories, labels, and recurring entries. Store it securely.")
             }
         }
+    }
+
+    private var moreStatusCard: some View {
+        CashRunwaySurface {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(alignment: .top, spacing: 14) {
+                    ZStack {
+                        Circle()
+                            .fill(CashRunwayTheme.accentMuted)
+                        Image(systemName: "chart.line.uptrend.xyaxis")
+                            .font(.system(size: 23, weight: .semibold))
+                            .foregroundStyle(CashRunwayTheme.accentDark)
+                    }
+                    .frame(width: 54, height: 54)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Operations")
+                            .font(CashRunwayTheme.headingFont)
+                            .foregroundStyle(CashRunwayTheme.textPrimary)
+                        Text("Manage structure, connected accounts, and local data files.")
+                            .font(CashRunwayTheme.bodyFont)
+                            .foregroundStyle(CashRunwayTheme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                HStack(spacing: 10) {
+                    statusMetric("Wallets", "\(model.wallets.count)")
+                    statusMetric("Transactions", "\(model.transactions.count)")
+                    statusMetric("Bank", monobankStatusLabel)
+                }
+            }
+        }
+    }
+
+    private func statusMetric(_ title: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(value)
+                .font(.system(size: 18, weight: .bold, design: .rounded))
+                .foregroundStyle(CashRunwayTheme.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+            Text(title)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(CashRunwayTheme.textMuted)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(CashRunwayTheme.pill, in: RoundedRectangle(cornerRadius: CashRunwayTheme.radiusS, style: .continuous))
+    }
+
+    private func operationSection<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(CashRunwayTheme.textMuted)
+                .textCase(.uppercase)
+                .padding(.horizontal, 4)
+
+            VStack(spacing: 0) {
+                content()
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: CashRunwayTheme.radiusL, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: CashRunwayTheme.radiusL, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
+            .shadow(color: CashRunwayTheme.softShadow, radius: 10, y: 3)
+        }
+    }
+
+    private func operationButton(
+        icon: String,
+        tint: Color,
+        title: String,
+        subtitle: String,
+        trailing: String?,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            OperationRow(icon: icon, tint: tint, title: title, subtitle: subtitle, trailing: trailing)
+        }
+        .buttonStyle(.plain)
     }
 
     private func handleImporterResult(_ result: Result<URL, any Error>) {
@@ -411,6 +456,17 @@ struct SettingsView: View {
             return "\(status.enabledAccountCount) cards connected · Last sync \(relativeFormatter.localizedString(for: lastSync, relativeTo: Date()))"
         }
         return "\(status.enabledAccountCount) cards connected · Waiting for first sync"
+    }
+
+    private var monobankStatusLabel: String {
+        let status = model.monobankConnectionStatus()
+        guard let integration = status.integration, integration.status != .disabled else {
+            return "Off"
+        }
+        if integration.status == .tokenInvalid || integration.status == .syncFailed || status.lastSyncError != nil {
+            return "Fix"
+        }
+        return "On"
     }
 
     private var relativeFormatter: RelativeDateTimeFormatter {
@@ -608,6 +664,11 @@ private struct BackupImportReviewView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    backupFlowHeader
+                }
+                .listRowBackground(CashRunwayTheme.surface)
+
                 Section("Source") {
                     summaryRow("File", value: fileName)
                 }
@@ -656,6 +717,8 @@ private struct BackupImportReviewView: View {
                 }
             }
             .navigationTitle("Import Full Backup")
+            .scrollContentBackground(.hidden)
+            .background(CashRunwayTheme.background)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(restoreMessage == nil && preparationError == nil ? "Cancel" : "Done") { dismiss() }
@@ -678,6 +741,32 @@ private struct BackupImportReviewView: View {
                 Text("Restoring this backup will replace all current Cash Runway data on this device. This cannot be merged automatically.")
             }
         }
+    }
+
+    private var backupFlowHeader: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                Image(systemName: "externaldrive.fill")
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundStyle(CashRunwayTheme.safetyTint)
+                    .frame(width: 48, height: 48)
+                    .background(CashRunwayTheme.safetyTint.opacity(0.14), in: Circle())
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Full Backup Restore")
+                        .font(CashRunwayTheme.headingFont)
+                        .foregroundStyle(CashRunwayTheme.textPrimary)
+                    Text("Review the file summary before replacing local data.")
+                        .font(CashRunwayTheme.bodyFont)
+                        .foregroundStyle(CashRunwayTheme.textSecondary)
+                }
+            }
+            HStack(spacing: 8) {
+                flowPill("Source", isActive: true)
+                flowPill("Preview", isActive: summary != nil)
+                flowPill("Restore", isActive: restoreMessage != nil)
+            }
+        }
+        .padding(.vertical, 6)
     }
 
     private func startRestore() {
@@ -722,32 +811,100 @@ private struct LabelManagementView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                ForEach(model.labels) { label in
-                    Button(label.name) {
-                        labelDraft = label
-                        isEditorPresented = true
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 18) {
+                    managementHeader(
+                        title: "Labels",
+                        subtitle: "\(model.labels.count) saved labels",
+                        icon: "tag.fill",
+                        tint: CashRunwayTheme.warning
+                    )
+
+                    if model.labels.isEmpty {
+                        ContentUnavailableView(
+                            "No Labels",
+                            systemImage: "tag.fill",
+                            description: Text("Add labels to group transactions across categories.")
+                        )
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 44)
+                    } else {
+                        LazyVStack(spacing: 10) {
+                            ForEach(model.labels) { label in
+                                Button {
+                                    labelDraft = label
+                                    isEditorPresented = true
+                                } label: {
+                                    HStack(spacing: 14) {
+                                        Circle()
+                                            .fill(CashRunwayTheme.categoryColor(label.colorHex))
+                                            .frame(width: 18, height: 18)
+                                            .frame(width: 48, height: 48)
+                                            .background(CashRunwayTheme.pill, in: Circle())
+
+                                        Text(label.name)
+                                            .font(CashRunwayTheme.subheadingFont)
+                                            .foregroundStyle(CashRunwayTheme.textPrimary)
+                                            .lineLimit(1)
+                                            .truncationMode(.tail)
+
+                                        Spacer()
+
+                                        Image(systemName: "pencil")
+                                            .font(.system(size: 14, weight: .semibold))
+                                            .foregroundStyle(CashRunwayTheme.textMuted)
+                                    }
+                                    .ledgerSurface(cornerRadius: CashRunwayTheme.radiusM)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
                     }
                 }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+                .padding(.bottom, 92)
             }
+            .background(CashRunwayTheme.background)
             .navigationTitle("Labels")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Done") { dismiss() }
                 }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        labelDraft = CashRunwayLabel(id: UUID(), name: "", colorHex: "#60788A", createdAt: .now, updatedAt: .now)
-                        isEditorPresented = true
-                    } label: {
-                        Image(systemName: "plus")
-                    }
+            }
+            .safeAreaInset(edge: .bottom) {
+                addBar(title: "Add Label", systemImage: "plus") {
+                    labelDraft = CashRunwayLabel(id: UUID(), name: "", colorHex: CategoryAppearanceCatalog.defaultColor, createdAt: .now, updatedAt: .now)
+                    isEditorPresented = true
                 }
             }
             .sheet(isPresented: $isEditorPresented) {
                 LabelEditorView(model: model, label: $labelDraft)
             }
         }
+    }
+
+    private func managementHeader(title: String, subtitle: String, icon: String, tint: Color) -> some View {
+        HStack(spacing: 14) {
+            ZStack {
+                Circle().fill(tint.opacity(0.14))
+                Image(systemName: icon)
+                    .font(.system(size: 21, weight: .semibold))
+                    .foregroundStyle(tint)
+            }
+            .frame(width: 54, height: 54)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(CashRunwayTheme.headingFont)
+                    .foregroundStyle(CashRunwayTheme.textPrimary)
+                Text(subtitle)
+                    .font(CashRunwayTheme.bodyFont)
+                    .foregroundStyle(CashRunwayTheme.textSecondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -759,41 +916,103 @@ private struct WalletManagementView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                ForEach(model.wallets) { wallet in
-                    Button(wallet.name) {
-                        walletDraft = wallet
-                        isEditorPresented = true
-                    }
-                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                        if model.wallets.count > 1 {
-                            Button(role: .destructive) {
-                                model.deleteWallet(id: wallet.id)
-                            } label: {
-                                SwiftUI.Label("Delete", systemImage: "trash")
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 18) {
+                    managementHeader(
+                        title: "Manual Wallets",
+                        subtitle: "\(model.wallets.count) wallets · \(MoneyFormatter.string(from: model.overviewSnapshot?.totalWealthMinor ?? 0)) total",
+                        icon: "wallet.pass.fill",
+                        tint: CashRunwayTheme.textSecondary
+                    )
+
+                    if model.wallets.isEmpty {
+                        ContentUnavailableView(
+                            "No Wallets",
+                            systemImage: "wallet.pass.fill",
+                            description: Text("Create a wallet before adding transactions or imports.")
+                        )
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 44)
+                    } else {
+                        LazyVStack(spacing: 10) {
+                            ForEach(model.wallets) { wallet in
+                                Button {
+                                    walletDraft = wallet
+                                    isEditorPresented = true
+                                } label: {
+                                    HStack(spacing: 14) {
+                                        CategoryGlyph(iconName: wallet.iconName ?? "wallet.pass.fill", colorHex: wallet.colorHex ?? "#60788A", size: 50)
+                                        VStack(alignment: .leading, spacing: 3) {
+                                            Text(wallet.name)
+                                                .font(CashRunwayTheme.subheadingFont)
+                                                .foregroundStyle(CashRunwayTheme.textPrimary)
+                                                .lineLimit(1)
+                                            Text(wallet.kind.rawValue.capitalized)
+                                                .font(CashRunwayTheme.captionFont)
+                                                .foregroundStyle(CashRunwayTheme.textSecondary)
+                                        }
+                                        Spacer()
+                                        Text(MoneyFormatter.string(from: wallet.currentBalanceMinor))
+                                            .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                            .foregroundStyle(wallet.currentBalanceMinor < 0 ? CashRunwayTheme.negative : CashRunwayTheme.textPrimary)
+                                            .lineLimit(1)
+                                            .minimumScaleFactor(0.75)
+                                        Image(systemName: "pencil")
+                                            .font(.system(size: 14, weight: .semibold))
+                                            .foregroundStyle(CashRunwayTheme.textMuted)
+                                    }
+                                    .ledgerSurface(cornerRadius: CashRunwayTheme.radiusM)
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
                     }
                 }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+                .padding(.bottom, 92)
             }
+            .background(CashRunwayTheme.background)
             .navigationTitle("Manual Wallets")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Done") { dismiss() }
                 }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        walletDraft = Wallet(id: UUID(), name: "", kind: .cash, colorHex: "#60788A", iconName: "wallet.pass.fill", startingBalanceMinor: 0, currentBalanceMinor: 0, isArchived: false, sortOrder: model.wallets.count, createdAt: .now, updatedAt: .now)
-                        isEditorPresented = true
-                    } label: {
-                        Image(systemName: "plus")
-                    }
+            }
+            .safeAreaInset(edge: .bottom) {
+                addBar(title: "Add Wallet", systemImage: "plus") {
+                    walletDraft = Wallet(id: UUID(), name: "", kind: .cash, colorHex: "#60788A", iconName: "wallet.pass.fill", startingBalanceMinor: 0, currentBalanceMinor: 0, isArchived: false, sortOrder: model.wallets.count, createdAt: .now, updatedAt: .now)
+                    isEditorPresented = true
                 }
             }
             .sheet(isPresented: $isEditorPresented) {
                 WalletEditorView(model: model, wallet: $walletDraft)
             }
         }
+    }
+
+    private func managementHeader(title: String, subtitle: String, icon: String, tint: Color) -> some View {
+        HStack(spacing: 14) {
+            ZStack {
+                Circle().fill(tint.opacity(0.14))
+                Image(systemName: icon)
+                    .font(.system(size: 21, weight: .semibold))
+                    .foregroundStyle(tint)
+            }
+            .frame(width: 54, height: 54)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(CashRunwayTheme.headingFont)
+                    .foregroundStyle(CashRunwayTheme.textPrimary)
+                Text(subtitle)
+                    .font(CashRunwayTheme.bodyFont)
+                    .foregroundStyle(CashRunwayTheme.textSecondary)
+                    .lineLimit(2)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -823,57 +1042,94 @@ private struct ScheduledTransactionsView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                Section("Templates") {
-                    ForEach(model.templates) { template in
-                        Button(template.merchant ?? template.kind.rawValue.capitalized) {
-                            templateDraft = template
-                            isEditorPresented = true
-                        }
-                    }
-                }
-                Section("Upcoming") {
-                    ForEach(model.instances) { instance in
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(instance.dueDate.formatted(date: .abbreviated, time: .omitted))
-                            Text(instance.status.rawValue.capitalized)
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 18) {
+                    managementHeader
+
+                    managementSection("Templates", count: model.templates.count) {
+                        if model.templates.isEmpty {
+                            Text("No recurring templates yet.")
+                                .font(CashRunwayTheme.bodyFont)
                                 .foregroundStyle(CashRunwayTheme.textSecondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.vertical, 10)
+                        } else {
+                            ForEach(model.templates) { template in
+                                Button {
+                                    templateDraft = template
+                                    isEditorPresented = true
+                                } label: {
+                                    scheduledTemplateRow(template)
+                                }
+                                .buttonStyle(.plain)
+                                if template.id != model.templates.last?.id {
+                                    Divider().overlay(CashRunwayTheme.line)
+                                }
+                            }
+                        }
+                    }
+
+                    managementSection("Upcoming", count: model.instances.count) {
+                        if model.instances.isEmpty {
+                            Text("No scheduled occurrences.")
+                                .font(CashRunwayTheme.bodyFont)
+                                .foregroundStyle(CashRunwayTheme.textSecondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.vertical, 10)
+                        } else {
+                            ForEach(model.instances) { instance in
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(instance.dueDate.formatted(date: .abbreviated, time: .omitted))
+                                        .font(CashRunwayTheme.subheadingFont)
+                                        .foregroundStyle(CashRunwayTheme.textPrimary)
+                                    Text(instance.status.rawValue.capitalized)
+                                        .font(CashRunwayTheme.captionFont)
+                                        .foregroundStyle(CashRunwayTheme.textSecondary)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.vertical, 10)
+                                if instance.id != model.instances.last?.id {
+                                    Divider().overlay(CashRunwayTheme.line)
+                                }
+                            }
                         }
                     }
                 }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+                .padding(.bottom, 92)
             }
+            .background(CashRunwayTheme.background)
             .navigationTitle("Scheduled Transactions")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Done") { dismiss() }
                 }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        guard let firstWalletID = model.wallets.first?.id else { return }
-                        templateDraft = RecurringTemplate(
-                            id: UUID(),
-                            kind: .expense,
-                            walletID: firstWalletID,
-                            counterpartyWalletID: model.wallets.dropFirst().first?.id,
-                            amountMinor: 0,
-                            categoryID: model.expenseCategories.first?.id,
-                            merchant: nil,
-                            note: nil,
-                            ruleType: .monthly,
-                            ruleInterval: 1,
-                            dayOfMonth: 1,
-                            weekday: nil,
-                            startDate: .now,
-                            endDate: nil,
-                            isActive: true,
-                            createdAt: .now,
-                            updatedAt: .now
-                        )
-                        isEditorPresented = true
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                    .disabled(model.wallets.isEmpty)
+            }
+            .safeAreaInset(edge: .bottom) {
+                addBar(title: "Add Template", systemImage: "plus", isDisabled: model.wallets.isEmpty) {
+                    guard let firstWalletID = model.wallets.first?.id else { return }
+                    templateDraft = RecurringTemplate(
+                        id: UUID(),
+                        kind: .expense,
+                        walletID: firstWalletID,
+                        counterpartyWalletID: model.wallets.dropFirst().first?.id,
+                        amountMinor: 0,
+                        categoryID: model.expenseCategories.first?.id,
+                        merchant: nil,
+                        note: nil,
+                        ruleType: .monthly,
+                        ruleInterval: 1,
+                        dayOfMonth: 1,
+                        weekday: nil,
+                        startDate: .now,
+                        endDate: nil,
+                        isActive: true,
+                        createdAt: .now,
+                        updatedAt: .now
+                    )
+                    isEditorPresented = true
                 }
             }
             .sheet(isPresented: $isEditorPresented) {
@@ -881,6 +1137,121 @@ private struct ScheduledTransactionsView: View {
             }
         }
     }
+
+    private var managementHeader: some View {
+        HStack(spacing: 14) {
+            ZStack {
+                Circle().fill(CashRunwayTheme.accentMuted)
+                Image(systemName: "repeat")
+                    .font(.system(size: 21, weight: .semibold))
+                    .foregroundStyle(CashRunwayTheme.accentDark)
+            }
+            .frame(width: 54, height: 54)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Scheduled Transactions")
+                    .font(CashRunwayTheme.headingFont)
+                    .foregroundStyle(CashRunwayTheme.textPrimary)
+                Text("\(model.templates.count) templates · \(model.instances.count) upcoming")
+                    .font(CashRunwayTheme.bodyFont)
+                    .foregroundStyle(CashRunwayTheme.textSecondary)
+            }
+        }
+    }
+
+    private func managementSection<Content: View>(_ title: String, count: Int, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(title)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(CashRunwayTheme.textMuted)
+                    .textCase(.uppercase)
+                Spacer()
+                Text("\(count)")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(CashRunwayTheme.textMuted)
+            }
+            VStack(spacing: 0) {
+                content()
+            }
+            .ledgerSurface(cornerRadius: CashRunwayTheme.radiusL)
+        }
+    }
+
+    private func scheduledTemplateRow(_ template: RecurringTemplate) -> some View {
+        HStack(spacing: 14) {
+            ZStack {
+                Circle().fill(CashRunwayTheme.accentMuted)
+                Image(systemName: template.kind == .transfer ? "arrow.left.arrow.right" : "repeat")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(CashRunwayTheme.accentDark)
+            }
+            .frame(width: 46, height: 46)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(template.merchant ?? template.kind.rawValue.capitalized)
+                    .font(CashRunwayTheme.subheadingFont)
+                    .foregroundStyle(CashRunwayTheme.textPrimary)
+                    .lineLimit(1)
+                Text("\(template.ruleType.rawValue.capitalized) every \(template.ruleInterval)")
+                    .font(CashRunwayTheme.captionFont)
+                    .foregroundStyle(CashRunwayTheme.textSecondary)
+            }
+            Spacer()
+            Text(MoneyFormatter.string(from: template.amountMinor))
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .foregroundStyle(CashRunwayTheme.amountColor(template.kind == .income ? template.amountMinor : -template.amountMinor))
+                .lineLimit(1)
+        }
+        .padding(.vertical, 10)
+    }
+}
+
+private func addBar(title: String, systemImage: String, isDisabled: Bool = false, action: @escaping () -> Void) -> some View {
+    Button(action: action) {
+        HStack(spacing: 10) {
+            Image(systemName: systemImage)
+            Text(title)
+        }
+        .font(.system(size: 17, weight: .bold))
+        .foregroundStyle(.white)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 15)
+        .background(isDisabled ? CashRunwayTheme.textMuted : CashRunwayTheme.accent, in: Capsule())
+    }
+    .disabled(isDisabled)
+    .padding(.horizontal, 20)
+    .padding(.vertical, 12)
+    .background(.ultraThinMaterial)
+}
+
+private func flowPill(_ title: String, isActive: Bool) -> some View {
+    Text(title)
+        .font(.system(size: 11, weight: .bold))
+        .foregroundStyle(isActive ? CashRunwayTheme.accentDark : CashRunwayTheme.textMuted)
+        .lineLimit(1)
+        .minimumScaleFactor(0.75)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 6)
+        .background(isActive ? CashRunwayTheme.accentMuted : CashRunwayTheme.pill, in: Capsule())
+}
+
+private func connectionHeader(title: String, subtitle: String, icon: String) -> some View {
+    HStack(spacing: 12) {
+        Image(systemName: icon)
+            .font(.system(size: 22, weight: .semibold))
+            .foregroundStyle(CashRunwayTheme.accentDark)
+            .frame(width: 48, height: 48)
+            .background(CashRunwayTheme.accentMuted, in: Circle())
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(CashRunwayTheme.headingFont)
+                .foregroundStyle(CashRunwayTheme.textPrimary)
+            Text(subtitle)
+                .font(CashRunwayTheme.bodyFont)
+                .foregroundStyle(CashRunwayTheme.textSecondary)
+        }
+    }
+    .padding(.vertical, 6)
 }
 
 private enum MonobankWizardStep {
@@ -1019,6 +1390,9 @@ private struct MonobankTokenIntroView: View {
     var body: some View {
         Form {
             Section {
+                connectionHeader(title: "Connect Monobank", subtitle: "Only new selected UAH card expenses will sync.", icon: "creditcard.fill")
+            }
+            Section {
                 Text("Cash Runway will import only new Monobank card expenses after connection.")
                 Text("Old bank history will not be imported.")
                 Text("Existing Cash Runway transactions will not be changed.")
@@ -1034,6 +1408,8 @@ private struct MonobankTokenIntroView: View {
                     .accessibilityIdentifier(CashRunwayAccessibilityID.monobankIntroContinueButton)
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(CashRunwayTheme.background)
     }
 }
 
@@ -1045,6 +1421,9 @@ private struct MonobankTokenStepView: View {
 
     var body: some View {
         Form {
+            Section {
+                connectionHeader(title: "Personal Token", subtitle: "Validate the token before choosing cards.", icon: "key.fill")
+            }
             Section {
                 // XCUITest types into SecureField extremely slowly; use TextField in UI-test mode.
                 if ProcessInfo.processInfo.environment["CASH_RUNWAY_UI_TEST_MODE"] == "1" {
@@ -1077,6 +1456,8 @@ private struct MonobankTokenStepView: View {
                 }
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(CashRunwayTheme.background)
     }
 }
 
@@ -1089,6 +1470,9 @@ private struct MonobankAccountSelectionView: View {
 
     var body: some View {
         Form {
+            Section {
+                connectionHeader(title: "Choose Cards", subtitle: "Map each enabled UAH account to a wallet.", icon: "rectangle.stack.fill")
+            }
             Section("Cards") {
                 ForEach(accounts, id: \.id) { account in
                     if account.currencyCode == 980 {
@@ -1137,6 +1521,8 @@ private struct MonobankAccountSelectionView: View {
                 Text("Only selected UAH card accounts will sync.")
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(CashRunwayTheme.background)
     }
 
     private var hasEnabledMappedAccount: Bool {
@@ -1181,6 +1567,9 @@ private struct MonobankStartConfirmationView: View {
 
     var body: some View {
         Form {
+            Section {
+                connectionHeader(title: "Start Sync", subtitle: "Confirm exactly what Cash Runway will import.", icon: "arrow.triangle.2.circlepath")
+            }
             Section("Sync starts from now") {
                 summaryRow("Start time", value: Self.dateFormatter.string(from: syncStartAt))
             }
@@ -1211,6 +1600,8 @@ private struct MonobankStartConfirmationView: View {
                     .accessibilityIdentifier(CashRunwayAccessibilityID.monobankStartSyncButton)
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(CashRunwayTheme.background)
     }
 
     private func summaryRow(_ title: String, value: String) -> some View {
@@ -1455,6 +1846,11 @@ private struct CSVImportReviewView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    importFlowHeader
+                }
+                .listRowBackground(CashRunwayTheme.surface)
+
                 Section("Source") {
                     summaryRow("File", value: fileName)
                     if !isPreparing, preparationError == nil {
@@ -1539,6 +1935,8 @@ private struct CSVImportReviewView: View {
                 }
             }
             .navigationTitle("Import CSV")
+            .scrollContentBackground(.hidden)
+            .background(CashRunwayTheme.background)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(importResult == nil && preparationError == nil ? "Cancel" : "Done") { dismiss() }
@@ -1553,6 +1951,33 @@ private struct CSVImportReviewView: View {
                 }
             }
         }
+    }
+
+    private var importFlowHeader: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                Image(systemName: "tray.and.arrow.down.fill")
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundStyle(CashRunwayTheme.dataTint)
+                    .frame(width: 48, height: 48)
+                    .background(CashRunwayTheme.dataTint.opacity(0.14), in: Circle())
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Import Review")
+                        .font(CashRunwayTheme.headingFont)
+                        .foregroundStyle(CashRunwayTheme.textPrimary)
+                    Text("Confirm mapping, preview rows, then import.")
+                        .font(CashRunwayTheme.bodyFont)
+                        .foregroundStyle(CashRunwayTheme.textSecondary)
+                }
+            }
+            HStack(spacing: 8) {
+                flowPill("Source", isActive: true)
+                flowPill("Mapping", isActive: hasRequiredMapping)
+                flowPill("Preview", isActive: !reviewRows.isEmpty)
+                flowPill("Result", isActive: importResult != nil)
+            }
+        }
+        .padding(.vertical, 6)
     }
 
     private var presetDisplayName: String {

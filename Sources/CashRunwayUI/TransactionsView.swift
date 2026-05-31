@@ -126,35 +126,52 @@ struct TransactionRow: View {
     var body: some View {
         HStack(spacing: 14) {
             CategoryGlyph(iconName: item.categoryIconName ?? fallbackIcon, colorHex: item.categoryColorHex ?? fallbackColor, size: 52)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(item.displayTitle)
-                    .font(.system(size: 17, weight: .semibold))
+            VStack(alignment: .leading, spacing: 4) {
+                Text(primaryTitle)
+                    .font(CashRunwayTheme.subheadingFont)
                     .foregroundStyle(CashRunwayTheme.textPrimary)
-                Text(item.walletName)
-                    .font(.system(size: 14, weight: .medium))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Text(secondaryTitle)
+                    .font(CashRunwayTheme.captionFont)
                     .foregroundStyle(CashRunwayTheme.textSecondary)
-                if !item.note.isEmpty {
-                    Text(item.note)
-                        .font(.system(size: 13))
-                        .foregroundStyle(CashRunwayTheme.textMuted)
-                        .lineLimit(2)
+                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    Text(item.occurredAt.formatted(date: .abbreviated, time: .omitted))
+                    Text("·")
+                    Text(item.source.rawValue.replacingOccurrences(of: "_", with: " ").capitalized)
+                    if !item.labels.isEmpty {
+                        Text("·")
+                        Text(item.labels.map(\.name).joined(separator: ", "))
+                    }
                 }
-                if !item.labels.isEmpty {
-                    Text(item.labels.map(\.name).joined(separator: " • "))
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(CashRunwayTheme.accentDark)
-                        .lineLimit(1)
-                }
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(CashRunwayTheme.textMuted)
+                .lineLimit(1)
             }
             Spacer()
             Text(MoneyFormatter.string(from: item.amountMinor))
-                .font(.system(size: 17, weight: .bold))
+                .font(.system(size: 17, weight: .bold, design: .rounded))
+                .monospacedDigit()
                 .foregroundStyle(CashRunwayTheme.amountColor(item.amountMinor))
                 .multilineTextAlignment(.trailing)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, 8)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(item.displayTitle), \(MoneyFormatter.string(from: item.amountMinor)), \(item.walletName)")
+    }
+
+    private var primaryTitle: String {
+        item.merchant.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? item.displayTitle : item.merchant
+    }
+
+    private var secondaryTitle: String {
+        if let categoryName = item.categoryName, !categoryName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return "\(categoryName) · \(item.walletName)"
+        }
+        return item.walletName
     }
 
     private var fallbackColor: String {
@@ -178,49 +195,94 @@ struct TransactionDetailsView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                Section("Summary") {
-                    detailRow("Amount", MoneyFormatter.string(from: item.amountMinor), identifier: CashRunwayAccessibilityID.transactionDetailsAmountRow)
-                    detailRow("Wallet", item.walletName)
-                    detailRow("Type", item.kind.rawValue.capitalized)
-                    detailRow("Date", item.occurredAt.formatted(date: .abbreviated, time: .omitted))
-                    detailRow("Source", item.source.rawValue.replacingOccurrences(of: "_", with: " ").capitalized)
-                }
-                if item.kind == .transfer, let transferDraft = try? model.repository.transactionDraft(id: item.id) {
-                    Section("Transfer") {
-                        detailRow(
-                            "Destination",
-                            model.wallets.first(where: { $0.id == transferDraft.destinationWalletID })?.name ?? "Unknown",
-                            identifier: CashRunwayAccessibilityID.transactionDetailsDestinationRow
-                        )
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 18) {
+                    CashRunwaySurface {
+                        HStack(spacing: 16) {
+                            CategoryGlyph(iconName: item.categoryIconName ?? fallbackIcon, colorHex: item.categoryColorHex ?? fallbackColor, size: 68)
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(item.displayTitle)
+                                    .font(CashRunwayTheme.headingFont)
+                                    .foregroundStyle(CashRunwayTheme.textPrimary)
+                                    .lineLimit(1)
+                                Text(MoneyFormatter.string(from: item.amountMinor))
+                                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                                    .monospacedDigit()
+                                    .foregroundStyle(CashRunwayTheme.amountColor(item.amountMinor))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.72)
+                                    .accessibilityIdentifier(CashRunwayAccessibilityID.transactionDetailsAmountRow)
+                            }
+                        }
+                    }
+
+                    detailSection("Summary") {
+                        detailRow("Wallet", item.walletName)
+                        detailRow("Type", item.kind.rawValue.capitalized)
+                        detailRow("Date", item.occurredAt.formatted(date: .abbreviated, time: .omitted))
+                        detailRow("Source", item.source.rawValue.replacingOccurrences(of: "_", with: " ").capitalized)
+                    }
+
+                    if item.kind == .transfer, let transferDraft = try? model.repository.transactionDraft(id: item.id) {
+                        detailSection("Transfer") {
+                            detailRow(
+                                "Destination",
+                                model.wallets.first(where: { $0.id == transferDraft.destinationWalletID })?.name ?? "Unknown",
+                                identifier: CashRunwayAccessibilityID.transactionDetailsDestinationRow
+                            )
+                        }
+                    }
+
+                    if let categoryName = item.categoryName {
+                        detailSection("Category") {
+                            detailRow("Category", categoryName)
+                        }
+                    }
+
+                    if !item.labels.isEmpty {
+                        detailSection("Labels") {
+                            Text(item.labels.map(\.name).joined(separator: ", "))
+                                .font(CashRunwayTheme.bodyFont)
+                                .foregroundStyle(CashRunwayTheme.textPrimary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+
+                    if !item.note.isEmpty {
+                        detailSection("Note") {
+                            Text(item.note)
+                                .font(CashRunwayTheme.bodyFont)
+                                .foregroundStyle(CashRunwayTheme.textPrimary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+
+                    VStack(spacing: 10) {
+                        Button("Edit", action: onEdit)
+                            .font(.system(size: 17, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 15)
+                            .background(CashRunwayTheme.accent, in: Capsule())
+                            .accessibilityIdentifier(CashRunwayAccessibilityID.transactionDetailsEditButton)
+
+                        Button("Delete", role: .destructive) {
+                            model.deleteTransaction(id: item.id)
+                            dismiss()
+                        }
+                        .font(.system(size: 16, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(CashRunwayTheme.negative.opacity(0.10), in: Capsule())
+                        .accessibilityIdentifier(CashRunwayAccessibilityID.transactionDetailsDeleteButton)
                     }
                 }
-                if let categoryName = item.categoryName {
-                    Section("Category") {
-                        detailRow("Category", categoryName)
-                    }
-                }
-                if !item.labels.isEmpty {
-                    Section("Labels") {
-                        Text(item.labels.map(\.name).joined(separator: ", "))
-                    }
-                }
-                if !item.note.isEmpty {
-                    Section("Note") {
-                        Text(item.note)
-                    }
-                }
-                Section {
-                    Button("Edit", action: onEdit)
-                        .accessibilityIdentifier(CashRunwayAccessibilityID.transactionDetailsEditButton)
-                    Button("Delete", role: .destructive) {
-                        model.deleteTransaction(id: item.id)
-                        dismiss()
-                    }
-                    .accessibilityIdentifier(CashRunwayAccessibilityID.transactionDetailsDeleteButton)
-                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
             }
+            .background(CashRunwayTheme.background)
             .navigationTitle(item.displayTitle)
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }
@@ -230,13 +292,41 @@ struct TransactionDetailsView: View {
         }
     }
 
+    private var fallbackColor: String {
+        item.kind == .income ? "#1CC389" : "#60788A"
+    }
+
+    private var fallbackIcon: String {
+        switch item.kind {
+        case .expense: "creditcard.fill"
+        case .income: "banknote.fill"
+        case .transfer: "arrow.left.arrow.right"
+        }
+    }
+
+    private func detailSection<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(CashRunwayTheme.textMuted)
+                .textCase(.uppercase)
+            VStack(spacing: 12) {
+                content()
+            }
+            .ledgerSurface(cornerRadius: CashRunwayTheme.radiusM)
+        }
+    }
+
     private func detailRow(_ title: String, _ value: String, identifier: String? = nil) -> some View {
         HStack {
             Text(title)
                 .foregroundStyle(CashRunwayTheme.textSecondary)
             Spacer()
             Text(value)
+                .foregroundStyle(CashRunwayTheme.textPrimary)
+                .multilineTextAlignment(.trailing)
         }
+        .font(CashRunwayTheme.bodyFont)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(title), \(value)")
         .accessibilityIdentifier(identifier ?? "")

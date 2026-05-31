@@ -477,12 +477,19 @@ public final class CSVService: @unchecked Sendable {
         ),
         .init(
             keywords: [
-                "food",
-                "drink",
                 "grocer",
                 "product",
                 "supermarket",
                 "продукт",
+                "супермаркет"
+            ],
+            iconName: "basket.fill",
+            colorHex: "#21C596"
+        ),
+        .init(
+            keywords: [
+                "food",
+                "drink",
                 "еда",
                 "їжа",
                 "харч",
@@ -490,7 +497,7 @@ public final class CSVService: @unchecked Sendable {
                 "напій"
             ],
             iconName: "fork.knife",
-            colorHex: "#B78B4A"
+            colorHex: "#B58B4A"
         ),
         .init(
             keywords: [
@@ -502,8 +509,8 @@ public final class CSVService: @unchecked Sendable {
                 "кофе",
                 "кава"
             ],
-            iconName: "cup.and.saucer.fill",
-            colorHex: "#64D1D5"
+            iconName: "fork.knife",
+            colorHex: "#5CCDC8"
         ),
         .init(
             keywords: [
@@ -616,8 +623,8 @@ public final class CSVService: @unchecked Sendable {
                 "курс",
                 "книг"
             ],
-            iconName: "graduationcap.fill",
-            colorHex: "#4A80C1"
+            iconName: "book.closed.fill",
+            colorHex: "#4D86C6"
         ),
         .init(
             keywords: [
@@ -634,7 +641,7 @@ public final class CSVService: @unchecked Sendable {
                 "авіа"
             ],
             iconName: "airplane",
-            colorHex: "#EE5DA7"
+            colorHex: "#E85D8E"
         ),
         .init(
             keywords: [
@@ -673,7 +680,7 @@ public final class CSVService: @unchecked Sendable {
                 "заробіт",
                 "заробот"
             ],
-            iconName: "banknote.fill",
+            iconName: "briefcase.fill",
             colorHex: "#2AAAD2"
         ),
         .init(
