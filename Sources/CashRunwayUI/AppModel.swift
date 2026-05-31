@@ -34,6 +34,7 @@ public final class CashRunwayAppModel {
     public var timelineSnapshot: TimelineSnapshot?
     public var overviewSnapshot: OverviewSnapshot?
     public var allBars: [TimelineBarPoint] = []
+    public var categoryDetailTransactions: [TransactionListItem] = []
 
     public var selectedMonthKey = DateKeys.monthKey(for: .now)
     public var selectedWalletID: UUID?
@@ -772,6 +773,20 @@ public final class CashRunwayAppModel {
         timelineSnapshot = snapshot.timelineSnapshot
         overviewSnapshot = snapshot.overviewSnapshot
         transactionQuery = snapshot.transactionQuery
+    }
+
+    public func loadCategoryDetailTransactions(query: TransactionQuery) async {
+        categoryDetailTransactions = []
+        do {
+            let repository = self.repository
+            let txs = try await Task.detached(priority: .userInitiated) {
+                try repository.transactions(query: query, limit: nil)
+            }.value
+            guard !Task.isCancelled else { return }
+            categoryDetailTransactions = txs
+        } catch {
+            categoryDetailTransactions = []
+        }
     }
 
     private func currentRefreshScopeMatches(monthKey: Int, walletID: UUID?, period: TimelinePeriod, query: TransactionQuery) -> Bool {
