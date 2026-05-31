@@ -960,7 +960,9 @@ struct CategoryManagementView: View {
                             Text("\(item.transactionCount) transactions in \(item.walletCount) wallets")
                                 .font(CashRunwayTheme.captionFont)
                                 .foregroundStyle(CashRunwayTheme.textSecondary)
+                                .lineLimit(1)
                         }
+                        .layoutPriority(1)
                         Spacer()
                         Button {
                             model.toggleCategoryVisibility(item.category)

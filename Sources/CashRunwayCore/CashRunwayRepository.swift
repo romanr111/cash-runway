@@ -1197,6 +1197,13 @@ extension CashRunwayRepository {
         }
     }
 
+    public func deleteLabel(id: UUID) throws {
+        try databaseManager.dbQueue.write { db in
+            try db.execute(sql: "DELETE FROM transaction_labels WHERE label_id = ?", arguments: [id.uuidString])
+            try db.execute(sql: "DELETE FROM labels WHERE id = ?", arguments: [id.uuidString])
+        }
+    }
+
     public func saveCategory(_ category: Category) throws {
         try databaseManager.dbQueue.write { db in
             try db.execute(

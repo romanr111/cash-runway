@@ -246,8 +246,7 @@ struct SettingsView: View {
 
                 HStack(spacing: 10) {
                     statusMetric("Wallets", "\(model.wallets.count)")
-                    statusMetric("Transactions", "\(model.transactions.count)")
-                    statusMetric("Bank", monobankStatusLabel)
+                    statusMetric("Bank Sync", monobankStatusLabel)
                 }
             }
         }
@@ -857,6 +856,13 @@ private struct LabelManagementView: View {
                                     .ledgerSurface(cornerRadius: CashRunwayTheme.radiusM)
                                 }
                                 .buttonStyle(.plain)
+                                .swipeActions(edge: .trailing) {
+                                    Button(role: .destructive) {
+                                        model.deleteLabel(id: label.id)
+                                    } label: {
+                                        SwiftUI.Label("Delete", systemImage: "trash")
+                                    }
+                                }
                             }
                         }
                     }

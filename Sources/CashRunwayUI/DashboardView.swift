@@ -441,6 +441,119 @@ private enum OverviewDisplayFormatter {
     }
 }
 
+private struct CategoryDonutChart: View {
+    let categories: [OverviewCategoryRow]
+    let kind: CategoryKind
+    let totalAmountMinor: Int64
+
+    private var centerText: String {
+        MoneyFormatter.string(from: kind == .expense ? -totalAmountMinor : totalAmountMinor)
+    }
+
+    private var centerSubtext: String {
+        kind == .expense ? "Expenses" : "Income"
+    }
+
+    var body: some View {
+        GeometryReader { geometry in
+            let width = geometry.size.width
+            let height = geometry.size.height
+            let center = CGPoint(x: width / 2, y: height / 2)
+            let size = min(width, height)
+            let outerRadius = size / 2 - 52
+            let innerRadius = outerRadius * 0.55
+
+            ZStack {
+                Canvas { context, _ in
+                    var startAngle = Angle.degrees(-90)
+                    for category in categories {
+                        let sweep = Angle.degrees(max(category.percentage / 100.0 * 360.0, 0.5))
+                        let endAngle = startAngle + sweep
+                        let midAngle = Angle.degrees(startAngle.degrees + sweep.degrees / 2)
+                        let color = CashRunwayTheme.categoryColor(category.colorHex)
+
+                        var path = Path()
+                        path.addArc(center: center, radius: outerRadius, startAngle: startAngle, endAngle: endAngle, clockwise: false)
+                        path.addArc(center: center, radius: innerRadius, startAngle: endAngle, endAngle: startAngle, clockwise: true)
+                        path.closeSubpath()
+
+                        context.fill(path, with: .color(color))
+
+                        if category.percentage >= 5 {
+                            let lineStart = CGPoint(
+                                x: center.x + cos(midAngle.radians) * outerRadius,
+                                y: center.y + sin(midAngle.radians) * outerRadius
+                            )
+                            let lineEnd = CGPoint(
+                                x: center.x + cos(midAngle.radians) * (outerRadius + 38),
+                                y: center.y + sin(midAngle.radians) * (outerRadius + 38)
+                            )
+                            var linePath = Path()
+                            linePath.move(to: lineStart)
+                            linePath.addLine(to: lineEnd)
+                            context.stroke(linePath, with: .color(color), lineWidth: 1.5)
+                        }
+
+                        startAngle = endAngle
+                    }
+                }
+
+                VStack(spacing: 4) {
+                    Text(centerText)
+                        .font(.system(size: 17, weight: .bold, design: .rounded))
+                        .foregroundStyle(CashRunwayTheme.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.65)
+                    Text(centerSubtext)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(CashRunwayTheme.textSecondary)
+                }
+                .frame(width: innerRadius * 1.8)
+
+                ForEach(Array(categories.enumerated()), id: \.element.id) { index, category in
+                    let midAngle = midAngleForCategory(at: index, categories: categories)
+                    let color = CashRunwayTheme.categoryColor(category.colorHex)
+
+                    let labelRadius = outerRadius + 18
+                    let labelX = center.x + cos(midAngle.radians) * labelRadius
+                    let labelY = center.y + sin(midAngle.radians) * labelRadius
+
+                    Text(OverviewDisplayFormatter.percentage(category.percentage))
+                        .font(.system(size: fontSizeForPercentage(category.percentage), weight: .bold))
+                        .foregroundStyle(color)
+                        .position(x: labelX, y: labelY)
+
+                    if category.percentage >= 5 {
+                        let iconRadius = outerRadius + 38
+                        let iconX = center.x + cos(midAngle.radians) * iconRadius
+                        let iconY = center.y + sin(midAngle.radians) * iconRadius
+
+                        CategoryGlyph(iconName: category.iconName, colorHex: category.colorHex, size: 34)
+                            .position(x: iconX, y: iconY)
+                    }
+                }
+            }
+            .frame(width: width, height: height)
+        }
+    }
+
+    private func midAngleForCategory(at index: Int, categories: [OverviewCategoryRow]) -> Angle {
+        var startDegrees = -90.0
+        for i in 0..<index {
+            startDegrees += max(categories[i].percentage / 100.0 * 360.0, 0.5)
+        }
+        let sweepDegrees = max(categories[index].percentage / 100.0 * 360.0, 0.5)
+        return Angle.degrees(startDegrees + sweepDegrees / 2)
+    }
+
+    private func fontSizeForPercentage(_ percentage: Double) -> CGFloat {
+        if percentage >= 10 { return 13 }
+        if percentage >= 5 { return 12 }
+        if percentage >= 2 { return 11 }
+        return 9
+    }
+}
+
 private struct TimelineOverviewView: View {
     @Bindable var model: CashRunwayAppModel
     @State private var chartMetric = OverviewChartMetric.wealth
@@ -702,7 +815,7 @@ private struct TimelineOverviewView: View {
 
     private var categoriesCard: some View {
         let categories = (model.overviewSnapshot?.categories ?? []).filter { $0.kind == categoryKind }
-        let topCategories = Array(categories.prefix(6))
+        let topCategories = Array(categories.prefix(5))
         return VStack(alignment: .leading, spacing: 18) {
             HStack {
                 Text("Categories")
@@ -726,54 +839,25 @@ private struct TimelineOverviewView: View {
                     .font(.system(size: 15))
                     .foregroundStyle(CashRunwayTheme.textSecondary)
             } else {
-                ZStack(alignment: .center) {
-                    Chart(categories) { item in
-                        SectorMark(angle: .value("Amount", item.amountMinor), innerRadius: .ratio(0.54), angularInset: 1.5)
-                            .foregroundStyle(CashRunwayTheme.categoryColor(item.colorHex))
-                    }
-                    .chartLegend(.hidden)
-                    .frame(height: 268)
+                CategoryDonutChart(
+                    categories: categories,
+                    kind: categoryKind,
+                    totalAmountMinor: categoryKind == .expense
+                        ? (model.overviewSnapshot?.monthExpenseMinor ?? 0)
+                        : (model.overviewSnapshot?.monthIncomeMinor ?? 0)
+                )
+                .frame(height: 320)
 
-                    VStack(spacing: 4) {
-                        Text(categoryKind == .expense ? MoneyFormatter.string(from: -(model.overviewSnapshot?.monthExpenseMinor ?? 0)) : MoneyFormatter.string(from: model.overviewSnapshot?.monthIncomeMinor ?? 0))
-                            .font(.system(size: 17, weight: .bold, design: .rounded))
-                            .foregroundStyle(CashRunwayTheme.textPrimary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.65)
-                        Text(categoryKind == .expense ? "Expenses" : "Income")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(CashRunwayTheme.textSecondary)
-                    }
-                    .frame(width: 116)
-                }
-
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 10)], spacing: 10) {
+                VStack(spacing: 14) {
                     ForEach(topCategories) { item in
-                        VStack(spacing: 6) {
-                            CategoryGlyph(iconName: item.iconName, colorHex: item.colorHex, size: 42)
-                            Text(OverviewDisplayFormatter.percentage(item.percentage))
-                                .font(.system(size: 13, weight: .bold))
-                                .foregroundStyle(CashRunwayTheme.categoryColor(item.colorHex))
-                            Text(item.name)
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(CashRunwayTheme.textSecondary)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.72)
+                        Button {
+                            selectedCategory = item
+                        } label: {
+                            categoryLegendRow(item)
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .background(CashRunwayTheme.pill, in: RoundedRectangle(cornerRadius: CashRunwayTheme.radiusS, style: .continuous))
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier(CashRunwayAccessibilityID.overviewCategory(item.name))
                     }
-                }
-
-                ForEach(categories) { item in
-                    Button {
-                        selectedCategory = item
-                    } label: {
-                        categoryLegendRow(item)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier(CashRunwayAccessibilityID.overviewCategory(item.name))
                 }
             }
 
@@ -829,7 +913,7 @@ private struct TimelineOverviewView: View {
                     .foregroundStyle(CashRunwayTheme.textPrimary)
                     .lineLimit(1)
                     .truncationMode(.tail)
-                Text("\(transactionCountText(item.transactionCount)) · \(OverviewDisplayFormatter.percentage(item.percentage))")
+                Text(transactionCountText(item.transactionCount))
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(CashRunwayTheme.textSecondary)
             }

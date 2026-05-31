@@ -303,6 +303,7 @@ struct OperationRow: View {
                     .font(CashRunwayTheme.subheadingFont)
                     .foregroundStyle(CashRunwayTheme.textPrimary)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                 Text(subtitle)
                     .font(CashRunwayTheme.captionFont)
                     .foregroundStyle(CashRunwayTheme.textSecondary)

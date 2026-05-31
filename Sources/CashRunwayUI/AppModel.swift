@@ -384,6 +384,12 @@ public final class CashRunwayAppModel {
         }
     }
 
+    public func deleteLabel(id: UUID) {
+        runMutation {
+            try repository.deleteLabel(id: id)
+        }
+    }
+
     public func saveWallet(_ wallet: Wallet) {
         runMutation {
             try repository.saveWallet(wallet)
