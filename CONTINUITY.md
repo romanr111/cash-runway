@@ -18,8 +18,8 @@ Rules:
 
 - Goal: Implement the broader Warm Functional Ledger UI refresh for Cash Runway in an isolated worktree.
 - Success criteria: More/Settings, supporting management sheets, editors, transaction-adjacent surfaces, and import/backup/Monobank flows follow the refreshed UI language while preserving behavior, accessibility identifiers, data models, disabled/deprecated feature policy, and required iOS validation gates.
-- Current state: The combined UI refresh plus direct transaction edit/delete consolidation was implemented, validated, and remained in draft PR #23 from branch `codex/broader-ui-refresh`.
-- Next action: Review draft PR #23 and decide whether to mark it ready or merge it.
+- Current state: Detailed code review found and fixed an important transaction-row note visibility regression; all required local validation passed after the fix.
+- Next action: Commit and push the review fix to draft PR #23.
 - Open questions: None.
 - Merge status: not-merged.
 
@@ -62,6 +62,9 @@ Rules:
 - 2026-05-31 [IMPLEMENTED] Consolidated transaction details/edit-delete flow into direct `Edit Transaction`: row taps open the editor, delete lives in the editor with confirmation, and the old details view was removed from active UI code.
 - 2026-05-31 [TEST] Updated transaction UI test source expectations for direct edit flow and added delete-from-editor coverage; local UI/E2E execution remains intentionally skipped per policy.
 - 2026-05-31 [VALIDATED] Direct edit/delete follow-up passed targeted delete invariant test, full `swift test`, required iPhone 17 clean build, UI test build-for-testing compile, and simulator smoke.
+- 2026-05-31 [REVIEW] Detailed self-review found an important row UX/accessibility regression where refreshed transaction rows hid manual notes; fixed `TransactionRow` metadata and accessibility summary to include notes again.
+- 2026-05-31 [VALIDATED] Post-review `diff -rq Sources/CashRunwayCore Modules/CashRunwayCorePackage/Sources/CashRunwayCore`, `git diff --check`, and full `swift test` passed after the row-note fix.
+- 2026-05-31 [VALIDATED] Post-review iPhone 17 clean build passed, simulator boot smoke opened Timeline and direct Edit Transaction, row accessibility labels included notes, and log scan found no crash/error/warning matches.
 
 ## Receipts
 
@@ -73,3 +76,5 @@ Rules:
 - 2026-05-31 [BUILD] Direct edit/delete follow-up: `xcodebuild -scheme CashRunway -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' clean build 2>&1 | tail -5` ended with `** BUILD SUCCEEDED **`.
 - 2026-05-31 [BUILD] `xcodebuild ... build-for-testing` ended with `** TEST BUILD SUCCEEDED **`.
 - 2026-05-31 [LOG] Direct edit/delete simulator log scan found no crash/error/warning matches.
+- 2026-05-31 [BUILD] Review fix: required iPhone 17 clean build ended with `** BUILD SUCCEEDED **`.
+- 2026-05-31 [LOG] Review fix simulator log scan found no crash/error/warning matches.

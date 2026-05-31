@@ -137,12 +137,11 @@ struct TransactionRow: View {
                     .foregroundStyle(CashRunwayTheme.textSecondary)
                     .lineLimit(1)
                 HStack(spacing: 6) {
-                    Text(item.occurredAt.formatted(date: .abbreviated, time: .omitted))
-                    Text("·")
-                    Text(item.source.rawValue.replacingOccurrences(of: "_", with: " ").capitalized)
-                    if !item.labels.isEmpty {
-                        Text("·")
-                        Text(item.labels.map(\.name).joined(separator: ", "))
+                    ForEach(Array(metadataParts.enumerated()), id: \.offset) { index, part in
+                        if index > 0 {
+                            Text("·")
+                        }
+                        Text(part)
                     }
                 }
                 .font(.system(size: 12, weight: .medium))
@@ -160,7 +159,7 @@ struct TransactionRow: View {
         }
         .padding(.vertical, 8)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(item.displayTitle), \(MoneyFormatter.string(from: item.amountMinor)), \(item.walletName)")
+        .accessibilityLabel(accessibilitySummary)
     }
 
     private var primaryTitle: String {
@@ -172,6 +171,24 @@ struct TransactionRow: View {
             return "\(categoryName) · \(item.walletName)"
         }
         return item.walletName
+    }
+
+    private var metadataParts: [String] {
+        var parts: [String] = []
+        let note = item.note.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !note.isEmpty {
+            parts.append(note)
+        }
+        parts.append(item.occurredAt.formatted(date: .abbreviated, time: .omitted))
+        parts.append(item.source.rawValue.replacingOccurrences(of: "_", with: " ").capitalized)
+        if !item.labels.isEmpty {
+            parts.append(item.labels.map(\.name).joined(separator: ", "))
+        }
+        return parts
+    }
+
+    private var accessibilitySummary: String {
+        ([item.displayTitle, MoneyFormatter.string(from: item.amountMinor), item.walletName] + metadataParts).joined(separator: ", ")
     }
 
     private var fallbackColor: String {
