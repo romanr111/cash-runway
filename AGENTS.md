@@ -49,7 +49,6 @@
 Every iOS task must pass ALL gates before being marked done, in this order:
 
 1. `swift test` (unit + integration tests only, exclude E2E/UI tests) → all targeted tests pass.
-   E2E/UI tests are only run in CI/CD pipelines; agents must not run them locally.
 2. `xcodebuild -scheme <scheme> -sdk iphonesimulator \
      -destination 'platform=iOS Simulator,name=iPhone 17' \
      clean build 2>&1 | tail -5`
@@ -83,16 +82,16 @@ To avoid expensive exploration of large files, use this reference before greppin
 
 | Concern | Primary file | Approx. lines |
 |---------|-------------|---------------|
-| Root view / TabView / onboarding / lock screen | `Sources/CashRunwayUI/RootView.swift` | ~260 |
-| Timeline (Dashboard) chart + feed + overview | `Sources/CashRunwayUI/DashboardView.swift` | ~1270 |
-| All editors (transaction, wallet, category, recurring, **budget**) | `Sources/CashRunwayUI/Editors.swift` | ~1280 |
-| Settings / More screen | `Sources/CashRunwayUI/SettingsView.swift` | ~990 |
-| App state / repository wrapper | `Sources/CashRunwayUI/AppModel.swift` | ~620 |
-| DB + Keychain + **AppLockStore** | `Sources/CashRunwayCore/DatabaseManager.swift` | ~610 |
-| Repository queries + **budgets/saveBudget** | `Sources/CashRunwayCore/CashRunwayRepository.swift` | ~1940 |
-| Models: **Budget**, **BudgetProgress**, transactions, wallets | `Sources/CashRunwayCore/Models.swift` | ~650 |
-| Main app entry + BG tasks | `AppHost/CashRunwayApp.swift` | ~295 |
-| UI-test runtime + fixture seeding | `AppHost/UITestRuntime.swift` | ~245 |
+| Root view / TabView / onboarding / lock screen | `Sources/CashRunwayUI/RootView.swift` | ~272 |
+| Timeline (Dashboard) chart + feed + overview | `Sources/CashRunwayUI/DashboardView.swift` | ~1335 |
+| All editors (transaction, wallet, category, recurring, **budget**) | `Sources/CashRunwayUI/Editors.swift` | ~1331 |
+| Settings / More screen | `Sources/CashRunwayUI/SettingsView.swift` | ~1832 |
+| App state / repository wrapper | `Sources/CashRunwayUI/AppModel.swift` | ~855 |
+| DB + Keychain + **AppLockStore** | `Sources/CashRunwayCore/DatabaseManager.swift` | ~724 |
+| Repository queries + **budgets/saveBudget** | `Sources/CashRunwayCore/CashRunwayRepository.swift` | ~3490 |
+| Models: **Budget**, **BudgetProgress**, transactions, wallets | `Sources/CashRunwayCore/Models.swift` | ~1595 |
+| Main app entry + BG tasks | `AppHost/CashRunwayApp.swift` | ~341 |
+| UI-test runtime + fixture seeding | `AppHost/UITestRuntime.swift` | ~471 |
 
 Prefer `ReadFile` with `line_offset` over full-file reads for files > 500 lines.
 
@@ -145,7 +144,7 @@ For a final success confirmation, `tail -5` is sufficient.
 - Use `TestKeychainStore` instead of the global keychain to avoid cross-test collisions.
 
 ### Test execution policy
-- **Never run full regression** (unfiltered `swift test`, full UI/E2E suite) in remote pipelines/CI or locally.
+- **Never run full regression** (unfiltered `swift test`, full UI/E2E suite) locally.
 - **Allowed locally**: Full unit tests, full integration tests, individual failed tests, or `--filter` targeted runs.
-- **E2E/UI tests**: Only run in CI/CD pipelines; agents must never run them locally.
+- **E2E/UI tests**: Only run in CI/CD nightly pipelines; agents must never run them locally.
 - Re-run only failing targeted tests locally to verify fixes — not full suites.

@@ -16,46 +16,39 @@ Rules:
 
 ## Snapshot
 
-- Goal: Move coverage and E2E UI tests to a nightly workflow; optimize E2E text entry and test flows.
-- Success criteria: PR pipeline runs only fast checks; nightly workflow runs coverage + E2E; text entry is faster with fallback safety; all tests pass.
-- Current state: PR `#22` merged to `main`. Nightly workflow (`ios-nightly.yml`) runs at 03:00 UTC with optional manual dispatch. PR pipeline (`ios-ci.yml`) trimmed to static-analysis → unit-tests → integration-tests. `fastEnterText` helper added with KVC `setValue` + verification fallback. UIKit animations disabled in test mode. SPM package caching added. Branches and remotes cleaned up.
-- Next action: Monitor first nightly run for timing and `fastEnterText` fallback rate.
+- Goal: Apply SwiftUI Expert Skill improvements to Cash Runway — fix P0/P1 performance bottlenecks (DB query in view body, N+1 queries, non-lazy lists, DateFormatter allocation, deleteWallet batching) and decompose SettingsView state.
+- Success criteria: All P0 and P1 issues resolved, swift test passes, app builds and boots on simulator, mirrored core stays in sync.
+- Current state: New worktree created at `../Cash-Runway-swiftui-performance-improvements` on branch `kimi/swiftui-performance-improvements`; sub-agents not yet spawned.
+- Next action: Spawn three sub-agents in the new worktree to execute the performance fixes in parallel.
 - Open questions: None.
-- Merge status: merged.
+- Merge status: not-merged.
 
 ## Git context
 
 - Repo root: `/Users/roman/Documents/Development/Cash Runway`
-- Working directory: `/Users/roman/Documents/Development/Cash Runway`
-- Branch: `main`
+- Working directory: `/Users/roman/Documents/Development/Cash-Runway-swiftui-performance-improvements`
+- Branch: `kimi/swiftui-performance-improvements`
 - Base branch: `origin/main`
-- Merge status: merged
+- Worktree reason: isolated-feature
+- Merge status: not-merged
 
 ## Working set
 
-- `.github/workflows/ios-nightly.yml`
-- `.github/workflows/ios-ci.yml`
+- `Sources/CashRunwayUI/DashboardView.swift`
+- `Sources/CashRunwayUI/Editors.swift`
+- `Sources/CashRunwayUI/SettingsView.swift`
+- `Sources/CashRunwayUI/AppModel.swift`
+- `Sources/CashRunwayCore/CashRunwayRepository.swift`
+- `Sources/CashRunwayCore/Theme.swift`
 - `AppHost/CashRunwayApp.swift`
-- `Tests/CashRunwayUITests/CashRunwayUITestCase.swift`
-- `Tests/CashRunwayUITests/TransactionCRUDUITests.swift`
-- `Tests/CashRunwayUITests/TransactionOverviewUITests.swift`
-- `Tests/CashRunwayUITests/MonobankConnectionUITests.swift`
 - `CONTINUITY.md`
 
 ## Done (recent)
 
-- 2026-05-19 [MERGE] PR `#22` (`feat/nightly-ci-e2e-optimizations`) merged and pushed. Branch deleted locally and remotely.
-- 2026-05-19 [CLEANUP] PR `#20` branch `feat/ui-test-class-level-launch` deleted locally and remotely.
-- 2026-05-19 [CODE] Added `ios-nightly.yml`: scheduled + `workflow_dispatch` with `run_coverage` / `run_e2e` booleans.
-- 2026-05-19 [CODE] Trimmed `ios-ci.yml`: removed coverage, build-e2e, and E2E test jobs.
-- 2026-05-19 [CODE] Added `fastEnterText` to `XCUIElement`: KVC `setValue` with verification and `clearAndEnterText` fallback.
-- 2026-05-19 [CODE] Added local FAB fallback in `openAddTransaction()` when exists but not hittable.
-- 2026-05-19 [CODE] Refactored slow transaction tests: removed redundant waits, explicit cleanup, and scroll-to-save.
-- 2026-05-19 [CODE] Disabled UIKit animations in test mode via `UIView.setAnimationsEnabled(false)`.
-- 2026-05-19 [CODE] Added conservative SPM package caching (`~/.swiftpm/cache`) to CI workflows.
-- 2026-05-19 [CHECK] `swift test` passed (unit + integration). `xcodebuild clean build` and `build-for-testing` succeeded.
+- 2026-05-31 [AUDIT] Three explore agents completed full SwiftUI Expert Skill audit of the codebase.
+- 2026-05-31 [PLAN] Performance-First improvement plan approved by user.
+- 2026-05-31 [SETUP] Created worktree `../Cash-Runway-swiftui-performance-improvements` on branch `kimi/swiftui-performance-improvements`.
 
 ## Receipts
 
-- 2026-05-19 [PR] `#22` — ci+e2e: nightly workflow, fast text entry, UIKit animation disable
-- 2026-05-19 [COMMIT] `1aebf87` on `feat/nightly-ci-e2e-optimizations`
+- 2026-05-31 [DECISION] Use separate worktree because primary checkout had local edits.
