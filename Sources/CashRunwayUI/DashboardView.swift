@@ -10,7 +10,6 @@ struct DashboardView: View {
     @State private var isComposerPresented = false
     @State private var isSearchPresented = false
     @State private var showsOverview = false
-    @State private var selectedItem: TransactionListItem?
     @State private var draft = TransactionDraft(kind: .expense, walletID: UUID(), amountMinor: 0, occurredAt: .now)
     @State private var isWalletEditorPresented = false
     @State private var walletDraft = Wallet(id: UUID(), name: "", kind: .cash, colorHex: "#60788A", iconName: "wallet.pass.fill", startingBalanceMinor: 0, currentBalanceMinor: 0, isArchived: false, sortOrder: 0, createdAt: .now, updatedAt: .now)
@@ -74,19 +73,6 @@ struct DashboardView: View {
             }
             .sheet(isPresented: $isSearchPresented) {
                 TimelineSearchSheet(model: model)
-            }
-            .sheet(item: $selectedItem) { item in
-                TransactionDetailsView(
-                    item: item,
-                    model: model,
-                    onEdit: {
-                        if let loadedDraft = try? model.repository.transactionDraft(id: item.id) {
-                            draft = loadedDraft
-                            selectedItem = nil
-                            isComposerPresented = true
-                        }
-                    }
-                )
             }
             .fullScreenCover(isPresented: $isComposerPresented) {
                 TransactionEditorView(model: model, draft: $draft)
@@ -312,7 +298,7 @@ struct DashboardView: View {
                         }
                         ForEach(section.items) { item in
                             Button {
-                                selectedItem = item
+                                openEditor(for: item)
                             } label: {
                                 TransactionRow(item: item)
                             }
@@ -352,6 +338,13 @@ struct DashboardView: View {
 
     private func walletName(for id: UUID) -> String? {
         model.wallets.first(where: { $0.id == id })?.name
+    }
+
+    private func openEditor(for item: TransactionListItem) {
+        if let loadedDraft = try? model.repository.transactionDraft(id: item.id) {
+            draft = loadedDraft
+            isComposerPresented = true
+        }
     }
 }
 
@@ -963,7 +956,6 @@ private struct CategoryDetailOverviewView: View {
     let category: OverviewCategoryRow
     @State private var selectedMonthKey: Int
     @State private var selectedWalletID: UUID?
-    @State private var selectedItem: TransactionListItem?
     @State private var isComposerPresented = false
     @State private var draft: TransactionDraft
 
@@ -997,19 +989,6 @@ private struct CategoryDetailOverviewView: View {
         .background(CashRunwayTheme.background)
         .navigationTitle(category.name)
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(item: $selectedItem) { item in
-            TransactionDetailsView(
-                item: item,
-                model: model,
-                onEdit: {
-                    if let loadedDraft = try? model.repository.transactionDraft(id: item.id) {
-                        draft = loadedDraft
-                        selectedItem = nil
-                        isComposerPresented = true
-                    }
-                }
-            )
-        }
         .fullScreenCover(isPresented: $isComposerPresented) {
             TransactionEditorView(model: model, draft: $draft)
         }
@@ -1172,7 +1151,7 @@ private struct CategoryDetailOverviewView: View {
             } else {
                 ForEach(items) { item in
                     Button {
-                        selectedItem = item
+                        openEditor(for: item)
                     } label: {
                         TransactionRow(item: item)
                     }
@@ -1281,6 +1260,13 @@ private struct CategoryDetailOverviewView: View {
 
     private func walletName(for id: UUID) -> String? {
         model.wallets.first(where: { $0.id == id })?.name
+    }
+
+    private func openEditor(for item: TransactionListItem) {
+        if let loadedDraft = try? model.repository.transactionDraft(id: item.id) {
+            draft = loadedDraft
+            isComposerPresented = true
+        }
     }
 
     private func pill(_ text: String) -> some View {

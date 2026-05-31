@@ -30,6 +30,7 @@ struct TransactionEditorView: View {
     @State private var amountError: String?
     @State private var originalCategoryID: UUID?
     @State private var isCategoryLearningPromptPresented = false
+    @State private var showsDeleteConfirmation = false
     @State private var pendingLearnTransactionID: UUID?
     @State private var pendingLearnCategoryID: UUID?
 
@@ -97,6 +98,14 @@ struct TransactionEditorView: View {
                 }
             } message: {
                 Text(categoryLearningPromptMessage)
+            }
+            .alert("Delete Transaction?", isPresented: $showsDeleteConfirmation) {
+                Button("Cancel", role: .cancel) {}
+                Button("Delete", role: .destructive) {
+                    deleteCurrentTransaction()
+                }
+            } message: {
+                Text("This transaction will be permanently removed.")
             }
             .onChange(of: composerModal) { _, modal in
                 guard modal == nil else { return }
@@ -410,6 +419,26 @@ struct TransactionEditorView: View {
                         .padding(.top, 20)
                         .accessibilityIdentifier(CashRunwayAccessibilityID.transactionSaveButton)
 
+                        if draft.id != nil {
+                            Button(role: .destructive) {
+                                showsDeleteConfirmation = true
+                            } label: {
+                                HStack {
+                                    Image(systemName: "trash")
+                                    Text("Delete Transaction")
+                                }
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(CashRunwayTheme.negative)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                                .background(CashRunwayTheme.negative.opacity(0.08), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(CashRunwayTheme.negative.opacity(0.18), lineWidth: 1))
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.top, 12)
+                            .accessibilityIdentifier(CashRunwayAccessibilityID.transactionDetailsDeleteButton)
+                        }
+
                         if let amountError {
                             Text(amountError)
                                 .font(.system(size: 14, weight: .medium))
@@ -669,6 +698,12 @@ struct TransactionEditorView: View {
            let categoryID = pendingLearnCategoryID ?? draft.categoryID {
             model.learnBankCategoryRule(transactionID: transactionID, categoryID: categoryID)
         }
+        dismiss()
+    }
+
+    private func deleteCurrentTransaction() {
+        guard let transactionID = draft.id else { return }
+        model.deleteTransaction(id: transactionID)
         dismiss()
     }
 

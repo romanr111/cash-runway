@@ -18,7 +18,7 @@ Rules:
 
 - Goal: Implement the broader Warm Functional Ledger UI refresh for Cash Runway in an isolated worktree.
 - Success criteria: More/Settings, supporting management sheets, editors, transaction-adjacent surfaces, and import/backup/Monobank flows follow the refreshed UI language while preserving behavior, accessibility identifiers, data models, disabled/deprecated feature policy, and required iOS validation gates.
-- Current state: The combined UI refresh was committed, pushed, and opened as draft PR #23 from `/Users/roman/.codex/worktrees/cash-runway-broader-ui-refresh` on branch `codex/broader-ui-refresh`.
+- Current state: The combined UI refresh plus direct transaction edit/delete consolidation was implemented, validated, and remained in draft PR #23 from branch `codex/broader-ui-refresh`.
 - Next action: Review draft PR #23 and decide whether to mark it ready or merge it.
 - Open questions: None.
 - Merge status: not-merged.
@@ -59,6 +59,9 @@ Rules:
 - 2026-05-31 [REVIEW] Fixed major review findings: removed nested category row buttons, removed visible direct wallet deletion from management rows, and aligned CSV Food & Drink import color with the controlled palette in both mirrored core trees.
 - 2026-05-31 [REVALIDATED] Focused appearance tests, `diff -rq Sources/CashRunwayCore Modules/CashRunwayCorePackage/Sources/CashRunwayCore`, `git diff --check`, full `swift test`, required iPhone 17 clean build, and review smoke passed.
 - 2026-05-31 [PUBLISHED] Committed, pushed, and opened draft PR #23 for the combined UI refresh.
+- 2026-05-31 [IMPLEMENTED] Consolidated transaction details/edit-delete flow into direct `Edit Transaction`: row taps open the editor, delete lives in the editor with confirmation, and the old details view was removed from active UI code.
+- 2026-05-31 [TEST] Updated transaction UI test source expectations for direct edit flow and added delete-from-editor coverage; local UI/E2E execution remains intentionally skipped per policy.
+- 2026-05-31 [VALIDATED] Direct edit/delete follow-up passed targeted delete invariant test, full `swift test`, required iPhone 17 clean build, UI test build-for-testing compile, and simulator smoke.
 
 ## Receipts
 
@@ -67,3 +70,6 @@ Rules:
 - 2026-05-31 [LOG] Review simulator log scan found no crash/error/warning matches.
 - 2026-05-31 [COMMIT] `Refresh Cash Runway UI surfaces`.
 - 2026-05-31 [PR] Draft PR #23: https://github.com/romanr111/cash-runway/pull/23.
+- 2026-05-31 [BUILD] Direct edit/delete follow-up: `xcodebuild -scheme CashRunway -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' clean build 2>&1 | tail -5` ended with `** BUILD SUCCEEDED **`.
+- 2026-05-31 [BUILD] `xcodebuild ... build-for-testing` ended with `** TEST BUILD SUCCEEDED **`.
+- 2026-05-31 [LOG] Direct edit/delete simulator log scan found no crash/error/warning matches.
