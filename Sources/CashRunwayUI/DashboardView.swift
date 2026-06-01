@@ -441,116 +441,191 @@ private enum OverviewDisplayFormatter {
     }
 }
 
+private struct DonutSegmentShape: Shape {
+    let startDegrees: Double
+    let endDegrees: Double
+    let thickness: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        let outerRadius = min(rect.width, rect.height) / 2
+        let innerRadius = max(outerRadius - thickness, 0)
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let adjustedEndDegrees = endDegrees - startDegrees >= 360 ? startDegrees + 359.99 : endDegrees
+
+        var path = Path()
+        path.addArc(
+            center: center,
+            radius: outerRadius,
+            startAngle: .degrees(startDegrees),
+            endAngle: .degrees(adjustedEndDegrees),
+            clockwise: false
+        )
+        path.addArc(
+            center: center,
+            radius: innerRadius,
+            startAngle: .degrees(adjustedEndDegrees),
+            endAngle: .degrees(startDegrees),
+            clockwise: true
+        )
+        path.closeSubpath()
+        return path
+    }
+}
+
 private struct CategoryDonutChart: View {
-    let categories: [OverviewCategoryRow]
+    let distribution: OverviewCategoryDistribution
     let kind: CategoryKind
-    let totalAmountMinor: Int64
+    let selectedCategory: OverviewCategoryRow?
+    let onSelectCategory: (OverviewCategoryRow) -> Void
 
-    private var centerText: String {
-        MoneyFormatter.string(from: kind == .expense ? -totalAmountMinor : totalAmountMinor)
-    }
-
-    private var centerSubtext: String {
-        kind == .expense ? "Expenses" : "Income"
-    }
+    private let diameter: CGFloat = 204
+    private let thickness: CGFloat = 24
+    private let badgeSize: CGFloat = 46
+    private let badgeRadius: CGFloat = 92
+    private let chartExtent: CGFloat = 250
 
     var body: some View {
-        GeometryReader { geometry in
-            let width = geometry.size.width
-            let height = geometry.size.height
-            let center = CGPoint(x: width / 2, y: height / 2)
-            let size = min(width, height)
-            let outerRadius = size / 2 - 52
-            let innerRadius = outerRadius * 0.55
+        ZStack {
+            Circle()
+                .stroke(CashRunwayTheme.pill, lineWidth: thickness)
+                .frame(width: diameter, height: diameter)
 
-            ZStack {
-                Canvas { context, _ in
-                    var startAngle = Angle.degrees(-90)
-                    for category in categories {
-                        let sweep = Angle.degrees(max(category.percentage / 100.0 * 360.0, 0.5))
-                        let endAngle = startAngle + sweep
-                        let midAngle = Angle.degrees(startAngle.degrees + sweep.degrees / 2)
-                        let color = CashRunwayTheme.categoryColor(category.colorHex)
-
-                        var path = Path()
-                        path.addArc(center: center, radius: outerRadius, startAngle: startAngle, endAngle: endAngle, clockwise: false)
-                        path.addArc(center: center, radius: innerRadius, startAngle: endAngle, endAngle: startAngle, clockwise: true)
-                        path.closeSubpath()
-
-                        context.fill(path, with: .color(color))
-
-                        if category.percentage >= 5 {
-                            let lineStart = CGPoint(
-                                x: center.x + cos(midAngle.radians) * outerRadius,
-                                y: center.y + sin(midAngle.radians) * outerRadius
-                            )
-                            let lineEnd = CGPoint(
-                                x: center.x + cos(midAngle.radians) * (outerRadius + 38),
-                                y: center.y + sin(midAngle.radians) * (outerRadius + 38)
-                            )
-                            var linePath = Path()
-                            linePath.move(to: lineStart)
-                            linePath.addLine(to: lineEnd)
-                            context.stroke(linePath, with: .color(color), lineWidth: 1.5)
-                        }
-
-                        startAngle = endAngle
-                    }
+            ForEach(distribution.segments) { segment in
+                let isSelected = segment.category.id == selectedCategory?.id
+                DonutSegmentShape(
+                    startDegrees: segment.startDegrees,
+                    endDegrees: segment.endDegrees,
+                    thickness: thickness
+                )
+                .fill(CashRunwayTheme.categoryColor(segment.category.colorHex))
+                .frame(width: diameter, height: diameter)
+                .opacity(isSelected ? 1 : 0.42)
+                .overlay {
+                    DonutSegmentShape(
+                        startDegrees: segment.startDegrees,
+                        endDegrees: segment.endDegrees,
+                        thickness: thickness
+                    )
+                    .stroke(CashRunwayTheme.surface, lineWidth: 1.5)
+                    .frame(width: diameter, height: diameter)
                 }
-
-                VStack(spacing: 4) {
-                    Text(centerText)
-                        .font(.system(size: 17, weight: .bold, design: .rounded))
-                        .foregroundStyle(CashRunwayTheme.textPrimary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.65)
-                    Text(centerSubtext)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(CashRunwayTheme.textSecondary)
+                .scaleEffect(isSelected ? 1.025 : 1)
+                .animation(.spring(response: 0.24, dampingFraction: 0.82), value: selectedCategory?.id)
+                .contentShape(
+                    DonutSegmentShape(
+                        startDegrees: segment.startDegrees,
+                        endDegrees: segment.endDegrees,
+                        thickness: thickness
+                    )
+                )
+                .onTapGesture {
+                    onSelectCategory(segment.category)
                 }
-                .frame(width: innerRadius * 1.8)
-
-                ForEach(Array(categories.enumerated()), id: \.element.id) { index, category in
-                    let midAngle = midAngleForCategory(at: index, categories: categories)
-                    let color = CashRunwayTheme.categoryColor(category.colorHex)
-
-                    let labelRadius = outerRadius + 18
-                    let labelX = center.x + cos(midAngle.radians) * labelRadius
-                    let labelY = center.y + sin(midAngle.radians) * labelRadius
-
-                    Text(OverviewDisplayFormatter.percentage(category.percentage))
-                        .font(.system(size: fontSizeForPercentage(category.percentage), weight: .bold))
-                        .foregroundStyle(color)
-                        .position(x: labelX, y: labelY)
-
-                    if category.percentage >= 5 {
-                        let iconRadius = outerRadius + 38
-                        let iconX = center.x + cos(midAngle.radians) * iconRadius
-                        let iconY = center.y + sin(midAngle.radians) * iconRadius
-
-                        CategoryGlyph(iconName: category.iconName, colorHex: category.colorHex, size: 34)
-                            .position(x: iconX, y: iconY)
-                    }
-                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(segment.category.name), \(OverviewDisplayFormatter.percentage(segment.category.percentage))")
+                .accessibilityAddTraits(.isButton)
             }
-            .frame(width: width, height: height)
+
+            ForEach(badgeSegments) { segment in
+                let angle = Angle.degrees(segment.midDegrees)
+                let isSelected = segment.category.id == selectedCategory?.id
+                CategoryDonutBadge(
+                    iconName: segment.category.iconName,
+                    colorHex: segment.category.colorHex,
+                    size: badgeSize,
+                    isSelected: isSelected
+                )
+                .offset(
+                    x: cos(angle.radians) * badgeRadius,
+                    y: sin(angle.radians) * badgeRadius
+                )
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+            }
+
+            centerContent
+                .frame(width: 126)
+        }
+        .frame(width: chartExtent, height: chartExtent)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 4)
+    }
+
+    private var badgeSegments: [OverviewCategoryDistributionSegment] {
+        let selectedSegment = distribution.segments.first { $0.category.id == selectedCategory?.id }
+        let candidates = [selectedSegment].compactMap { $0 }
+            + distribution.segments.filter { $0.category.percentage >= 0.08 }
+        var result: [OverviewCategoryDistributionSegment] = []
+
+        for segment in candidates {
+            guard !result.contains(where: { $0.id == segment.id }) else { continue }
+            let isSelected = segment.id == selectedSegment?.id
+            let hasRoom = result.allSatisfy { angularDistance($0.midDegrees, segment.midDegrees) >= 30 }
+            if isSelected || hasRoom {
+                result.append(segment)
+            }
+            if result.count >= 5 { break }
+        }
+
+        return result
+    }
+
+    private func angularDistance(_ first: Double, _ second: Double) -> Double {
+        let rawDifference = abs(first - second).truncatingRemainder(dividingBy: 360)
+        return min(rawDifference, 360 - rawDifference)
+    }
+
+    @ViewBuilder
+    private var centerContent: some View {
+        if let selectedCategory {
+            VStack(spacing: 4) {
+                Text(selectedCategory.name)
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .foregroundStyle(CashRunwayTheme.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.65)
+                Text(MoneyFormatter.string(from: signedAmount(selectedCategory.amountMinor)))
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .foregroundStyle(kind == .expense ? CashRunwayTheme.negative : CashRunwayTheme.positive)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.62)
+                Text(OverviewDisplayFormatter.percentage(selectedCategory.percentage))
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(CashRunwayTheme.textSecondary)
+            }
+        } else {
+            Text(kind == .expense ? "No expenses yet" : "No income yet")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(CashRunwayTheme.textSecondary)
+                .multilineTextAlignment(.center)
         }
     }
 
-    private func midAngleForCategory(at index: Int, categories: [OverviewCategoryRow]) -> Angle {
-        var startDegrees = -90.0
-        for i in 0..<index {
-            startDegrees += max(categories[i].percentage / 100.0 * 360.0, 0.5)
-        }
-        let sweepDegrees = max(categories[index].percentage / 100.0 * 360.0, 0.5)
-        return Angle.degrees(startDegrees + sweepDegrees / 2)
+    private func signedAmount(_ amountMinor: Int64) -> Int64 {
+        kind == .expense ? -amountMinor : amountMinor
     }
+}
 
-    private func fontSizeForPercentage(_ percentage: Double) -> CGFloat {
-        if percentage >= 10 { return 13 }
-        if percentage >= 5 { return 12 }
-        if percentage >= 2 { return 11 }
-        return 9
+private struct CategoryDonutBadge: View {
+    let iconName: String?
+    let colorHex: String?
+    let size: CGFloat
+    let isSelected: Bool
+
+    var body: some View {
+        let color = CashRunwayTheme.categoryColor(colorHex)
+        ZStack {
+            Circle()
+                .fill(color)
+            Circle()
+                .stroke(CashRunwayTheme.surface, lineWidth: 4)
+            Image(systemName: CategoryAppearanceCatalog.renderableIconName(iconName))
+                .font(.system(size: size * 0.4, weight: .bold))
+                .foregroundStyle(.white)
+        }
+        .frame(width: size, height: size)
+        .shadow(color: color.opacity(isSelected ? 0.28 : 0.16), radius: isSelected ? 12 : 8, x: 0, y: 6)
+        .scaleEffect(isSelected ? 1.08 : 1)
     }
 }
 
@@ -559,7 +634,8 @@ private struct TimelineOverviewView: View {
     @State private var chartMetric = OverviewChartMetric.wealth
     @State private var categoryKind: CategoryKind = .expense
     @State private var showsCategoryManagement = false
-    @State private var selectedCategory: OverviewCategoryRow?
+    @State private var showsAllCategories = false
+    @State private var selectedCategoryID: UUID?
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -587,14 +663,6 @@ private struct TimelineOverviewView: View {
         }
         .sheet(isPresented: $showsCategoryManagement) {
             CategoryManagementView(model: model, initialKind: categoryKind)
-        }
-        .navigationDestination(item: $selectedCategory) { category in
-            CategoryDetailOverviewView(
-                model: model,
-                category: category,
-                monthKey: model.selectedMonthKey,
-                walletID: model.selectedWalletID
-            )
         }
         .simultaneousGesture(
             DragGesture(minimumDistance: 20, coordinateSpace: .local)
@@ -814,72 +882,135 @@ private struct TimelineOverviewView: View {
     }
 
     private var categoriesCard: some View {
-        let categories = (model.overviewSnapshot?.categories ?? []).filter { $0.kind == categoryKind }
-        let topCategories = Array(categories.prefix(5))
-        return VStack(alignment: .leading, spacing: 18) {
-            HStack {
-                Text("Categories")
-                    .font(.system(size: 30, weight: .bold, design: .rounded))
-                    .foregroundStyle(CashRunwayTheme.textPrimary)
-                Spacer()
-                Button {
-                    showsCategoryManagement = true
-                } label: {
-                    Image(systemName: "slider.horizontal.3")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(CashRunwayTheme.textPrimary)
-                        .frame(width: 38, height: 38)
-                        .background(CashRunwayTheme.pill, in: Circle())
-                }
-                .buttonStyle(.plain)
-            }
-
-            if categories.isEmpty {
-                Text("No category totals for this month.")
-                    .font(.system(size: 15))
-                    .foregroundStyle(CashRunwayTheme.textSecondary)
-            } else {
-                CategoryDonutChart(
-                    categories: categories,
-                    kind: categoryKind,
-                    totalAmountMinor: categoryKind == .expense
-                        ? (model.overviewSnapshot?.monthExpenseMinor ?? 0)
-                        : (model.overviewSnapshot?.monthIncomeMinor ?? 0)
-                )
-                .frame(height: 320)
-
-                VStack(spacing: 14) {
-                    ForEach(topCategories) { item in
-                        Button {
-                            selectedCategory = item
-                        } label: {
-                            categoryLegendRow(item)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier(CashRunwayAccessibilityID.overviewCategory(item.name))
-                    }
-                }
-            }
-
-            Button {
-                showsCategoryManagement = true
-            } label: {
-                HStack {
-                    Text("All Categories (\(categories.count))")
-                        .font(.system(size: 16, weight: .semibold))
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .bold))
-                }
-                .foregroundStyle(CashRunwayTheme.textPrimary)
-                .padding(.horizontal, 18)
-                .padding(.vertical, 16)
-                .background(CashRunwayTheme.pill, in: Capsule())
-            }
+        let sourceCategories = (model.overviewSnapshot?.categories ?? []).filter { $0.kind == categoryKind }
+        let distribution = OverviewCategoryDistributionLayout.distribution(for: sourceCategories)
+        let categories = distribution.segments.map(\.category)
+        let displayedCategories = OverviewCategoryDisplayLayout.displayedCategories(
+            in: categories,
+            showsAllCategories: showsAllCategories
+        )
+        let remainingCategoryCount = max(categories.count - 5, 0)
+        let currentSelection = selectedCategory(from: categories, showsAllCategories: showsAllCategories)
+        return VStack(alignment: .leading, spacing: 20) {
+            categoriesHeader
+            categoriesCardContent(
+                distribution: distribution,
+                categories: categories,
+                displayedCategories: displayedCategories,
+                currentSelection: currentSelection,
+                remainingCategoryCount: remainingCategoryCount
+            )
         }
         .padding(20)
         .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
+        .onAppear {
+            syncSelectedCategoryID(with: categories)
+        }
+        .onChange(of: categoryKind) { _, _ in
+            showsAllCategories = false
+            selectedCategoryID = categories.first?.id
+        }
+        .onChange(of: model.selectedMonthKey) { _, _ in
+            showsAllCategories = false
+            selectedCategoryID = categories.first?.id
+        }
+        .onChange(of: model.selectedWalletID) { _, _ in
+            showsAllCategories = false
+            selectedCategoryID = categories.first?.id
+        }
+        .onChange(of: categories.map(\.id)) { _, _ in
+            syncSelectedCategoryID(with: categories)
+        }
+    }
+
+    private var categoriesHeader: some View {
+        HStack {
+            Text("Categories")
+                .font(.system(size: 30, weight: .bold, design: .rounded))
+                .foregroundStyle(CashRunwayTheme.textPrimary)
+            Spacer()
+            Button {
+                showsCategoryManagement = true
+            } label: {
+                Image(systemName: "slider.horizontal.3")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(CashRunwayTheme.textPrimary)
+                    .frame(width: 38, height: 38)
+                    .background(CashRunwayTheme.pill, in: Circle())
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    @ViewBuilder
+    private func categoriesCardContent(
+        distribution: OverviewCategoryDistribution,
+        categories: [OverviewCategoryRow],
+        displayedCategories: [OverviewCategoryRow],
+        currentSelection: OverviewCategoryRow?,
+        remainingCategoryCount: Int
+    ) -> some View {
+        if categories.isEmpty {
+            CategoryDonutChart(
+                distribution: distribution,
+                kind: categoryKind,
+                selectedCategory: nil
+            ) { _ in }
+        } else {
+            CategoryDonutChart(
+                distribution: distribution,
+                kind: categoryKind,
+                selectedCategory: currentSelection
+            ) { category in
+                selectCategory(category, from: categories)
+            }
+
+            VStack(spacing: 10) {
+                ForEach(displayedCategories) { item in
+                    Button {
+                        selectCategory(item, from: categories)
+                    } label: {
+                        categoryLegendRow(item, isSelected: item.id == currentSelection?.id)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier(CashRunwayAccessibilityID.overviewCategory(item.name))
+                }
+            }
+
+            if remainingCategoryCount > 0 {
+                showMoreCategoriesButton(categories: categories, remainingCategoryCount: remainingCategoryCount)
+            }
+        }
+    }
+
+    private func showMoreCategoriesButton(
+        categories: [OverviewCategoryRow],
+        remainingCategoryCount: Int
+    ) -> some View {
+        Button {
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+                let nextShowsAllCategories = !showsAllCategories
+                showsAllCategories = nextShowsAllCategories
+                selectedCategoryID = selectedCategory(
+                    from: categories,
+                    showsAllCategories: nextShowsAllCategories
+                )?.id
+            }
+        } label: {
+            HStack {
+                Text(showsAllCategories ? "Show Less" : "Show More (\(remainingCategoryCount))")
+                    .font(.system(size: 16, weight: .semibold))
+                Spacer()
+                Image(systemName: showsAllCategories ? "chevron.up" : "chevron.down")
+                    .font(.system(size: 12, weight: .bold))
+            }
+            .foregroundStyle(CashRunwayTheme.accent)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 16)
+            .background(CashRunwayTheme.accent.opacity(0.14), in: Capsule())
+        }
+        .buttonStyle(.plain)
     }
 
     private var labelsCard: some View {
@@ -904,24 +1035,42 @@ private struct TimelineOverviewView: View {
         .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
     }
 
-    private func categoryLegendRow(_ item: OverviewCategoryRow) -> some View {
+    private func categoryLegendRow(_ item: OverviewCategoryRow, isSelected: Bool) -> some View {
         HStack(spacing: 14) {
             CategoryGlyph(iconName: item.iconName, colorHex: item.colorHex, size: 46)
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(item.name)
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(CashRunwayTheme.textPrimary)
                     .lineLimit(1)
                     .truncationMode(.tail)
-                Text(transactionCountText(item.transactionCount))
-                    .font(.system(size: 14, weight: .medium))
+                Text("\(transactionCountText(item.transactionCount)) · \(OverviewDisplayFormatter.percentage(item.percentage))")
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(CashRunwayTheme.textSecondary)
             }
             Spacer()
             Text(MoneyFormatter.string(from: signedAmount(item.amountMinor)))
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(categoryKind == .expense ? CashRunwayTheme.negative : CashRunwayTheme.positive)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(minHeight: 66)
+        .background(
+            isSelected
+                ? CashRunwayTheme.categoryColor(item.colorHex).opacity(0.12)
+                : CashRunwayTheme.surface,
+            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(
+                    isSelected ? CashRunwayTheme.categoryColor(item.colorHex).opacity(0.36) : CashRunwayTheme.line.opacity(0.55),
+                    lineWidth: 1
+                )
+        )
     }
 
     private func labelLegendRow(_ item: OverviewLabelRow) -> some View {
@@ -948,6 +1097,38 @@ private struct TimelineOverviewView: View {
 
     private func signedAmount(_ amountMinor: Int64) -> Int64 {
         categoryKind == .expense ? -amountMinor : amountMinor
+    }
+
+    private func selectedCategory(
+        from categories: [OverviewCategoryRow],
+        showsAllCategories: Bool
+    ) -> OverviewCategoryRow? {
+        OverviewCategoryDisplayLayout.selectedCategory(
+            in: categories,
+            selectedCategoryID: selectedCategoryID,
+            showsAllCategories: showsAllCategories
+        )
+    }
+
+    private func syncSelectedCategoryID(with categories: [OverviewCategoryRow]) {
+        guard let selected = selectedCategory(from: categories, showsAllCategories: showsAllCategories) else {
+            selectedCategoryID = nil
+            return
+        }
+        selectedCategoryID = selected.id
+    }
+
+    private func selectCategory(_ category: OverviewCategoryRow, from categories: [OverviewCategoryRow]) {
+        if OverviewCategoryDisplayLayout.shouldExpandForSelection(
+            categoryID: category.id,
+            in: categories,
+            showsAllCategories: showsAllCategories
+        ) {
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+                showsAllCategories = true
+            }
+        }
+        selectedCategoryID = category.id
     }
 
     private func transactionCountText(_ count: Int) -> String {

@@ -1376,6 +1376,113 @@ public struct OverviewCategoryRow: Identifiable, Hashable, Sendable {
     public var percentage: Double
 }
 
+public struct OverviewCategoryDistributionSegment: Identifiable, Hashable, Sendable {
+    public var id: UUID { category.id }
+    public var category: OverviewCategoryRow
+    public var startDegrees: Double
+    public var endDegrees: Double
+    public var sweepDegrees: Double
+    public var midDegrees: Double
+}
+
+public struct OverviewCategoryDistribution: Hashable, Sendable {
+    public var segments: [OverviewCategoryDistributionSegment]
+    public var totalAmountMinor: Int64
+}
+
+public enum OverviewCategoryDistributionLayout {
+    public static func distribution(for categories: [OverviewCategoryRow]) -> OverviewCategoryDistribution {
+        let validCategories = categories.compactMap { category -> OverviewCategoryRow? in
+            guard category.amountMinor != Int64.min else { return nil }
+            let normalizedAmount = abs(category.amountMinor)
+            guard normalizedAmount > 0 else { return nil }
+            var normalizedCategory = category
+            normalizedCategory.amountMinor = normalizedAmount
+            return normalizedCategory
+        }
+        .sorted {
+            if $0.amountMinor == $1.amountMinor {
+                return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+            }
+            return $0.amountMinor > $1.amountMinor
+        }
+
+        let totalAmountMinor = validCategories.reduce(Int64.zero) { $0 + $1.amountMinor }
+        guard totalAmountMinor > 0 else {
+            return OverviewCategoryDistribution(segments: [], totalAmountMinor: 0)
+        }
+
+        var startDegrees = -90.0
+        let segments = validCategories.map { category in
+            var normalizedCategory = category
+            normalizedCategory.percentage = Double(category.amountMinor) / Double(totalAmountMinor)
+            let sweepDegrees = validCategories.count == 1 ? 360.0 : normalizedCategory.percentage * 360.0
+            let endDegrees = startDegrees + sweepDegrees
+            defer { startDegrees = endDegrees }
+            return OverviewCategoryDistributionSegment(
+                category: normalizedCategory,
+                startDegrees: startDegrees,
+                endDegrees: endDegrees,
+                sweepDegrees: sweepDegrees,
+                midDegrees: startDegrees + sweepDegrees / 2
+            )
+        }
+
+        return OverviewCategoryDistribution(segments: segments, totalAmountMinor: totalAmountMinor)
+    }
+
+    public static func segments(for categories: [OverviewCategoryRow]) -> [OverviewCategoryDistributionSegment] {
+        distribution(for: categories).segments
+    }
+}
+
+public enum OverviewCategoryDisplayLayout {
+    public static let defaultVisibleLimit = 5
+
+    public static func displayedCategories(
+        in categories: [OverviewCategoryRow],
+        showsAllCategories: Bool,
+        visibleLimit: Int = defaultVisibleLimit
+    ) -> [OverviewCategoryRow] {
+        guard !showsAllCategories else { return categories }
+        return Array(categories.prefix(max(visibleLimit, 0)))
+    }
+
+    public static func selectedCategory(
+        in categories: [OverviewCategoryRow],
+        selectedCategoryID: UUID?,
+        showsAllCategories: Bool,
+        visibleLimit: Int = defaultVisibleLimit
+    ) -> OverviewCategoryRow? {
+        let displayed = displayedCategories(
+            in: categories,
+            showsAllCategories: showsAllCategories,
+            visibleLimit: visibleLimit
+        )
+        if let selectedCategoryID,
+           let selected = displayed.first(where: { $0.id == selectedCategoryID }) {
+            return selected
+        }
+        return displayed.first
+    }
+
+    public static func shouldExpandForSelection(
+        categoryID: UUID,
+        in categories: [OverviewCategoryRow],
+        showsAllCategories: Bool,
+        visibleLimit: Int = defaultVisibleLimit
+    ) -> Bool {
+        guard !showsAllCategories else { return false }
+        guard categories.contains(where: { $0.id == categoryID }) else { return false }
+        let displayed = displayedCategories(
+            in: categories,
+            showsAllCategories: false,
+            visibleLimit: visibleLimit
+        )
+        return !displayed.contains(where: { $0.id == categoryID })
+    }
+}
+
 public struct OverviewLabelRow: Identifiable, Hashable, Sendable {
     public var id: String { "\(labelID.uuidString)-\(kind.rawValue)" }
     public var labelID: UUID

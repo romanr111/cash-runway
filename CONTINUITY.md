@@ -16,10 +16,10 @@ Rules:
 
 ## Snapshot
 
-- Goal: Implement the broader Warm Functional Ledger UI refresh for Cash Runway in an isolated worktree.
-- Success criteria: More/Settings, supporting management sheets, editors, transaction-adjacent surfaces, and import/backup/Monobank flows follow the refreshed UI language while preserving behavior, accessibility identifiers, data models, disabled/deprecated feature policy, and required iOS validation gates.
-- Current state: Fixed category row text crushing on iPhone 15 by adding .lineLimit(1) and .layoutPriority(1); committed and pushed to draft PR #23.
-- Next action: Await user review/merge decision.
+- Goal: Fix the broken Timeline Overview Categories donut on draft PR #23.
+- Success criteria: Donut uses valid absolute category totals, renders centered and prominent, supports in-place category selection, keeps mirrored core in sync, and passes focused tests, full unit tests, simulator build, and boot smoke.
+- Current state: Follow-up review fixes added visible donut category badges and deterministic collapsed-list selection on `codex/broader-ui-refresh`; validation and seeded real-data smoke passed.
+- Next action: Commit and push the donut fix to PR #23 or request final adjustments.
 - Open questions: None.
 - Merge status: not-merged.
 
@@ -44,6 +44,7 @@ Rules:
 - `Modules/CashRunwayCorePackage/Sources/CashRunwayCore/Models.swift`
 - `Modules/CashRunwayCorePackage/Sources/CashRunwayCore/CSVSupport.swift`
 - `Tests/CashRunwayCoreTests/CashRunwayCoreTests.swift`
+- `Tests/CashRunwayCoreTests/OverviewCategoryDistributionTests.swift`
 - `Tests/CashRunwayCoreTests/UtilityAndModelTests.swift`
 - `CONTINUITY.md`
 
@@ -65,6 +66,13 @@ Rules:
 - 2026-05-31 [REVIEW] Detailed self-review found an important row UX/accessibility regression where refreshed transaction rows hid manual notes; fixed `TransactionRow` metadata and accessibility summary to include notes again.
 - 2026-05-31 [VALIDATED] Post-review `diff -rq Sources/CashRunwayCore Modules/CashRunwayCorePackage/Sources/CashRunwayCore`, `git diff --check`, and full `swift test` passed after the row-note fix.
 - 2026-05-31 [VALIDATED] Post-review iPhone 17 clean build passed, simulator boot smoke opened Timeline and direct Edit Transaction, row accessibility labels included notes, and log scan found no crash/error/warning matches.
+- 2026-06-01 [SETUP] Corrected active worktree branch from `benchmarks-for-pr25` back to PR #23 branch `codex/broader-ui-refresh`; temporary wrong-branch stash was dropped after porting the fix.
+- 2026-06-01 [IMPLEMENTED] Added mirrored `OverviewCategoryDistributionLayout` normalization and replaced the Overview Categories donut with a fixed-size, centered, selection-based ring using the category list as legend.
+- 2026-06-01 [TEST] Added `OverviewCategoryDistributionTests` for absolute expense amounts, zero/invalid filtering, descending sort, full-ring single category, and empty fallback.
+- 2026-06-01 [VALIDATED] Focused distribution tests, core mirror diff, diff check, full `swift test`, iPhone 17 build, XcodeBuildMCP simulator launch, empty Overview smoke, seeded real-data Overview smoke, and log scan passed.
+- 2026-06-01 [REVIEW] Detailed self-review found missing category badges on the donut and a hidden-row selection gap when the category list was collapsed.
+- 2026-06-01 [IMPLEMENTED] Added solid category badges over readable donut segments and moved collapsed selection policy into mirrored core `OverviewCategoryDisplayLayout`.
+- 2026-06-01 [VALIDATED] Follow-up focused tests, full `swift test`, mirror diff, diff check, clean iPhone 17 build, seeded real-data smoke, and runtime/os log scan passed.
 
 ## Receipts
 
@@ -78,3 +86,12 @@ Rules:
 - 2026-05-31 [LOG] Direct edit/delete simulator log scan found no crash/error/warning matches.
 - 2026-05-31 [BUILD] Review fix: required iPhone 17 clean build ended with `** BUILD SUCCEEDED **`.
 - 2026-05-31 [LOG] Review fix simulator log scan found no crash/error/warning matches.
+- 2026-06-01 [TEST] `swift test --filter OverviewCategoryDistributionTests` passed after first failing because `OverviewCategoryDistributionLayout` did not exist.
+- 2026-06-01 [TEST] `swift test` passed with 236 tests in 23 suites.
+- 2026-06-01 [BUILD] `xcodebuild -scheme CashRunway -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' clean build 2>&1 | tail -60` ended with `** BUILD SUCCEEDED **`.
+- 2026-06-01 [SMOKE] XcodeBuildMCP `build_run_sim` launched `dev.roman.cashrunway` on iPhone 17, Overview opened, empty-state donut was centered/prominent, and runtime/os log scan found no crash/error/warning matches.
+- 2026-06-01 [SMOKE] Relaunched with `CASH_RUNWAY_UI_TEST_MODE=1`, `transaction_core`, reset DB `cash-runway-donut-smoke.sqlite`; May 2026 Overview showed real donut data: Restaurants 54% and Groceries 46%, with matching segment/row accessibility labels and no crash/error/warning log matches.
+- 2026-06-01 [TEST] Follow-up `swift test --filter OverviewCategoryDistributionTests` passed with 5 tests after red failure for missing `OverviewCategoryDisplayLayout`.
+- 2026-06-01 [TEST] Follow-up `swift test` passed with 238 tests in 23 suites.
+- 2026-06-01 [BUILD] Follow-up `xcodebuild -scheme CashRunway -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' clean build 2>&1 | tail -5` ended with `** BUILD SUCCEEDED **`.
+- 2026-06-01 [SMOKE] Follow-up seeded smoke screenshot `/var/folders/y1/44_6v5x1685fclqcclfn375w0000gn/T/screenshot_optimized_09f04fe7-259b-487b-8d67-fb5b6b98a8b3.jpg` showed solid category badges over the real May donut; runtime/os log scan found no crash/error/warning matches.
