@@ -18,8 +18,8 @@ Rules:
 
 - Goal: Make PR `#24` merge-ready while preserving category-merge data safety.
 - Success criteria: Category merge preserves transactions while only updating category references, remap lookups follow active destinations, CI/unit compile blockers are fixed, core mirrors stay identical, current `origin/main` merges cleanly, and required validation passes.
-- Current state: The CSV test compile blocker and chained remap bug were fixed, latest `origin/main` was merged with the continuity conflict resolved, and prior local validation passed before the latest main merge.
-- Next action: Rerun validation after the latest main merge, push PR `#24`, then recheck mergeability and CI.
+- Current state: The CSV test compile blocker and chained remap bug were fixed, latest `origin/main` was merged, and required local validation passed on the combined branch.
+- Next action: Push PR `#24`, then recheck mergeability and CI.
 - Open questions: None.
 - Merge status: not-merged.
 
@@ -58,6 +58,8 @@ Rules:
 - 2026-06-01 [VALIDATED] `swift test --filter BankCategoryMapperTests`, `swift test --filter CSVEdgeCaseTests/importReusesMergedDestinationCategoryByName`, and core mirror diff passed.
 - 2026-06-01 [MERGE] Merged current `origin/main` into `codex/category-merge-fix` and resolved the only conflict in `CONTINUITY.md`.
 - 2026-06-01 [VALIDATED] Focused category merge/import tests, full `swift test`, core mirror diff, `git diff --check`, required iPhone 17 clean build, install/launch smoke, and app error/fault log scan passed.
+- 2026-06-01 [MERGE] Merged newer `origin/main` through `f5d7ad4` into `codex/category-merge-fix` and resolved the continuity conflict.
+- 2026-06-01 [VALIDATED] Re-ran focused category merge/import tests, full `swift test`, core mirror diff, `git diff --check`, iPhone 17 clean build, and install/launch smoke after the latest main merge; all passed.
 
 ## Receipts
 
@@ -75,3 +77,7 @@ Rules:
 - 2026-06-01 [SMOKE] Installed and launched `dev.roman.cashrunway` on iPhone 17; severity-filtered app log scan found no error/fault entries, with only system debug text containing `warning` from RunningBoard/BoardServices.
 - 2026-06-01 [PR] `#24` — https://github.com/romanr111/cash-runway/pull/24
 - 2026-06-01 [MAIN] `fix/side-store-concurrency` was merged into `main` at `db9a1e4`; follow-up continuity update landed at `f5d7ad4`.
+- 2026-06-01 [TEST] Post-latest-main `swift test --filter 'DatabaseTransactionSafetyTests/categoryMerge|BankCategoryMapperTests|CSVEdgeCaseTests/importReusesMergedDestinationCategoryByName'` passed 13 tests.
+- 2026-06-01 [TEST] Post-latest-main `swift test` passed 243 tests in 23 suites.
+- 2026-06-01 [BUILD] Post-latest-main iPhone 17 clean build ended with `** BUILD SUCCEEDED **`; same SQLCipher strip and AppIntents metadata warnings.
+- 2026-06-01 [SMOKE] Post-latest-main install and launch returned `dev.roman.cashrunway: 76479`; severity-filtered app log scan found no error/fault entries.
