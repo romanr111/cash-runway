@@ -18,8 +18,8 @@ Rules:
 
 - Goal: Make PR `#24` merge-ready while preserving category-merge data safety.
 - Success criteria: Category merge preserves transactions while only updating category references, remap lookups follow active destinations, CI/unit compile blockers are fixed, core mirrors stay identical, current `origin/main` merges cleanly, and required validation passes.
-- Current state: The CSV test compile blocker was fixed, chained remap lookup was repaired with focused red/green coverage, and local focused tests passed.
-- Next action: Merge current `origin/main`, resolve any continuity conflict, then run the full validation gates.
+- Current state: The CSV test compile blocker and chained remap bug were fixed, current `origin/main` was merged with the continuity conflict resolved, and focused tests passed.
+- Next action: Run the full validation gates, push PR `#24`, and recheck mergeability/CI.
 - Open questions: None.
 - Merge status: not-merged.
 
@@ -43,6 +43,7 @@ Rules:
 
 ## Done (recent)
 
+- 2026-06-01 [MERGE] PR `#26` (`side_store_integration`) merged to `main`. Branch deleted locally and remotely.
 - 2026-06-01 [CODE] Added `ios-release.yml` for tag-triggered IPA builds and automatic `altstore.json` updates pushed to main.
 - 2026-06-01 [CODE] Added `sidestore-release.yml` for manual SideStore builds with GitHub Pages deployment.
 - 2026-06-01 [CODE] Added `altstore.json` SideStore source manifest and `sidestore/icon.png` app icon.
@@ -55,13 +56,16 @@ Rules:
 - 2026-06-01 [TEST] Added a failing chained-remap BankCategoryMapper regression for `Restaurants -> Groceries -> Shopping`.
 - 2026-06-01 [CODE] Fixed CSV test verification through `transactionDraft(id:)` and made `resolvedCategoryID` follow remap chains to active destinations in both mirrored core trees.
 - 2026-06-01 [VALIDATED] `swift test --filter BankCategoryMapperTests`, `swift test --filter CSVEdgeCaseTests/importReusesMergedDestinationCategoryByName`, and core mirror diff passed.
+- 2026-06-01 [MERGE] Merged current `origin/main` into `codex/category-merge-fix` and resolved the only conflict in `CONTINUITY.md`.
 
 ## Receipts
 
-- 2026-06-01 [MERGE] Resolved the only conflict in `CONTINUITY.md` and created merge commit `d8283fd`.
+- 2026-06-01 [MERGE] `0d31943` — Merge pull request #26 from romanr111/side_store_integration
+- 2026-06-01 [COMMIT] `20a9c48` — fix(release): review fixes for SideStore automation
 - 2026-06-01 [COMMIT] `d9c269e` — ci: add tag-triggered release workflow and altstore.json source
 - 2026-06-01 [COMMIT] `9c3bf28` — Add SideStore release workflow and icon; update agent configs and continuity
 - 2026-06-01 [TEST] Red `swift test --filter BankCategoryMapperTests` failed only on `builtInMCCFallbackFollowsChainedMergedDestinationCategory`, resolving archived Groceries instead of active Shopping.
 - 2026-06-01 [TEST] Green `swift test --filter BankCategoryMapperTests` passed 6 tests.
 - 2026-06-01 [TEST] Green `swift test --filter CSVEdgeCaseTests/importReusesMergedDestinationCategoryByName` passed.
+- 2026-06-01 [MERGE] Resolved `CONTINUITY.md` conflict after merging `origin/main` into PR `#24`.
 - 2026-06-01 [PR] `#24` — https://github.com/romanr111/cash-runway/pull/24
