@@ -18,8 +18,8 @@ Rules:
 
 - Goal: Fix the broken Timeline Overview Categories donut on draft PR #23.
 - Success criteria: Donut uses valid absolute category totals, renders centered and prominent, supports in-place category selection, keeps mirrored core in sync, and passes focused tests, full unit tests, simulator build, and boot smoke.
-- Current state: The second `origin/main` merge passed validation and was ready to commit.
-- Next action: Commit the second merge and push `codex/broader-ui-refresh` to update PR #23.
+- Current state: The PR branch included the latest `origin/main` workflow-only merge and was ready for final push.
+- Next action: Push `codex/broader-ui-refresh` to update PR #23 and verify PR mergeability.
 - Open questions: None.
 - Merge status: not-merged.
 
@@ -80,6 +80,7 @@ Rules:
 - 2026-06-01 [PUSHED] Pushed `codex/broader-ui-refresh` to PR #23 at `e2a54bb`.
 - 2026-06-01 [MERGE] Fetched again and found `origin/main` advanced to `f5d7ad4`; second merge only conflicted in `CONTINUITY.md`.
 - 2026-06-01 [VALIDATED] Second main merge passed mirror diff, diff check, focused donut tests, full `swift test`, clean iPhone 17 build, Build iOS Apps simulator launch, seeded May Overview smoke, and log scan.
+- 2026-06-01 [MERGE] Fetched once more before pushing and merged new `origin/main` SideStore workflow-only commits without conflicts.
 
 ## Receipts
 
@@ -110,3 +111,5 @@ Rules:
 - 2026-06-01 [TEST] Second-merge `swift test` passed with 242 tests in 24 suites.
 - 2026-06-01 [BUILD] Second-merge `xcodebuild -scheme CashRunway -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' clean build 2>&1 | tail -5` ended with `** BUILD SUCCEEDED **`.
 - 2026-06-01 [SMOKE] Second-merge seeded smoke screenshots `/var/folders/y1/44_6v5x1685fclqcclfn375w0000gn/T/screenshot_optimized_1418ff23-4993-4391-8855-49817786c2e2.jpg` and `/var/folders/y1/44_6v5x1685fclqcclfn375w0000gn/T/screenshot_optimized_e8af4b9f-d524-485c-9cb8-f14ef3c061b5.jpg` showed May Overview donut with category badges and matching legend rows; runtime/os log scan found no crash/error/warning matches.
+- 2026-06-01 [MERGE] Final pre-push `origin/main` merge commit changed only `.github/workflows/sidestore-release.yml`.
+- 2026-06-01 [TEST] Final pre-push workflow-only merge passed diff check, core mirror diff, and `swift test --filter OverviewCategoryDistributionTests`.
