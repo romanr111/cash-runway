@@ -188,10 +188,20 @@ jobs:
               --notes "Automated SideStore build for Cash Runway."
           fi
 
+      - name: Verify GitHub Pages is enabled
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if ! gh api "repos/${{ github.repository }}/pages" --jq '.source.branch' >/dev/null 2>&1; then
+            echo "::error::GitHub Pages is not enabled for this repository." >&2
+            echo "::error::Go to Settings → Pages → Build and deployment → Source: GitHub Actions → Save, then re-run this workflow." >&2
+            exit 1
+          fi
+
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
-        with:
-          enablement: true
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
