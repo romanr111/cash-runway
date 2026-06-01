@@ -7,7 +7,6 @@ struct BankConnectionServiceTests {
     @Test func tokenValidationCallsClientInfoOnly() async throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
-        try TestSupport.seedFixtureWallets(into: repository)
         let validator = FakeMonobankTokenValidator(
             info: MonobankClientInfo(name: "Test User", accounts: [Self.uahAccount(id: "account-1")])
         )
@@ -28,7 +27,6 @@ struct BankConnectionServiceTests {
     @Test func finalConfirmationCreatesActiveIntegrationAndSelectedUAHAccounts() async throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
-        try TestSupport.seedFixtureWallets(into: repository)
         let keychain = TestKeychainStore()
         let tokenStore = KeychainBankTokenStore(keychain: keychain)
         let syncStartAt = Date(timeIntervalSince1970: 1_800_000_000)
@@ -67,7 +65,6 @@ struct BankConnectionServiceTests {
     @Test func connectionFailureRollsBackRowsAndDeletesStoredToken() async throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
-        try TestSupport.seedFixtureWallets(into: repository)
         let keychain = TestKeychainStore()
         let walletID = try #require(try repository.wallets().first?.id)
         let service = MonobankConnectionService(
@@ -96,7 +93,6 @@ struct BankConnectionServiceTests {
     @Test func enabledAccountRequiresExistingWalletMapping() async throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
-        try TestSupport.seedFixtureWallets(into: repository)
         let service = MonobankConnectionService(
             repository: repository,
             tokenStore: KeychainBankTokenStore(keychain: TestKeychainStore()),
@@ -119,7 +115,6 @@ struct BankConnectionServiceTests {
     @Test func successfulSyncClearsPreviousErrorAndUpdatesIntegrationStatus() async throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
-        try TestSupport.seedFixtureWallets(into: repository)
         let syncStartAt = Date(timeIntervalSince1970: 1_800_000_000)
         let now = syncStartAt.addingTimeInterval(60)
         let walletID = try #require(try repository.wallets().first?.id)
@@ -180,24 +175,32 @@ struct BankConnectionServiceTests {
             try await performer.syncOnForeground()
         }
 
-        await base.waitUntilCallCount(1)
+        let firstCallStarted = await base.waitUntilCallCount(1)
+        #expect(firstCallStarted)
+        guard firstCallStarted else { return }
         #expect(await base.callCount == 1)
         #expect(await base.maxActiveCount == 1)
 
         await base.releaseNext()
-        _ = try await manualTask.value
-        await base.waitUntilCallCount(2)
+        _ = try await withTimeout(seconds: 10) {
+            try await manualTask.value
+        }
+
+        let secondCallStarted = await base.waitUntilCallCount(2)
+        #expect(secondCallStarted)
+        guard secondCallStarted else { return }
         #expect(await base.maxActiveCount == 1)
 
         await base.releaseNext()
-        _ = try await foregroundTask.value
+        _ = try await withTimeout(seconds: 10) {
+            try await foregroundTask.value
+        }
         #expect(await base.callCount == 2)
     }
 
     @Test func disconnectDisablesIntegrationAndKeepsImportedTransactions() async throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
-        try TestSupport.seedFixtureWallets(into: repository)
         let keychain = TestKeychainStore()
         let tokenStore = KeychainBankTokenStore(keychain: keychain)
         let syncStartAt = Date(timeIntervalSince1970: 1_800_000_000)
@@ -234,7 +237,6 @@ struct BankConnectionServiceTests {
     @Test func learningMerchantCategoryRuleAffectsFutureImports() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
-        try TestSupport.seedFixtureWallets(into: repository)
         let syncStartAt = Date(timeIntervalSince1970: 1_800_000_000)
         let walletID = try #require(try repository.wallets().first?.id)
         let groceries = try #require(try repository.categories(kind: .expense).first { $0.name == "Groceries" })
@@ -428,10 +430,12 @@ private actor BlockingBankSyncPerformer: BankSyncPerforming {
         await block()
     }
 
-    func waitUntilCallCount(_ expectedCount: Int) async {
-        while callCount < expectedCount {
-            await Task.yield()
+    func waitUntilCallCount(_ expectedCount: Int, timeoutNanoseconds: UInt64 = 10_000_000_000) async -> Bool {
+        let deadline = DispatchTime.now().uptimeNanoseconds + timeoutNanoseconds
+        while callCount < expectedCount && DispatchTime.now().uptimeNanoseconds < deadline {
+            try? await Task.sleep(nanoseconds: 10_000_000)
         }
+        return callCount >= expectedCount
     }
 
     func releaseNext() {
@@ -448,5 +452,31 @@ private actor BlockingBankSyncPerformer: BankSyncPerforming {
         }
         activeCount -= 1
         return BankSyncResult()
+    }
+}
+
+private struct TestTimeoutError: Error {}
+
+private func withTimeout<T>(
+    seconds: UInt64,
+    operation: @escaping @Sendable () async throws -> T
+) async throws -> T {
+    try await withThrowingTaskGroup(of: T.self) { group in
+        defer { group.cancelAll() }
+
+        group.addTask {
+            try await operation()
+        }
+
+        group.addTask {
+            try await Task.sleep(nanoseconds: seconds * 1_000_000_000)
+            throw TestTimeoutError()
+        }
+
+        guard let result = try await group.next() else {
+            throw TestTimeoutError()
+        }
+
+        return result
     }
 }
