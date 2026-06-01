@@ -54,6 +54,12 @@ jobs:
             echo "Missing sidestore/icon.png. Add a 1024x1024 PNG icon before publishing." >&2
             exit 1
           }
+          width=$(sips -g pixelWidth sidestore/icon.png 2>/dev/null | awk -F': ' '/pixelWidth/ {print $2}')
+          height=$(sips -g pixelHeight sidestore/icon.png 2>/dev/null | awk -F': ' '/pixelHeight/ {print $2}')
+          if [[ "${width}" != "1024" || "${height}" != "1024" ]]; then
+            echo "sidestore/icon.png must be exactly 1024x1024 pixels." >&2
+            exit 1
+          fi
 
       - name: Set app version for this build
         shell: bash

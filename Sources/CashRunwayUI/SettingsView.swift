@@ -90,11 +90,10 @@ struct SettingsView: View {
                             moreRow(icon: "square.and.arrow.up.fill", tint: "#E5862F", title: "Export CSV", subtitle: isExporting ? "Exporting…" : "Share the current filtered export") {
                                 guard !isExporting else { return }
                                 isExporting = true
-                                let service = model.csvService
                                 let query = model.transactionQuery
-                                Task.detached(priority: .userInitiated) {
+                                Task {
                                     do {
-                                        let csv = try service.exportCSV(query: query)
+                                        let csv = try await model.exportCSV(query: query)
                                         let url = FileManager.default.temporaryDirectory.appendingPathComponent("cash-runway-export.csv")
                                         try csv.write(to: url, atomically: true, encoding: .utf8)
                                         await MainActor.run {
@@ -255,21 +254,23 @@ struct SettingsView: View {
 
     private func exportFullBackup() {
         isBackupExporting = true
-        let service = model.backupService
-        Task { @MainActor in
+        Task {
             do {
-                let data = try await Task.detached(priority: .userInitiated) {
-                    let backup = try service.exportFullBackup()
-                    return try service.encode(backup)
-                }.value
+                let data = try await model.exportFullBackupData()
                 let url = FileManager.default.temporaryDirectory.appendingPathComponent("cash-runway-backup-\(backupFileTimestamp()).json")
                 try data.write(to: url, options: .atomic)
-                backupExportFileURL = url
-                isBackupExporterPresented = true
+                await MainActor.run {
+                    backupExportFileURL = url
+                    isBackupExporterPresented = true
+                }
             } catch {
-                model.errorMessage = error.localizedDescription
+                await MainActor.run {
+                    model.errorMessage = error.localizedDescription
+                }
             }
-            isBackupExporting = false
+            await MainActor.run {
+                isBackupExporting = false
+            }
         }
     }
 

@@ -25,30 +25,18 @@ final class BackupCoordinator: Identifiable {
 
     func prepareImport(from url: URL) {
         let fileName = url.lastPathComponent.isEmpty ? "backup.json" : url.lastPathComponent
-        let service = model.backupService
         backupImportData = Data()
         backupImportFileName = fileName
         backupImportSummary = nil
         backupImportPreparationError = nil
 
-        Task {
+        Task { @MainActor in
             do {
-                let data = try await Task.detached(priority: .userInitiated) {
-                    try CSVImportFileReader.readData(from: url)
-                }.value
-                let summary = try await Task.detached(priority: .userInitiated) {
-                    let backup = try service.decode(data: data)
-                    return try service.validate(backup)
-                }.value
-
-                await MainActor.run {
-                    backupImportData = data
-                    backupImportSummary = summary
-                }
+                let preparedImport = try await model.prepareBackupImport(from: url)
+                backupImportData = preparedImport.data
+                backupImportSummary = preparedImport.summary
             } catch {
-                await MainActor.run {
-                    backupImportPreparationError = error.localizedDescription
-                }
+                backupImportPreparationError = error.localizedDescription
             }
         }
     }
