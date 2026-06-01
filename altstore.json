@@ -1,0 +1,18 @@
+{
+  "name": "Cash Runway",
+  "identifier": "dev.roman.cashrunway.source",
+  "sourceURL": "https://raw.githubusercontent.com/romanr111/cash-runway/main/altstore.json",
+  "apps": [
+    {
+      "name": "Cash Runway",
+      "bundleIdentifier": "dev.roman.cashrunway",
+      "developerName": "Roman",
+      "subtitle": "Personal finance & budget tracker",
+      "localizedDescription": "Cash Runway is a personal finance tracker that helps you monitor transactions, manage wallets, track categories, and plan recurring payments.",
+      "iconURL": "https://raw.githubusercontent.com/romanr111/cash-runway/main/Assets/AppIcon.png",
+      "tintColor": "E85D3A",
+      "category": "finance",
+      "versions": []
+    }
+  ]
+}
