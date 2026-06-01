@@ -2,6 +2,12 @@ name: iOS CI
 
 on:
   workflow_dispatch:
+    inputs:
+      run_ui_e2e_tests:
+        description: 'Run UI end-to-end tests'
+        type: boolean
+        default: false
+        required: false
   pull_request:
     types:
       - opened
@@ -130,3 +136,64 @@ jobs:
           path: swift-integration-test.log
           if-no-files-found: ignore
 
+  ui-e2e-tests:
+    name: UI End-to-End Tests
+    runs-on: macos-26
+    timeout-minutes: 60
+    needs: integration-tests
+    if: github.event_name == 'workflow_dispatch' && inputs.run_ui_e2e_tests
+
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
+
+      - name: Cache SwiftPM packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.swiftpm/cache
+          key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-
+
+      - name: Pick iPhone simulator
+        id: simulator
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if xcrun simctl list devices available | grep -q 'iPhone 17 ('; then
+            destination='platform=iOS Simulator,name=iPhone 17'
+          else
+            device_name="$(xcrun simctl list devices available | awk -F'[()]' '/iPhone/ && /Shutdown|Booted/ { sub(/^[[:space:]]+/, "", $1); print $1; exit }')"
+            if [[ -z "${device_name}" ]]; then
+              echo 'No available iPhone simulator found' >&2
+              exit 1
+            fi
+            destination="platform=iOS Simulator,name=${device_name}"
+          fi
+
+          echo "destination=${destination}" >> "${GITHUB_OUTPUT}"
+          echo "Using ${destination}"
+
+      - name: Run UI end-to-end tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild test \
+            -project "${{ env.PROJECT }}" \
+            -scheme "${{ env.SCHEME }}" \
+            -sdk iphonesimulator \
+            -destination "${{ steps.simulator.outputs.destination }}" \
+            -only-testing:CashRunwayUITests \
+            2>&1 | tee ui-e2e-test.log
+
+      - name: Upload UI E2E test logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ui-e2e-test-logs
+          path: ui-e2e-test.log
+          if-no-files-found: ignore

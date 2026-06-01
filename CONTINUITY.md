@@ -16,44 +16,44 @@ Rules:
 
 ## Snapshot
 
-- Goal: Fix category merging so duplicate categories such as `Restaurant` can be merged into `Restaurants` safely.
-- Success criteria: Merge moves transactions and relevant category references, hides the source category, keeps the destination active, preserves aggregate/search consistency, mirrors core changes, and passes required iOS validation gates.
-- Current state: Category merge was fixed and draft PR `#24` was opened from `codex/category-merge-fix` with required unit/build/boot validation passing.
-- Next action: Monitor PR `#24` CI and address any review feedback.
+- Goal: Keep the category merge remap lookup fix published while preserving the current mainline release-automation continuity.
+- Success criteria: PR `#24` stays ready for review on top of current `origin/main`, category lookup reuses merged categories, and the ledger stays synchronized after the branch is reconciled.
+- Current state: The category merge remap lookup fix was published on PR `#24`, the PR was marked ready for review, and the branch hit a merge conflict while being brought up to current `origin/main`.
+- Next action: Resolve the remaining merge conflict in `CONTINUITY.md`, repush the branch, and recheck mergeability.
 - Open questions: None.
 - Merge status: not-merged.
 
 ## Git context
 
-- Repo root: `/Users/roman/Documents/Development/Cash Runway`
-- Working directory: `/Users/roman/.codex/worktrees/cash-runway-category-merge-fix`
-- Branch: `codex/category-merge-fix`
+- Repo root: `/Users/openclaw/Development/Cash_Runway`
+- Working directory: `/Users/openclaw/.codex/tmp/cash-runway-pr24-review-fix`
+- Branch: `codex/pr24-review-fix-2`
 - Base branch: `origin/main`
-- Worktree reason: isolated-feature
+- Worktree reason: review
 - Merge status: not-merged
 
 ## Working set
 
 - `Sources/CashRunwayCore/CashRunwayRepository.swift`
 - `Modules/CashRunwayCorePackage/Sources/CashRunwayCore/CashRunwayRepository.swift`
-- `Tests/CashRunwayCoreTests/DatabaseTransactionSafetyTests.swift`
+- `Tests/CashRunwayCoreTests/BankCategoryMapperTests.swift`
+- `Tests/CashRunwayCoreTests/CSVEdgeCaseTests.swift`
 - `CONTINUITY.md`
 
 ## Done (recent)
 
-- 2026-05-31 [PLAN] Category merge repair plan selected: move all references, archive the source category, and use TDD.
-- 2026-05-31 [SETUP] Created isolated worktree `/Users/roman/.codex/worktrees/cash-runway-category-merge-fix` on branch `codex/category-merge-fix`.
-- 2026-05-31 [TEST] Added failing category merge tests for duplicate transaction merge, recurring/bank rule references, invalid pairs, and hidden destinations; then made them pass.
-- 2026-05-31 [TEST] Added review follow-up coverage for category remap and audit persistence.
-- 2026-05-31 [IMPLEMENTED] `mergeCategory(oldCategoryID:into:)` now validates category pairs, moves transaction/recurring/bank-rule references, archives the source category, records remap/audit entries, and rebuilds derived data.
-- 2026-05-31 [VALIDATED] Focused merge tests, mirror diff, `git diff --check`, full `swift test`, required iPhone 17 clean build, and simulator boot/log smoke passed.
-- 2026-05-31 [SMOKE] Booted app on iPhone 17 and opened Timeline, Wallets, More, Categories, and the Merge Categories sheet without crash.
-- 2026-05-31 [PR] Opened draft PR `#24` from `codex/category-merge-fix` into `main`.
+- 2026-06-01 [CODE] Added `ios-release.yml` for tag-triggered IPA builds and automatic `altstore.json` updates pushed to main.
+- 2026-06-01 [CODE] Added `sidestore-release.yml` for manual SideStore builds with GitHub Pages deployment.
+- 2026-06-01 [CODE] Added `altstore.json` SideStore source manifest and `sidestore/icon.png` app icon.
+- 2026-06-01 [REVIEW] Fixed missing icon URL, stale source push to main, tint color inconsistency, Python deprecation, and stale continuity ledger.
+- 2026-06-01 [CODE] Published the category merge remap lookup fix on PR `#24`.
+- 2026-06-01 [TEST] Added regression coverage for merged built-in MCC fallback and CSV name reuse.
+- 2026-06-01 [VALIDATED] Mirror diff and `git diff --check` passed; targeted `swift test` compiled touched files but still hit the unrelated `no such module 'Testing'` failure in `AppLockAndLocationTests.swift`.
+- 2026-06-01 [PR] Updated PR `#24` title to `Fix category merge remap lookups` and marked it ready for review.
 
 ## Receipts
 
-- 2026-05-31 [DECISION] Source categories should be hidden after merge; category references should move beyond transactions where active runtime behavior depends on them.
-- 2026-05-31 [TEST] `swift test` passed 236 tests in 22 suites.
-- 2026-05-31 [BUILD] `xcodebuild -scheme CashRunway -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' clean build 2>&1 | tail -5` ended with `** BUILD SUCCEEDED **`.
-- 2026-05-31 [LOG] Simulator runtime log scan found no crash/error/warning matches; XcodeBuildMCP reported the existing SQLCipher signed-binary strip warning during build-run.
-- 2026-05-31 [PR] `#24` — https://github.com/romanr111/cash-runway/pull/24
+- 2026-06-01 [MERGE] Resolved the only conflict in `CONTINUITY.md` and created merge commit `d8283fd`.
+- 2026-06-01 [COMMIT] `d9c269e` — ci: add tag-triggered release workflow and altstore.json source
+- 2026-06-01 [COMMIT] `9c3bf28` — Add SideStore release workflow and icon; update agent configs and continuity
+- 2026-06-01 [PR] `#24` — https://github.com/romanr111/cash-runway/pull/24

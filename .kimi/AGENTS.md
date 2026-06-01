@@ -1,7 +1,7 @@
 ## Git safety
 - For major feature development - new branch.
 - If local edits exist - separate git worktree.
-- If an asset should not ship, move it to `Docs/`, `DesignReferences/`, or equivalent.
+- If an asset should not ship, move it to `DesignReferences/` or equivalent.
 
 1. Behavioral guidelines, these guidelines bias toward caution over speed. For trivial tasks, use judgment.
 
@@ -73,14 +73,8 @@ For product/MVP/app/completion of PLAN.md tasks:
 - Use Context7 when you need library/API docs.
 - Fetch minimal targeted docs; summarize (no large dumps).
 
-### Container-first policy for .git projects
-- Codex must **never** install system packages on the host unless explicitly instructed.
-- Prefer container images to supply all tooling used by the project.
-- For code projects and dependencies: **use containers by default**.
-- If the repo has an existing container workflow (Dockerfile/compose/Makefile targets), follow it.
-- If the repo has no container workflow, create a minimal one.
-- Keep repo-specific container details in the repo’s `AGENTS.md`.
-- Cash Runway exception: native iOS tooling is the default here. Use host Swift/Xcode/iOS Simulator workflows; do not create Docker/container workflows for normal Cash Runway work unless explicitly asked.
+### Container-first policy (Cash Runway exception)
+Native iOS tooling is the default. Use host Swift/Xcode/iOS Simulator workflows; do not create Docker/container workflows unless explicitly asked.
 
 ### Secrets and sensitive data
 - Never print secrets (tokens, private keys, credentials) to terminal output.
@@ -153,8 +147,4 @@ A clean workspace has **one** worktree (the primary checkout) and **one** local 
 ### Exploration cost ceiling
 Before broad exploration, use the Code location quick reference in the root `AGENTS.md`. For large files, use `rg -n` plus line-window reads instead of reading whole files.
 
-### UI tests
-UI tests are opt-in and targeted. When explicitly working on them, use deterministic `CASH_RUNWAY_UI_TEST_MODE` / `UITEST-*` data and inspect the live accessibility tree or logs before changing UI code for a failing selector.
 
-### Real-device debugging
-Simulator is the default validation target. Real-device work requires explicit user approval or a confirmed device-specific bug. For confirmed real-device issues, preserve evidence first when data may be at risk, verify device unlock/trust, and prefer plain `devicectl` launch/timing before Xcode/LLDB-heavy debugging.

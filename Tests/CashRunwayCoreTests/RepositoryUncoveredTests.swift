@@ -388,4 +388,58 @@ struct RepositoryUncoveredTests {
         ))
         #expect(outOfRange.isEmpty)
     }
+
+    // MARK: - deleteWallet single-transaction correctness
+
+    /// Verifies that deleteWallet removes all transactions for the target wallet
+    /// in a single atomic write, leaving other wallets untouched.
+    @Test func deleteWalletRemovesAllTransactionsAtomically() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let wallets = try repository.wallets()
+        #expect(wallets.count >= 2)
+        let targetWallet = wallets[0]
+        let otherWallet = wallets[1]
+        let categories = try repository.categories(kind: .expense)
+        let category = try #require(categories.first)
+
+        // Create many transactions in the target wallet.
+        for index in 0..<50 {
+            try repository.saveTransaction(TransactionDraft(
+                kind: .expense,
+                walletID: targetWallet.id,
+                amountMinor: Int64(1_000 * (index + 1)),
+                occurredAt: .now,
+                categoryID: category.id,
+                merchant: "Expense \(index)",
+                note: ""
+            ))
+        }
+
+        // Create a transaction in the other wallet.
+        try repository.saveTransaction(TransactionDraft(
+            kind: .expense,
+            walletID: otherWallet.id,
+            amountMinor: 99_999,
+            occurredAt: .now,
+            categoryID: category.id,
+            merchant: "Other",
+            note: ""
+        ))
+
+        let beforeCount = try repository.transactions(query: .init(walletID: targetWallet.id)).count
+        #expect(beforeCount == 50)
+
+        try repository.deleteWallet(id: targetWallet.id)
+
+        let afterTargetCount = try repository.transactions(query: .init(walletID: targetWallet.id)).count
+        #expect(afterTargetCount == 0)
+
+        let afterOtherCount = try repository.transactions(query: .init(walletID: otherWallet.id)).count
+        #expect(afterOtherCount == 1)
+
+        let remainingWallets = try repository.wallets()
+        #expect(remainingWallets.contains(where: { $0.id == targetWallet.id }) == false)
+    }
 }

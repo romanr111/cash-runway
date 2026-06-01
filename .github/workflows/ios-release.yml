@@ -1,0 +1,128 @@
+name: iOS Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+env:
+  PROJECT: CashRunway.xcodeproj
+  SCHEME: CashRunway
+
+jobs:
+  build-and-release:
+    name: Build & Release IPA
+    runs-on: macos-26
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Cache SwiftPM packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.swiftpm/cache
+          key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-
+
+      - name: Build archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild archive \
+            -project "${PROJECT}" \
+            -scheme "${SCHEME}" \
+            -archivePath "${SCHEME}.xcarchive" \
+            -sdk iphoneos \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM= \
+            2>&1 | grep -E "(warning:|error:|ARCHIVE SUCCEEDED|ARCHIVE FAILED)"
+
+      - name: Package IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p Payload
+          app_path="${SCHEME}.xcarchive/Products/Applications/${SCHEME}.app"
+          if [[ ! -d "${app_path}" ]]; then
+            echo "Expected app not found at ${app_path}" >&2
+            find "${SCHEME}.xcarchive" -name "*.app" -type d
+            exit 1
+          fi
+          cp -a "${app_path}" Payload/
+          zip -rq "${SCHEME}.ipa" Payload
+          ls -lh "${SCHEME}.ipa"
+
+      - name: Compute metadata
+        id: metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          size=$(stat -f%z "${SCHEME}.ipa")
+          echo "size=${size}" >> "${GITHUB_OUTPUT}"
+          version="${GITHUB_REF_NAME#v}"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          date=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          echo "date=${date}" >> "${GITHUB_OUTPUT}"
+
+      - name: Update altstore.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ steps.metadata.outputs.version }}"
+          date="${{ steps.metadata.outputs.date }}"
+          size="${{ steps.metadata.outputs.size }}"
+
+          python3 <<PYEOF
+          import json
+
+          with open("altstore.json", "r") as f:
+              source = json.load(f)
+
+          app = source["apps"][0]
+          new_version = {
+              "version": version,
+              "date": date,
+              "localizedDescription": f"Release v{version}.",
+              "downloadURL": f"https://github.com/romanr111/cash-runway/releases/download/v{version}/CashRunway.ipa",
+              "size": int(size),
+              "minOSVersion": "17.0"
+          }
+
+          # Keep prior versions, prepend new one
+          existing = [v for v in app.get("versions", []) if v["version"] != version]
+          app["versions"] = [new_version] + existing
+
+          with open("altstore.json", "w") as f:
+              json.dump(source, f, indent=2)
+              f.write("\n")
+          PYEOF
+
+      - name: Commit updated altstore.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          cp altstore.json /tmp/altstore.json.updated
+          git fetch origin main
+          git checkout -B main origin/main
+          cp /tmp/altstore.json.updated altstore.json
+          git add altstore.json
+          git commit -m "chore(release): update altstore.json for ${{ github.ref_name }}"
+          git push origin main
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          files: |
+            CashRunway.ipa
+            altstore.json
+          generate_release_notes: true

@@ -236,14 +236,7 @@ struct DashboardView: View {
                         LazyHStack(alignment: .bottom, spacing: 16) {
                             ForEach(bars) { bar in
                                 let isSelected = bar.periodKey == selectedPeriodKey
-                                MonthChartColumn(
-                                    bar: bar,
-                                    isSelected: isSelected,
-                                    maxValue: maxValue
-                                )
-                                .id(bar.periodKey)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
+                                Button {
                                     guard !isSelected else { return }
                                     let impact = UIImpactFeedbackGenerator(style: .light)
                                     impact.impactOccurred()
@@ -251,7 +244,16 @@ struct DashboardView: View {
                                     guard newMonthKey != model.selectedMonthKey else { return }
                                     model.selectedMonthKey = newMonthKey
                                     model.reloadTimeline()
+                                } label: {
+                                    MonthChartColumn(
+                                        bar: bar,
+                                        isSelected: isSelected,
+                                        maxValue: maxValue
+                                    )
+                                    .id(bar.periodKey)
+                                    .contentShape(Rectangle())
                                 }
+                                .buttonStyle(.plain)
                             }
                         }
                         .padding(.horizontal, 20)
@@ -297,7 +299,7 @@ struct DashboardView: View {
     }
 
     private var transactionFeed: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        LazyVStack(alignment: .leading, spacing: 18) {
             if let sections = model.timelineSnapshot?.sections, !sections.isEmpty {
                 ForEach(sections) { section in
                     VStack(alignment: .leading, spacing: 12) {
@@ -399,6 +401,8 @@ private struct MonthChartColumn: View {
             RoundedRectangle(cornerRadius: 12)
                 .fill(isSelected ? CashRunwayTheme.accent.opacity(0.08) : Color.clear)
         )
+        .accessibilityLabel("\(bar.xLabel), income \(MoneyFormatter.string(from: bar.incomeMinor)), expense \(MoneyFormatter.string(from: bar.expenseMinor))")
+        .accessibilityAddTraits(.isButton)
     }
 }
 
@@ -928,7 +932,7 @@ private struct CategoryDetailOverviewView: View {
     }
 
     var body: some View {
-        let items = transactions
+        let items = model.categoryDetailTransactions
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 22) {
                 filters
@@ -939,6 +943,9 @@ private struct CategoryDetailOverviewView: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 16)
             .padding(.bottom, 80)
+        }
+        .task(id: transactionQuery) {
+            await model.loadCategoryDetailTransactions(query: transactionQuery)
         }
         .background(CashRunwayTheme.background)
         .navigationTitle(category.name)
@@ -1063,7 +1070,7 @@ private struct CategoryDetailOverviewView: View {
                     y: .value("Amount", point.amountMinor)
                 )
                 .foregroundStyle(CashRunwayTheme.categoryColor(category.colorHex))
-                .cornerRadius(6)
+                .clipShape(.rect(cornerRadius: 6))
             }
             .chartXAxis {
                 AxisMarks(values: .automatic) { value in
@@ -1133,10 +1140,6 @@ private struct CategoryDetailOverviewView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(CashRunwayAccessibilityID.overviewCategoryDetailTransactionList)
-    }
-
-    private var transactions: [TransactionListItem] {
-        (try? model.repository.transactions(query: transactionQuery, limit: nil)) ?? []
     }
 
     private var transactionQuery: TransactionQuery {
