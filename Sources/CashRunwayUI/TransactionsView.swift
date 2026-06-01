@@ -242,3 +242,22 @@ struct TransactionDetailsView: View {
         .accessibilityIdentifier(identifier ?? "")
     }
 }
+
+#Preview {
+    TransactionRow(item: TransactionListItem(
+        id: UUID(),
+        walletName: "Main Wallet",
+        amountMinor: -2500,
+        occurredAt: Date(),
+        categoryName: "Food",
+        categoryColorHex: "#FF5733",
+        categoryIconName: "fork.knife",
+        merchant: "Grocery Store",
+        note: "Weekly shopping",
+        kind: .expense,
+        source: .manual,
+        labels: [],
+        dayKey: 20240115
+    ))
+    .padding()
+}
