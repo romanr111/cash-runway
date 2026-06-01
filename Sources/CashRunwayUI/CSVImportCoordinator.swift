@@ -42,7 +42,6 @@ final class CSVImportCoordinator: Identifiable {
 
     func prepareImport(from url: URL) {
         let fileName = url.lastPathComponent.isEmpty ? "import.csv" : url.lastPathComponent
-        let csvService = model.csvService
 
         importData = Data()
         importFileName = fileName
@@ -54,39 +53,23 @@ final class CSVImportCoordinator: Identifiable {
         importPreparationStatus = "Opening selected file..."
         isImportPreparing = true
 
-        Task {
+        Task { @MainActor in
             do {
-                let data = try await Task.detached(priority: .userInitiated) {
-                    try CSVImportFileReader.readData(from: url)
-                }.value
-
-                await MainActor.run {
-                    importPreparationProgress = 0.55
-                    importPreparationStatus = "Reading CSV rows..."
-                }
-
-                let preparedImport = try await Task.detached(priority: .userInitiated) {
-                    let preview = try csvService.preview(data: data)
-                    let preset = csvService.detectPreset(headers: preview.headers)
-                    return CSVPreparedImport(data: data, preview: preview, preset: preset)
-                }.value
-
-                await MainActor.run {
-                    importData = preparedImport.data
-                    importPreview = preparedImport.preview
-                    importPreset = preparedImport.preset
-                    importMapping = defaultMapping(headers: preparedImport.preview.headers, preset: preparedImport.preset)
-                    importPreparationProgress = 1.0
-                    importPreparationStatus = "Ready to review."
-                    isImportPreparing = false
-                }
+                importPreparationProgress = 0.55
+                importPreparationStatus = "Reading CSV rows..."
+                let preparedImport = try await model.prepareCSVImport(from: url)
+                importData = preparedImport.data
+                importPreview = preparedImport.preview
+                importPreset = preparedImport.preset
+                importMapping = defaultMapping(headers: preparedImport.preview.headers, preset: preparedImport.preset)
+                importPreparationProgress = 1.0
+                importPreparationStatus = "Ready to review."
+                isImportPreparing = false
             } catch {
-                await MainActor.run {
-                    importPreparationError = error.localizedDescription
-                    importPreparationProgress = 0.0
-                    importPreparationStatus = ""
-                    isImportPreparing = false
-                }
+                importPreparationError = error.localizedDescription
+                importPreparationProgress = 0.0
+                importPreparationStatus = ""
+                isImportPreparing = false
             }
         }
     }
@@ -161,10 +144,4 @@ final class CSVImportCoordinator: Identifiable {
             candidates.contains { $0.caseInsensitiveCompare(header) == .orderedSame }
         }
     }
-}
-
-private struct CSVPreparedImport: Sendable {
-    let data: Data
-    let preview: CSVImportPreview
-    let preset: CSVPreset
 }

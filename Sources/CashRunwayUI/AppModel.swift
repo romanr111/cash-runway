@@ -17,6 +17,7 @@ public final class CashRunwayAppModel {
     public var bankTokenStore: any BankTokenStore
     private let bankSyncPerformer: any BankSyncPerforming
     private let monobankTokenValidator: any MonobankTokenValidating
+    private let backgroundWork: BackgroundWork
     // LEGACY_DISABLED_APP_LOCK:
     // App Lock is disabled for MVP. Do not wire into runtime without a new product decision.
     // public var lockStore: AppLockStore
@@ -93,6 +94,12 @@ public final class CashRunwayAppModel {
         self.bankTokenStore = bankTokenStore
         self.bankSyncPerformer = BankSyncSerialPerformer(BankSyncCoordinator(repository: repository, tokenStore: bankTokenStore))
         self.monobankTokenValidator = MonobankDirectTokenValidator()
+        self.backgroundWork = BackgroundWork(
+            repository: repository,
+            csvService: self.csvService,
+            backupService: self.backupService,
+            bankSyncPerformer: self.bankSyncPerformer
+        )
         // self.lockStore = lockStore
     }
 
@@ -108,6 +115,12 @@ public final class CashRunwayAppModel {
         self.bankTokenStore = bankTokenStore
         self.bankSyncPerformer = BankSyncSerialPerformer(bankSyncPerformer)
         self.monobankTokenValidator = monobankTokenValidator
+        self.backgroundWork = BackgroundWork(
+            repository: repository,
+            csvService: self.csvService,
+            backupService: self.backupService,
+            bankSyncPerformer: self.bankSyncPerformer
+        )
     }
 
     public func bootstrap() async {
@@ -139,17 +152,12 @@ public final class CashRunwayAppModel {
             var query = self.transactionQuery
             query.walletID = selectedWalletID
 
-            let (bars, snapshot) = try await Task.detached(priority: .userInitiated) {
-                let bars = try repository.allBars(walletID: selectedWalletID, period: selectedTimelinePeriod)
-                let snapshot = try Self.loadSnapshot(
-                    repository: repository,
-                    selectedMonthKey: selectedMonthKey,
-                    selectedWalletID: selectedWalletID,
-                    selectedTimelinePeriod: selectedTimelinePeriod,
-                    transactionQuery: query
-                )
-                return (bars, snapshot)
-            }.value
+            let (bars, snapshot) = try await backgroundWork.loadAllBarsAndSnapshot(
+                selectedMonthKey: selectedMonthKey,
+                selectedWalletID: selectedWalletID,
+                selectedTimelinePeriod: selectedTimelinePeriod,
+                transactionQuery: query
+            )
 
             guard currentRefreshScopeMatches(monthKey: selectedMonthKey, walletID: selectedWalletID, period: selectedTimelinePeriod, query: query) else {
                 return false
@@ -193,12 +201,12 @@ public final class CashRunwayAppModel {
             preloadAdjacentOverviewSnapshots()
         }
         do {
-            let repository = self.repository
             let selectedMonthKey = self.selectedMonthKey
             let selectedWalletID = self.selectedWalletID
-            let overview = try await Task.detached(priority: .userInitiated) {
-                try repository.overviewSnapshot(monthKey: selectedMonthKey, walletID: selectedWalletID)
-            }.value
+            let overview = try await backgroundWork.loadOverviewSnapshot(
+                monthKey: selectedMonthKey,
+                walletID: selectedWalletID
+            )
             overviewSnapshot = overview
             latestTransactionMonthKey = try? repository.latestTransactionMonthKey()
             setCachedOverview(overview, monthKey: selectedMonthKey, walletID: selectedWalletID)
@@ -262,16 +270,12 @@ public final class CashRunwayAppModel {
         }
 
         do {
-            let repository = self.repository
-            let mutable = try await Task.detached(priority: .userInitiated) {
-                try Self.loadMutableSnapshots(
-                    repository: repository,
-                    selectedMonthKey: targetMonthKey,
-                    selectedWalletID: targetWalletID,
-                    selectedTimelinePeriod: targetPeriod,
-                    transactionQuery: targetQuery
-                )
-            }.value
+            let mutable = try await backgroundWork.loadMutableSnapshots(
+                selectedMonthKey: targetMonthKey,
+                selectedWalletID: targetWalletID,
+                selectedTimelinePeriod: targetPeriod,
+                transactionQuery: targetQuery
+            )
 
             guard selectedMonthKey == targetMonthKey,
                   selectedWalletID == targetWalletID,
@@ -317,22 +321,25 @@ public final class CashRunwayAppModel {
     }
 
     private func preloadAdjacentOverviewSnapshots() {
-        Task {
-            let repository = self.repository
-            let selectedMonthKey = self.selectedMonthKey
-            let selectedWalletID = self.selectedWalletID
-            let maxMonthKey = self.maxMonthKey
+        let selectedMonthKey = self.selectedMonthKey
+        let selectedWalletID = self.selectedWalletID
+        let maxMonthKey = self.maxMonthKey
+        let backgroundWork = self.backgroundWork
+        Task { [selectedMonthKey, selectedWalletID, maxMonthKey, backgroundWork] in
             for offset in [-1, 1] {
                 guard let date = DateKeys.calendar.date(byAdding: .month, value: offset, to: DateKeys.startOfMonth(for: selectedMonthKey)) else { continue }
                 let monthKey = DateKeys.monthKey(for: date)
                 guard monthKey <= maxMonthKey else { continue }
-                let key = self.overviewCacheKey(monthKey: monthKey, walletID: selectedWalletID)
-                guard self.overviewSnapshotCache[key] == nil else { continue }
-                let task = Task.detached(priority: .background) {
-                    try repository.overviewSnapshot(monthKey: monthKey, walletID: selectedWalletID)
+                let key = "\(monthKey)-\(selectedWalletID?.uuidString ?? "all")"
+                let shouldLoad = await MainActor.run { [weak self] in
+                    guard let self else { return false }
+                    return self.overviewSnapshotCache[key] == nil
                 }
-                guard let snapshot = try? await task.value else { continue }
-                self.setCachedOverview(snapshot, monthKey: monthKey, walletID: selectedWalletID)
+                guard shouldLoad else { continue }
+                guard let snapshot = try? await backgroundWork.loadOverviewSnapshot(monthKey: monthKey, walletID: selectedWalletID) else { continue }
+                await MainActor.run { [weak self] in
+                    self?.setCachedOverview(snapshot, monthKey: monthKey, walletID: selectedWalletID)
+                }
             }
         }
     }
@@ -597,6 +604,22 @@ public final class CashRunwayAppModel {
         return try backupService.encode(backup)
     }
 
+    func exportCSV(query: TransactionQuery) async throws -> String {
+        try await backgroundWork.exportCSV(query: query)
+    }
+
+    func exportFullBackupData() async throws -> Data {
+        try await backgroundWork.exportFullBackupData()
+    }
+
+    func prepareCSVImport(from url: URL) async throws -> CSVImportPreparation {
+        try await backgroundWork.prepareCSVImport(from: url)
+    }
+
+    func prepareBackupImport(from url: URL) async throws -> BackupImportPreparation {
+        try await backgroundWork.prepareBackupImport(from: url)
+    }
+
     public func previewFullBackup(data: Data) throws -> BackupValidationSummary {
         let backup = try backupService.decode(data: data)
         return try backupService.validate(backup)
@@ -644,36 +667,22 @@ public final class CashRunwayAppModel {
         }
         guard foregroundRefreshTask == nil else { return }
 
-        let repository = repository
         let selectedMonthKey = selectedMonthKey
         let selectedWalletID = selectedWalletID
         let selectedTimelinePeriod = selectedTimelinePeriod
         let transactionQuery = transactionQuery
-        let bankSyncPerformer = bankSyncPerformer
-        foregroundRefreshTask = Task { [weak self] in
+        let backgroundWork = self.backgroundWork
+        foregroundRefreshTask = Task { [weak self, backgroundWork] in
             defer {
                 self?.foregroundRefreshTask = nil
             }
             do {
-                let (snapshot, bankSyncMessage) = try await Task.detached(priority: .utility) {
-                    let syncMessage: String?
-                    do {
-                        _ = try await bankSyncPerformer.syncOnForeground()
-                        syncMessage = nil
-                    } catch {
-                        syncMessage = error.localizedDescription
-                    }
-                    try repository.runMaintenance()
-                    try repository.refreshRecurringInstances()
-                    let snapshot = try Self.loadSnapshot(
-                        repository: repository,
-                        selectedMonthKey: selectedMonthKey,
-                        selectedWalletID: selectedWalletID,
-                        selectedTimelinePeriod: selectedTimelinePeriod,
-                        transactionQuery: transactionQuery
-                    )
-                    return (snapshot, syncMessage)
-                }.value
+                let (snapshot, bankSyncMessage) = try await backgroundWork.refreshForegroundSnapshot(
+                    selectedMonthKey: selectedMonthKey,
+                    selectedWalletID: selectedWalletID,
+                    selectedTimelinePeriod: selectedTimelinePeriod,
+                    transactionQuery: transactionQuery
+                )
                 guard !Task.isCancelled else { return }
                 guard let self else { return }
                 guard self.currentRefreshScopeMatches(monthKey: selectedMonthKey, walletID: selectedWalletID, period: selectedTimelinePeriod, query: transactionQuery) else {
@@ -712,7 +721,7 @@ public final class CashRunwayAppModel {
         }
     }
 
-    private nonisolated static func loadSnapshot(
+    fileprivate nonisolated static func loadSnapshot(
         repository: CashRunwayRepository,
         selectedMonthKey: Int,
         selectedWalletID: UUID?,
@@ -737,7 +746,7 @@ public final class CashRunwayAppModel {
         )
     }
 
-    private nonisolated static func loadMutableSnapshots(
+    fileprivate nonisolated static func loadMutableSnapshots(
         repository: CashRunwayRepository,
         selectedMonthKey: Int,
         selectedWalletID: UUID?,
@@ -798,7 +807,110 @@ public final class CashRunwayAppModel {
     }
 }
 
-private struct AppModelSnapshot: Sendable {
+private actor BackgroundWork {
+    private let repository: CashRunwayRepository
+    private let csvService: CSVService
+    private let backupService: BackupService
+    private let bankSyncPerformer: any BankSyncPerforming
+
+    init(
+        repository: CashRunwayRepository,
+        csvService: CSVService,
+        backupService: BackupService,
+        bankSyncPerformer: any BankSyncPerforming
+    ) {
+        self.repository = repository
+        self.csvService = csvService
+        self.backupService = backupService
+        self.bankSyncPerformer = bankSyncPerformer
+    }
+
+    func loadAllBarsAndSnapshot(
+        selectedMonthKey: Int,
+        selectedWalletID: UUID?,
+        selectedTimelinePeriod: TimelinePeriod,
+        transactionQuery: TransactionQuery
+    ) throws -> (bars: [TimelineBarPoint], snapshot: AppModelSnapshot) {
+        let bars = try repository.allBars(walletID: selectedWalletID, period: selectedTimelinePeriod)
+        let snapshot = try CashRunwayAppModel.loadSnapshot(
+            repository: repository,
+            selectedMonthKey: selectedMonthKey,
+            selectedWalletID: selectedWalletID,
+            selectedTimelinePeriod: selectedTimelinePeriod,
+            transactionQuery: transactionQuery
+        )
+        return (bars, snapshot)
+    }
+
+    func loadOverviewSnapshot(monthKey: Int, walletID: UUID?) throws -> OverviewSnapshot {
+        try repository.overviewSnapshot(monthKey: monthKey, walletID: walletID)
+    }
+
+    func loadMutableSnapshots(
+        selectedMonthKey: Int,
+        selectedWalletID: UUID?,
+        selectedTimelinePeriod: TimelinePeriod,
+        transactionQuery: TransactionQuery
+    ) throws -> MutableSnapshots {
+        try CashRunwayAppModel.loadMutableSnapshots(
+            repository: repository,
+            selectedMonthKey: selectedMonthKey,
+            selectedWalletID: selectedWalletID,
+            selectedTimelinePeriod: selectedTimelinePeriod,
+            transactionQuery: transactionQuery
+        )
+    }
+
+    func refreshForegroundSnapshot(
+        selectedMonthKey: Int,
+        selectedWalletID: UUID?,
+        selectedTimelinePeriod: TimelinePeriod,
+        transactionQuery: TransactionQuery
+    ) async throws -> (snapshot: AppModelSnapshot, bankSyncMessage: String?) {
+        let bankSyncMessage: String?
+        do {
+            _ = try await bankSyncPerformer.syncOnForeground()
+            bankSyncMessage = nil
+        } catch {
+            bankSyncMessage = error.localizedDescription
+        }
+        try repository.runMaintenance()
+        try repository.refreshRecurringInstances()
+        let snapshot = try CashRunwayAppModel.loadSnapshot(
+            repository: repository,
+            selectedMonthKey: selectedMonthKey,
+            selectedWalletID: selectedWalletID,
+            selectedTimelinePeriod: selectedTimelinePeriod,
+            transactionQuery: transactionQuery
+        )
+        return (snapshot, bankSyncMessage)
+    }
+
+    func exportCSV(query: TransactionQuery) throws -> String {
+        try csvService.exportCSV(query: query)
+    }
+
+    func exportFullBackupData() throws -> Data {
+        let backup = try backupService.exportFullBackup()
+        return try backupService.encode(backup)
+    }
+
+    func prepareCSVImport(from url: URL) throws -> CSVImportPreparation {
+        let data = try CSVImportFileReader.readData(from: url)
+        let preview = try csvService.preview(data: data)
+        let preset = csvService.detectPreset(headers: preview.headers)
+        return CSVImportPreparation(data: data, preview: preview, preset: preset)
+    }
+
+    func prepareBackupImport(from url: URL) throws -> BackupImportPreparation {
+        let data = try CSVImportFileReader.readData(from: url)
+        let backup = try backupService.decode(data: data)
+        let summary = try backupService.validate(backup)
+        return BackupImportPreparation(data: data, summary: summary)
+    }
+}
+
+fileprivate struct AppModelSnapshot: Sendable {
     var wallets: [Wallet]
     var expenseCategories: [CashRunwayCategory]
     var incomeCategories: [CashRunwayCategory]
@@ -813,13 +925,24 @@ private struct AppModelSnapshot: Sendable {
     var transactionQuery: TransactionQuery
 }
 
-private struct MutableSnapshots: Sendable {
+fileprivate struct MutableSnapshots: Sendable {
     var budgets: [BudgetProgress]
     var transactions: [TransactionListItem]
     var dashboardSnapshot: DashboardSnapshot?
     var timelineSnapshot: TimelineSnapshot?
     var overviewSnapshot: OverviewSnapshot?
     var transactionQuery: TransactionQuery
+}
+
+struct CSVImportPreparation: Sendable {
+    let data: Data
+    let preview: CSVImportPreview
+    let preset: CSVPreset
+}
+
+struct BackupImportPreparation: Sendable {
+    let data: Data
+    let summary: BackupValidationSummary
 }
 
 enum CSVImportFileReader {
