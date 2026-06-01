@@ -18,8 +18,8 @@ Rules:
 
 - Goal: Make PR `#24` merge-ready while preserving category-merge data safety.
 - Success criteria: Category merge preserves transactions while only updating category references, remap lookups follow active destinations, CI/unit compile blockers are fixed, core mirrors stay identical, current `origin/main` merges cleanly, and required validation passes.
-- Current state: The CSV test compile blocker and chained remap bug were fixed, current `origin/main` was merged with the continuity conflict resolved, and focused tests passed.
-- Next action: Run the full validation gates, push PR `#24`, and recheck mergeability/CI.
+- Current state: The CSV test compile blocker and chained remap bug were fixed, current `origin/main` was merged, required local validation passed, and the app launched on iPhone 17 without app error/fault logs.
+- Next action: Push PR `#24`, then recheck mergeability and CI.
 - Open questions: None.
 - Merge status: not-merged.
 
@@ -57,6 +57,7 @@ Rules:
 - 2026-06-01 [CODE] Fixed CSV test verification through `transactionDraft(id:)` and made `resolvedCategoryID` follow remap chains to active destinations in both mirrored core trees.
 - 2026-06-01 [VALIDATED] `swift test --filter BankCategoryMapperTests`, `swift test --filter CSVEdgeCaseTests/importReusesMergedDestinationCategoryByName`, and core mirror diff passed.
 - 2026-06-01 [MERGE] Merged current `origin/main` into `codex/category-merge-fix` and resolved the only conflict in `CONTINUITY.md`.
+- 2026-06-01 [VALIDATED] Focused category merge/import tests, full `swift test`, core mirror diff, `git diff --check`, required iPhone 17 clean build, install/launch smoke, and app error/fault log scan passed.
 
 ## Receipts
 
@@ -68,4 +69,8 @@ Rules:
 - 2026-06-01 [TEST] Green `swift test --filter BankCategoryMapperTests` passed 6 tests.
 - 2026-06-01 [TEST] Green `swift test --filter CSVEdgeCaseTests/importReusesMergedDestinationCategoryByName` passed.
 - 2026-06-01 [MERGE] Resolved `CONTINUITY.md` conflict after merging `origin/main` into PR `#24`.
+- 2026-06-01 [TEST] `swift test --filter 'DatabaseTransactionSafetyTests/categoryMerge|BankCategoryMapperTests|CSVEdgeCaseTests/importReusesMergedDestinationCategoryByName'` passed 13 tests.
+- 2026-06-01 [TEST] `swift test` passed 243 tests in 23 suites.
+- 2026-06-01 [BUILD] `xcodebuild -scheme CashRunway -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' clean build` ended with `** BUILD SUCCEEDED **`; SQLCipher strip and AppIntents metadata warnings matched existing build noise.
+- 2026-06-01 [SMOKE] Installed and launched `dev.roman.cashrunway` on iPhone 17; severity-filtered app log scan found no error/fault entries, with only system debug text containing `warning` from RunningBoard/BoardServices.
 - 2026-06-01 [PR] `#24` — https://github.com/romanr111/cash-runway/pull/24
