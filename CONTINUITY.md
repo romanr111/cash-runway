@@ -16,10 +16,10 @@ Rules:
 
 ## Snapshot
 
-- Goal: Add SideStore release automation for Cash Runway — tag-triggered IPA releases with source metadata updates on main, and manual SideStore builds deployed to GitHub Pages.
-- Success criteria: Tag push produces IPA + updated source JSON committed to main; manual workflow produces unsigned IPA + Pages-deployed SideStore source; icon asset exists and is referenced correctly.
-- Current state: PR `#26` merged to `main`; `ios-release.yml` and `sidestore-release.yml` are on `main`; `altstore.json` and `sidestore/icon.png` present; branch and remote cleaned up.
-- Next action: Enable GitHub Pages (GitHub Actions source) in repo settings if not already done, then trigger a manual SideStore release to verify E2E flow.
+- Goal: Merge `fix/side-store-concurrency` branch into `main` to resolve CI Swift 6 strict concurrency build failure and SideStore workflow issues.
+- Success criteria: Validation gates pass, branch merged and pushed, workspace cleaned up per hygiene rules.
+- Current state: Branch `fix/side-store-concurrency` merged into `main` and pushed. `swift test` (235 tests) and simulator build passed. Workspace cleaned.
+- Next action: None — task complete.
 - Open questions: None.
 - Merge status: merged.
 
@@ -29,27 +29,23 @@ Rules:
 - Working directory: `/Users/roman/Documents/Development/Cash Runway`
 - Branch: `main`
 - Base branch: `origin/main`
+- Worktree reason: N/A (primary checkout)
 - Merge status: merged
 
 ## Working set
 
-- `.github/workflows/ios-release.yml`
-- `.github/workflows/sidestore-release.yml`
-- `altstore.json`
-- `sidestore/icon.png`
-- `CONTINUITY.md`
+- Clean working tree.
 
 ## Done (recent)
 
-- 2026-06-01 [MERGE] PR `#26` (`side_store_integration`) merged to `main`. Branch deleted locally and remotely.
-- 2026-06-01 [CODE] Added `ios-release.yml` for tag-triggered IPA builds and automatic `altstore.json` updates pushed to main.
-- 2026-06-01 [CODE] Added `sidestore-release.yml` for manual SideStore builds with GitHub Pages deployment.
-- 2026-06-01 [CODE] Added `altstore.json` SideStore source manifest and `sidestore/icon.png` app icon.
-- 2026-06-01 [REVIEW] Fixed missing icon URL, stale source push to main, tint color inconsistency, Python deprecation, and stale continuity ledger.
+- 2026-06-01 [ANALYSIS] Identified root cause of CI failure: `Self.loadSnapshot` inside `Task.detached` closure implicitly captured `self` from `@MainActor`, making closure non-`@Sendable` under Xcode 26.4.1 / Swift 6 stricter diagnostics.
+- 2026-06-01 [FIX] Commit `e79b409` extracted background work into `private actor BackgroundWork`, eliminating inline `@Sendable` closures.
+- 2026-06-01 [FIX] Commit `6ed5f9e` enabled SideStore workflow dispatch trigger.
+- 2026-06-01 [FIX] Commit `9bdce19` fixed two-phase init error (`self` used before all stored properties initialized) caused by `backgroundWork` property access during init.
+- 2026-06-01 [VALIDATE] `swift test` → 235 tests passed; `xcodebuild clean build` → BUILD SUCCEEDED; simulator boot → app launched without crash.
+- 2026-06-01 [MERGE] Merged `fix/side-store-concurrency` into `main` and pushed to origin. Resolved minor merge conflicts in `sidestore-release.yml` and `sidestore/icon.png`.
+- 2026-06-01 [CLEANUP] Deleted local and remote `fix/side-store-concurrency` branch per worktree hygiene rules.
 
 ## Receipts
 
-- 2026-06-01 [MERGE] `0d31943` — Merge pull request #26 from romanr111/side_store_integration
-- 2026-06-01 [COMMIT] `20a9c48` — fix(release): review fixes for SideStore automation
-- 2026-06-01 [COMMIT] `d9c269e` — ci: add tag-triggered release workflow and altstore.json source
-- 2026-06-01 [COMMIT] `9c3bf28` — Add SideStore release workflow and icon; update agent configs and continuity
+- 2026-06-01 [DECISION] Fix was kept on existing `fix/side-store-concurrency` branch rather than new worktree because primary checkout was clean.
