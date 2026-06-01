@@ -21,8 +21,6 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Cache SwiftPM packages
         uses: actions/cache@v4
@@ -83,7 +81,6 @@ jobs:
 
           python3 <<PYEOF
           import json
-          import sys
 
           with open("altstore.json", "r") as f:
               source = json.load(f)
@@ -113,10 +110,13 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout -b "bot/update-altstore-${{ github.ref_name }}"
+          cp altstore.json /tmp/altstore.json.updated
+          git fetch origin main
+          git checkout -B main origin/main
+          cp /tmp/altstore.json.updated altstore.json
           git add altstore.json
           git commit -m "chore(release): update altstore.json for ${{ github.ref_name }}"
-          git push origin "bot/update-altstore-${{ github.ref_name }}"
+          git push origin main
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

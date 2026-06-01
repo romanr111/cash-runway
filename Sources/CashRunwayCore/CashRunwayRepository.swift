@@ -1170,15 +1170,15 @@ extension CashRunwayRepository {
             return Array(ids)
         }
 
-        for txID in txIDs {
-            do {
-                try deleteTransaction(id: txID)
-            } catch CashRunwayError.notFound {
-                // Already deleted as a linked transfer; safe to ignore.
-            }
-        }
-
         try databaseManager.dbQueue.write { db in
+            for txID in txIDs {
+                do {
+                    try deleteTransaction(id: txID, db: db)
+                } catch CashRunwayError.notFound {
+                    // Already deleted as a linked transfer; safe to ignore.
+                }
+            }
+
             let templateRows = try Row.fetchAll(
                 db,
                 sql: "SELECT id FROM recurring_templates WHERE wallet_id = ? OR counterparty_wallet_id = ?",
@@ -1709,11 +1709,15 @@ extension CashRunwayRepository {
         }
     }
 
+    private static let monthAbbreviations = [
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+    ]
+
     private static func monthAbbreviation(for monthKey: Int) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "MMM"
-        return formatter.string(from: DateKeys.startOfMonth(for: monthKey))
+        let month = monthKey % 100
+        guard month >= 1 && month <= 12 else { return "" }
+        return monthAbbreviations[month - 1]
     }
 
     private static func monthLabel(for monthKey: Int) -> String {
@@ -1983,28 +1987,32 @@ extension CashRunwayRepository {
 
     public func deleteTransaction(id: UUID) throws {
         try databaseManager.dbQueue.write { db in
-            guard let transactionRow = try Row.fetchOne(db, sql: "SELECT * FROM transactions WHERE id = ?", arguments: [id.uuidString]) else {
-                throw CashRunwayError.notFound
-            }
-            let transaction = try Self.transaction(transactionRow)
+            try deleteTransaction(id: id, db: db)
+        }
+    }
 
-            var transactionsToDelete = [transaction]
-            if transaction.type == .transferOut || transaction.type == .transferIn,
-               let linkedID = transaction.linkedTransferID,
-               let linkedRow = try Row.fetchOne(
-                db,
-                sql: "SELECT * FROM transactions WHERE id = ?",
-                arguments: [linkedID.uuidString]
-               ) {
-                transactionsToDelete.append(try Self.transaction(linkedRow))
-            }
+    private func deleteTransaction(id: UUID, db: Database) throws {
+        guard let transactionRow = try Row.fetchOne(db, sql: "SELECT * FROM transactions WHERE id = ?", arguments: [id.uuidString]) else {
+            throw CashRunwayError.notFound
+        }
+        let transaction = try Self.transaction(transactionRow)
 
-            for item in transactionsToDelete {
-                try applyContribution(db, old: contribution(for: item), new: nil)
-                try db.execute(sql: "DELETE FROM transaction_labels WHERE transaction_id = ?", arguments: [item.id.uuidString])
-                try db.execute(sql: "DELETE FROM transaction_search WHERE transaction_id = ?", arguments: [item.id.uuidString])
-                try db.execute(sql: "DELETE FROM transactions WHERE id = ?", arguments: [item.id.uuidString])
-            }
+        var transactionsToDelete = [transaction]
+        if transaction.type == .transferOut || transaction.type == .transferIn,
+           let linkedID = transaction.linkedTransferID,
+           let linkedRow = try Row.fetchOne(
+            db,
+            sql: "SELECT * FROM transactions WHERE id = ?",
+            arguments: [linkedID.uuidString]
+           ) {
+            transactionsToDelete.append(try Self.transaction(linkedRow))
+        }
+
+        for item in transactionsToDelete {
+            try applyContribution(db, old: contribution(for: item), new: nil)
+            try db.execute(sql: "DELETE FROM transaction_labels WHERE transaction_id = ?", arguments: [item.id.uuidString])
+            try db.execute(sql: "DELETE FROM transaction_search WHERE transaction_id = ?", arguments: [item.id.uuidString])
+            try db.execute(sql: "DELETE FROM transactions WHERE id = ?", arguments: [item.id.uuidString])
         }
     }
 
@@ -2685,19 +2693,43 @@ extension CashRunwayRepository {
         \(limit.map { "LIMIT \($0)" } ?? "")
         """
 
-        return try Row.fetchAll(db, sql: sql, arguments: StatementArguments(arguments)).map { row in
-            let transaction = try Self.transaction(row)
-            let labelRows = try Row.fetchAll(
-                db,
-                sql: """
-                SELECT l.* FROM labels l
+        let rows = try Row.fetchAll(db, sql: sql, arguments: StatementArguments(arguments))
+        let transactionIDs = rows.compactMap { row -> String? in row["id"] }
+        let labelsByTransactionID: [UUID: [Label]] = try {
+            if transactionIDs.isEmpty {
+                return [:]
+            }
+            // SQLite default limit is 999 variables per query; chunk to stay safely under.
+            let chunkSize = 900
+            var dict: [UUID: [Label]] = [:]
+            for index in stride(from: 0, to: transactionIDs.count, by: chunkSize) {
+                let chunk = Array(transactionIDs[index..<min(index + chunkSize, transactionIDs.count)])
+                let inPlaceholders = chunk.enumerated().map { ":txLabel\($0.offset)" }.joined(separator: ", ")
+                let labelSQL = """
+                SELECT tl.transaction_id, l.* FROM labels l
                 JOIN transaction_labels tl ON tl.label_id = l.id
-                WHERE tl.transaction_id = ?
+                WHERE tl.transaction_id IN (\(inPlaceholders))
                 ORDER BY l.name
-                """,
-                arguments: [transaction.id.uuidString]
-            )
-            let labels = try labelRows.map(Self.label)
+                """
+                var labelArgs: [String: any DatabaseValueConvertible] = [:]
+                for (index, txID) in chunk.enumerated() {
+                    labelArgs["txLabel\(index)"] = txID
+                }
+                let labelRows = try Row.fetchAll(db, sql: labelSQL, arguments: StatementArguments(labelArgs))
+                for labelRow in labelRows {
+                    if let txID = UUID(uuidString: labelRow["transaction_id"]) {
+                        var arr = dict[txID, default: []]
+                        arr.append(try Self.label(labelRow))
+                        dict[txID] = arr
+                    }
+                }
+            }
+            return dict
+        }()
+
+        return try rows.map { row in
+            let transaction = try Self.transaction(row)
+            let labels = labelsByTransactionID[transaction.id] ?? []
             return TransactionListItem(
                 id: transaction.id,
                 walletName: row["wallet_name"],

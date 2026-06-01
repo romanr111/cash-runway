@@ -937,6 +937,7 @@ struct CategoryManagementView: View {
                 .padding(.vertical, 8)
                 .listRowBackground(CashRunwayTheme.background)
                 .listRowSeparator(.hidden)
+                .accessibilityIdentifier(CashRunwayAccessibilityID.categoryManagementScreen)
 
                 ForEach(items) { item in
                     HStack(spacing: 14) {

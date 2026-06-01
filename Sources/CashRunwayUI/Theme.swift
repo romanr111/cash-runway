@@ -55,29 +55,41 @@ public enum CashRunwayTheme {
         amountMinor < 0 ? negative : positive
     }
 
-    public static func monthAbbreviation(for monthKey: Int) -> String {
+    private static let monthAbbreviationFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "MMM"
-        return formatter.string(from: DateKeys.startOfMonth(for: monthKey))
+        return formatter
+    }()
+
+    public static func monthAbbreviation(for monthKey: Int) -> String {
+        monthAbbreviationFormatter.string(from: DateKeys.startOfMonth(for: monthKey))
     }
 
-    public static func monthFullLabel(for monthKey: Int) -> String {
+    private static let monthFullLabelFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale.current
         formatter.dateFormat = "MMMM yyyy"
-        return formatter.string(from: DateKeys.startOfMonth(for: monthKey))
+        return formatter
+    }()
+
+    public static func monthFullLabel(for monthKey: Int) -> String {
+        monthFullLabelFormatter.string(from: DateKeys.startOfMonth(for: monthKey))
     }
+
+    private static let dayHeaderFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "EEEE, d MMM"
+        return formatter
+    }()
 
     public static func dayHeader(for dayKey: Int) -> String {
         let year = dayKey / 10_000
         let month = (dayKey / 100) % 100
         let day = dayKey % 100
         let date = DateKeys.calendar.date(from: DateComponents(year: year, month: month, day: day)) ?? .now
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "EEEE, d MMM"
-        return formatter.string(from: date)
+        return dayHeaderFormatter.string(from: date)
     }
 }
 
@@ -365,4 +377,13 @@ struct ScreenTitle: View {
             .foregroundStyle(CashRunwayTheme.textPrimary)
             .frame(maxWidth: .infinity, alignment: .center)
     }
+}
+
+#Preview {
+    VStack(spacing: 24) {
+        CategoryGlyph(iconName: "car.fill", colorHex: "#FF5733")
+        SectionHeader(title: "Section Title", subtitle: "Subtitle text")
+        ScreenTitle(title: "Screen Title")
+    }
+    .padding()
 }

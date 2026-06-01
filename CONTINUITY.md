@@ -18,8 +18,8 @@ Rules:
 
 - Goal: Fix the broken Timeline Overview Categories donut on draft PR #23.
 - Success criteria: Donut uses valid absolute category totals, renders centered and prominent, supports in-place category selection, keeps mirrored core in sync, and passes focused tests, full unit tests, simulator build, and boot smoke.
-- Current state: Follow-up review fixes added visible donut category badges and deterministic collapsed-list selection on `codex/broader-ui-refresh`; validation and seeded real-data smoke passed.
-- Next action: Commit and push the donut fix to PR #23 or request final adjustments.
+- Current state: Donut fixes were committed locally, `origin/main` was merged with conflicts resolved, and post-merge validation passed.
+- Next action: Commit the `origin/main` merge and push `codex/broader-ui-refresh` to update PR #23.
 - Open questions: None.
 - Merge status: not-merged.
 
@@ -45,6 +45,7 @@ Rules:
 - `Modules/CashRunwayCorePackage/Sources/CashRunwayCore/CSVSupport.swift`
 - `Tests/CashRunwayCoreTests/CashRunwayCoreTests.swift`
 - `Tests/CashRunwayCoreTests/OverviewCategoryDistributionTests.swift`
+- `Tests/CashRunwayCoreTests/RepositoryUncoveredTests.swift`
 - `Tests/CashRunwayCoreTests/UtilityAndModelTests.swift`
 - `CONTINUITY.md`
 
@@ -73,6 +74,9 @@ Rules:
 - 2026-06-01 [REVIEW] Detailed self-review found missing category badges on the donut and a hidden-row selection gap when the category list was collapsed.
 - 2026-06-01 [IMPLEMENTED] Added solid category badges over readable donut segments and moved collapsed selection policy into mirrored core `OverviewCategoryDisplayLayout`.
 - 2026-06-01 [VALIDATED] Follow-up focused tests, full `swift test`, mirror diff, diff check, clean iPhone 17 build, seeded real-data smoke, and runtime/os log scan passed.
+- 2026-06-01 [COMMIT] Created local donut fix commit `9fda92b` (`Fix overview categories donut chart`).
+- 2026-06-01 [MERGE] Merged `origin/main` into `codex/broader-ui-refresh`; resolved release metadata with main, kept PR direct-edit/category UI flows, switched Settings to main's split-view version, and preserved the donut fix.
+- 2026-06-01 [VALIDATED] Post-merge focused donut tests, mirror diff, diff check, clean iPhone 17 build, Build iOS Apps simulator run, seeded May Overview smoke, log scan, and full `swift test` passed.
 
 ## Receipts
 
@@ -95,3 +99,7 @@ Rules:
 - 2026-06-01 [TEST] Follow-up `swift test` passed with 238 tests in 23 suites.
 - 2026-06-01 [BUILD] Follow-up `xcodebuild -scheme CashRunway -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' clean build 2>&1 | tail -5` ended with `** BUILD SUCCEEDED **`.
 - 2026-06-01 [SMOKE] Follow-up seeded smoke screenshot `/var/folders/y1/44_6v5x1685fclqcclfn375w0000gn/T/screenshot_optimized_09f04fe7-259b-487b-8d67-fb5b6b98a8b3.jpg` showed solid category badges over the real May donut; runtime/os log scan found no crash/error/warning matches.
+- 2026-06-01 [TEST] Post-merge `swift test --filter OverviewCategoryDistributionTests` passed with 5 tests.
+- 2026-06-01 [TEST] First post-merge full `swift test` had one transient performance timing miss (`fixturePopulationTimingGate` 33.4s > 30s); isolated rerun passed in 21.1s, and final full rerun passed with 242 tests in 24 suites.
+- 2026-06-01 [BUILD] Post-merge clean iPhone 17 build ended with `** BUILD SUCCEEDED **`.
+- 2026-06-01 [SMOKE] Post-merge seeded smoke screenshot `/var/folders/y1/44_6v5x1685fclqcclfn375w0000gn/T/screenshot_optimized_5f7d2e0a-57e5-42be-8dfd-cc99cd9a2348.jpg` showed May Overview donut with category badges; runtime/os log scan found no crash/error/warning matches.
