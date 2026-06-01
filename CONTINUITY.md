@@ -18,8 +18,8 @@ Rules:
 
 - Goal: Make PR `#24` merge-ready while preserving category-merge data safety.
 - Success criteria: Category merge preserves transactions while only updating category references, remap lookups follow active destinations, CI/unit compile blockers are fixed, core mirrors stay identical, current `origin/main` merges cleanly, and required validation passes.
-- Current state: The CSV test compile blocker and chained remap bug were fixed, latest `origin/main` was merged, and required local validation passed on the combined branch.
-- Next action: Push PR `#24`, then recheck mergeability and CI.
+- Current state: PR `#24` was updated, latest `origin/main` was merged, required local validation passed, GitHub reports the PR mergeable, and CI checks passed.
+- Next action: Await final review or merge PR `#24`.
 - Open questions: None.
 - Merge status: not-merged.
 
@@ -60,6 +60,7 @@ Rules:
 - 2026-06-01 [VALIDATED] Focused category merge/import tests, full `swift test`, core mirror diff, `git diff --check`, required iPhone 17 clean build, install/launch smoke, and app error/fault log scan passed.
 - 2026-06-01 [MERGE] Merged newer `origin/main` through `f5d7ad4` into `codex/category-merge-fix` and resolved the continuity conflict.
 - 2026-06-01 [VALIDATED] Re-ran focused category merge/import tests, full `swift test`, core mirror diff, `git diff --check`, iPhone 17 clean build, and install/launch smoke after the latest main merge; all passed.
+- 2026-06-01 [CI] PR `#24` reported mergeable (`CLEAN`); Static Analysis, Unit Tests, and Integration Tests passed; UI E2E skipped per workflow policy.
 
 ## Receipts
 
@@ -81,3 +82,4 @@ Rules:
 - 2026-06-01 [TEST] Post-latest-main `swift test` passed 243 tests in 23 suites.
 - 2026-06-01 [BUILD] Post-latest-main iPhone 17 clean build ended with `** BUILD SUCCEEDED **`; same SQLCipher strip and AppIntents metadata warnings.
 - 2026-06-01 [SMOKE] Post-latest-main install and launch returned `dev.roman.cashrunway: 76479`; severity-filtered app log scan found no error/fault entries.
+- 2026-06-01 [CI] GitHub checks for PR `#24`: Static Analysis passed in 17s, Unit Tests passed in 1m23s, Integration Tests passed in 5m30s, UI End-to-End Tests skipped.
