@@ -18,8 +18,8 @@ Rules:
 
 - Goal: Implement the broader Warm Functional Ledger UI refresh for Cash Runway in an isolated worktree.
 - Success criteria: More/Settings, supporting management sheets, editors, transaction-adjacent surfaces, and import/backup/Monobank flows follow the refreshed UI language while preserving behavior, accessibility identifiers, data models, disabled/deprecated feature policy, and required iOS validation gates.
-- Current state: Detailed code review found and fixed an important transaction-row note visibility regression; all required local validation passed after the fix.
-- Next action: Commit and push the review fix to draft PR #23.
+- Current state: Fixed category row text crushing on iPhone 15 by adding .lineLimit(1) and .layoutPriority(1); committed and pushed to draft PR #23.
+- Next action: Await user review/merge decision.
 - Open questions: None.
 - Merge status: not-merged.
 
