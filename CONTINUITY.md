@@ -16,18 +16,18 @@ Rules:
 
 ## Snapshot
 
-- Goal: Keep the category merge remap lookup fix published while preserving the current mainline release-automation continuity.
-- Success criteria: PR `#24` stays ready for review on top of current `origin/main`, category lookup reuses merged categories, and the ledger stays synchronized after the branch is reconciled.
-- Current state: The category merge remap lookup fix was published on PR `#24`, the PR was marked ready for review, and the branch hit a merge conflict while being brought up to current `origin/main`.
-- Next action: Resolve the remaining merge conflict in `CONTINUITY.md`, repush the branch, and recheck mergeability.
+- Goal: Make PR `#24` merge-ready while preserving category-merge data safety.
+- Success criteria: Category merge preserves transactions while only updating category references, remap lookups follow active destinations, CI/unit compile blockers are fixed, core mirrors stay identical, current `origin/main` merges cleanly, and required validation passes.
+- Current state: The CSV test compile blocker was fixed, chained remap lookup was repaired with focused red/green coverage, and local focused tests passed.
+- Next action: Merge current `origin/main`, resolve any continuity conflict, then run the full validation gates.
 - Open questions: None.
 - Merge status: not-merged.
 
 ## Git context
 
-- Repo root: `/Users/openclaw/Development/Cash_Runway`
-- Working directory: `/Users/openclaw/.codex/tmp/cash-runway-pr24-review-fix`
-- Branch: `codex/pr24-review-fix-2`
+- Repo root: `/Users/roman/Documents/Development/Cash Runway`
+- Working directory: `/Users/roman/.codex/worktrees/cash-runway-category-merge-fix`
+- Branch: `codex/category-merge-fix`
 - Base branch: `origin/main`
 - Worktree reason: review
 - Merge status: not-merged
@@ -38,6 +38,7 @@ Rules:
 - `Modules/CashRunwayCorePackage/Sources/CashRunwayCore/CashRunwayRepository.swift`
 - `Tests/CashRunwayCoreTests/BankCategoryMapperTests.swift`
 - `Tests/CashRunwayCoreTests/CSVEdgeCaseTests.swift`
+- `Tests/CashRunwayCoreTests/DatabaseTransactionSafetyTests.swift`
 - `CONTINUITY.md`
 
 ## Done (recent)
@@ -50,10 +51,17 @@ Rules:
 - 2026-06-01 [TEST] Added regression coverage for merged built-in MCC fallback and CSV name reuse.
 - 2026-06-01 [VALIDATED] Mirror diff and `git diff --check` passed; targeted `swift test` compiled touched files but still hit the unrelated `no such module 'Testing'` failure in `AppLockAndLocationTests.swift`.
 - 2026-06-01 [PR] Updated PR `#24` title to `Fix category merge remap lookups` and marked it ready for review.
+- 2026-06-01 [TEST] Reproduced the CI compile blocker from `CSVEdgeCaseTests.importReusesMergedDestinationCategoryByName` using the nonexistent `TransactionListItem.categoryID`.
+- 2026-06-01 [TEST] Added a failing chained-remap BankCategoryMapper regression for `Restaurants -> Groceries -> Shopping`.
+- 2026-06-01 [CODE] Fixed CSV test verification through `transactionDraft(id:)` and made `resolvedCategoryID` follow remap chains to active destinations in both mirrored core trees.
+- 2026-06-01 [VALIDATED] `swift test --filter BankCategoryMapperTests`, `swift test --filter CSVEdgeCaseTests/importReusesMergedDestinationCategoryByName`, and core mirror diff passed.
 
 ## Receipts
 
 - 2026-06-01 [MERGE] Resolved the only conflict in `CONTINUITY.md` and created merge commit `d8283fd`.
 - 2026-06-01 [COMMIT] `d9c269e` — ci: add tag-triggered release workflow and altstore.json source
 - 2026-06-01 [COMMIT] `9c3bf28` — Add SideStore release workflow and icon; update agent configs and continuity
+- 2026-06-01 [TEST] Red `swift test --filter BankCategoryMapperTests` failed only on `builtInMCCFallbackFollowsChainedMergedDestinationCategory`, resolving archived Groceries instead of active Shopping.
+- 2026-06-01 [TEST] Green `swift test --filter BankCategoryMapperTests` passed 6 tests.
+- 2026-06-01 [TEST] Green `swift test --filter CSVEdgeCaseTests/importReusesMergedDestinationCategoryByName` passed.
 - 2026-06-01 [PR] `#24` — https://github.com/romanr111/cash-runway/pull/24

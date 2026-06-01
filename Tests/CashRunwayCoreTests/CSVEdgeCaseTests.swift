@@ -258,7 +258,8 @@ struct CSVEdgeCaseTests {
 
         #expect(result.insertedTransactions == 1)
         let imported = try #require(try repository.transactions().first { $0.note == "Weekly groceries" })
-        #expect(imported.categoryID == groceriesID)
+        let importedDraft = try repository.transactionDraft(id: imported.id)
+        #expect(importedDraft.categoryID == groceriesID)
         #expect(try repository.categories(kind: .expense).contains { $0.name == "Restaurants" } == false)
     }
 }

@@ -605,7 +605,7 @@ private func resolvedCategoryID(_ db: Database, kind: CategoryKind, named name: 
         return activeID
     }
 
-    return try String.fetchOne(
+    var nextID = try String.fetchOne(
         db,
         sql: """
         SELECT cr.new_category_id
@@ -616,7 +616,35 @@ private func resolvedCategoryID(_ db: Database, kind: CategoryKind, named name: 
         LIMIT 1
         """,
         arguments: [kind.rawValue, name]
-    ).flatMap(UUID.init(uuidString:))
+    )
+    var visitedIDs = Set<String>()
+    while let currentID = nextID {
+        guard visitedIDs.insert(currentID).inserted else { return nil }
+        guard let row = try Row.fetchOne(
+            db,
+            sql: "SELECT id, is_archived FROM categories WHERE id = ? AND kind = ?",
+            arguments: [currentID, kind.rawValue]
+        ) else {
+            return nil
+        }
+        let isArchived: Bool = row["is_archived"]
+        if !isArchived {
+            return UUID(uuidString: row["id"])
+        }
+        nextID = try String.fetchOne(
+            db,
+            sql: """
+            SELECT cr.new_category_id
+            FROM category_remaps cr
+            JOIN categories c ON c.id = cr.old_category_id
+            WHERE cr.old_category_id = ? AND c.kind = ?
+            ORDER BY cr.remapped_at DESC
+            LIMIT 1
+            """,
+            arguments: [currentID, kind.rawValue]
+        )
+    }
+    return nil
 }
 
 public final class CashRunwayRepository: @unchecked Sendable {
