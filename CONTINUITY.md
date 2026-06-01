@@ -16,39 +16,39 @@ Rules:
 
 ## Snapshot
 
-- Goal: Apply SwiftUI Expert Skill improvements to Cash Runway — fix P0/P1 performance bottlenecks (DB query in view body, N+1 queries, non-lazy lists, DateFormatter allocation, deleteWallet batching) and decompose SettingsView state.
-- Success criteria: All P0 and P1 issues resolved, swift test passes, app builds and boots on simulator, mirrored core stays in sync.
-- Current state: New worktree created at `../Cash-Runway-swiftui-performance-improvements` on branch `kimi/swiftui-performance-improvements`; sub-agents not yet spawned.
-- Next action: Spawn three sub-agents in the new worktree to execute the performance fixes in parallel.
+- Goal: Add SideStore release automation for Cash Runway — tag-triggered IPA releases with source metadata updates on main, and manual SideStore builds deployed to GitHub Pages.
+- Success criteria: Tag push produces IPA + updated source JSON committed to main; manual workflow produces unsigned IPA + Pages-deployed SideStore source; icon asset exists and is referenced correctly.
+- Current state: `side_store_integration` branch contains `ios-release.yml`, `sidestore-release.yml`, `altstore.json`, and `sidestore/icon.png`; review fixes applied.
+- Next action: Merge PR to main.
 - Open questions: None.
 - Merge status: not-merged.
 
 ## Git context
 
 - Repo root: `/Users/roman/Documents/Development/Cash Runway`
-- Working directory: `/Users/roman/Documents/Development/Cash-Runway-swiftui-performance-improvements`
-- Branch: `kimi/swiftui-performance-improvements`
+- Working directory: `/Users/roman/Documents/Development/Cash Runway`
+- Branch: `side_store_integration`
 - Base branch: `origin/main`
-- Worktree reason: isolated-feature
 - Merge status: not-merged
 
 ## Working set
 
-- `Sources/CashRunwayUI/DashboardView.swift`
-- `Sources/CashRunwayUI/Editors.swift`
-- `Sources/CashRunwayUI/SettingsView.swift`
-- `Sources/CashRunwayUI/AppModel.swift`
-- `Sources/CashRunwayCore/CashRunwayRepository.swift`
-- `Sources/CashRunwayCore/Theme.swift`
-- `AppHost/CashRunwayApp.swift`
+- `.github/workflows/ios-release.yml`
+- `.github/workflows/sidestore-release.yml`
+- `altstore.json`
+- `sidestore/icon.png`
+- `AGENTS.md`
+- `.kimi/AGENTS.md`
 - `CONTINUITY.md`
 
 ## Done (recent)
 
-- 2026-05-31 [AUDIT] Three explore agents completed full SwiftUI Expert Skill audit of the codebase.
-- 2026-05-31 [PLAN] Performance-First improvement plan approved by user.
-- 2026-05-31 [SETUP] Created worktree `../Cash-Runway-swiftui-performance-improvements` on branch `kimi/swiftui-performance-improvements`.
+- 2026-06-01 [CODE] Added `ios-release.yml` for tag-triggered IPA builds and automatic `altstore.json` updates pushed to main.
+- 2026-06-01 [CODE] Added `sidestore-release.yml` for manual SideStore builds with GitHub Pages deployment.
+- 2026-06-01 [CODE] Added `altstore.json` SideStore source manifest and `sidestore/icon.png` app icon.
+- 2026-06-01 [REVIEW] Fixed missing icon URL, stale source push to main, tint color inconsistency, Python deprecation, and stale continuity ledger.
 
 ## Receipts
 
-- 2026-05-31 [DECISION] Use separate worktree because primary checkout had local edits.
+- 2026-06-01 [COMMIT] `d9c269e` — ci: add tag-triggered release workflow and altstore.json source
+- 2026-06-01 [COMMIT] `9c3bf28` — Add SideStore release workflow and icon; update agent configs and continuity

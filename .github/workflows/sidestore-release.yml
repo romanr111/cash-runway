@@ -107,7 +107,7 @@ jobs:
           version = "${{ steps.meta.outputs.version }}"
           build = "${{ steps.meta.outputs.build }}"
           size = os.path.getsize("CashRunway.ipa")
-          date = datetime.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+          date = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
           ipa_url = f"https://github.com/romanr111/cash-runway/releases/download/v{version}/CashRunway.ipa"
           icon_url = "https://romanr111.github.io/cash-runway/icon.png"
@@ -120,7 +120,7 @@ jobs:
               "iconURL": icon_url,
               "website": "https://github.com/romanr111/cash-runway",
               "sourceURL": "https://romanr111.github.io/cash-runway/source.json",
-              "tintColor": "#1F7A4D",
+              "tintColor": "#E85D3A",
               "featuredApps": ["dev.roman.cashrunway"],
               "apps": [
                   {
@@ -130,8 +130,8 @@ jobs:
                       "subtitle": "Track cash runway and recurring costs.",
                       "localizedDescription": "Cash Runway is a personal finance app for tracking wallet balances, transactions, recurring costs, and financial runway.",
                       "iconURL": icon_url,
-                      "tintColor": "#1F7A4D",
-                      "category": "utilities",
+                      "tintColor": "#E85D3A",
+                      "category": "finance",
 
                       "version": version,
                       "versionDate": date,
