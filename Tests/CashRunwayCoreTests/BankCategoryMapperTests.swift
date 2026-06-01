@@ -53,6 +53,25 @@ struct BankCategoryMapperTests {
         #expect(fallback == otherExpenseID)
     }
 
+    @Test func builtInMCCFallbackUsesMergedDestinationCategory() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        let groceriesID = try categoryID(repository, named: "Groceries")
+        let restaurantsID = try categoryID(repository, named: "Restaurants")
+
+        try repository.mergeCategory(oldCategoryID: restaurantsID, into: groceriesID)
+
+        let resolved = try BankCategoryMapper(repository: repository).resolve(
+            merchant: nil,
+            description: "Food shop",
+            mcc: 5812,
+            originalMcc: nil
+        )
+
+        #expect(resolved == groceriesID)
+        #expect(try repository.categories(kind: .expense).contains { $0.id == restaurantsID } == false)
+    }
+
     @Test func originalMCCFallsBackToBuiltInCategoryWhenPrimaryMCCIsUnknown() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()

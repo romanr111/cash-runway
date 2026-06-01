@@ -519,11 +519,11 @@ private enum BankCategoryResolution {
         }
         for code in [mcc, originalMcc].compactMap({ $0 }) {
             if let categoryName = builtInCategoryName(mcc: code),
-               let categoryID = try categoryID(db, named: categoryName) {
+               let categoryID = try resolvedCategoryID(db, kind: .expense, named: categoryName) {
                 return categoryID
             }
         }
-        if let fallbackID = try categoryID(db, named: "Other Expense") {
+        if let fallbackID = try resolvedCategoryID(db, kind: .expense, named: "Other Expense") {
             return fallbackID
         }
         throw CashRunwayError.notFound
@@ -594,14 +594,29 @@ private enum BankCategoryResolution {
             nil
         }
     }
+}
 
-    private static func categoryID(_ db: Database, named name: String) throws -> UUID? {
-        try String.fetchOne(
-            db,
-            sql: "SELECT id FROM categories WHERE kind = ? AND is_archived = 0 AND name = ?",
-            arguments: [CategoryKind.expense.rawValue, name]
-        ).flatMap(UUID.init(uuidString:))
+private func resolvedCategoryID(_ db: Database, kind: CategoryKind, named name: String) throws -> UUID? {
+    if let activeID = try String.fetchOne(
+        db,
+        sql: "SELECT id FROM categories WHERE kind = ? AND is_archived = 0 AND trim(name) = trim(?) COLLATE NOCASE",
+        arguments: [kind.rawValue, name]
+    ).flatMap(UUID.init(uuidString:)) {
+        return activeID
     }
+
+    return try String.fetchOne(
+        db,
+        sql: """
+        SELECT cr.new_category_id
+        FROM category_remaps cr
+        JOIN categories c ON c.id = cr.old_category_id
+        WHERE c.kind = ? AND c.is_archived = 1 AND trim(c.name) = trim(?) COLLATE NOCASE
+        ORDER BY cr.remapped_at DESC
+        LIMIT 1
+        """,
+        arguments: [kind.rawValue, name]
+    ).flatMap(UUID.init(uuidString:))
 }
 
 public final class CashRunwayRepository: @unchecked Sendable {
@@ -2243,13 +2258,8 @@ extension CashRunwayRepository {
 
         let allRows = try Row.fetchAll(db, sql: "SELECT * FROM categories WHERE kind = ? AND is_archived = 0", arguments: [categoryKind.rawValue])
 
-        if let rawName {
-            for row in allRows {
-                let rowName: String = row["name"]
-                if rowName.trimmingCharacters(in: .whitespacesAndNewlines).caseInsensitiveCompare(rawName) == .orderedSame {
-                    return UUID(uuidString: row["id"])!
-                }
-            }
+        if let rawName, let categoryID = try resolvedCategoryID(db, kind: categoryKind, named: rawName) {
+            return categoryID
         }
 
         if rawName == nil {
