@@ -779,7 +779,7 @@ public final class CashRunwayAppModel {
         categoryDetailTransactions = []
         do {
             let repository = self.repository
-            let txs = try await Task.detached(priority: .userInitiated) {
+            let txs = try await Task(priority: .userInitiated) {
                 try repository.transactions(query: query, limit: nil)
             }.value
             guard !Task.isCancelled else { return }

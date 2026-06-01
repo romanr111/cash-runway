@@ -179,6 +179,46 @@ struct CashRunwayPerformanceTests {
         #expect(seconds(elapsed) < 30)
     }
 
+    @Test func chunkedLabelQueryTimingGate() throws {
+        let repository = try makeRepository()
+        let generator = FixtureGenerator(repository: repository)
+        try generator.populate(scenario: .medium)
+        let clock = ContinuousClock()
+
+        let elapsed = clock.measure {
+            _ = try? repository.transactions(query: .init(), limit: nil)
+        }
+        #expect(seconds(elapsed) < 2)
+    }
+
+    @Test func deleteWalletTimingGate() throws {
+        let repository = try makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let wallets = try repository.wallets()
+        let targetWallet = try #require(wallets.first)
+        let categories = try repository.categories(kind: .expense)
+        let category = try #require(categories.first)
+
+        for index in 0..<100 {
+            try repository.saveTransaction(TransactionDraft(
+                kind: .expense,
+                walletID: targetWallet.id,
+                amountMinor: Int64(1_000 * (index + 1)),
+                occurredAt: .now,
+                categoryID: category.id,
+                merchant: "Expense \(index)",
+                note: ""
+            ))
+        }
+
+        let clock = ContinuousClock()
+        let elapsed = clock.measure {
+            try? repository.deleteWallet(id: targetWallet.id)
+        }
+        #expect(seconds(elapsed) < 1)
+    }
+
     private func makeRepository() throws -> CashRunwayRepository {
         let baseURL = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("cash-runway-perf-tests", isDirectory: true)
