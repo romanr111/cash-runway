@@ -18,17 +18,18 @@ Rules:
 
 - Goal: Add SideStore release automation for Cash Runway — tag-triggered IPA releases with source metadata updates on main, and manual SideStore builds deployed to GitHub Pages.
 - Success criteria: Tag push produces IPA + updated source JSON committed to main; manual workflow produces unsigned IPA + Pages-deployed SideStore source; icon asset exists and is referenced correctly.
-- Current state: `side_store_integration` branch contains `ios-release.yml`, `sidestore-release.yml`, `altstore.json`, and `sidestore/icon.png`; review fixes applied.
-- Next action: Merge PR to main.
+- Current state: The merge commit had been created locally, and the branch was ready to be pushed to origin.
+- Next action: Push `side_store_integration` to `origin`.
 - Open questions: None.
-- Merge status: not-merged.
+- Merge status: merged.
 
 ## Git context
 
-- Repo root: `/Users/roman/Documents/Development/Cash Runway`
-- Working directory: `/Users/roman/Documents/Development/Cash Runway`
+- Repo root: `/Users/openclaw/Development/Cash_Runway-pr26`
+- Working directory: `/Users/openclaw/Development/Cash_Runway-pr26`
 - Branch: `side_store_integration`
 - Base branch: `origin/main`
+- Worktree reason: review
 - Merge status: not-merged
 
 ## Working set
@@ -50,5 +51,6 @@ Rules:
 
 ## Receipts
 
+- 2026-06-01 [MERGE] Resolved the only conflict in `CONTINUITY.md` and created merge commit `d8283fd`.
 - 2026-06-01 [COMMIT] `d9c269e` — ci: add tag-triggered release workflow and altstore.json source
 - 2026-06-01 [COMMIT] `9c3bf28` — Add SideStore release workflow and icon; update agent configs and continuity

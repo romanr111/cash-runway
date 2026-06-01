@@ -2,6 +2,7 @@ import BackgroundTasks
 import Darwin
 import Foundation
 import GRDB
+import OSLog
 import SwiftUI
 import UIKit
 
@@ -102,6 +103,8 @@ private final class BackgroundProcessingTaskBox: @unchecked Sendable {
 
 #if DEBUG
 private enum DebugDataRecoveryAttempt {
+    private static let logger = Logger(subsystem: "dev.roman.cashrunway", category: "recovery")
+
     struct ProbeResult {
         var transactionCount: Int
         var walletCount: Int
@@ -114,12 +117,12 @@ private enum DebugDataRecoveryAttempt {
         do {
             let report = try run()
             try write(report)
-            print(report)
+            logger.info("\(report)")
             Darwin.exit(0)
         } catch {
             let report = "FAIL recovery_attempt error=\(error.localizedDescription)"
             try? write(report)
-            print(report)
+            logger.error("\(report)")
             Darwin.exit(1)
         }
     }
