@@ -13,6 +13,7 @@ struct WalletManagementView: View {
     var body: some View {
         NavigationStack {
             List {
+                EmptyView().accessibilityIdentifier(CashRunwayAccessibilityID.walletManagementScreen)
                 ForEach(model.wallets) { wallet in
                     Button(wallet.name) {
                         walletDraft = wallet

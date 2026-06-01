@@ -13,6 +13,7 @@ struct LabelManagementView: View {
     var body: some View {
         NavigationStack {
             List {
+                EmptyView().accessibilityIdentifier(CashRunwayAccessibilityID.labelManagementScreen)
                 ForEach(model.labels) { label in
                     Button(label.name) {
                         labelDraft = label

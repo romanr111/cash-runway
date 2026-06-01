@@ -11,6 +11,7 @@ struct CSVImportView: View {
     var body: some View {
         NavigationStack {
             Form {
+                EmptyView().accessibilityIdentifier(CashRunwayAccessibilityID.csvImportScreen)
                 Section("Source") {
                     summaryRow("File", value: coordinator.importFileName)
                     if !coordinator.isImportPreparing, coordinator.importPreparationError == nil {

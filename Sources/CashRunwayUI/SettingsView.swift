@@ -45,20 +45,25 @@ struct SettingsView: View {
                             moreRow(icon: "square.grid.2x2", tint: "#64D1D5", title: "Categories", subtitle: "Manage visibility, order, and merges") {
                                 isCategoryManagementPresented = true
                             }
+                            .accessibilityIdentifier(CashRunwayAccessibilityID.settingsCategoriesRow)
                             rowDivider
                             moreRow(icon: "tag.fill", tint: "#F7A72A", title: "Labels", subtitle: "\(model.labels.count) labels") {
                                 isLabelsPresented = true
                             }
+                            .accessibilityIdentifier(CashRunwayAccessibilityID.settingsLabelsRow)
                             rowDivider
                             moreRow(icon: "repeat", tint: "#1CC389", title: "Scheduled Transactions", subtitle: "\(model.templates.count) templates") {
                                 isTemplatesPresented = true
                             }
+                            .accessibilityIdentifier(CashRunwayAccessibilityID.settingsScheduledTransactionsRow)
                             rowDivider
                             staticRow(icon: "banknote.fill", tint: "#4A80C1", title: "Main Currency", value: "UAH")
+                            .accessibilityIdentifier(CashRunwayAccessibilityID.settingsMainCurrencyRow)
                             rowDivider
                             moreRow(icon: "wallet.pass.fill", tint: "#60788A", title: "Manual Wallets", subtitle: "\(model.wallets.count) wallets") {
                                 isWalletsPresented = true
                             }
+                            .accessibilityIdentifier(CashRunwayAccessibilityID.settingsWalletsRow)
                             rowDivider
                         }
                         .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
@@ -80,6 +85,7 @@ struct SettingsView: View {
                                     isCSVImporterPresented = true
                                 }
                             }
+                            .accessibilityIdentifier(CashRunwayAccessibilityID.settingsImportCSVRow)
                             rowDivider
                             moreRow(icon: "square.and.arrow.up.fill", tint: "#E5862F", title: "Export CSV", subtitle: isExporting ? "Exporting…" : "Share the current filtered export") {
                                 guard !isExporting else { return }
@@ -104,15 +110,18 @@ struct SettingsView: View {
                                     }
                                 }
                             }
+                            .accessibilityIdentifier(CashRunwayAccessibilityID.settingsExportCSVRow)
                             rowDivider
                             moreRow(icon: "externaldrive.fill", tint: "#4A80C1", title: "Import Full Backup", subtitle: "Replace data from JSON") {
                                 isBackupImporterPresented = true
                             }
+                            .accessibilityIdentifier(CashRunwayAccessibilityID.settingsImportBackupRow)
                             rowDivider
                             moreRow(icon: "externaldrive.badge.plus", tint: "#7A6FF0", title: "Export Full Backup", subtitle: isBackupExporting ? "Exporting…" : "Share unencrypted backup JSON") {
                                 guard !isBackupExporting else { return }
                                 isBackupExportWarningPresented = true
                             }
+                            .accessibilityIdentifier(CashRunwayAccessibilityID.settingsExportBackupRow)
                         }
                         .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
@@ -447,6 +456,7 @@ private struct ScheduledTransactionsView: View {
     var body: some View {
         NavigationStack {
             List {
+                EmptyView().accessibilityIdentifier(CashRunwayAccessibilityID.scheduledTransactionsScreen)
                 Section("Templates") {
                     ForEach(model.templates) { template in
                         Button(template.merchant ?? template.kind.rawValue.capitalized) {

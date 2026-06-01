@@ -11,6 +11,7 @@ struct BackupView: View {
     var body: some View {
         NavigationStack {
             Form {
+                EmptyView().accessibilityIdentifier(CashRunwayAccessibilityID.backupImportScreen)
                 Section("Source") {
                     summaryRow("File", value: coordinator.backupImportFileName)
                 }

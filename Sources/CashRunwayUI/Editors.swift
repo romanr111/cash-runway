@@ -873,6 +873,7 @@ struct CategoryManagementView: View {
     var body: some View {
         NavigationStack {
             List {
+                EmptyView().accessibilityIdentifier(CashRunwayAccessibilityID.categoryManagementScreen)
                 Picker("Kind", selection: $selectedKind) {
                     Text("Expenses").tag(CategoryKind.expense)
                     Text("Income").tag(CategoryKind.income)

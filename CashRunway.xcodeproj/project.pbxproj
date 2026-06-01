@@ -30,6 +30,7 @@
 		A00100010001000100010015 /* Tests/CashRunwayUITests/TransactionCRUDUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010017 /* Tests/CashRunwayUITests/TransactionCRUDUITests.swift */; };
 		A00100010001000100010016 /* Tests/CashRunwayUITests/TransactionOverviewUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010018 /* Tests/CashRunwayUITests/TransactionOverviewUITests.swift */; };
 		A00100010001000100010017 /* Tests/CashRunwayUITests/MonobankConnectionUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0020001000100010001001A /* Tests/CashRunwayUITests/MonobankConnectionUITests.swift */; };
+		A00100010001000100010023 /* Tests/CashRunwayUITests/SettingsNavigationUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010023 /* Tests/CashRunwayUITests/SettingsNavigationUITests.swift */; };
 		A0010001000100010001001B /* Sources/CashRunwayUI/MonobankCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0020001000100010001001B /* Sources/CashRunwayUI/MonobankCoordinator.swift */; };
 		A0010001000100010001001C /* Sources/CashRunwayUI/MonobankWizardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0020001000100010001001C /* Sources/CashRunwayUI/MonobankWizardView.swift */; };
 		A0010001000100010001001D /* Sources/CashRunwayUI/CSVImportCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0020001000100010001001D /* Sources/CashRunwayUI/CSVImportCoordinator.swift */; };
@@ -85,6 +86,7 @@
 		A00200010001000100010020 /* Sources/CashRunwayUI/BackupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayUI/BackupView.swift; sourceTree = "<group>"; };
 		A00200010001000100010021 /* Sources/CashRunwayUI/LabelManagementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayUI/LabelManagementView.swift; sourceTree = "<group>"; };
 		A00200010001000100010022 /* Sources/CashRunwayUI/WalletManagementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayUI/WalletManagementView.swift; sourceTree = "<group>"; };
+		A00200010001000100010023 /* Tests/CashRunwayUITests/SettingsNavigationUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/CashRunwayUITests/SettingsNavigationUITests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -182,6 +184,7 @@
 				A00200010001000100010017 /* Tests/CashRunwayUITests/TransactionCRUDUITests.swift */,
 				A00200010001000100010018 /* Tests/CashRunwayUITests/TransactionOverviewUITests.swift */,
 				A0020001000100010001001A /* Tests/CashRunwayUITests/MonobankConnectionUITests.swift */,
+				A00200010001000100010023 /* Tests/CashRunwayUITests/SettingsNavigationUITests.swift */,
 			);
 			name = Tests;
 			sourceTree = "<group>";
@@ -351,6 +354,7 @@
 				A00100010001000100010015 /* Tests/CashRunwayUITests/TransactionCRUDUITests.swift in Sources */,
 				A00100010001000100010016 /* Tests/CashRunwayUITests/TransactionOverviewUITests.swift in Sources */,
 				A00100010001000100010017 /* Tests/CashRunwayUITests/MonobankConnectionUITests.swift in Sources */,
+				A00100010001000100010023 /* Tests/CashRunwayUITests/SettingsNavigationUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
