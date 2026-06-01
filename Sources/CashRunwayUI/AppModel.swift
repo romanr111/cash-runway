@@ -87,19 +87,23 @@ public final class CashRunwayAppModel {
         // App Lock is disabled for MVP.
         // lockStore: AppLockStore = AppLockStore(keychain: KeychainStore(service: "dev.roman.cash-runway"))
     ) {
-        self.repository = repository
-        self.csvService = CSVService(repository: repository)
-        self.backupService = BackupService(repository: repository)
+        let csvService = CSVService(repository: repository)
+        let backupService = BackupService(repository: repository)
         let bankTokenStore = KeychainBankTokenStore(keychain: KeychainStore(service: "dev.roman.cash-runway"))
-        self.bankTokenStore = bankTokenStore
-        self.bankSyncPerformer = BankSyncSerialPerformer(BankSyncCoordinator(repository: repository, tokenStore: bankTokenStore))
-        self.monobankTokenValidator = MonobankDirectTokenValidator()
-        self.backgroundWork = BackgroundWork(
+        let bankSyncPerformer = BankSyncSerialPerformer(BankSyncCoordinator(repository: repository, tokenStore: bankTokenStore))
+        let backgroundWork = BackgroundWork(
             repository: repository,
-            csvService: self.csvService,
-            backupService: self.backupService,
-            bankSyncPerformer: self.bankSyncPerformer
+            csvService: csvService,
+            backupService: backupService,
+            bankSyncPerformer: bankSyncPerformer
         )
+        self.repository = repository
+        self.csvService = csvService
+        self.backupService = backupService
+        self.bankTokenStore = bankTokenStore
+        self.bankSyncPerformer = bankSyncPerformer
+        self.monobankTokenValidator = MonobankDirectTokenValidator()
+        self.backgroundWork = backgroundWork
         // self.lockStore = lockStore
     }
 
@@ -109,18 +113,22 @@ public final class CashRunwayAppModel {
         bankSyncPerformer: any BankSyncPerforming,
         monobankTokenValidator: any MonobankTokenValidating
     ) {
-        self.repository = repository
-        self.csvService = CSVService(repository: repository)
-        self.backupService = BackupService(repository: repository)
-        self.bankTokenStore = bankTokenStore
-        self.bankSyncPerformer = BankSyncSerialPerformer(bankSyncPerformer)
-        self.monobankTokenValidator = monobankTokenValidator
-        self.backgroundWork = BackgroundWork(
+        let csvService = CSVService(repository: repository)
+        let backupService = BackupService(repository: repository)
+        let performer = BankSyncSerialPerformer(bankSyncPerformer)
+        let backgroundWork = BackgroundWork(
             repository: repository,
-            csvService: self.csvService,
-            backupService: self.backupService,
-            bankSyncPerformer: self.bankSyncPerformer
+            csvService: csvService,
+            backupService: backupService,
+            bankSyncPerformer: performer
         )
+        self.repository = repository
+        self.csvService = csvService
+        self.backupService = backupService
+        self.bankTokenStore = bankTokenStore
+        self.bankSyncPerformer = performer
+        self.monobankTokenValidator = monobankTokenValidator
+        self.backgroundWork = backgroundWork
     }
 
     public func bootstrap() async {
