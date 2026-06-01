@@ -71,7 +71,7 @@ private final class BackgroundMaintenanceCoordinator {
     private func handle(task: BGProcessingTask) {
         schedule()
         let taskBox = BackgroundProcessingTaskBox(task)
-        let maintenanceTask = Task.detached(priority: .background) {
+        let maintenanceTask = Task(priority: .background) {
             do {
                 let repository = try CashRunwayRepository()
                 try repository.runMaintenance()
