@@ -158,6 +158,26 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-spm-
 
+      - name: Pick iPhone simulator
+        id: simulator
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if xcrun simctl list devices available | grep -q 'iPhone 17 ('; then
+            destination='platform=iOS Simulator,name=iPhone 17'
+          else
+            device_name="$(xcrun simctl list devices available | awk -F'[()]' '/iPhone/ && /Shutdown|Booted/ { sub(/^[[:space:]]+/, "", $1); print $1; exit }')"
+            if [[ -z "${device_name}" ]]; then
+              echo 'No available iPhone simulator found' >&2
+              exit 1
+            fi
+            destination="platform=iOS Simulator,name=${device_name}"
+          fi
+
+          echo "destination=${destination}" >> "${GITHUB_OUTPUT}"
+          echo "Using ${destination}"
+
       - name: Run UI end-to-end tests
         shell: bash
         run: |
@@ -165,7 +185,8 @@ jobs:
           xcodebuild test \
             -project "${{ env.PROJECT }}" \
             -scheme "${{ env.SCHEME }}" \
-            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -sdk iphonesimulator \
+            -destination "${{ steps.simulator.outputs.destination }}" \
             -only-testing:CashRunwayUITests \
             2>&1 | tee ui-e2e-test.log
 
