@@ -1,0 +1,201 @@
+name: SideStore Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Marketing version, e.g. 1.0.1"
+        required: true
+        type: string
+      build:
+        description: "Build number; defaults to GitHub run number"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: sidestore-release
+  cancel-in-progress: false
+
+jobs:
+  build-release-deploy:
+    runs-on: macos-26
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Resolve release metadata
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ inputs.version }}"
+          BUILD="${{ inputs.build }}"
+          if [[ -z "${BUILD}" ]]; then
+            BUILD="${GITHUB_RUN_NUMBER}"
+          fi
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "build=${BUILD}" >> "${GITHUB_OUTPUT}"
+          echo "tag=v${VERSION}" >> "${GITHUB_OUTPUT}"
+
+      - name: Validate SideStore assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f sidestore/icon.png || {
+            echo "Missing sidestore/icon.png. Add a 1024x1024 PNG icon before publishing." >&2
+            exit 1
+          }
+          width=$(sips -g pixelWidth sidestore/icon.png 2>/dev/null | awk -F': ' '/pixelWidth/ {print $2}')
+          height=$(sips -g pixelHeight sidestore/icon.png 2>/dev/null | awk -F': ' '/pixelHeight/ {print $2}')
+          if [[ "${width}" != "1024" || "${height}" != "1024" ]]; then
+            echo "sidestore/icon.png must be exactly 1024x1024 pixels." >&2
+            exit 1
+          fi
+
+      - name: Set app version for this build
+        shell: bash
+        run: |
+          set -euo pipefail
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${{ steps.meta.outputs.version }}" AppHost/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ steps.meta.outputs.build }}" AppHost/Info.plist
+
+      - name: Build unsigned iOS app
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project CashRunway.xcodeproj \
+            -scheme CashRunway \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            AD_HOC_CODE_SIGNING_ALLOWED=NO \
+            clean build
+
+      - name: Package IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_PATH="$(find DerivedData/Build/Products/Release-iphoneos -name 'CashRunway.app' -type d -print -quit)"
+          test -n "${APP_PATH}" || { echo "CashRunway.app not found" >&2; exit 1; }
+
+          rm -rf Payload CashRunway.ipa public
+          mkdir -p Payload public
+          cp -R "${APP_PATH}" Payload/CashRunway.app
+          /usr/bin/zip -qry CashRunway.ipa Payload
+
+          cp sidestore/icon.png public/icon.png
+          touch public/.nojekyll
+
+      - name: Generate SideStore source JSON
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import pathlib
+          import datetime
+
+          version = "${{ steps.meta.outputs.version }}"
+          build = "${{ steps.meta.outputs.build }}"
+          size = os.path.getsize("CashRunway.ipa")
+          date = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+          ipa_url = f"https://github.com/romanr111/cash-runway/releases/download/v{version}/CashRunway.ipa"
+          icon_url = "https://romanr111.github.io/cash-runway/icon.png"
+
+          source = {
+              "name": "Cash Runway",
+              "identifier": "dev.roman.cashrunway.source",
+              "subtitle": "Personal finance runway tracker.",
+              "description": "SideStore source for Cash Runway test builds.",
+              "iconURL": icon_url,
+              "website": "https://github.com/romanr111/cash-runway",
+              "sourceURL": "https://romanr111.github.io/cash-runway/source.json",
+              "tintColor": "#E85D3A",
+              "featuredApps": ["dev.roman.cashrunway"],
+              "apps": [
+                  {
+                      "name": "Cash Runway",
+                      "bundleIdentifier": "dev.roman.cashrunway",
+                      "developerName": "Roman Rud",
+                      "subtitle": "Track cash runway and recurring costs.",
+                      "localizedDescription": "Cash Runway is a personal finance app for tracking wallet balances, transactions, recurring costs, and financial runway.",
+                      "iconURL": icon_url,
+                      "tintColor": "#E85D3A",
+                      "category": "finance",
+
+                      "version": version,
+                      "versionDate": date,
+                      "versionDescription": "Automated SideStore build from GitHub Actions.",
+                      "downloadURL": ipa_url,
+                      "size": size,
+
+                      "versions": [
+                          {
+                              "version": version,
+                              "buildVersion": build,
+                              "date": date,
+                              "localizedDescription": "Automated SideStore build from GitHub Actions.",
+                              "downloadURL": ipa_url,
+                              "size": size,
+                              "minOSVersion": "17.0"
+                          }
+                      ],
+                      "appPermissions": {
+                          "entitlements": [],
+                          "privacy": {}
+                      }
+                  }
+              ],
+              "news": []
+          }
+
+          pathlib.Path("public").mkdir(exist_ok=True)
+          pathlib.Path("public/source.json").write_text(
+              json.dumps(source, indent=2, ensure_ascii=False) + "\n",
+              encoding="utf-8"
+          )
+          PY
+
+      - name: Create or update GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.meta.outputs.tag }}"
+
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            gh release upload "${TAG}" CashRunway.ipa public/source.json --clobber
+          else
+            gh release create "${TAG}" CashRunway.ipa public/source.json \
+              --title "${TAG}" \
+              --notes "Automated SideStore build for Cash Runway."
+          fi
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+      - name: Deploy SideStore source to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
