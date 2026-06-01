@@ -18,8 +18,8 @@ Rules:
 
 - Goal: Make PR `#24` merge-ready while preserving category-merge data safety.
 - Success criteria: Category merge preserves transactions while only updating category references, remap lookups follow active destinations, CI/unit compile blockers are fixed, core mirrors stay identical, current `origin/main` merges cleanly, and required validation passes.
-- Current state: The CSV test compile blocker and chained remap bug were fixed, current `origin/main` was merged, required local validation passed, and the app launched on iPhone 17 without app error/fault logs.
-- Next action: Push PR `#24`, then recheck mergeability and CI.
+- Current state: The CSV test compile blocker and chained remap bug were fixed, latest `origin/main` was merged with the continuity conflict resolved, and prior local validation passed before the latest main merge.
+- Next action: Rerun validation after the latest main merge, push PR `#24`, then recheck mergeability and CI.
 - Open questions: None.
 - Merge status: not-merged.
 
@@ -74,3 +74,4 @@ Rules:
 - 2026-06-01 [BUILD] `xcodebuild -scheme CashRunway -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' clean build` ended with `** BUILD SUCCEEDED **`; SQLCipher strip and AppIntents metadata warnings matched existing build noise.
 - 2026-06-01 [SMOKE] Installed and launched `dev.roman.cashrunway` on iPhone 17; severity-filtered app log scan found no error/fault entries, with only system debug text containing `warning` from RunningBoard/BoardServices.
 - 2026-06-01 [PR] `#24` — https://github.com/romanr111/cash-runway/pull/24
+- 2026-06-01 [MAIN] `fix/side-store-concurrency` was merged into `main` at `db9a1e4`; follow-up continuity update landed at `f5d7ad4`.
