@@ -1,6 +1,3 @@
-## Agent-specific behavioral guidelines
-- **Kimi / Kimi-based LLMs only:** Also apply `.kimi/AGENTS.md` project-wide for behavioral, git safety, continuity ledger, and workflow rules.
-
 ## iOS agent rules
 
 ### Preserve existing structure
@@ -117,8 +114,18 @@ Real-device builds, forensics, and `devicectl` launches are **slow and token-exp
 - Before broad exploration, use the Code location quick reference above. For large files, use `rg -n` plus line-window reads instead of reading whole files.
 - UI tests are opt-in and targeted. When explicitly working on them, use deterministic `CASH_RUNWAY_UI_TEST_MODE` / `UITEST-*` data and inspect the live accessibility tree or logs before changing UI code for a failing selector.
 - For confirmed real-device issues, preserve evidence first when data may be at risk, verify device unlock/trust, and prefer plain `devicectl` launch/timing before Xcode/LLDB-heavy debugging.
-- After an approved merge/push, clean merged worktrees and branches, prune stale worktrees, and update `CONTINUITY.md`.
 - Validate new shell scripts with `bash -n` before first execution.
+
+### Worktree hygiene — mandatory cleanup
+Historical pattern: worktrees and branches accumulated (`codex/xcuitest-transaction-suite`, `codex/data-loss-investigation`, `codex/keychain-startup-hardening`) and were not always pruned, leaving stale entries.
+
+**Rule:** Immediately after a feature branch is merged and pushed with user approval:
+1. `git worktree remove <path>` (or `git worktree prune` if the directory is already gone).
+2. `git branch -d <branch>` (local).
+3. `git push origin --delete <branch>` (remote) if the branch was pushed.
+4. Update `CONTINUITY.md` to reflect the cleaned state.
+
+A clean workspace has **one** worktree (the primary checkout) and **one** local branch (`main`), except intentionally retained legacy branches.
 
 ### Feature deprecation / temporary disable pattern
 When hiding a feature temporarily (as done for Budgets and App Lock):
@@ -149,6 +156,19 @@ For a final success confirmation, `tail -5` is sufficient.
 - **Allowed locally**: Full unit tests, full integration tests, individual failed tests, or `--filter` targeted runs.
 - **E2E/UI tests**: Only run in CI/CD nightly pipelines; agents must never run them locally.
 - Re-run only failing targeted tests locally to verify fixes — not full suites.
+
+### Self-review proportionality
+Full self-code-review (re-read every changed file, grep for orphans, verify logic) is required for:
+- Multi-file changes (> 3 files)
+- Architectural or API changes
+- Security-sensitive changes (Keychain, DB encryption, auth)
+
+**Skip the full second pass for:**
+- Single-file comment-only changes
+- Simple test disables (`@Test(.disabled(...))`)
+- Adding deprecation comments with no logic changes
+
+For these, a quick `git diff --stat` + `grep` for typos is sufficient.
 
 ### Validation Matrix
 
