@@ -146,5 +146,3 @@ A clean workspace has **one** worktree (the primary checkout) and **one** local 
 
 ### Exploration cost ceiling
 Before broad exploration, use the Code location quick reference in the root `AGENTS.md`. For large files, use `rg -n` plus line-window reads instead of reading whole files.
-
-

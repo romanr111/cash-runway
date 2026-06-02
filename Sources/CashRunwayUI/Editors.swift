@@ -30,6 +30,7 @@ struct TransactionEditorView: View {
     @State private var amountError: String?
     @State private var originalCategoryID: UUID?
     @State private var isCategoryLearningPromptPresented = false
+    @State private var showsDeleteConfirmation = false
     @State private var pendingLearnTransactionID: UUID?
     @State private var pendingLearnCategoryID: UUID?
 
@@ -97,6 +98,14 @@ struct TransactionEditorView: View {
                 }
             } message: {
                 Text(categoryLearningPromptMessage)
+            }
+            .alert("Delete Transaction?", isPresented: $showsDeleteConfirmation) {
+                Button("Cancel", role: .cancel) {}
+                Button("Delete", role: .destructive) {
+                    deleteCurrentTransaction()
+                }
+            } message: {
+                Text("This transaction will be permanently removed.")
             }
             .onChange(of: composerModal) { _, modal in
                 guard modal == nil else { return }
@@ -410,6 +419,26 @@ struct TransactionEditorView: View {
                         .padding(.top, 20)
                         .accessibilityIdentifier(CashRunwayAccessibilityID.transactionSaveButton)
 
+                        if draft.id != nil {
+                            Button(role: .destructive) {
+                                showsDeleteConfirmation = true
+                            } label: {
+                                HStack {
+                                    Image(systemName: "trash")
+                                    Text("Delete Transaction")
+                                }
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(CashRunwayTheme.negative)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                                .background(CashRunwayTheme.negative.opacity(0.08), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(CashRunwayTheme.negative.opacity(0.18), lineWidth: 1))
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.top, 12)
+                            .accessibilityIdentifier(CashRunwayAccessibilityID.transactionDetailsDeleteButton)
+                        }
+
                         if let amountError {
                             Text(amountError)
                                 .font(.system(size: 14, weight: .medium))
@@ -672,6 +701,12 @@ struct TransactionEditorView: View {
         dismiss()
     }
 
+    private func deleteCurrentTransaction() {
+        guard let transactionID = draft.id else { return }
+        model.deleteTransaction(id: transactionID)
+        dismiss()
+    }
+
     private var divider: some View {
         Divider().overlay(CashRunwayTheme.line)
     }
@@ -863,7 +898,7 @@ struct CategoryManagementView: View {
     @State private var items: [CategoryManagementItem] = []
     @State private var showsEditor = false
     @State private var showsMergeSheet = false
-    @State private var categoryDraft = CashRunwayCategory(id: UUID(), name: "", kind: .expense, iconName: "questionmark.app.fill", colorHex: "#7E57C2", parentID: nil, isSystem: false, isArchived: false, sortOrder: 0, createdAt: .now, updatedAt: .now)
+    @State private var categoryDraft = CashRunwayCategory(id: UUID(), name: "", kind: .expense, iconName: CategoryAppearanceCatalog.defaultIcon, colorHex: CategoryAppearanceCatalog.defaultColor, parentID: nil, isSystem: false, isArchived: false, sortOrder: 0, createdAt: .now, updatedAt: .now)
 
     init(model: CashRunwayAppModel, initialKind: CategoryKind) {
         self.model = model
@@ -873,48 +908,48 @@ struct CategoryManagementView: View {
     var body: some View {
         NavigationStack {
             List {
-                EmptyView().accessibilityIdentifier(CashRunwayAccessibilityID.categoryManagementScreen)
-                Picker("Kind", selection: $selectedKind) {
-                    Text("Expenses").tag(CategoryKind.expense)
-                    Text("Income").tag(CategoryKind.income)
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("\(items.count) total · \(visibleCount) visible · \(hiddenCount) hidden")
+                        .font(CashRunwayTheme.captionFont)
+                        .foregroundStyle(CashRunwayTheme.textSecondary)
+                        .textCase(.uppercase)
+                        .padding(.horizontal, 2)
+
+                    Picker("Kind", selection: $selectedKind) {
+                        Text("Expenses").tag(CategoryKind.expense)
+                        Text("Income").tag(CategoryKind.income)
+                    }
+                    .pickerStyle(.segmented)
                 }
-                .pickerStyle(.segmented)
+                .padding(.top, 8)
+                .padding(.bottom, 2)
                 .listRowBackground(CashRunwayTheme.background)
                 .listRowSeparator(.hidden)
+                .accessibilityIdentifier(CashRunwayAccessibilityID.categoryManagementScreen)
 
                 ForEach(items) { item in
-                    HStack(spacing: 14) {
-                        CategoryGlyph(iconName: item.category.iconName, colorHex: item.category.colorHex, size: 48)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(item.category.name)
-                                .font(.system(size: 17, weight: .semibold))
-                                .foregroundStyle(CashRunwayTheme.textPrimary)
-                            Text("\(item.transactionCount) transactions in \(item.walletCount) wallets")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundStyle(CashRunwayTheme.textSecondary)
-                        }
-                        Spacer()
-                        Button {
+                    CategoryManagementRow(
+                        item: item,
+                        onEdit: {
+                            categoryDraft = item.category
+                            showsEditor = true
+                        },
+                        onToggleVisibility: {
                             model.toggleCategoryVisibility(item.category)
                             reload()
-                        } label: {
-                            Image(systemName: item.isVisible ? "eye.fill" : "eye.slash.fill")
-                                .font(.system(size: 17, weight: .semibold))
-                                .foregroundStyle(item.isVisible ? CashRunwayTheme.accentDark : CashRunwayTheme.textMuted)
-                                .frame(width: 36, height: 36)
                         }
-                        Image(systemName: "line.3.horizontal")
-                            .font(.system(size: 17, weight: .medium))
-                            .foregroundStyle(CashRunwayTheme.textMuted)
-                    }
-                    .padding(.vertical, 8)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        categoryDraft = item.category
-                        showsEditor = true
-                    }
+                    )
+                    .listRowInsets(EdgeInsets(top: 6, leading: 18, bottom: 6, trailing: 10))
+                    .listRowBackground(CashRunwayTheme.background)
+                    .listRowSeparator(.hidden)
                 }
                 .onMove(perform: moveItems)
+
+                Color.clear
+                    .frame(height: 76)
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(CashRunwayTheme.background)
+                    .listRowSeparator(.hidden)
             }
             .environment(\.editMode, .constant(.active))
             .scrollContentBackground(.hidden)
@@ -929,19 +964,7 @@ struct CategoryManagementView: View {
             .safeAreaInset(edge: .bottom) {
                 HStack {
                     Button {
-                        categoryDraft = CashRunwayCategory(
-                            id: UUID(),
-                            name: "",
-                            kind: selectedKind,
-                            iconName: "questionmark.app.fill",
-                            colorHex: "#7E57C2",
-                            parentID: nil,
-                            isSystem: false,
-                            isArchived: false,
-                            sortOrder: items.count,
-                            createdAt: .now,
-                            updatedAt: .now
-                        )
+                        categoryDraft = newCategoryDraft()
                         showsEditor = true
                     } label: {
                         Image(systemName: "plus")
@@ -964,8 +987,9 @@ struct CategoryManagementView: View {
                     .overlay(Capsule().stroke(CashRunwayTheme.line, lineWidth: 1))
                 }
                 .padding(.horizontal, 20)
-                .padding(.vertical, 12)
-                .background(.ultraThinMaterial)
+                .padding(.top, 10)
+                .padding(.bottom, 8)
+                .background(.regularMaterial)
             }
             .sheet(isPresented: $showsEditor, onDismiss: reload) {
                 CategoryEditorView(model: model, category: $categoryDraft)
@@ -982,10 +1006,111 @@ struct CategoryManagementView: View {
         items = model.categoryManagementItems(kind: selectedKind)
     }
 
+    private var visibleCount: Int {
+        items.filter(\.isVisible).count
+    }
+
+    private var hiddenCount: Int {
+        items.count - visibleCount
+    }
+
+    private func newCategoryDraft() -> CashRunwayCategory {
+        CashRunwayCategory(
+            id: UUID(),
+            name: "",
+            kind: selectedKind,
+            iconName: CategoryAppearanceCatalog.defaultIcon,
+            colorHex: CategoryAppearanceCatalog.defaultColor,
+            parentID: nil,
+            isSystem: false,
+            isArchived: false,
+            sortOrder: items.count,
+            createdAt: .now,
+            updatedAt: .now
+        )
+    }
+
     private func moveItems(from source: IndexSet, to destination: Int) {
         items.move(fromOffsets: source, toOffset: destination)
         model.reorderCategories(kind: selectedKind, orderedCategoryIDs: items.map(\.category.id))
         reload()
+    }
+}
+
+private struct CategoryManagementRow: View {
+    let item: CategoryManagementItem
+    let onEdit: () -> Void
+    let onToggleVisibility: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Button(action: onEdit) {
+                HStack(spacing: 12) {
+                    CategoryGlyph(iconName: item.category.iconName, colorHex: item.category.colorHex, size: 50)
+                        .opacity(item.isVisible ? 1 : 0.58)
+
+                    VStack(alignment: .leading, spacing: 5) {
+                        HStack(spacing: 8) {
+                            Text(item.category.name)
+                                .font(CashRunwayTheme.subheadingFont)
+                                .foregroundStyle(item.isVisible ? CashRunwayTheme.textPrimary : CashRunwayTheme.textSecondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.82)
+
+                            if !item.isVisible {
+                                Text("Hidden")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(CashRunwayTheme.textMuted)
+                                    .padding(.horizontal, 7)
+                                    .padding(.vertical, 3)
+                                    .background(CashRunwayTheme.pill, in: Capsule())
+                            }
+                        }
+
+                        Text("\(item.transactionCount) transactions · \(item.walletCount) wallets")
+                            .font(CashRunwayTheme.captionFont)
+                            .foregroundStyle(CashRunwayTheme.textSecondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.82)
+                    }
+                    .layoutPriority(1)
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Edit \(item.category.name)")
+            .layoutPriority(1)
+
+            Spacer(minLength: 6)
+
+            Menu {
+                Button {
+                    onEdit()
+                } label: {
+                    SwiftUI.Label("Edit", systemImage: "pencil")
+                }
+
+                Button {
+                    onToggleVisibility()
+                } label: {
+                    SwiftUI.Label(item.isVisible ? "Hide" : "Show", systemImage: item.isVisible ? "eye.slash.fill" : "eye.fill")
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(CashRunwayTheme.textSecondary)
+                    .frame(width: 44, height: 44)
+                    .background(CashRunwayTheme.pill, in: Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Category actions")
+        }
+        .padding(.vertical, 13)
+        .padding(.leading, 14)
+        .padding(.trailing, 8)
+        .frame(minHeight: 76)
+        .background(item.isVisible ? CashRunwayTheme.surface : CashRunwayTheme.surfaceMuted, in: RoundedRectangle(cornerRadius: CashRunwayTheme.radiusM, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: CashRunwayTheme.radiusM, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
+        .contentShape(Rectangle())
     }
 }
 
@@ -1379,27 +1504,62 @@ struct WalletEditorView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                TextField("Name", text: $wallet.name)
-                Picker("Kind", selection: $wallet.kind) {
-                    ForEach(WalletKind.allCases, id: \.self) { kind in
-                        Text(kind.rawValue.capitalized).tag(kind)
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 18) {
+                    CashRunwaySurface {
+                        HStack(spacing: 16) {
+                            CategoryGlyph(iconName: wallet.iconName ?? "wallet.pass.fill", colorHex: wallet.colorHex ?? "#60788A", size: 64)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(wallet.name.isEmpty ? "New Wallet" : wallet.name)
+                                    .font(CashRunwayTheme.headingFont)
+                                    .foregroundStyle(CashRunwayTheme.textPrimary)
+                                    .lineLimit(1)
+                                Text(wallet.kind.rawValue.capitalized)
+                                    .font(CashRunwayTheme.bodyFont)
+                                    .foregroundStyle(CashRunwayTheme.textSecondary)
+                            }
+                        }
                     }
-                }
-                TextField("Starting Balance", text: $balanceText)
-                    .keyboardType(.decimalPad)
 
-                if model.wallets.count > 1 {
-                    Section {
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text("Wallet Details")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(CashRunwayTheme.textMuted)
+                            .textCase(.uppercase)
+                        VStack(spacing: 14) {
+                            TextField("Name", text: $wallet.name)
+                                .textFieldStyle(.roundedBorder)
+                            Picker("Kind", selection: $wallet.kind) {
+                                ForEach(WalletKind.allCases, id: \.self) { kind in
+                                    Text(kind.rawValue.capitalized).tag(kind)
+                                }
+                            }
+                            TextField("Starting Balance", text: $balanceText)
+                                .keyboardType(.decimalPad)
+                                .textFieldStyle(.roundedBorder)
+                        }
+                        .ledgerSurface()
+                    }
+
+                    if model.wallets.count > 1 {
                         Button(role: .destructive) {
                             showsDeleteConfirmation = true
                         } label: {
-                            Text("Delete Wallet")
+                            SwiftUI.Label("Delete Wallet", systemImage: "trash")
+                                .font(.system(size: 16, weight: .semibold))
                                 .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .background(CashRunwayTheme.negative.opacity(0.10), in: Capsule())
                         }
+                        .buttonStyle(.plain)
                     }
                 }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
             }
+            .background(CashRunwayTheme.background)
+            .navigationTitle("Wallet")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .topBarTrailing) {
@@ -1436,25 +1596,108 @@ struct CategoryEditorView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                TextField("Name", text: $category.name)
-                Picker("Kind", selection: $category.kind) {
-                    Text("Expense").tag(CategoryKind.expense)
-                    Text("Income").tag(CategoryKind.income)
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 18) {
+                    CashRunwaySurface {
+                        HStack(spacing: 16) {
+                            CategoryGlyph(iconName: category.iconName, colorHex: category.colorHex, size: 70)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(category.name.isEmpty ? "New Category" : category.name)
+                                    .font(CashRunwayTheme.headingFont)
+                                    .foregroundStyle(CashRunwayTheme.textPrimary)
+                                    .lineLimit(1)
+                                Text(category.kind == .income ? "Income" : "Expense")
+                                    .font(CashRunwayTheme.bodyFont)
+                                    .foregroundStyle(CashRunwayTheme.textSecondary)
+                            }
+                        }
+                    }
+
+                    editorSection("Details") {
+                        TextField("Name", text: $category.name)
+                            .textFieldStyle(.roundedBorder)
+                        Picker("Kind", selection: $category.kind) {
+                            Text("Expense").tag(CategoryKind.expense)
+                            Text("Income").tag(CategoryKind.income)
+                        }
+                        .pickerStyle(.segmented)
+                    }
+
+                    editorSection("Color") {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 46), spacing: 10)], spacing: 10) {
+                            ForEach(CategoryAppearanceCatalog.colors) { choice in
+                                Button {
+                                    category.colorHex = choice.colorHex
+                                } label: {
+                                    CashRunwaySwatch(colorHex: choice.colorHex, isSelected: CategoryAppearanceCatalog.normalizedColorHex(category.colorHex) == choice.colorHex)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel(choice.name)
+                            }
+                        }
+                    }
+
+                    editorSection("Symbol") {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 68), spacing: 12)], spacing: 12) {
+                            ForEach(CategoryAppearanceCatalog.icons) { choice in
+                                Button {
+                                    category.iconName = choice.iconName
+                                } label: {
+                                    VStack(spacing: 6) {
+                                        CategoryGlyph(iconName: choice.iconName, colorHex: category.colorHex, size: 48)
+                                        Text(choice.name)
+                                            .font(.system(size: 11, weight: .semibold))
+                                            .foregroundStyle(CashRunwayTheme.textSecondary)
+                                            .lineLimit(1)
+                                            .minimumScaleFactor(0.75)
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 8)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: CashRunwayTheme.radiusS, style: .continuous)
+                                            .fill(CategoryAppearanceCatalog.normalizedIconName(category.iconName) == choice.iconName ? CashRunwayTheme.accentMuted : CashRunwayTheme.pill)
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
                 }
-                TextField("Color Hex", text: Binding(get: { category.colorHex ?? "" }, set: { category.colorHex = $0 }))
-                TextField("Symbol", text: Binding(get: { category.iconName ?? "" }, set: { category.iconName = $0 }))
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
             }
+            .background(CashRunwayTheme.background)
+            .navigationTitle("Category")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Save") {
+                        category.iconName = CategoryAppearanceCatalog.normalizedIconName(category.iconName)
+                        category.colorHex = CategoryAppearanceCatalog.normalizedColorHex(category.colorHex)
                         category.updatedAt = .now
                         model.saveCategory(category)
                         dismiss()
                     }
                 }
             }
+        }
+        .onAppear {
+            category.iconName = CategoryAppearanceCatalog.normalizedIconName(category.iconName)
+            category.colorHex = CategoryAppearanceCatalog.normalizedColorHex(category.colorHex)
+        }
+    }
+
+    private func editorSection<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(CashRunwayTheme.textMuted)
+                .textCase(.uppercase)
+            VStack(alignment: .leading, spacing: 14) {
+                content()
+            }
+            .ledgerSurface()
         }
     }
 }
@@ -1466,20 +1709,79 @@ struct LabelEditorView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                TextField("Name", text: $label.name)
-                TextField("Color Hex", text: Binding(get: { label.colorHex ?? "" }, set: { label.colorHex = $0 }))
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 18) {
+                    CashRunwaySurface {
+                        HStack(spacing: 16) {
+                            Circle()
+                                .fill(CashRunwayTheme.categoryColor(label.colorHex))
+                                .frame(width: 26, height: 26)
+                                .frame(width: 64, height: 64)
+                                .background(CashRunwayTheme.pill, in: Circle())
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(label.name.isEmpty ? "New Label" : label.name)
+                                    .font(CashRunwayTheme.headingFont)
+                                    .foregroundStyle(CashRunwayTheme.textPrimary)
+                                    .lineLimit(1)
+                                Text("Transaction label")
+                                    .font(CashRunwayTheme.bodyFont)
+                                    .foregroundStyle(CashRunwayTheme.textSecondary)
+                            }
+                        }
+                    }
+
+                    editorSection("Details") {
+                        TextField("Name", text: $label.name)
+                            .textFieldStyle(.roundedBorder)
+                    }
+
+                    editorSection("Color") {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 46), spacing: 10)], spacing: 10) {
+                            ForEach(CategoryAppearanceCatalog.colors) { choice in
+                                Button {
+                                    label.colorHex = choice.colorHex
+                                } label: {
+                                    CashRunwaySwatch(colorHex: choice.colorHex, isSelected: CategoryAppearanceCatalog.normalizedColorHex(label.colorHex) == choice.colorHex)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel(choice.name)
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
             }
+            .background(CashRunwayTheme.background)
+            .navigationTitle("Label")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Save") {
+                        label.colorHex = CategoryAppearanceCatalog.normalizedColorHex(label.colorHex)
                         label.updatedAt = .now
                         model.saveLabel(label)
                         dismiss()
                     }
                 }
             }
+        }
+        .onAppear {
+            label.colorHex = CategoryAppearanceCatalog.normalizedColorHex(label.colorHex)
+        }
+    }
+
+    private func editorSection<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(CashRunwayTheme.textMuted)
+                .textCase(.uppercase)
+            VStack(alignment: .leading, spacing: 14) {
+                content()
+            }
+            .ledgerSurface()
         }
     }
 }
@@ -1494,6 +1796,9 @@ struct RecurringTemplateEditorView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    editorHeader(title: "Recurring Template", subtitle: "Define the repeat rule and transaction defaults.", icon: "repeat")
+                }
                 Picker("Kind", selection: $template.kind) {
                     Text("Expense").tag(RecurringTemplateKind.expense)
                     Text("Income").tag(RecurringTemplateKind.income)
@@ -1562,11 +1867,32 @@ struct RecurringTemplateEditorView: View {
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(CashRunwayTheme.background)
         }
         .onAppear {
             amountText = template.amountMinor == 0 ? "" : MoneyFormatter.plainString(from: template.amountMinor)
             usesEndDate = template.endDate != nil
         }
+    }
+
+    private func editorHeader(title: String, subtitle: String, icon: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(CashRunwayTheme.accentDark)
+                .frame(width: 48, height: 48)
+                .background(CashRunwayTheme.accentMuted, in: Circle())
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(CashRunwayTheme.headingFont)
+                    .foregroundStyle(CashRunwayTheme.textPrimary)
+                Text(subtitle)
+                    .font(CashRunwayTheme.bodyFont)
+                    .foregroundStyle(CashRunwayTheme.textSecondary)
+            }
+        }
+        .padding(.vertical, 6)
     }
 }
 
@@ -1580,6 +1906,9 @@ struct RecurringInstanceEditorView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    editorHeader(title: "Occurrence", subtitle: "Adjust this scheduled instance only.", icon: "calendar.badge.clock")
+                }
                 DatePicker("Due Date", selection: $instance.dueDate, displayedComponents: [.date])
                 Picker("Status", selection: $instance.status) {
                     ForEach(RecurringInstanceStatus.allCases, id: \.self) { status in
@@ -1607,6 +1936,8 @@ struct RecurringInstanceEditorView: View {
                 ))
             }
             .navigationTitle("Occurrence")
+            .scrollContentBackground(.hidden)
+            .background(CashRunwayTheme.background)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .topBarTrailing) {
@@ -1626,5 +1957,24 @@ struct RecurringInstanceEditorView: View {
                 amountText = instance.overrideAmountMinor.map(MoneyFormatter.plainString(from:)) ?? ""
             }
         }
+    }
+
+    private func editorHeader(title: String, subtitle: String, icon: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(CashRunwayTheme.accentDark)
+                .frame(width: 48, height: 48)
+                .background(CashRunwayTheme.accentMuted, in: Circle())
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(CashRunwayTheme.headingFont)
+                    .foregroundStyle(CashRunwayTheme.textPrimary)
+                Text(subtitle)
+                    .font(CashRunwayTheme.bodyFont)
+                    .foregroundStyle(CashRunwayTheme.textSecondary)
+            }
+        }
+        .padding(.vertical, 6)
     }
 }

@@ -10,7 +10,6 @@ struct DashboardView: View {
     @State private var isComposerPresented = false
     @State private var isSearchPresented = false
     @State private var showsOverview = false
-    @State private var selectedItem: TransactionListItem?
     @State private var draft = TransactionDraft(kind: .expense, walletID: UUID(), amountMinor: 0, occurredAt: .now)
     @State private var isWalletEditorPresented = false
     @State private var walletDraft = Wallet(id: UUID(), name: "", kind: .cash, colorHex: "#60788A", iconName: "wallet.pass.fill", startingBalanceMinor: 0, currentBalanceMinor: 0, isArchived: false, sortOrder: 0, createdAt: .now, updatedAt: .now)
@@ -74,19 +73,6 @@ struct DashboardView: View {
             }
             .sheet(isPresented: $isSearchPresented) {
                 TimelineSearchSheet(model: model)
-            }
-            .sheet(item: $selectedItem) { item in
-                TransactionDetailsView(
-                    item: item,
-                    model: model,
-                    onEdit: {
-                        if let loadedDraft = try? model.repository.transactionDraft(id: item.id) {
-                            draft = loadedDraft
-                            selectedItem = nil
-                            isComposerPresented = true
-                        }
-                    }
-                )
             }
             .fullScreenCover(isPresented: $isComposerPresented) {
                 TransactionEditorView(model: model, draft: $draft)
@@ -314,7 +300,7 @@ struct DashboardView: View {
                         }
                         ForEach(section.items) { item in
                             Button {
-                                selectedItem = item
+                                openEditor(for: item)
                             } label: {
                                 TransactionRow(item: item)
                             }
@@ -354,6 +340,13 @@ struct DashboardView: View {
 
     private func walletName(for id: UUID) -> String? {
         model.wallets.first(where: { $0.id == id })?.name
+    }
+
+    private func openEditor(for item: TransactionListItem) {
+        if let loadedDraft = try? model.repository.transactionDraft(id: item.id) {
+            draft = loadedDraft
+            isComposerPresented = true
+        }
     }
 }
 
@@ -452,26 +445,216 @@ private enum OverviewDisplayFormatter {
     }
 }
 
+private struct DonutSegmentShape: Shape {
+    let startDegrees: Double
+    let endDegrees: Double
+    let thickness: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        let outerRadius = min(rect.width, rect.height) / 2
+        let innerRadius = max(outerRadius - thickness, 0)
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let adjustedEndDegrees = endDegrees - startDegrees >= 360 ? startDegrees + 359.99 : endDegrees
+
+        var path = Path()
+        path.addArc(
+            center: center,
+            radius: outerRadius,
+            startAngle: .degrees(startDegrees),
+            endAngle: .degrees(adjustedEndDegrees),
+            clockwise: false
+        )
+        path.addArc(
+            center: center,
+            radius: innerRadius,
+            startAngle: .degrees(adjustedEndDegrees),
+            endAngle: .degrees(startDegrees),
+            clockwise: true
+        )
+        path.closeSubpath()
+        return path
+    }
+}
+
+private struct CategoryDonutChart: View {
+    let distribution: OverviewCategoryDistribution
+    let kind: CategoryKind
+    let selectedCategory: OverviewCategoryRow?
+    let onSelectCategory: (OverviewCategoryRow) -> Void
+
+    private let diameter: CGFloat = 204
+    private let thickness: CGFloat = 24
+    private let badgeSize: CGFloat = 46
+    private let badgeRadius: CGFloat = 92
+    private let chartExtent: CGFloat = 250
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(CashRunwayTheme.pill, lineWidth: thickness)
+                .frame(width: diameter, height: diameter)
+
+            ForEach(distribution.segments) { segment in
+                let isSelected = segment.category.id == selectedCategory?.id
+                DonutSegmentShape(
+                    startDegrees: segment.startDegrees,
+                    endDegrees: segment.endDegrees,
+                    thickness: thickness
+                )
+                .fill(CashRunwayTheme.categoryColor(segment.category.colorHex))
+                .frame(width: diameter, height: diameter)
+                .opacity(isSelected ? 1 : 0.42)
+                .overlay {
+                    DonutSegmentShape(
+                        startDegrees: segment.startDegrees,
+                        endDegrees: segment.endDegrees,
+                        thickness: thickness
+                    )
+                    .stroke(CashRunwayTheme.surface, lineWidth: 1.5)
+                    .frame(width: diameter, height: diameter)
+                }
+                .scaleEffect(isSelected ? 1.025 : 1)
+                .animation(.spring(response: 0.24, dampingFraction: 0.82), value: selectedCategory?.id)
+                .contentShape(
+                    DonutSegmentShape(
+                        startDegrees: segment.startDegrees,
+                        endDegrees: segment.endDegrees,
+                        thickness: thickness
+                    )
+                )
+                .onTapGesture {
+                    onSelectCategory(segment.category)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(segment.category.name), \(OverviewDisplayFormatter.percentage(segment.category.percentage))")
+                .accessibilityAddTraits(.isButton)
+            }
+
+            ForEach(badgeSegments) { segment in
+                let angle = Angle.degrees(segment.midDegrees)
+                let isSelected = segment.category.id == selectedCategory?.id
+                CategoryDonutBadge(
+                    iconName: segment.category.iconName,
+                    colorHex: segment.category.colorHex,
+                    size: badgeSize,
+                    isSelected: isSelected
+                )
+                .offset(
+                    x: cos(angle.radians) * badgeRadius,
+                    y: sin(angle.radians) * badgeRadius
+                )
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+            }
+
+            centerContent
+                .frame(width: 126)
+        }
+        .frame(width: chartExtent, height: chartExtent)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 4)
+    }
+
+    private var badgeSegments: [OverviewCategoryDistributionSegment] {
+        let selectedSegment = distribution.segments.first { $0.category.id == selectedCategory?.id }
+        let candidates = [selectedSegment].compactMap { $0 }
+            + distribution.segments.filter { $0.category.percentage >= 0.08 }
+        var result: [OverviewCategoryDistributionSegment] = []
+
+        for segment in candidates {
+            guard !result.contains(where: { $0.id == segment.id }) else { continue }
+            let isSelected = segment.id == selectedSegment?.id
+            let hasRoom = result.allSatisfy { angularDistance($0.midDegrees, segment.midDegrees) >= 30 }
+            if isSelected || hasRoom {
+                result.append(segment)
+            }
+            if result.count >= 5 { break }
+        }
+
+        return result
+    }
+
+    private func angularDistance(_ first: Double, _ second: Double) -> Double {
+        let rawDifference = abs(first - second).truncatingRemainder(dividingBy: 360)
+        return min(rawDifference, 360 - rawDifference)
+    }
+
+    @ViewBuilder
+    private var centerContent: some View {
+        if let selectedCategory {
+            VStack(spacing: 4) {
+                Text(selectedCategory.name)
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .foregroundStyle(CashRunwayTheme.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.65)
+                Text(MoneyFormatter.string(from: signedAmount(selectedCategory.amountMinor)))
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .foregroundStyle(kind == .expense ? CashRunwayTheme.negative : CashRunwayTheme.positive)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.62)
+                Text(OverviewDisplayFormatter.percentage(selectedCategory.percentage))
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(CashRunwayTheme.textSecondary)
+            }
+        } else {
+            Text(kind == .expense ? "No expenses yet" : "No income yet")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(CashRunwayTheme.textSecondary)
+                .multilineTextAlignment(.center)
+        }
+    }
+
+    private func signedAmount(_ amountMinor: Int64) -> Int64 {
+        kind == .expense ? -amountMinor : amountMinor
+    }
+}
+
+private struct CategoryDonutBadge: View {
+    let iconName: String?
+    let colorHex: String?
+    let size: CGFloat
+    let isSelected: Bool
+
+    var body: some View {
+        let color = CashRunwayTheme.categoryColor(colorHex)
+        ZStack {
+            Circle()
+                .fill(color)
+            Circle()
+                .stroke(CashRunwayTheme.surface, lineWidth: 4)
+            Image(systemName: CategoryAppearanceCatalog.renderableIconName(iconName))
+                .font(.system(size: size * 0.4, weight: .bold))
+                .foregroundStyle(.white)
+        }
+        .frame(width: size, height: size)
+        .shadow(color: color.opacity(isSelected ? 0.28 : 0.16), radius: isSelected ? 12 : 8, x: 0, y: 6)
+        .scaleEffect(isSelected ? 1.08 : 1)
+    }
+}
+
 private struct TimelineOverviewView: View {
     @Bindable var model: CashRunwayAppModel
     @State private var chartMetric = OverviewChartMetric.wealth
     @State private var categoryKind: CategoryKind = .expense
     @State private var showsCategoryManagement = false
-    @State private var selectedCategory: OverviewCategoryRow?
+    @State private var showsAllCategories = false
+    @State private var selectedCategoryID: UUID?
 
     var body: some View {
         ScrollView(showsIndicators: false) {
-            VStack(spacing: 22) {
-                header
+            VStack(spacing: 20) {
+                overviewHero
                 filters
                 monthStrip
                 metricPicker
-                overviewChart
                 categoriesCard
+                overviewChart
                 labelsCard
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 16)
+            .padding(.bottom, 28)
         }
         .background(CashRunwayTheme.background)
         .navigationBarTitleDisplayMode(.inline)
@@ -484,14 +667,6 @@ private struct TimelineOverviewView: View {
         }
         .sheet(isPresented: $showsCategoryManagement) {
             CategoryManagementView(model: model, initialKind: categoryKind)
-        }
-        .navigationDestination(item: $selectedCategory) { category in
-            CategoryDetailOverviewView(
-                model: model,
-                category: category,
-                monthKey: model.selectedMonthKey,
-                walletID: model.selectedWalletID
-            )
         }
         .simultaneousGesture(
             DragGesture(minimumDistance: 20, coordinateSpace: .local)
@@ -508,9 +683,20 @@ private struct TimelineOverviewView: View {
         )
     }
 
-    private var header: some View {
-        Color.clear
-            .frame(height: 0)
+    private var overviewHero: some View {
+        VStack(spacing: 6) {
+            Text(chartValue(for: chartMetric))
+                .font(.system(size: 34, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(CashRunwayTheme.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+            Text(chartMetric.rawValue)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(CashRunwayTheme.textSecondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 4)
     }
 
     private var filters: some View {
@@ -527,10 +713,10 @@ private struct TimelineOverviewView: View {
                     }
                 }
             } label: {
-                pill(model.selectedWalletID.flatMap(walletName(for:)) ?? "All Wallets")
+                pill(model.selectedWalletID.flatMap(walletName(for:)) ?? "All Wallets", icon: "wallet.pass")
             }
 
-            pill("By months")
+            pill("By months", icon: "calendar")
         }
     }
 
@@ -612,16 +798,14 @@ private struct TimelineOverviewView: View {
     }
 
     private var metricPicker: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 12) {
+        VStack(spacing: 10) {
+            HStack(spacing: 8) {
                 ForEach(OverviewChartMetric.allCases, id: \.self) { metric in
-                    metricCard(title: metric.rawValue, value: chartValue(for: metric), isSelected: chartMetric == metric) {
-                        chartMetric = metric
-                    }
+                    metricCard(title: metric.rawValue, value: chartValue(for: metric), isSelected: chartMetric == metric) { chartMetric = metric }
                 }
             }
 
-            HStack(spacing: 12) {
+            HStack(spacing: 8) {
                 kindCard(title: "Expenses", value: MoneyFormatter.string(from: -(model.overviewSnapshot?.monthExpenseMinor ?? 0)), isSelected: categoryKind == .expense) {
                     categoryKind = .expense
                 }
@@ -702,68 +886,135 @@ private struct TimelineOverviewView: View {
     }
 
     private var categoriesCard: some View {
-        let categories = (model.overviewSnapshot?.categories ?? []).filter { $0.kind == categoryKind }
-        return VStack(alignment: .leading, spacing: 18) {
+        let sourceCategories = (model.overviewSnapshot?.categories ?? []).filter { $0.kind == categoryKind }
+        let distribution = OverviewCategoryDistributionLayout.distribution(for: sourceCategories)
+        let categories = distribution.segments.map(\.category)
+        let displayedCategories = OverviewCategoryDisplayLayout.displayedCategories(
+            in: categories,
+            showsAllCategories: showsAllCategories
+        )
+        let remainingCategoryCount = max(categories.count - 5, 0)
+        let currentSelection = selectedCategory(from: categories, showsAllCategories: showsAllCategories)
+        return VStack(alignment: .leading, spacing: 20) {
+            categoriesHeader
+            categoriesCardContent(
+                distribution: distribution,
+                categories: categories,
+                displayedCategories: displayedCategories,
+                currentSelection: currentSelection,
+                remainingCategoryCount: remainingCategoryCount
+            )
+        }
+        .padding(20)
+        .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
+        .onAppear {
+            syncSelectedCategoryID(with: categories)
+        }
+        .onChange(of: categoryKind) { _, _ in
+            showsAllCategories = false
+            selectedCategoryID = categories.first?.id
+        }
+        .onChange(of: model.selectedMonthKey) { _, _ in
+            showsAllCategories = false
+            selectedCategoryID = categories.first?.id
+        }
+        .onChange(of: model.selectedWalletID) { _, _ in
+            showsAllCategories = false
+            selectedCategoryID = categories.first?.id
+        }
+        .onChange(of: categories.map(\.id)) { _, _ in
+            syncSelectedCategoryID(with: categories)
+        }
+    }
+
+    private var categoriesHeader: some View {
+        HStack {
             Text("Categories")
-                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .font(.system(size: 30, weight: .bold, design: .rounded))
                 .foregroundStyle(CashRunwayTheme.textPrimary)
+            Spacer()
+            Button {
+                showsCategoryManagement = true
+            } label: {
+                Image(systemName: "slider.horizontal.3")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(CashRunwayTheme.textPrimary)
+                    .frame(width: 38, height: 38)
+                    .background(CashRunwayTheme.pill, in: Circle())
+            }
+            .buttonStyle(.plain)
+        }
+    }
 
-            if categories.isEmpty {
-                Text("No category totals for this month.")
-                    .font(.system(size: 15))
-                    .foregroundStyle(CashRunwayTheme.textSecondary)
-            } else {
-                ZStack {
-                    Chart(categories) { item in
-                        SectorMark(angle: .value("Amount", item.amountMinor), innerRadius: .ratio(0.58))
-                            .foregroundStyle(CashRunwayTheme.categoryColor(item.colorHex))
-                    }
-                    .chartLegend(.hidden)
-                    .frame(height: 220)
+    @ViewBuilder
+    private func categoriesCardContent(
+        distribution: OverviewCategoryDistribution,
+        categories: [OverviewCategoryRow],
+        displayedCategories: [OverviewCategoryRow],
+        currentSelection: OverviewCategoryRow?,
+        remainingCategoryCount: Int
+    ) -> some View {
+        if categories.isEmpty {
+            CategoryDonutChart(
+                distribution: distribution,
+                kind: categoryKind,
+                selectedCategory: nil
+            ) { _ in }
+        } else {
+            CategoryDonutChart(
+                distribution: distribution,
+                kind: categoryKind,
+                selectedCategory: currentSelection
+            ) { category in
+                selectCategory(category, from: categories)
+            }
 
-                    VStack(spacing: 4) {
-                        Text(categoryKind == .expense ? MoneyFormatter.string(from: -(model.overviewSnapshot?.monthExpenseMinor ?? 0)) : MoneyFormatter.string(from: model.overviewSnapshot?.monthIncomeMinor ?? 0))
-                            .font(.system(size: 17, weight: .bold, design: .rounded))
-                            .foregroundStyle(CashRunwayTheme.textPrimary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.65)
-                        Text(categoryKind == .expense ? "Expenses" : "Income")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(CashRunwayTheme.textSecondary)
-                    }
-                    .frame(width: 116)
-                }
-
-                ForEach(categories) { item in
+            VStack(spacing: 10) {
+                ForEach(displayedCategories) { item in
                     Button {
-                        selectedCategory = item
+                        selectCategory(item, from: categories)
                     } label: {
-                        categoryLegendRow(item)
+                        categoryLegendRow(item, isSelected: item.id == currentSelection?.id)
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier(CashRunwayAccessibilityID.overviewCategory(item.name))
                 }
             }
 
-            Button {
-                showsCategoryManagement = true
-            } label: {
-                HStack {
-                    Text("All Categories (\(categories.count))")
-                        .font(.system(size: 16, weight: .semibold))
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .bold))
-                }
-                .foregroundStyle(CashRunwayTheme.textPrimary)
-                .padding(.horizontal, 18)
-                .padding(.vertical, 16)
-                .background(CashRunwayTheme.pill, in: Capsule())
+            if remainingCategoryCount > 0 {
+                showMoreCategoriesButton(categories: categories, remainingCategoryCount: remainingCategoryCount)
             }
         }
-        .padding(20)
-        .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
+    }
+
+    private func showMoreCategoriesButton(
+        categories: [OverviewCategoryRow],
+        remainingCategoryCount: Int
+    ) -> some View {
+        Button {
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+                let nextShowsAllCategories = !showsAllCategories
+                showsAllCategories = nextShowsAllCategories
+                selectedCategoryID = selectedCategory(
+                    from: categories,
+                    showsAllCategories: nextShowsAllCategories
+                )?.id
+            }
+        } label: {
+            HStack {
+                Text(showsAllCategories ? "Show Less" : "Show More (\(remainingCategoryCount))")
+                    .font(.system(size: 16, weight: .semibold))
+                Spacer()
+                Image(systemName: showsAllCategories ? "chevron.up" : "chevron.down")
+                    .font(.system(size: 12, weight: .bold))
+            }
+            .foregroundStyle(CashRunwayTheme.accent)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 16)
+            .background(CashRunwayTheme.accent.opacity(0.14), in: Capsule())
+        }
+        .buttonStyle(.plain)
     }
 
     private var labelsCard: some View {
@@ -788,22 +1039,42 @@ private struct TimelineOverviewView: View {
         .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
     }
 
-    private func categoryLegendRow(_ item: OverviewCategoryRow) -> some View {
+    private func categoryLegendRow(_ item: OverviewCategoryRow, isSelected: Bool) -> some View {
         HStack(spacing: 14) {
             CategoryGlyph(iconName: item.iconName, colorHex: item.colorHex, size: 46)
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(item.name)
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(CashRunwayTheme.textPrimary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                 Text("\(transactionCountText(item.transactionCount)) · \(OverviewDisplayFormatter.percentage(item.percentage))")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(CashRunwayTheme.textSecondary)
             }
             Spacer()
             Text(MoneyFormatter.string(from: signedAmount(item.amountMinor)))
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(categoryKind == .expense ? CashRunwayTheme.negative : CashRunwayTheme.positive)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(minHeight: 66)
+        .background(
+            isSelected
+                ? CashRunwayTheme.categoryColor(item.colorHex).opacity(0.12)
+                : CashRunwayTheme.surface,
+            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(
+                    isSelected ? CashRunwayTheme.categoryColor(item.colorHex).opacity(0.36) : CashRunwayTheme.line.opacity(0.55),
+                    lineWidth: 1
+                )
+        )
     }
 
     private func labelLegendRow(_ item: OverviewLabelRow) -> some View {
@@ -830,6 +1101,38 @@ private struct TimelineOverviewView: View {
 
     private func signedAmount(_ amountMinor: Int64) -> Int64 {
         categoryKind == .expense ? -amountMinor : amountMinor
+    }
+
+    private func selectedCategory(
+        from categories: [OverviewCategoryRow],
+        showsAllCategories: Bool
+    ) -> OverviewCategoryRow? {
+        OverviewCategoryDisplayLayout.selectedCategory(
+            in: categories,
+            selectedCategoryID: selectedCategoryID,
+            showsAllCategories: showsAllCategories
+        )
+    }
+
+    private func syncSelectedCategoryID(with categories: [OverviewCategoryRow]) {
+        guard let selected = selectedCategory(from: categories, showsAllCategories: showsAllCategories) else {
+            selectedCategoryID = nil
+            return
+        }
+        selectedCategoryID = selected.id
+    }
+
+    private func selectCategory(_ category: OverviewCategoryRow, from categories: [OverviewCategoryRow]) {
+        if OverviewCategoryDisplayLayout.shouldExpandForSelection(
+            categoryID: category.id,
+            in: categories,
+            showsAllCategories: showsAllCategories
+        ) {
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+                showsAllCategories = true
+            }
+        }
+        selectedCategoryID = category.id
     }
 
     private func transactionCountText(_ count: Int) -> String {
@@ -894,13 +1197,22 @@ private struct TimelineOverviewView: View {
         .buttonStyle(.plain)
     }
 
-    private func pill(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 15, weight: .semibold))
-            .foregroundStyle(CashRunwayTheme.textPrimary)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(CashRunwayTheme.pill, in: Capsule())
+    private func pill(_ text: String, icon: String? = nil) -> some View {
+        HStack(spacing: 7) {
+            if let icon {
+                Image(systemName: icon)
+                    .font(.system(size: 12, weight: .bold))
+            }
+            Text(text)
+                .lineLimit(1)
+            Image(systemName: "chevron.down")
+                .font(.system(size: 10, weight: .bold))
+        }
+        .font(.system(size: 15, weight: .semibold))
+        .foregroundStyle(CashRunwayTheme.textPrimary)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(CashRunwayTheme.pill, in: Capsule())
     }
 
     private func walletName(for id: UUID) -> String? {
@@ -913,7 +1225,6 @@ private struct CategoryDetailOverviewView: View {
     let category: OverviewCategoryRow
     @State private var selectedMonthKey: Int
     @State private var selectedWalletID: UUID?
-    @State private var selectedItem: TransactionListItem?
     @State private var isComposerPresented = false
     @State private var draft: TransactionDraft
 
@@ -950,19 +1261,6 @@ private struct CategoryDetailOverviewView: View {
         .background(CashRunwayTheme.background)
         .navigationTitle(category.name)
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(item: $selectedItem) { item in
-            TransactionDetailsView(
-                item: item,
-                model: model,
-                onEdit: {
-                    if let loadedDraft = try? model.repository.transactionDraft(id: item.id) {
-                        draft = loadedDraft
-                        selectedItem = nil
-                        isComposerPresented = true
-                    }
-                }
-            )
-        }
         .fullScreenCover(isPresented: $isComposerPresented) {
             TransactionEditorView(model: model, draft: $draft)
         }
@@ -1125,7 +1423,7 @@ private struct CategoryDetailOverviewView: View {
             } else {
                 ForEach(items) { item in
                     Button {
-                        selectedItem = item
+                        openEditor(for: item)
                     } label: {
                         TransactionRow(item: item)
                     }
@@ -1230,6 +1528,13 @@ private struct CategoryDetailOverviewView: View {
 
     private func walletName(for id: UUID) -> String? {
         model.wallets.first(where: { $0.id == id })?.name
+    }
+
+    private func openEditor(for item: TransactionListItem) {
+        if let loadedDraft = try? model.repository.transactionDraft(id: item.id) {
+            draft = loadedDraft
+            isComposerPresented = true
+        }
     }
 
     private func pill(_ text: String) -> some View {

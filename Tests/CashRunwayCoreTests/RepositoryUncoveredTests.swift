@@ -389,10 +389,44 @@ struct RepositoryUncoveredTests {
         #expect(outOfRange.isEmpty)
     }
 
+    // MARK: - deleteLabel
+
+    @Test func deleteLabelPreservesTransactionsAndRemovesFromSearch() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let wallets = try repository.wallets()
+        let categories = try repository.categories(kind: .expense)
+        let label = LabelBuilder().with(name: "DeletableLabel").build()
+        try repository.saveLabel(label)
+
+        try repository.saveTransaction(
+            TransactionBuilder()
+                .with(walletID: wallets[0].id)
+                .with(amountMinor: 5_000)
+                .with(categoryID: categories[0].id)
+                .with(labelIDs: [label.id])
+                .with(merchant: "LabeledExpense")
+                .build()
+        )
+
+        let preDeleteSearch = try repository.transactions(query: .init(searchText: "DeletableLabel"))
+        #expect(preDeleteSearch.count == 1)
+
+        try repository.deleteLabel(id: label.id)
+
+        let postDeleteLabels = try repository.labels()
+        #expect(postDeleteLabels.contains(where: { $0.id == label.id }) == false)
+
+        let postDeleteTxs = try repository.transactions()
+        #expect(postDeleteTxs.contains(where: { $0.merchant == "LabeledExpense" }) == true)
+
+        let postDeleteSearch = try repository.transactions(query: .init(searchText: "DeletableLabel"))
+        #expect(postDeleteSearch.isEmpty)
+    }
+
     // MARK: - deleteWallet single-transaction correctness
 
-    /// Verifies that deleteWallet removes all transactions for the target wallet
-    /// in a single atomic write, leaving other wallets untouched.
     @Test func deleteWalletRemovesAllTransactionsAtomically() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
@@ -404,7 +438,6 @@ struct RepositoryUncoveredTests {
         let categories = try repository.categories(kind: .expense)
         let category = try #require(categories.first)
 
-        // Create many transactions in the target wallet.
         for index in 0..<50 {
             try repository.saveTransaction(TransactionDraft(
                 kind: .expense,
@@ -417,7 +450,6 @@ struct RepositoryUncoveredTests {
             ))
         }
 
-        // Create a transaction in the other wallet.
         try repository.saveTransaction(TransactionDraft(
             kind: .expense,
             walletID: otherWallet.id,
