@@ -908,25 +908,12 @@ struct CategoryManagementView: View {
     var body: some View {
         NavigationStack {
             List {
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack(spacing: 14) {
-                        ZStack {
-                            Circle().fill(CashRunwayTheme.accentMuted)
-                            Image(systemName: "square.grid.2x2")
-                                .font(.system(size: 21, weight: .semibold))
-                                .foregroundStyle(CashRunwayTheme.accentDark)
-                        }
-                        .frame(width: 54, height: 54)
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Categories")
-                                .font(CashRunwayTheme.headingFont)
-                                .foregroundStyle(CashRunwayTheme.textPrimary)
-                            Text("\(items.count) total · \(visibleCount) visible · \(hiddenCount) hidden")
-                                .font(CashRunwayTheme.bodyFont)
-                                .foregroundStyle(CashRunwayTheme.textSecondary)
-                        }
-                    }
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("\(items.count) total · \(visibleCount) visible · \(hiddenCount) hidden")
+                        .font(CashRunwayTheme.captionFont)
+                        .foregroundStyle(CashRunwayTheme.textSecondary)
+                        .textCase(.uppercase)
+                        .padding(.horizontal, 2)
 
                     Picker("Kind", selection: $selectedKind) {
                         Text("Expenses").tag(CategoryKind.expense)
@@ -934,73 +921,35 @@ struct CategoryManagementView: View {
                     }
                     .pickerStyle(.segmented)
                 }
-                .padding(.vertical, 8)
+                .padding(.top, 8)
+                .padding(.bottom, 2)
                 .listRowBackground(CashRunwayTheme.background)
                 .listRowSeparator(.hidden)
                 .accessibilityIdentifier(CashRunwayAccessibilityID.categoryManagementScreen)
 
                 ForEach(items) { item in
-                    HStack(spacing: 14) {
-                        CategoryGlyph(iconName: item.category.iconName, colorHex: item.category.colorHex, size: 50)
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack(spacing: 8) {
-                                Text(item.category.name)
-                                    .font(CashRunwayTheme.subheadingFont)
-                                    .foregroundStyle(CashRunwayTheme.textPrimary)
-                                    .lineLimit(1)
-                                    .truncationMode(.tail)
-                                if !item.isVisible {
-                                    Text("Hidden")
-                                        .font(.system(size: 11, weight: .bold))
-                                        .foregroundStyle(CashRunwayTheme.textMuted)
-                                        .padding(.horizontal, 7)
-                                        .padding(.vertical, 3)
-                                        .background(CashRunwayTheme.pill, in: Capsule())
-                                }
-                            }
-                            Text("\(item.transactionCount) transactions in \(item.walletCount) wallets")
-                                .font(CashRunwayTheme.captionFont)
-                                .foregroundStyle(CashRunwayTheme.textSecondary)
-                                .lineLimit(1)
-                        }
-                        .layoutPriority(1)
-                        Spacer()
-                        Button {
-                            model.toggleCategoryVisibility(item.category)
-                            reload()
-                        } label: {
-                            Image(systemName: item.isVisible ? "eye.slash.fill" : "eye.fill")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(item.isVisible ? CashRunwayTheme.textMuted : CashRunwayTheme.accentDark)
-                                .frame(width: 40, height: 40)
-                                .background(CashRunwayTheme.pill, in: Circle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(item.isVisible ? "Hide" : "Show")
-
-                        Button {
+                    CategoryManagementRow(
+                        item: item,
+                        onEdit: {
                             categoryDraft = item.category
                             showsEditor = true
-                        } label: {
-                            Image(systemName: "pencil")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(CashRunwayTheme.textSecondary)
-                                .frame(width: 40, height: 40)
-                                .background(CashRunwayTheme.pill, in: Circle())
+                        },
+                        onToggleVisibility: {
+                            model.toggleCategoryVisibility(item.category)
+                            reload()
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Edit")
-
-                        Image(systemName: "line.3.horizontal")
-                            .font(.system(size: 17, weight: .medium))
-                            .foregroundStyle(CashRunwayTheme.textMuted)
-                    }
-                    .ledgerSurface(cornerRadius: CashRunwayTheme.radiusM)
-                    .listRowInsets(EdgeInsets(top: 5, leading: 20, bottom: 5, trailing: 20))
+                    )
+                    .listRowInsets(EdgeInsets(top: 6, leading: 18, bottom: 6, trailing: 10))
                     .listRowBackground(CashRunwayTheme.background)
                     .listRowSeparator(.hidden)
                 }
                 .onMove(perform: moveItems)
+
+                Color.clear
+                    .frame(height: 76)
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(CashRunwayTheme.background)
+                    .listRowSeparator(.hidden)
             }
             .environment(\.editMode, .constant(.active))
             .scrollContentBackground(.hidden)
@@ -1038,8 +987,9 @@ struct CategoryManagementView: View {
                     .overlay(Capsule().stroke(CashRunwayTheme.line, lineWidth: 1))
                 }
                 .padding(.horizontal, 20)
-                .padding(.vertical, 12)
-                .background(.ultraThinMaterial)
+                .padding(.top, 10)
+                .padding(.bottom, 8)
+                .background(.regularMaterial)
             }
             .sheet(isPresented: $showsEditor, onDismiss: reload) {
                 CategoryEditorView(model: model, category: $categoryDraft)
@@ -1084,6 +1034,83 @@ struct CategoryManagementView: View {
         items.move(fromOffsets: source, toOffset: destination)
         model.reorderCategories(kind: selectedKind, orderedCategoryIDs: items.map(\.category.id))
         reload()
+    }
+}
+
+private struct CategoryManagementRow: View {
+    let item: CategoryManagementItem
+    let onEdit: () -> Void
+    let onToggleVisibility: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Button(action: onEdit) {
+                HStack(spacing: 12) {
+                    CategoryGlyph(iconName: item.category.iconName, colorHex: item.category.colorHex, size: 50)
+                        .opacity(item.isVisible ? 1 : 0.58)
+
+                    VStack(alignment: .leading, spacing: 5) {
+                        HStack(spacing: 8) {
+                            Text(item.category.name)
+                                .font(CashRunwayTheme.subheadingFont)
+                                .foregroundStyle(item.isVisible ? CashRunwayTheme.textPrimary : CashRunwayTheme.textSecondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.82)
+
+                            if !item.isVisible {
+                                Text("Hidden")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(CashRunwayTheme.textMuted)
+                                    .padding(.horizontal, 7)
+                                    .padding(.vertical, 3)
+                                    .background(CashRunwayTheme.pill, in: Capsule())
+                            }
+                        }
+
+                        Text("\(item.transactionCount) transactions · \(item.walletCount) wallets")
+                            .font(CashRunwayTheme.captionFont)
+                            .foregroundStyle(CashRunwayTheme.textSecondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.82)
+                    }
+                    .layoutPriority(1)
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Edit \(item.category.name)")
+            .layoutPriority(1)
+
+            Spacer(minLength: 6)
+
+            Menu {
+                Button {
+                    onEdit()
+                } label: {
+                    SwiftUI.Label("Edit", systemImage: "pencil")
+                }
+
+                Button {
+                    onToggleVisibility()
+                } label: {
+                    SwiftUI.Label(item.isVisible ? "Hide" : "Show", systemImage: item.isVisible ? "eye.slash.fill" : "eye.fill")
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(CashRunwayTheme.textSecondary)
+                    .frame(width: 44, height: 44)
+                    .background(CashRunwayTheme.pill, in: Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Category actions")
+        }
+        .padding(.vertical, 13)
+        .padding(.leading, 14)
+        .padding(.trailing, 8)
+        .frame(minHeight: 76)
+        .background(item.isVisible ? CashRunwayTheme.surface : CashRunwayTheme.surfaceMuted, in: RoundedRectangle(cornerRadius: CashRunwayTheme.radiusM, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: CashRunwayTheme.radiusM, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
+        .contentShape(Rectangle())
     }
 }
 
