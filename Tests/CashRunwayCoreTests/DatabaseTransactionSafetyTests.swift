@@ -201,6 +201,64 @@ struct DatabaseTransactionSafetyTests {
         try TestSupport.assertCategoryTruth(repository)
     }
 
+    @Test func categoryMergeCombinesTransactionCountsAndAmounts() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let walletID = try #require(try repository.wallets().first?.id)
+        let destination = CategoryBuilder()
+            .with(name: "Merged Dining")
+            .with(kind: .expense)
+            .with(sortOrder: 998)
+            .build()
+        let restaurant = CategoryBuilder()
+            .with(name: "Restaurant")
+            .with(kind: .expense)
+            .with(sortOrder: 999)
+            .build()
+        try repository.saveCategory(destination)
+        try repository.saveCategory(restaurant)
+
+        for (merchant, amount, categoryID) in [
+            ("Source lunch", 1_200, restaurant.id),
+            ("Source dinner", 3_400, restaurant.id),
+            ("Destination cafe", 5_600, destination.id),
+            ("Destination brunch", 7_800, destination.id),
+            ("Destination delivery", 9_000, destination.id),
+        ] as [(String, Int64, UUID)] {
+            try repository.saveTransaction(
+                TransactionDraft(
+                    kind: .expense,
+                    walletID: walletID,
+                    amountMinor: amount,
+                    occurredAt: .now,
+                    categoryID: categoryID,
+                    merchant: merchant,
+                    note: ""
+                )
+            )
+        }
+
+        let sourceBefore = try transactionStats(repository, categoryID: restaurant.id)
+        let destinationBefore = try transactionStats(repository, categoryID: destination.id)
+        let allBefore = try transactionStats(repository)
+        #expect(sourceBefore.count == 2)
+        #expect(sourceBefore.amountMinor == 4_600)
+
+        try repository.mergeCategory(oldCategoryID: restaurant.id, into: destination.id)
+
+        let sourceAfter = try transactionStats(repository, categoryID: restaurant.id)
+        let destinationAfter = try transactionStats(repository, categoryID: destination.id)
+        let allAfter = try transactionStats(repository)
+        #expect(sourceAfter.count == 0)
+        #expect(sourceAfter.amountMinor == 0)
+        #expect(destinationAfter.count == sourceBefore.count + destinationBefore.count)
+        #expect(destinationAfter.amountMinor == sourceBefore.amountMinor + destinationBefore.amountMinor)
+        #expect(allAfter.count == allBefore.count)
+        #expect(allAfter.amountMinor == allBefore.amountMinor)
+        try TestSupport.assertCategoryTruth(repository)
+    }
+
     @Test func categoryMergeMovesRecurringAndBankRuleReferences() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
@@ -346,6 +404,35 @@ struct DatabaseTransactionSafetyTests {
         let activeCategories = try repository.categories(kind: .expense)
         #expect(activeCategories.contains { $0.id == visibleSource.id })
         #expect(activeCategories.contains { $0.id == hiddenDestination.id } == false)
+    }
+
+    private func transactionStats(_ repository: CashRunwayRepository, categoryID: UUID) throws -> (count: Int, amountMinor: Int64) {
+        try repository.databaseManager.dbQueue.read { db in
+            let row = try Row.fetchOne(
+                db,
+                sql: """
+                SELECT COUNT(*) AS count, COALESCE(SUM(amount_minor), 0) AS amount_minor
+                FROM transactions
+                WHERE is_deleted = 0 AND category_id = ?
+                """,
+                arguments: [categoryID.uuidString]
+            )
+            return (row?["count"] ?? 0, row?["amount_minor"] ?? 0)
+        }
+    }
+
+    private func transactionStats(_ repository: CashRunwayRepository) throws -> (count: Int, amountMinor: Int64) {
+        try repository.databaseManager.dbQueue.read { db in
+            let row = try Row.fetchOne(
+                db,
+                sql: """
+                SELECT COUNT(*) AS count, COALESCE(SUM(amount_minor), 0) AS amount_minor
+                FROM transactions
+                WHERE is_deleted = 0
+                """
+            )
+            return (row?["count"] ?? 0, row?["amount_minor"] ?? 0)
+        }
     }
 
     @Test func walletDeletionRemovesAllLinkedData() throws {
