@@ -118,6 +118,7 @@ Real-device builds, forensics, and `devicectl` launches are **slow and token-exp
 - UI tests are opt-in and targeted. When explicitly working on them, use deterministic `CASH_RUNWAY_UI_TEST_MODE` / `UITEST-*` data and inspect the live accessibility tree or logs before changing UI code for a failing selector.
 - For confirmed real-device issues, preserve evidence first when data may be at risk, verify device unlock/trust, and prefer plain `devicectl` launch/timing before Xcode/LLDB-heavy debugging.
 - After an approved merge/push, clean merged worktrees and branches, prune stale worktrees, and update `CONTINUITY.md`.
+- Validate new shell scripts with `bash -n` before first execution.
 
 ### Feature deprecation / temporary disable pattern
 When hiding a feature temporarily (as done for Budgets and App Lock):
@@ -148,3 +149,59 @@ For a final success confirmation, `tail -5` is sufficient.
 - **Allowed locally**: Full unit tests, full integration tests, individual failed tests, or `--filter` targeted runs.
 - **E2E/UI tests**: Only run in CI/CD nightly pipelines; agents must never run them locally.
 - Re-run only failing targeted tests locally to verify fixes — not full suites.
+
+### Validation Matrix
+
+Choose validation by change type.
+
+- UI-only SwiftUI presentation/catalog changes:
+  Run `Scripts/validate-ui-only.sh`.
+  Do not run unfiltered `swift test` unless the user explicitly asks or the change touches business logic, persistence, parsing, imports, security, mirrored core sources, merge/conflict resolution, or publish-readiness validation.
+
+- Core/business/persistence/import/export/security changes:
+  Run targeted `swift test --filter ...` during implementation, then run full allowed unit/integration validation before completion.
+
+- PR publish/readiness, merge conflict resolution, or main-merge updates:
+  Run the full required gates: core mirror diff, `git diff --check`, unit/integration tests, clean simulator build, simulator launch/log smoke, and PR checks after push.
+
+- E2E/UI tests:
+  Never run locally unless explicitly requested. CI owns UI/E2E execution.
+
+### Simulator Smoke Limitation
+
+XcodeBuildMCP runtime snapshots may return no element refs for this app. If a settled seeded launch still returns an empty runtime snapshot once, do not keep retrying tap/type navigation.
+
+Use screenshot evidence plus runtime/os log scan, report that interactive smoke was blocked by empty runtime snapshots, and do not run local UI/E2E tests.
+
+### Xcode / Package-Root Build Guidance
+
+This repo contains both a `Package.swift` and a `.xcodeproj`; `xcodebuild` from the repo root resolves the project automatically. If XcodeBuildMCP build/scheme tools require an explicit project/workspace path, use shell `xcodebuild` from the repo root instead.
+
+Prefer repo scripts for validation instead of rediscovering commands:
+- `Scripts/validate-ui-only.sh` for UI-only changes.
+- `Scripts/agent-validate.sh` for focused/full validation.
+- `Scripts/smoke-seeded-simulator.sh` for deterministic launch/log smoke.
+
+For long full package test runs, capture the summary in a log:
+
+```bash
+swift test > /tmp/cash-runway-swift-test.log 2>&1; rc=$?; tail -60 /tmp/cash-runway-swift-test.log; exit $rc
+```
+
+Do not use `status` as a zsh variable name.
+
+- **Stale build artifact warning:**
+  A legacy `$PROJECT_DIR/DerivedData/` directory may contain old simulator builds. If simulator smoke tests behave unexpectedly (missing new UI, empty seeded data, or sheets not presenting), verify the installed `.app` is fresh. The smoke script resolves the true build path via `xcodebuild -showBuildSettings`.
+
+### UITest Environment Variables (DEBUG only)
+
+| Variable | Valid values | Consumer |
+|----------|--------------|----------|
+| `CASH_RUNWAY_UI_TEST_MODE` | `1` | Enables UITest runtime |
+| `CASH_RUNWAY_UI_TEST_SCENARIO` | `transaction_core`, `category_merge`, `category_editor`, `monobank_first_start` | `UITestRuntime.swift` |
+| `CASH_RUNWAY_UI_TEST_START_SCREEN` | `category_management`, `category_editor` | `RootView.swift` |
+| `CASH_RUNWAY_UI_TEST_DB_PATH` | Absolute path to temp `.sqlite` | `UITestRuntime.swift` |
+| `CASH_RUNWAY_UI_TEST_RESET` | `1` | Wipes DB + keychain on launch |
+| `CASH_RUNWAY_UI_TEST_MONOBANK_MODE` | `happy_path`, `invalid_token`, `first_sync_fails_then_recovers`, `foreground_new_expense` | `UITestRuntime.swift` |
+
+All variables are passed to the simulator via `SIMCTL_CHILD_*` prefix (e.g. `SIMCTL_CHILD_CASH_RUNWAY_UI_TEST_MODE=1`).
