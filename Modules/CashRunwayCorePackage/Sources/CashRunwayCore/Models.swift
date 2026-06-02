@@ -1376,6 +1376,113 @@ public struct OverviewCategoryRow: Identifiable, Hashable, Sendable {
     public var percentage: Double
 }
 
+public struct OverviewCategoryDistributionSegment: Identifiable, Hashable, Sendable {
+    public var id: UUID { category.id }
+    public var category: OverviewCategoryRow
+    public var startDegrees: Double
+    public var endDegrees: Double
+    public var sweepDegrees: Double
+    public var midDegrees: Double
+}
+
+public struct OverviewCategoryDistribution: Hashable, Sendable {
+    public var segments: [OverviewCategoryDistributionSegment]
+    public var totalAmountMinor: Int64
+}
+
+public enum OverviewCategoryDistributionLayout {
+    public static func distribution(for categories: [OverviewCategoryRow]) -> OverviewCategoryDistribution {
+        let validCategories = categories.compactMap { category -> OverviewCategoryRow? in
+            guard category.amountMinor != Int64.min else { return nil }
+            let normalizedAmount = abs(category.amountMinor)
+            guard normalizedAmount > 0 else { return nil }
+            var normalizedCategory = category
+            normalizedCategory.amountMinor = normalizedAmount
+            return normalizedCategory
+        }
+        .sorted {
+            if $0.amountMinor == $1.amountMinor {
+                return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+            }
+            return $0.amountMinor > $1.amountMinor
+        }
+
+        let totalAmountMinor = validCategories.reduce(Int64.zero) { $0 + $1.amountMinor }
+        guard totalAmountMinor > 0 else {
+            return OverviewCategoryDistribution(segments: [], totalAmountMinor: 0)
+        }
+
+        var startDegrees = -90.0
+        let segments = validCategories.map { category in
+            var normalizedCategory = category
+            normalizedCategory.percentage = Double(category.amountMinor) / Double(totalAmountMinor)
+            let sweepDegrees = validCategories.count == 1 ? 360.0 : normalizedCategory.percentage * 360.0
+            let endDegrees = startDegrees + sweepDegrees
+            defer { startDegrees = endDegrees }
+            return OverviewCategoryDistributionSegment(
+                category: normalizedCategory,
+                startDegrees: startDegrees,
+                endDegrees: endDegrees,
+                sweepDegrees: sweepDegrees,
+                midDegrees: startDegrees + sweepDegrees / 2
+            )
+        }
+
+        return OverviewCategoryDistribution(segments: segments, totalAmountMinor: totalAmountMinor)
+    }
+
+    public static func segments(for categories: [OverviewCategoryRow]) -> [OverviewCategoryDistributionSegment] {
+        distribution(for: categories).segments
+    }
+}
+
+public enum OverviewCategoryDisplayLayout {
+    public static let defaultVisibleLimit = 5
+
+    public static func displayedCategories(
+        in categories: [OverviewCategoryRow],
+        showsAllCategories: Bool,
+        visibleLimit: Int = defaultVisibleLimit
+    ) -> [OverviewCategoryRow] {
+        guard !showsAllCategories else { return categories }
+        return Array(categories.prefix(max(visibleLimit, 0)))
+    }
+
+    public static func selectedCategory(
+        in categories: [OverviewCategoryRow],
+        selectedCategoryID: UUID?,
+        showsAllCategories: Bool,
+        visibleLimit: Int = defaultVisibleLimit
+    ) -> OverviewCategoryRow? {
+        let displayed = displayedCategories(
+            in: categories,
+            showsAllCategories: showsAllCategories,
+            visibleLimit: visibleLimit
+        )
+        if let selectedCategoryID,
+           let selected = displayed.first(where: { $0.id == selectedCategoryID }) {
+            return selected
+        }
+        return displayed.first
+    }
+
+    public static func shouldExpandForSelection(
+        categoryID: UUID,
+        in categories: [OverviewCategoryRow],
+        showsAllCategories: Bool,
+        visibleLimit: Int = defaultVisibleLimit
+    ) -> Bool {
+        guard !showsAllCategories else { return false }
+        guard categories.contains(where: { $0.id == categoryID }) else { return false }
+        let displayed = displayedCategories(
+            in: categories,
+            showsAllCategories: false,
+            visibleLimit: visibleLimit
+        )
+        return !displayed.contains(where: { $0.id == categoryID })
+    }
+}
+
 public struct OverviewLabelRow: Identifiable, Hashable, Sendable {
     public var id: String { "\(labelID.uuidString)-\(kind.rawValue)" }
     public var labelID: UUID
@@ -1559,23 +1666,23 @@ public struct DefaultCategoryDefinition: Hashable, Sendable {
 
 public enum SeedCategories {
     public static let all: [DefaultCategoryDefinition] = [
-        .init(id: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!, name: "Groceries", kind: .expense, iconName: "cart", colorHex: "#1CC389"),
-        .init(id: UUID(uuidString: "11111111-1111-1111-1111-111111111112")!, name: "Restaurants", kind: .expense, iconName: "cup.and.saucer.fill", colorHex: "#64D1D5"),
+        .init(id: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!, name: "Groceries", kind: .expense, iconName: "basket.fill", colorHex: "#21C596"),
+        .init(id: UUID(uuidString: "11111111-1111-1111-1111-111111111112")!, name: "Restaurants", kind: .expense, iconName: "fork.knife", colorHex: "#5CCDC8"),
         .init(id: UUID(uuidString: "11111111-1111-1111-1111-111111111113")!, name: "Transport", kind: .expense, iconName: "tram.fill", colorHex: "#FFC400"),
         .init(id: UUID(uuidString: "11111111-1111-1111-1111-111111111114")!, name: "Housing", kind: .expense, iconName: "house.fill", colorHex: "#E5862F"),
         .init(id: UUID(uuidString: "11111111-1111-1111-1111-111111111115")!, name: "Utilities", kind: .expense, iconName: "bolt.fill", colorHex: "#6FD03B"),
         .init(id: UUID(uuidString: "11111111-1111-1111-1111-111111111116")!, name: "Health", kind: .expense, iconName: "cross.case.fill", colorHex: "#E96176"),
         .init(id: UUID(uuidString: "11111111-1111-1111-1111-111111111117")!, name: "Shopping", kind: .expense, iconName: "bag.fill", colorHex: "#5FD4BF"),
         .init(id: UUID(uuidString: "11111111-1111-1111-1111-111111111118")!, name: "Entertainment", kind: .expense, iconName: "theatermasks.fill", colorHex: "#FFA600"),
-        .init(id: UUID(uuidString: "11111111-1111-1111-1111-111111111119")!, name: "Education", kind: .expense, iconName: "graduationcap.fill", colorHex: "#4A80C1"),
-        .init(id: UUID(uuidString: "11111111-1111-1111-1111-111111111120")!, name: "Travel", kind: .expense, iconName: "airplane", colorHex: "#EE5DA7"),
+        .init(id: UUID(uuidString: "11111111-1111-1111-1111-111111111119")!, name: "Education", kind: .expense, iconName: "book.closed.fill", colorHex: "#4D86C6"),
+        .init(id: UUID(uuidString: "11111111-1111-1111-1111-111111111120")!, name: "Travel", kind: .expense, iconName: "airplane", colorHex: "#E85D8E"),
         .init(id: UUID(uuidString: "11111111-1111-1111-1111-111111111121")!, name: "Gifts", kind: .expense, iconName: "gift.fill", colorHex: "#FF5E57"),
-        .init(id: UUID(uuidString: "11111111-1111-1111-1111-111111111122")!, name: "Other Expense", kind: .expense, iconName: "questionmark.app.fill", colorHex: "#7E57C2"),
-        .init(id: UUID(uuidString: "22222222-2222-2222-2222-222222222111")!, name: "Salary", kind: .income, iconName: "banknote.fill", colorHex: "#2AAAD2"),
+        .init(id: UUID(uuidString: "11111111-1111-1111-1111-111111111122")!, name: "Other Expense", kind: .expense, iconName: "ellipsis.circle.fill", colorHex: "#7B61D8"),
+        .init(id: UUID(uuidString: "22222222-2222-2222-2222-222222222111")!, name: "Salary", kind: .income, iconName: "briefcase.fill", colorHex: "#2AAAD2"),
         .init(id: UUID(uuidString: "22222222-2222-2222-2222-222222222112")!, name: "Bonus", kind: .income, iconName: "crown.fill", colorHex: "#F7A72A"),
         .init(id: UUID(uuidString: "22222222-2222-2222-2222-222222222113")!, name: "Gift Income", kind: .income, iconName: "gift.fill", colorHex: "#FF5E57"),
         .init(id: UUID(uuidString: "22222222-2222-2222-2222-222222222114")!, name: "Refund", kind: .income, iconName: "arrow.uturn.backward.circle.fill", colorHex: "#16C790"),
-        .init(id: UUID(uuidString: "22222222-2222-2222-2222-222222222115")!, name: "Other Income", kind: .income, iconName: "sparkles", colorHex: "#87C56A"),
+        .init(id: UUID(uuidString: "22222222-2222-2222-2222-222222222115")!, name: "Other Income", kind: .income, iconName: "plus.circle.fill", colorHex: "#88C95A"),
     ]
 }
 
