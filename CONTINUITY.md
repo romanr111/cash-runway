@@ -18,8 +18,8 @@ Rules:
 
 - Goal: Make PR `#24` merge-ready while preserving category-merge data safety.
 - Success criteria: Category merge preserves transactions while only updating category references, remap lookups follow active destinations, CI/unit compile blockers are fixed, core mirrors stay identical, current `origin/main` merges cleanly, and required validation passes.
-- Current state: PR `#24` has an added category-merge count/sum preservation test and full local Swift package validation passed; the new test change is not yet pushed.
-- Next action: Commit and push the new data-safety test, then verify PR `#24` checks.
+- Current state: PR `#24` includes the added category-merge count/sum preservation test, and full local Swift package validation passed for that change.
+- Next action: Verify PR `#24` checks before merge.
 - Open questions: None.
 - Merge status: not-merged.
 
@@ -87,3 +87,4 @@ Rules:
 - 2026-06-02 [TEST] `swift test --filter DatabaseTransactionSafetyTests/categoryMergeCombinesTransactionCountsAndAmounts` passed.
 - 2026-06-02 [TEST] `swift test --filter 'DatabaseTransactionSafetyTests/categoryMerge|BankCategoryMapperTests|CSVEdgeCaseTests/importReusesMergedDestinationCategoryByName'` passed 14 tests.
 - 2026-06-02 [TEST] `swift test` passed 244 tests in 23 suites.
+- 2026-06-02 [COMMIT] `0ea6ddb` — test: verify category merge preserves transaction totals
