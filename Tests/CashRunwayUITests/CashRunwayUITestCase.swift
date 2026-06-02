@@ -163,10 +163,6 @@ class CashRunwayUITestCase: XCTestCase {
 
     func assertTransactionRowExists(note: String, walletName: String? = nil, allowScroll: Bool = false, file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertTrue(waitForTransactionRow(note: note, walletName: walletName, timeout: 3, allowScroll: allowScroll), file: file, line: line)
-        if allowScroll {
-            let row = transactionRowElement(note: note, walletName: walletName)
-            XCTAssertTrue(row.isHittable, file: file, line: line)
-        }
     }
 
     func assertTransactionRowDoesNotExist(note: String, walletName: String? = nil, file: StaticString = #filePath, line: UInt = #line) {
@@ -260,7 +256,7 @@ class CashRunwayUITestCase: XCTestCase {
     @discardableResult
     func waitForTransactionRow(note: String, walletName: String? = nil, timeout: TimeInterval, allowScroll: Bool) -> Bool {
         let row = transactionRowElement(note: note, walletName: walletName)
-        if row.waitForExistence(timeout: timeout) {
+        if row.waitForExistence(timeout: timeout), row.isHittable {
             return true
         }
 
@@ -268,7 +264,14 @@ class CashRunwayUITestCase: XCTestCase {
 
         for _ in 0..<6 {
             app.swipeUp()
-            if row.waitForExistence(timeout: 1) {
+            if row.waitForExistence(timeout: 1), row.isHittable {
+                return true
+            }
+        }
+
+        for _ in 0..<6 {
+            app.swipeDown()
+            if row.waitForExistence(timeout: 1), row.isHittable {
                 return true
             }
         }
@@ -444,25 +447,10 @@ extension XCUIElement {
         typeText(text)
     }
 
-    /// Attempts fast text entry via KVC `setValue`, verifies the result, and falls back
-    /// to `clearAndEnterText` on mismatch. Use for plain text fields (amount, note, token).
-    ///
-    /// Note: verification uses exact string equality. If the field applies a formatter that
-    /// transforms the display text (e.g. adding a currency symbol), the fallback path is used.
+    /// Enters text reliably using `clearAndEnterText`. Previously attempted a KVC `setValue`
+    /// fast path, but `setValue:forKey:` on `XCUIElement` throws `NSUnknownKeyException`
+    /// across multiple field types (text fields, search fields, secure text fields).
     func fastEnterText(_ text: String) {
-        tap()
-        setValue(text, forKey: "value")
-
-        // Small pause to let the value commit before reading it back
-        RunLoop.current.run(until: Date().addingTimeInterval(0.1))
-
-        // Verify the value was set correctly
-        let committed = (value as? String) ?? ""
-        if committed == text {
-            return
-        }
-
-        // Fallback to reliable but slower path
         clearAndEnterText(text)
     }
 

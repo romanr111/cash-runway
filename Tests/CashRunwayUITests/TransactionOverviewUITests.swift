@@ -27,21 +27,29 @@ final class OverviewFlowUITests: CashRunwayUITestCase {
         app.buttons[CashRunwayUITestIdentifiers.timelineSearchResetButton].tap()
         app.buttons[CashRunwayUITestIdentifiers.timelineSearchApplyButton].tap()
 
-        assertTransactionRowExists(note: "UITEST-DELETE-001")
-        assertTransactionRowExists(note: "UITEST-EDIT-001")
-        assertTransactionRowExists(note: "UITEST-SEARCH-001")
+        assertTransactionRowExists(note: "UITEST-DELETE-001", allowScroll: true)
+        assertTransactionRowExists(note: "UITEST-EDIT-001", allowScroll: true)
+        assertTransactionRowExists(note: "UITEST-SEARCH-001", allowScroll: true)
 
         selectWallet("Savings")
         XCTAssertTrue((buttonLabel(CashRunwayUITestIdentifiers.timelineWalletMenu) ?? "").contains("Savings"))
-        assertTransactionRowExists(note: "UITEST-SEARCH-001")
+
+        // Wait for the async timeline reload to complete after wallet filter change.
+        RunLoop.current.run(until: Date().addingTimeInterval(1.5))
+
+        assertTransactionRowExists(note: "UITEST-SEARCH-001", allowScroll: true)
         assertTransactionRowDoesNotExist(note: "UITEST-DELETE-001")
         assertTransactionRowDoesNotExist(note: "UITEST-EDIT-001")
 
         selectAllWallets()
         XCTAssertTrue((buttonLabel(CashRunwayUITestIdentifiers.timelineWalletMenu) ?? "").contains("All Wallets"))
-        assertTransactionRowExists(note: "UITEST-SEARCH-001")
-        assertTransactionRowExists(note: "UITEST-DELETE-001")
-        assertTransactionRowExists(note: "UITEST-EDIT-001")
+
+        // Wait for the async timeline reload to complete after wallet filter change.
+        RunLoop.current.run(until: Date().addingTimeInterval(1.5))
+
+        assertTransactionRowExists(note: "UITEST-SEARCH-001", allowScroll: true)
+        assertTransactionRowExists(note: "UITEST-DELETE-001", allowScroll: true)
+        assertTransactionRowExists(note: "UITEST-EDIT-001", allowScroll: true)
     }
 
     func testSpendingOverviewReflectsNewExpenseAndCategoryDetailDrillsDown() {

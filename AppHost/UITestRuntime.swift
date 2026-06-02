@@ -361,9 +361,16 @@ private struct TransactionCoreUITestSeeder {
         let editLabelID = try ensureLabel(name: "UITEST-LABEL-001")
         let now = Date()
         let calendar = DateKeys.calendar
-        let threeDaysAgo = calendar.date(byAdding: .day, value: -3, to: now) ?? now
-        let twoDaysAgo = calendar.date(byAdding: .day, value: -2, to: now) ?? now
-        let yesterday = calendar.date(byAdding: .day, value: -1, to: now) ?? now
+        // Anchor relative dates to the middle of the month so all UITest transactions
+        // fall within the same month. This prevents month-boundary failures in overview
+        // navigation tests (e.g., on June 2, -3 days = May 30, a different month).
+        let monthComponents = calendar.dateComponents([.year, .month], from: now)
+        let monthStart = calendar.date(from: monthComponents)!
+        let anchor = calendar.date(byAdding: .day, value: 14, to: monthStart)!
+        let threeDaysAgo = calendar.date(byAdding: .day, value: -3, to: anchor) ?? anchor
+        let twoDaysAgo = calendar.date(byAdding: .day, value: -2, to: anchor) ?? anchor
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: anchor) ?? anchor
+        let today = anchor
 
         let restaurantsID = try requireCategory(named: "Restaurants", kind: .expense)
         let groceriesID = try requireCategory(named: "Groceries", kind: .expense)
@@ -414,7 +421,7 @@ private struct TransactionCoreUITestSeeder {
                 kind: .income,
                 walletID: mainWallet.id,
                 amountMinor: 50_000,
-                occurredAt: now,
+                occurredAt: today,
                 categoryID: salaryID,
                 merchant: "Salary baseline",
                 note: "UITEST-INCOME-001",
@@ -428,7 +435,7 @@ private struct TransactionCoreUITestSeeder {
                 walletID: mainWallet.id,
                 destinationWalletID: savingsWallet.id,
                 amountMinor: 15_000,
-                occurredAt: now,
+                occurredAt: today,
                 merchant: "Transfer baseline",
                 note: "UITEST-TRANSFER-001",
                 source: .manual
