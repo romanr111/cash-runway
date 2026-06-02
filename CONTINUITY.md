@@ -18,8 +18,8 @@ Rules:
 
 - Goal: Make PR `#24` merge-ready while preserving category-merge data safety.
 - Success criteria: Category merge preserves transactions while only updating category references, remap lookups follow active destinations, CI/unit compile blockers are fixed, core mirrors stay identical, current `origin/main` merges cleanly, and required validation passes.
-- Current state: PR `#24` includes the added category-merge count/sum preservation test, and full local Swift package validation passed for that change.
-- Next action: Verify PR `#24` checks before merge.
+- Current state: PR `#24` now has an upgraded category merge sheet with in-flow success confirmation, and local unit/package/build/simulator validation passed.
+- Next action: Commit and push the merge UI update, then verify PR `#24` checks.
 - Open questions: None.
 - Merge status: not-merged.
 
@@ -39,6 +39,8 @@ Rules:
 - `Tests/CashRunwayCoreTests/BankCategoryMapperTests.swift`
 - `Tests/CashRunwayCoreTests/CSVEdgeCaseTests.swift`
 - `Tests/CashRunwayCoreTests/DatabaseTransactionSafetyTests.swift`
+- `Sources/CashRunwayUI/AppModel.swift`
+- `Sources/CashRunwayUI/Editors.swift`
 - `CONTINUITY.md`
 
 ## Done (recent)
@@ -62,6 +64,7 @@ Rules:
 - 2026-06-01 [VALIDATED] Re-ran focused category merge/import tests, full `swift test`, core mirror diff, `git diff --check`, iPhone 17 clean build, and install/launch smoke after the latest main merge; all passed.
 - 2026-06-01 [CI] PR `#24` reported mergeable (`CLEAN`); Static Analysis, Unit Tests, and Integration Tests passed; UI E2E skipped per workflow policy.
 - 2026-06-02 [TEST] Added category-merge regression coverage that records source/destination transaction counts and sums before merge, then asserts the destination receives their combined count/sum while global count/sum stay unchanged.
+- 2026-06-02 [UI] Replaced the basic category merge form with a designed merge flow showing source/destination category cards, transaction-count preview, data-preservation copy, and an in-sheet success confirmation after merge.
 
 ## Receipts
 
@@ -88,3 +91,7 @@ Rules:
 - 2026-06-02 [TEST] `swift test --filter 'DatabaseTransactionSafetyTests/categoryMerge|BankCategoryMapperTests|CSVEdgeCaseTests/importReusesMergedDestinationCategoryByName'` passed 14 tests.
 - 2026-06-02 [TEST] `swift test` passed 244 tests in 23 suites.
 - 2026-06-02 [COMMIT] `0ea6ddb` — test: verify category merge preserves transaction totals
+- 2026-06-02 [BUILD] Category merge UI update iPhone 17 clean build ended with `** BUILD SUCCEEDED **`; SQLCipher strip and AppIntents metadata warnings matched existing build noise.
+- 2026-06-02 [TEST] Category merge UI update `swift test --filter 'DatabaseTransactionSafetyTests/categoryMerge|BankCategoryMapperTests|CSVEdgeCaseTests/importReusesMergedDestinationCategoryByName'` passed 14 tests.
+- 2026-06-02 [TEST] Category merge UI update `swift test` passed 244 tests in 23 suites.
+- 2026-06-02 [SMOKE] Installed and launched latest `dev.roman.cashrunway` on iPhone 17; severity-filtered app log scan found no error/fault entries.
