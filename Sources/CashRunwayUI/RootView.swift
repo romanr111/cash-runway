@@ -18,6 +18,10 @@ public struct CashRunwayRootView: View {
     private static let onboardingKey = "hasCompletedOnboarding"
     private static let logger = Logger(subsystem: "dev.roman.cashrunway", category: "startup")
 
+    #if DEBUG
+    @State private var debugStartScreenSheet: DebugStartScreenSheet?
+    #endif
+
     public init(
         model: CashRunwayAppModel? = nil,
         startupError: String? = nil,
@@ -93,6 +97,31 @@ public struct CashRunwayRootView: View {
                 .background(CashRunwayTheme.background)
             // }
         }
+        #if DEBUG
+        .sheet(item: $debugStartScreenSheet) { sheet in
+            switch sheet {
+            case .categoryManagement:
+                CategoryManagementView(model: model, initialKind: .expense)
+            case .categoryEditor:
+                if let category = model.expenseCategories.first(where: { $0.name == "UITEST-EDITABLE" })
+                    ?? model.incomeCategories.first(where: { $0.name == "UITEST-EDITABLE" }) {
+                    CategoryEditorView(model: model, category: .constant(category))
+                } else {
+                    EmptyView()
+                }
+            }
+        }
+        .onAppear {
+            if ProcessInfo.processInfo.environment["CASH_RUNWAY_UI_TEST_MODE"] == "1" {
+                if let raw = ProcessInfo.processInfo.environment["CASH_RUNWAY_UI_TEST_START_SCREEN"],
+                   let screen = DebugStartScreenSheet(rawValue: raw) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        debugStartScreenSheet = screen
+                    }
+                }
+            }
+        }
+        #endif
         .task { await model.bootstrap() }
         .onChange(of: scenePhase) { _, phase in
             // LEGACY_DISABLED_APP_LOCK:
@@ -251,6 +280,14 @@ public struct CashRunwayRootView: View {
     //     }
     //     .background(CashRunwayTheme.background.ignoresSafeArea())
     // }
+
+    #if DEBUG
+    private enum DebugStartScreenSheet: String, Identifiable {
+        case categoryManagement = "category_management"
+        case categoryEditor = "category_editor"
+        var id: String { rawValue }
+    }
+    #endif
 
     private func onboardingCard(title: String, body: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {

@@ -47,7 +47,14 @@ struct CashRunwayAppRuntime {
 private struct UITestLaunchConfiguration {
     enum Scenario: String {
         case transactionCore = "transaction_core"
+        case categoryMerge = "category_merge"
+        case categoryEditor = "category_editor"
         case monobankFirstStart = "monobank_first_start"
+    }
+
+    enum StartScreen: String {
+        case categoryManagement = "category_management"
+        case categoryEditor = "category_editor"
     }
 
     static var current: UITestLaunchConfiguration? {
@@ -59,6 +66,7 @@ private struct UITestLaunchConfiguration {
                 ?? Scenario.transactionCore.rawValue
         )
         let databasePath = environment["CASH_RUNWAY_UI_TEST_DB_PATH"] ?? "cash-runway-ui-tests.sqlite"
+        let startScreen = StartScreen(rawValue: environment["CASH_RUNWAY_UI_TEST_START_SCREEN"] ?? "")
 
         return UITestLaunchConfiguration(
             scenario: scenario,
@@ -67,7 +75,8 @@ private struct UITestLaunchConfiguration {
             monobankMode: UITestMonobankMode(
                 rawValue: environment["CASH_RUNWAY_UI_TEST_MONOBANK_MODE"]
                     ?? UITestMonobankMode.happyPath.rawValue
-            ) ?? .happyPath
+            ) ?? .happyPath,
+            startScreen: startScreen
         )
     }
 
@@ -75,6 +84,7 @@ private struct UITestLaunchConfiguration {
     let databaseURL: URL
     let shouldReset: Bool
     let monobankMode: UITestMonobankMode
+    let startScreen: StartScreen?
 
     private let defaultsSuiteName = "dev.roman.cashrunway.uitest"
 
@@ -110,23 +120,12 @@ private struct UITestLaunchConfiguration {
         // LEGACY_DISABLED_APP_LOCK:
         // App Lock is disabled for MVP.
         // let lockStore = AppLockStore(keychain: keychain)
-        let model: CashRunwayAppModel
-        let tokenStore = KeychainBankTokenStore(keychain: keychain)
-        if scenario == .monobankFirstStart {
-            model = CashRunwayAppModel(
-                repository: repository,
-                bankTokenStore: tokenStore,
-                bankSyncPerformer: UITestBankSyncPerformer(repository: repository, mode: monobankMode),
-                monobankTokenValidator: UITestMonobankTokenValidator(mode: monobankMode)
-            )
-        } else {
-            model = CashRunwayAppModel(
-                repository: repository,
-                bankTokenStore: tokenStore,
-                bankSyncPerformer: UITestBankSyncPerformer(repository: repository, mode: monobankMode),
-                monobankTokenValidator: UITestMonobankTokenValidator(mode: monobankMode)
-            )
-        }
+        let model = CashRunwayAppModel(
+            repository: repository,
+            bankTokenStore: KeychainBankTokenStore(keychain: keychain),
+            bankSyncPerformer: UITestBankSyncPerformer(repository: repository, mode: monobankMode),
+            monobankTokenValidator: UITestMonobankTokenValidator(mode: monobankMode)
+        )
         return CashRunwayAppRuntime(
             model: model,
             startupError: nil,
@@ -136,8 +135,16 @@ private struct UITestLaunchConfiguration {
     }
 
     private func seedScenarioIfNeeded(using repository: CashRunwayRepository) throws {
-        guard scenario == .transactionCore else { return }
-        try TransactionCoreUITestSeeder(repository: repository).seed()
+        switch scenario {
+        case .transactionCore:
+            try TransactionCoreUITestSeeder(repository: repository).seed()
+        case .categoryMerge:
+            try CategoryMergeUITestSeeder(repository: repository).seed()
+        case .categoryEditor:
+            try CategoryEditorUITestSeeder(repository: repository).seed()
+        case .monobankFirstStart, .none:
+            break
+        }
     }
 
     private func resetDatabaseFiles() throws {
@@ -466,6 +473,113 @@ private struct TransactionCoreUITestSeeder {
             return category.id
         }
         throw CashRunwayError.invalidState("UI test category \(name) is missing.")
+    }
+}
+
+private struct CategoryMergeUITestSeeder {
+    let repository: CashRunwayRepository
+
+    func seed() throws {
+        try removeExistingUITestTransactions()
+        try FixtureGenerator.seedFixtureWalletsIfNeeded(into: repository)
+
+        let wallets = try repository.wallets()
+        guard let mainWallet = wallets.first(where: { $0.name == "Main Wallet" }) else {
+            throw CashRunwayError.invalidState("UI test baseline wallets are missing.")
+        }
+
+        let now = Date()
+        let calendar = DateKeys.calendar
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: now) ?? now
+
+        let sourceCategory = Category(
+            id: UUID(uuidString: "77777777-7777-7777-7777-777777777001") ?? UUID(),
+            name: "UITEST-SOURCE",
+            kind: .expense,
+            iconName: "bag.fill",
+            colorHex: "#F35E63",
+            parentID: nil,
+            isSystem: false,
+            isArchived: false,
+            sortOrder: 9998,
+            createdAt: now,
+            updatedAt: now
+        )
+        let destCategory = Category(
+            id: UUID(uuidString: "77777777-7777-7777-7777-777777777002") ?? UUID(),
+            name: "UITEST-DEST",
+            kind: .expense,
+            iconName: "cart.fill",
+            colorHex: "#21C596",
+            parentID: nil,
+            isSystem: false,
+            isArchived: false,
+            sortOrder: 9999,
+            createdAt: now,
+            updatedAt: now
+        )
+        try repository.saveCategory(sourceCategory)
+        try repository.saveCategory(destCategory)
+
+        try repository.saveTransaction(
+            TransactionDraft(
+                kind: .expense,
+                walletID: mainWallet.id,
+                amountMinor: 1_000,
+                occurredAt: yesterday,
+                categoryID: sourceCategory.id,
+                merchant: "Source baseline",
+                note: "UITEST-MERGE-SRC-001",
+                source: .manual
+            )
+        )
+        try repository.saveTransaction(
+            TransactionDraft(
+                kind: .expense,
+                walletID: mainWallet.id,
+                amountMinor: 2_000,
+                occurredAt: yesterday,
+                categoryID: destCategory.id,
+                merchant: "Dest baseline",
+                note: "UITEST-MERGE-DST-001",
+                source: .manual
+            )
+        )
+
+        try repository.runMaintenance()
+    }
+
+    private func removeExistingUITestTransactions() throws {
+        let existing = try repository.transactions(query: .init(), limit: nil)
+            .filter { $0.note.hasPrefix("UITEST-") || $0.merchant.hasPrefix("UITEST-") }
+        for item in existing {
+            do { try repository.deleteTransaction(id: item.id) } catch CashRunwayError.notFound { continue }
+        }
+    }
+}
+
+private struct CategoryEditorUITestSeeder {
+    let repository: CashRunwayRepository
+
+    func seed() throws {
+        try FixtureGenerator.seedFixtureWalletsIfNeeded(into: repository)
+
+        let now = Date()
+        let category = Category(
+            id: UUID(uuidString: "88888888-8888-8888-8888-888888888001") ?? UUID(),
+            name: "UITEST-EDITABLE",
+            kind: .expense,
+            iconName: "star.fill",
+            colorHex: "#F2C230",
+            parentID: nil,
+            isSystem: false,
+            isArchived: false,
+            sortOrder: 9997,
+            createdAt: now,
+            updatedAt: now
+        )
+        try repository.saveCategory(category)
+        try repository.runMaintenance()
     }
 }
 #endif
