@@ -474,7 +474,8 @@ public final class CashRunwayAppModel {
         }
     }
 
-    public func mergeCategory(oldCategoryID: UUID, into newCategoryID: UUID) {
+    @discardableResult
+    public func mergeCategory(oldCategoryID: UUID, into newCategoryID: UUID) -> Bool {
         runMutation {
             try repository.mergeCategory(oldCategoryID: oldCategoryID, into: newCategoryID)
         }
@@ -718,7 +719,8 @@ public final class CashRunwayAppModel {
         }
     }
 
-    private func runMutation(_ mutation: () throws -> Void) {
+    @discardableResult
+    private func runMutation(_ mutation: () throws -> Void) -> Bool {
         foregroundRefreshTask?.cancel()
         foregroundRefreshTask = nil
         do {
@@ -730,8 +732,10 @@ public final class CashRunwayAppModel {
                     lastForegroundRefreshAt = Date()
                 }
             }
+            return true
         } catch {
             errorMessage = error.localizedDescription
+            return false
         }
     }
 

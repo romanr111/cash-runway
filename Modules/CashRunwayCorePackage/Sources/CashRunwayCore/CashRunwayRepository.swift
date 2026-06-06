@@ -11,6 +11,12 @@ private struct AggregateContribution {
     let categoryID: UUID?
 }
 
+private struct CategorySpendDelta {
+    let monthKey: Int
+    let expenseMinor: Int64
+    let transactionCount: Int
+}
+
 public protocol MonobankClient: Sendable {
     func clientInfo() async throws -> MonobankClientInfo
     func statement(accountID: String, from: Date, to: Date) async throws -> [MonobankStatementItem]
@@ -519,11 +525,11 @@ private enum BankCategoryResolution {
         }
         for code in [mcc, originalMcc].compactMap({ $0 }) {
             if let categoryName = builtInCategoryName(mcc: code),
-               let categoryID = try categoryID(db, named: categoryName) {
+               let categoryID = try resolvedCategoryID(db, kind: .expense, named: categoryName) {
                 return categoryID
             }
         }
-        if let fallbackID = try categoryID(db, named: "Other Expense") {
+        if let fallbackID = try resolvedCategoryID(db, kind: .expense, named: "Other Expense") {
             return fallbackID
         }
         throw CashRunwayError.notFound
@@ -594,14 +600,57 @@ private enum BankCategoryResolution {
             nil
         }
     }
+}
 
-    private static func categoryID(_ db: Database, named name: String) throws -> UUID? {
-        try String.fetchOne(
-            db,
-            sql: "SELECT id FROM categories WHERE kind = ? AND is_archived = 0 AND name = ?",
-            arguments: [CategoryKind.expense.rawValue, name]
-        ).flatMap(UUID.init(uuidString:))
+private func resolvedCategoryID(_ db: Database, kind: CategoryKind, named name: String) throws -> UUID? {
+    if let activeID = try String.fetchOne(
+        db,
+        sql: "SELECT id FROM categories WHERE kind = ? AND is_archived = 0 AND trim(name) = trim(?) COLLATE NOCASE",
+        arguments: [kind.rawValue, name]
+    ).flatMap(UUID.init(uuidString:)) {
+        return activeID
     }
+
+    var nextID = try String.fetchOne(
+        db,
+        sql: """
+        SELECT cr.new_category_id
+        FROM category_remaps cr
+        JOIN categories c ON c.id = cr.old_category_id
+        WHERE c.kind = ? AND c.is_archived = 1 AND trim(c.name) = trim(?) COLLATE NOCASE
+        ORDER BY cr.remapped_at DESC
+        LIMIT 1
+        """,
+        arguments: [kind.rawValue, name]
+    )
+    var visitedIDs = Set<String>()
+    while let currentID = nextID {
+        guard visitedIDs.insert(currentID).inserted else { return nil }
+        guard let row = try Row.fetchOne(
+            db,
+            sql: "SELECT id, is_archived FROM categories WHERE id = ? AND kind = ?",
+            arguments: [currentID, kind.rawValue]
+        ) else {
+            return nil
+        }
+        let isArchived: Bool = row["is_archived"]
+        if !isArchived {
+            return UUID(uuidString: row["id"])
+        }
+        nextID = try String.fetchOne(
+            db,
+            sql: """
+            SELECT cr.new_category_id
+            FROM category_remaps cr
+            JOIN categories c ON c.id = cr.old_category_id
+            WHERE cr.old_category_id = ? AND c.kind = ?
+            ORDER BY cr.remapped_at DESC
+            LIMIT 1
+            """,
+            arguments: [currentID, kind.rawValue]
+        )
+    }
+    return nil
 }
 
 public final class CashRunwayRepository: @unchecked Sendable {
@@ -2018,15 +2067,62 @@ extension CashRunwayRepository {
 
     public func mergeCategory(oldCategoryID: UUID, into newCategoryID: UUID) throws {
         try databaseManager.dbQueue.write { db in
+            guard oldCategoryID != newCategoryID else {
+                throw CashRunwayError.validation("Choose two different categories to merge.")
+            }
+            guard let oldKind = try String.fetchOne(
+                db,
+                sql: "SELECT kind FROM categories WHERE id = ?",
+                arguments: [oldCategoryID.uuidString]
+            ),
+                  let newCategoryRow = try Row.fetchOne(
+                    db,
+                    sql: "SELECT kind, is_archived FROM categories WHERE id = ?",
+                    arguments: [newCategoryID.uuidString]
+                  )
+            else {
+                throw CashRunwayError.notFound
+            }
+            let newKind: String = newCategoryRow["kind"]
+            let newIsArchived: Bool = newCategoryRow["is_archived"]
+            guard oldKind == newKind else {
+                throw CashRunwayError.validation("Categories must have the same type to merge.")
+            }
+            guard !newIsArchived else {
+                throw CashRunwayError.validation("Destination category must be active.")
+            }
+
             let now = Date()
             let affectedMonths = Set(try Int.fetchAll(
                 db,
                 sql: "SELECT DISTINCT local_month_key FROM transactions WHERE category_id = ?",
                 arguments: [oldCategoryID.uuidString]
             ))
+            let affectedTransactionIDs = try String.fetchAll(
+                db,
+                sql: "SELECT id FROM transactions WHERE is_deleted = 0 AND category_id = ?",
+                arguments: [oldCategoryID.uuidString]
+            )
+            let categorySpendDeltas = try Self.categorySpendDeltas(db, categoryID: oldCategoryID)
             try db.execute(
                 sql: "UPDATE transactions SET category_id = ?, updated_at = ? WHERE category_id = ?",
                 arguments: [newCategoryID.uuidString, now, oldCategoryID.uuidString]
+            )
+            try db.execute(
+                sql: "UPDATE recurring_templates SET category_id = ?, updated_at = ? WHERE category_id = ?",
+                arguments: [newCategoryID.uuidString, now, oldCategoryID.uuidString]
+            )
+            try db.execute(
+                sql: "UPDATE recurring_instances SET override_category_id = ?, updated_at = ? WHERE override_category_id = ?",
+                arguments: [newCategoryID.uuidString, now, oldCategoryID.uuidString]
+            )
+            try db.execute(
+                sql: "UPDATE bank_category_rules SET category_id = ?, updated_at = ? WHERE category_id = ?",
+                arguments: [newCategoryID.uuidString, now, oldCategoryID.uuidString]
+            )
+            try db.execute(
+                sql: "UPDATE categories SET is_archived = 1, updated_at = ? WHERE id = ?",
+                arguments: [now, oldCategoryID.uuidString]
             )
             try db.execute(
                 sql: """
@@ -2042,9 +2138,9 @@ extension CashRunwayRepository {
                 """,
                 arguments: [UUID().uuidString, oldCategoryID.uuidString, "{\"from\":\"\(oldCategoryID.uuidString)\",\"to\":\"\(newCategoryID.uuidString)\"}", now]
             )
-            try markDirtyRanges(db, monthKeys: affectedMonths)
-            try processPendingAggregateRebuilds(db)
-            try rebuildFTS(db)
+            try applyCategoryMergeDeltas(db, oldCategoryID: oldCategoryID, newCategoryID: newCategoryID, deltas: categorySpendDeltas)
+            try recomputeBudgetSnapshots(db, monthKeys: affectedMonths)
+            try syncSearch(db, transactionIDs: affectedTransactionIDs)
         }
     }
 
@@ -2218,13 +2314,8 @@ extension CashRunwayRepository {
 
         let allRows = try Row.fetchAll(db, sql: "SELECT * FROM categories WHERE kind = ? AND is_archived = 0", arguments: [categoryKind.rawValue])
 
-        if let rawName {
-            for row in allRows {
-                let rowName: String = row["name"]
-                if rowName.trimmingCharacters(in: .whitespacesAndNewlines).caseInsensitiveCompare(rawName) == .orderedSame {
-                    return UUID(uuidString: row["id"])!
-                }
-            }
+        if let rawName, let categoryID = try resolvedCategoryID(db, kind: categoryKind, named: rawName) {
+            return categoryID
         }
 
         if rawName == nil {
@@ -2527,6 +2618,56 @@ extension CashRunwayRepository {
         }
         let impactedMonthKeys = Set([old?.monthKey, new?.monthKey].compactMap { $0 })
         try recomputeBudgetSnapshots(db, monthKeys: impactedMonthKeys)
+    }
+
+    private static func categorySpendDeltas(_ db: Database, categoryID: UUID) throws -> [CategorySpendDelta] {
+        let rows = try Row.fetchAll(
+            db,
+            sql: """
+            SELECT local_month_key, COALESCE(SUM(amount_minor), 0) AS expense_minor, COUNT(*) AS txn_count
+            FROM transactions
+            WHERE is_deleted = 0 AND type = 'expense' AND category_id = ?
+            GROUP BY local_month_key
+            """,
+            arguments: [categoryID.uuidString]
+        )
+        return rows.map {
+            CategorySpendDelta(
+                monthKey: $0["local_month_key"],
+                expenseMinor: $0["expense_minor"],
+                transactionCount: $0["txn_count"]
+            )
+        }
+    }
+
+    private func applyCategoryMergeDeltas(_ db: Database, oldCategoryID: UUID, newCategoryID: UUID, deltas: [CategorySpendDelta]) throws {
+        guard !deltas.isEmpty else { return }
+        let now = Date()
+        for delta in deltas {
+            try db.execute(
+                sql: """
+                UPDATE monthly_category_spend
+                SET expense_minor = expense_minor - ?, txn_count = txn_count - ?, updated_at = ?
+                WHERE category_id = ? AND month_key = ?
+                """,
+                arguments: [delta.expenseMinor, delta.transactionCount, now, oldCategoryID.uuidString, delta.monthKey]
+            )
+            try db.execute(
+                sql: "DELETE FROM monthly_category_spend WHERE category_id = ? AND month_key = ? AND expense_minor = 0 AND txn_count <= 0",
+                arguments: [oldCategoryID.uuidString, delta.monthKey]
+            )
+            try db.execute(
+                sql: """
+                INSERT INTO monthly_category_spend (category_id, month_key, expense_minor, txn_count, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(category_id, month_key) DO UPDATE SET
+                    expense_minor = expense_minor + excluded.expense_minor,
+                    txn_count = txn_count + excluded.txn_count,
+                    updated_at = excluded.updated_at
+                """,
+                arguments: [newCategoryID.uuidString, delta.monthKey, delta.expenseMinor, delta.transactionCount, now]
+            )
+        }
     }
 
     private func mutateAggregate(_ db: Database, contribution: AggregateContribution, multiplier: Int64) throws {
@@ -2863,6 +3004,28 @@ extension CashRunwayRepository {
             sql: "INSERT INTO transaction_search (transaction_id, merchant, note, wallet_name, category_name, labels) VALUES (?, ?, ?, ?, ?, ?)",
             arguments: [transaction.id.uuidString, transaction.merchant ?? "", transaction.note ?? "", walletName, categoryName, labelNames]
         )
+    }
+
+    private func syncSearch(_ db: Database, transactionIDs: [String]) throws {
+        guard !transactionIDs.isEmpty else { return }
+
+        let chunkSize = 900
+        for index in stride(from: 0, to: transactionIDs.count, by: chunkSize) {
+            let chunk = Array(transactionIDs[index..<min(index + chunkSize, transactionIDs.count)])
+            let placeholders = chunk.enumerated().map { ":id\($0.offset)" }.joined(separator: ", ")
+            var arguments: [String: any DatabaseValueConvertible] = [:]
+            for (index, transactionID) in chunk.enumerated() {
+                arguments["id\(index)"] = transactionID
+            }
+            let rows = try Row.fetchAll(
+                db,
+                sql: "SELECT * FROM transactions WHERE is_deleted = 0 AND id IN (\(placeholders))",
+                arguments: StatementArguments(arguments)
+            )
+            for row in rows {
+                try syncSearch(db, transaction: try Self.transaction(row))
+            }
+        }
     }
 
     private func rebuildMonths(_ db: Database, monthKeys: Set<Int>) throws {

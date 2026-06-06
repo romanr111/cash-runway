@@ -1120,44 +1120,443 @@ private struct CategoryMergeView: View {
     let kind: CategoryKind
     @State private var sourceID: UUID?
     @State private var destinationID: UUID?
+    @State private var items: [CategoryManagementItem] = []
+    @State private var mergeResult: CategoryMergeResult?
+    @State private var isMerging = false
+    @State private var mergeProgress = 0.0
+    @State private var mergeStatus = "Preparing merge"
+    @State private var mergeTask: Task<Void, Never>?
 
     var body: some View {
         NavigationStack {
-            Form {
-                Picker("From", selection: $sourceID) {
-                    Text("Select category").tag(UUID?.none)
-                    ForEach(categories) { category in
-                        Text(category.name).tag(UUID?.some(category.id))
+            Group {
+                if let mergeResult {
+                    mergeSuccessView(mergeResult)
+                } else {
+                    mergeForm
+                }
+            }
+            .navigationTitle(mergeResult == nil ? "Merge Categories" : "Merge Complete")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    if mergeResult == nil {
+                        Button("Cancel") { dismiss() }
+                            .disabled(isMerging)
                     }
                 }
-                Picker("Into", selection: $destinationID) {
-                    Text("Select category").tag(UUID?.none)
-                    ForEach(categories.filter { $0.id != sourceID }) { category in
-                        Text(category.name).tag(UUID?.some(category.id))
+                ToolbarItem(placement: .topBarTrailing) {
+                    if mergeResult != nil {
+                        Button("Done") { dismiss() }
                     }
                 }
             }
-            .navigationTitle("Merge Categories")
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Merge") {
-                        if let sourceID, let destinationID {
-                            model.mergeCategory(oldCategoryID: sourceID, into: destinationID)
-                            dismiss()
-                        }
-                    }
-                    .disabled(sourceID == nil || destinationID == nil)
-                }
+            .onAppear(perform: reloadItems)
+            .onDisappear {
+                mergeTask?.cancel()
+                mergeTask = nil
             }
         }
     }
 
-    private var categories: [CashRunwayCategory] {
-        kind == .income ? model.incomeCategories : model.expenseCategories
+    private var mergeForm: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Image(systemName: "arrow.down.forward.and.arrow.up.backward")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(CashRunwayTheme.accentDark)
+                        .frame(width: 48, height: 48)
+                        .background(CashRunwayTheme.accentMuted, in: Circle())
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Combine duplicate categories")
+                            .font(.system(size: 24, weight: .bold, design: .rounded))
+                            .foregroundStyle(CashRunwayTheme.textPrimary)
+                        Text("Transactions, recurring templates, and bank rules move to the category you keep. The source category is hidden after merge.")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(CashRunwayTheme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(20)
+                .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
+
+                categoryPicker(
+                    title: "Merge from",
+                    subtitle: "This category will be hidden",
+                    placeholder: "Choose source category",
+                    selection: $sourceID,
+                    excludedID: destinationID
+                )
+                .disabled(isMerging)
+
+                Image(systemName: "arrow.down")
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(CashRunwayTheme.textMuted)
+                    .frame(width: 44, height: 44)
+                    .background(CashRunwayTheme.pill, in: Circle())
+
+                categoryPicker(
+                    title: "Keep as destination",
+                    subtitle: "All linked records move here",
+                    placeholder: "Choose destination category",
+                    selection: $destinationID,
+                    excludedID: sourceID
+                )
+                .disabled(isMerging)
+
+                if let sourceItem, let destinationItem {
+                    mergePreview(sourceItem: sourceItem, destinationItem: destinationItem)
+                    if isMerging {
+                        mergeProgressView(sourceItem: sourceItem, destinationItem: destinationItem)
+                    }
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 20)
+            .padding(.bottom, 108)
+        }
+        .scrollContentBackground(.hidden)
+        .background(CashRunwayTheme.background)
+        .safeAreaInset(edge: .bottom) {
+            Button {
+                mergeSelectedCategories()
+            } label: {
+                HStack(spacing: 10) {
+                    if isMerging {
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(.white)
+                        Text("Merging Categories")
+                            .font(.system(size: 17, weight: .bold))
+                    } else {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 16, weight: .bold))
+                        Text("Merge Categories")
+                            .font(.system(size: 17, weight: .bold))
+                    }
+                }
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 54)
+                .background(hasMergeSelection ? CashRunwayTheme.accentDark : CashRunwayTheme.textMuted, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+            .disabled(!hasMergeSelection || isMerging)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .background(.ultraThinMaterial)
+        }
     }
+
+    private var managementItems: [CategoryManagementItem] {
+        items
+    }
+
+    private var sourceItem: CategoryManagementItem? {
+        guard let sourceID else { return nil }
+        return managementItems.first { $0.category.id == sourceID }
+    }
+
+    private var destinationItem: CategoryManagementItem? {
+        guard let destinationID else { return nil }
+        return managementItems.first { $0.category.id == destinationID }
+    }
+
+    private var hasMergeSelection: Bool {
+        sourceID != nil && destinationID != nil && sourceID != destinationID
+    }
+
+    private func categoryPicker(
+        title: String,
+        subtitle: String,
+        placeholder: String,
+        selection: Binding<UUID?>,
+        excludedID: UUID?
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(CashRunwayTheme.textSecondary)
+                    .textCase(.uppercase)
+                Text(subtitle)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(CashRunwayTheme.textMuted)
+            }
+
+            Menu {
+                Button("Clear Selection") {
+                    selection.wrappedValue = nil
+                }
+                ForEach(managementItems.filter { $0.category.id != excludedID }) { item in
+                    Button {
+                        selection.wrappedValue = item.category.id
+                    } label: {
+                        SwiftUI.Label(item.category.name, systemImage: item.category.iconName ?? "circle.fill")
+                    }
+                }
+            } label: {
+                HStack(spacing: 14) {
+                    if let selected = managementItems.first(where: { $0.category.id == selection.wrappedValue }) {
+                        CategoryGlyph(iconName: selected.category.iconName, colorHex: selected.category.colorHex, size: 46)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(selected.category.name)
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundStyle(CashRunwayTheme.textPrimary)
+                            Text("\(selected.transactionCount) transactions")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(CashRunwayTheme.textSecondary)
+                        }
+                    } else {
+                        Image(systemName: "circle.dashed")
+                            .font(.system(size: 22, weight: .semibold))
+                            .foregroundStyle(CashRunwayTheme.textMuted)
+                            .frame(width: 46, height: 46)
+                            .background(CashRunwayTheme.pill, in: Circle())
+                        Text(placeholder)
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(CashRunwayTheme.textSecondary)
+                    }
+
+                    Spacer()
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(CashRunwayTheme.textMuted)
+                }
+                .frame(minHeight: 56)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(18)
+        .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
+    }
+
+    private func mergePreview(sourceItem: CategoryManagementItem, destinationItem: CategoryManagementItem) -> some View {
+        let totalTransactions = sourceItem.transactionCount + destinationItem.transactionCount
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 12) {
+                CategoryGlyph(iconName: sourceItem.category.iconName, colorHex: sourceItem.category.colorHex, size: 42)
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(CashRunwayTheme.textMuted)
+                CategoryGlyph(iconName: destinationItem.category.iconName, colorHex: destinationItem.category.colorHex, size: 42)
+                Spacer()
+                Text("\(totalTransactions)")
+                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                    .foregroundStyle(CashRunwayTheme.textPrimary)
+                Text("tx")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(CashRunwayTheme.textMuted)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                mergeFact(icon: "checkmark.seal.fill", text: "Transactions are preserved; only category references change.")
+                mergeFact(icon: "eye.slash.fill", text: "\(sourceItem.category.name) becomes hidden after merge.")
+                mergeFact(icon: "chart.bar.fill", text: "\(destinationItem.category.name) keeps \(totalTransactions) total transactions.")
+            }
+        }
+        .padding(18)
+        .background(CashRunwayTheme.accentMuted, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(CashRunwayTheme.accent.opacity(0.35), lineWidth: 1))
+    }
+
+    private func mergeFact(icon: String, text: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(CashRunwayTheme.accentDark)
+                .frame(width: 20)
+            Text(text)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(CashRunwayTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func mergeProgressView(sourceItem: CategoryManagementItem, destinationItem: CategoryManagementItem) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 12) {
+                Image(systemName: "arrow.triangle.merge")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(CashRunwayTheme.accentDark)
+                    .frame(width: 40, height: 40)
+                    .background(CashRunwayTheme.accentMuted, in: Circle())
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(mergeStatus)
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(CashRunwayTheme.textPrimary)
+                    Text("\(sourceItem.category.name) is moving into \(destinationItem.category.name)")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(CashRunwayTheme.textSecondary)
+                        .lineLimit(2)
+                }
+
+                Spacer()
+
+                Text("\(Int((mergeProgress * 100).rounded()))%")
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .foregroundStyle(CashRunwayTheme.textSecondary)
+                    .monospacedDigit()
+            }
+
+            ProgressView(value: mergeProgress, total: 1)
+                .progressViewStyle(.linear)
+                .tint(CashRunwayTheme.accentDark)
+                .accessibilityLabel("Merge progress")
+                .accessibilityValue("\(Int((mergeProgress * 100).rounded())) percent")
+
+            Text("Transactions stay intact while category references are updated.")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(CashRunwayTheme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(18)
+        .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+        .accessibilityElement(children: .combine)
+    }
+
+    private func mergeSuccessView(_ result: CategoryMergeResult) -> some View {
+        VStack(spacing: 24) {
+            Spacer(minLength: 24)
+
+            ZStack {
+                Circle()
+                    .fill(CashRunwayTheme.accentMuted)
+                    .frame(width: 112, height: 112)
+                Image(systemName: "checkmark.seal.fill")
+                    .font(.system(size: 52, weight: .semibold))
+                    .foregroundStyle(CashRunwayTheme.accentDark)
+            }
+
+            VStack(spacing: 10) {
+                Text("Merged into \(result.destination.name)")
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .foregroundStyle(CashRunwayTheme.textPrimary)
+                    .multilineTextAlignment(.center)
+                Text("All existing transactions were preserved and now point to the destination category.")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(CashRunwayTheme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            HStack(spacing: 14) {
+                CategoryGlyph(iconName: result.source.iconName, colorHex: result.source.colorHex, size: 54)
+                    .opacity(0.55)
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(CashRunwayTheme.textMuted)
+                CategoryGlyph(iconName: result.destination.iconName, colorHex: result.destination.colorHex, size: 54)
+            }
+            .padding(.vertical, 4)
+
+            VStack(spacing: 10) {
+                successMetric(value: "\(result.totalTransactionCount)", label: "transactions kept")
+                successMetric(value: result.source.name, label: "hidden source")
+            }
+            .padding(18)
+            .frame(maxWidth: .infinity)
+            .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
+
+            Spacer(minLength: 24)
+        }
+        .padding(.horizontal, 24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(CashRunwayTheme.background)
+        .safeAreaInset(edge: .bottom) {
+            Button {
+                dismiss()
+            } label: {
+                Text("Done")
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 54)
+                    .background(CashRunwayTheme.accentDark, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .background(.ultraThinMaterial)
+        }
+    }
+
+    private func successMetric(value: String, label: String) -> some View {
+        HStack {
+            Text(value)
+                .font(.system(size: 17, weight: .bold))
+                .foregroundStyle(CashRunwayTheme.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+            Spacer()
+            Text(label)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(CashRunwayTheme.textMuted)
+        }
+    }
+
+    private func mergeSelectedCategories() {
+        guard !isMerging, let sourceItem, let destinationItem else { return }
+        let result = CategoryMergeResult(source: sourceItem.category, destination: destinationItem.category, totalTransactionCount: sourceItem.transactionCount + destinationItem.transactionCount)
+
+        mergeTask?.cancel()
+        mergeTask = Task { @MainActor in
+            withAnimation(.easeInOut(duration: 0.18)) {
+                isMerging = true
+                mergeProgress = 0.35
+                mergeStatus = "Updating linked records"
+            }
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+
+            let didMerge = model.mergeCategory(oldCategoryID: sourceItem.category.id, into: destinationItem.category.id)
+            guard !Task.isCancelled else { return }
+
+            if didMerge {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    mergeProgress = 0.82
+                    mergeStatus = "Refreshing totals"
+                }
+
+                reloadItems()
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    mergeProgress = 1
+                    mergeStatus = "Merge complete"
+                }
+
+                sourceID = nil
+                destinationID = nil
+                isMerging = false
+                mergeTask = nil
+                mergeResult = result
+            } else {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    isMerging = false
+                    mergeProgress = 0
+                    mergeStatus = "Preparing merge"
+                }
+                mergeTask = nil
+            }
+        }
+    }
+
+    private func reloadItems() {
+        items = model.categoryManagementItems(kind: kind)
+    }
+}
+
+private struct CategoryMergeResult {
+    let source: CashRunwayCategory
+    let destination: CashRunwayCategory
+    let totalTransactionCount: Int
 }
 
 // DEPRECATED — Budgets feature is de-prioritized. Work stopped; do not modify or add tests until resumed.

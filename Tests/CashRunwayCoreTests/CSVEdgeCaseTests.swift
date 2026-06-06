@@ -229,4 +229,37 @@ struct CSVEdgeCaseTests {
         let imported = try #require(transactions.first)
         #expect(imported.kind == .income)
     }
+
+    @Test func importReusesMergedDestinationCategoryByName() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let walletID = try #require(try repository.wallets().first?.id)
+        let groceriesID = try #require(try repository.categories(kind: .expense).first { $0.name == "Groceries" }?.id)
+        let restaurantsID = try #require(try repository.categories(kind: .expense).first { $0.name == "Restaurants" }?.id)
+
+        try repository.mergeCategory(oldCategoryID: restaurantsID, into: groceriesID)
+
+        let service = CSVService(repository: repository)
+        let text = "Date,Amount,Category,Note\n2025-01-01,100,Restaurants,Weekly groceries"
+        let mapping = CSVImportMapping(
+            dateColumn: "Date",
+            amountColumn: "Amount",
+            debitColumn: nil,
+            creditColumn: nil,
+            merchantColumn: nil,
+            noteColumn: "Note",
+            categoryColumn: "Category",
+            labelsColumn: nil,
+            walletID: walletID,
+            defaultKind: .expense
+        )
+        let result = try service.importCSV(data: Data(text.utf8), fileName: "test.csv", mapping: mapping)
+
+        #expect(result.insertedTransactions == 1)
+        let imported = try #require(try repository.transactions().first { $0.note == "Weekly groceries" })
+        let importedDraft = try repository.transactionDraft(id: imported.id)
+        #expect(importedDraft.categoryID == groceriesID)
+        #expect(try repository.categories(kind: .expense).contains { $0.name == "Restaurants" } == false)
+    }
 }
