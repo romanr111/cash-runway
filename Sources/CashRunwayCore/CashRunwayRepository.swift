@@ -11,6 +11,12 @@ private struct AggregateContribution {
     let categoryID: UUID?
 }
 
+private struct CategorySpendDelta {
+    let monthKey: Int
+    let expenseMinor: Int64
+    let transactionCount: Int
+}
+
 public protocol MonobankClient: Sendable {
     func clientInfo() async throws -> MonobankClientInfo
     func statement(accountID: String, from: Date, to: Date) async throws -> [MonobankStatementItem]
@@ -2092,6 +2098,12 @@ extension CashRunwayRepository {
                 sql: "SELECT DISTINCT local_month_key FROM transactions WHERE category_id = ?",
                 arguments: [oldCategoryID.uuidString]
             ))
+            let affectedTransactionIDs = try String.fetchAll(
+                db,
+                sql: "SELECT id FROM transactions WHERE is_deleted = 0 AND category_id = ?",
+                arguments: [oldCategoryID.uuidString]
+            )
+            let categorySpendDeltas = try Self.categorySpendDeltas(db, categoryID: oldCategoryID)
             try db.execute(
                 sql: "UPDATE transactions SET category_id = ?, updated_at = ? WHERE category_id = ?",
                 arguments: [newCategoryID.uuidString, now, oldCategoryID.uuidString]
@@ -2126,9 +2138,9 @@ extension CashRunwayRepository {
                 """,
                 arguments: [UUID().uuidString, oldCategoryID.uuidString, "{\"from\":\"\(oldCategoryID.uuidString)\",\"to\":\"\(newCategoryID.uuidString)\"}", now]
             )
-            try markDirtyRanges(db, monthKeys: affectedMonths)
-            try processPendingAggregateRebuilds(db)
-            try rebuildFTS(db)
+            try applyCategoryMergeDeltas(db, oldCategoryID: oldCategoryID, newCategoryID: newCategoryID, deltas: categorySpendDeltas)
+            try recomputeBudgetSnapshots(db, monthKeys: affectedMonths)
+            try syncSearch(db, transactionIDs: affectedTransactionIDs)
         }
     }
 
@@ -2608,6 +2620,56 @@ extension CashRunwayRepository {
         try recomputeBudgetSnapshots(db, monthKeys: impactedMonthKeys)
     }
 
+    private static func categorySpendDeltas(_ db: Database, categoryID: UUID) throws -> [CategorySpendDelta] {
+        let rows = try Row.fetchAll(
+            db,
+            sql: """
+            SELECT local_month_key, COALESCE(SUM(amount_minor), 0) AS expense_minor, COUNT(*) AS txn_count
+            FROM transactions
+            WHERE is_deleted = 0 AND type = 'expense' AND category_id = ?
+            GROUP BY local_month_key
+            """,
+            arguments: [categoryID.uuidString]
+        )
+        return rows.map {
+            CategorySpendDelta(
+                monthKey: $0["local_month_key"],
+                expenseMinor: $0["expense_minor"],
+                transactionCount: $0["txn_count"]
+            )
+        }
+    }
+
+    private func applyCategoryMergeDeltas(_ db: Database, oldCategoryID: UUID, newCategoryID: UUID, deltas: [CategorySpendDelta]) throws {
+        guard !deltas.isEmpty else { return }
+        let now = Date()
+        for delta in deltas {
+            try db.execute(
+                sql: """
+                UPDATE monthly_category_spend
+                SET expense_minor = expense_minor - ?, txn_count = txn_count - ?, updated_at = ?
+                WHERE category_id = ? AND month_key = ?
+                """,
+                arguments: [delta.expenseMinor, delta.transactionCount, now, oldCategoryID.uuidString, delta.monthKey]
+            )
+            try db.execute(
+                sql: "DELETE FROM monthly_category_spend WHERE category_id = ? AND month_key = ? AND expense_minor = 0 AND txn_count <= 0",
+                arguments: [oldCategoryID.uuidString, delta.monthKey]
+            )
+            try db.execute(
+                sql: """
+                INSERT INTO monthly_category_spend (category_id, month_key, expense_minor, txn_count, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(category_id, month_key) DO UPDATE SET
+                    expense_minor = expense_minor + excluded.expense_minor,
+                    txn_count = txn_count + excluded.txn_count,
+                    updated_at = excluded.updated_at
+                """,
+                arguments: [newCategoryID.uuidString, delta.monthKey, delta.expenseMinor, delta.transactionCount, now]
+            )
+        }
+    }
+
     private func mutateAggregate(_ db: Database, contribution: AggregateContribution, multiplier: Int64) throws {
         let amount = contribution.amountMinor * multiplier
         let now = Date()
@@ -2942,6 +3004,28 @@ extension CashRunwayRepository {
             sql: "INSERT INTO transaction_search (transaction_id, merchant, note, wallet_name, category_name, labels) VALUES (?, ?, ?, ?, ?, ?)",
             arguments: [transaction.id.uuidString, transaction.merchant ?? "", transaction.note ?? "", walletName, categoryName, labelNames]
         )
+    }
+
+    private func syncSearch(_ db: Database, transactionIDs: [String]) throws {
+        guard !transactionIDs.isEmpty else { return }
+
+        let chunkSize = 900
+        for index in stride(from: 0, to: transactionIDs.count, by: chunkSize) {
+            let chunk = Array(transactionIDs[index..<min(index + chunkSize, transactionIDs.count)])
+            let placeholders = chunk.enumerated().map { ":id\($0.offset)" }.joined(separator: ", ")
+            var arguments: [String: any DatabaseValueConvertible] = [:]
+            for (index, transactionID) in chunk.enumerated() {
+                arguments["id\(index)"] = transactionID
+            }
+            let rows = try Row.fetchAll(
+                db,
+                sql: "SELECT * FROM transactions WHERE is_deleted = 0 AND id IN (\(placeholders))",
+                arguments: StatementArguments(arguments)
+            )
+            for row in rows {
+                try syncSearch(db, transaction: try Self.transaction(row))
+            }
+        }
     }
 
     private func rebuildMonths(_ db: Database, monthKeys: Set<Int>) throws {

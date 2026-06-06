@@ -1122,6 +1122,10 @@ private struct CategoryMergeView: View {
     @State private var destinationID: UUID?
     @State private var items: [CategoryManagementItem] = []
     @State private var mergeResult: CategoryMergeResult?
+    @State private var isMerging = false
+    @State private var mergeProgress = 0.0
+    @State private var mergeStatus = "Preparing merge"
+    @State private var mergeTask: Task<Void, Never>?
 
     var body: some View {
         NavigationStack {
@@ -1138,6 +1142,7 @@ private struct CategoryMergeView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     if mergeResult == nil {
                         Button("Cancel") { dismiss() }
+                            .disabled(isMerging)
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
@@ -1147,6 +1152,10 @@ private struct CategoryMergeView: View {
                 }
             }
             .onAppear(perform: reloadItems)
+            .onDisappear {
+                mergeTask?.cancel()
+                mergeTask = nil
+            }
         }
     }
 
@@ -1182,6 +1191,7 @@ private struct CategoryMergeView: View {
                     selection: $sourceID,
                     excludedID: destinationID
                 )
+                .disabled(isMerging)
 
                 Image(systemName: "arrow.down")
                     .font(.system(size: 17, weight: .bold))
@@ -1196,9 +1206,13 @@ private struct CategoryMergeView: View {
                     selection: $destinationID,
                     excludedID: sourceID
                 )
+                .disabled(isMerging)
 
                 if let sourceItem, let destinationItem {
                     mergePreview(sourceItem: sourceItem, destinationItem: destinationItem)
+                    if isMerging {
+                        mergeProgressView(sourceItem: sourceItem, destinationItem: destinationItem)
+                    }
                 }
             }
             .padding(.horizontal, 20)
@@ -1212,17 +1226,25 @@ private struct CategoryMergeView: View {
                 mergeSelectedCategories()
             } label: {
                 HStack(spacing: 10) {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 16, weight: .bold))
-                    Text("Merge Categories")
-                        .font(.system(size: 17, weight: .bold))
+                    if isMerging {
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(.white)
+                        Text("Merging Categories")
+                            .font(.system(size: 17, weight: .bold))
+                    } else {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 16, weight: .bold))
+                        Text("Merge Categories")
+                            .font(.system(size: 17, weight: .bold))
+                    }
                 }
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
                 .frame(height: 54)
-                .background(canMerge ? CashRunwayTheme.accentDark : CashRunwayTheme.textMuted, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .background(hasMergeSelection ? CashRunwayTheme.accentDark : CashRunwayTheme.textMuted, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             }
-            .disabled(!canMerge)
+            .disabled(!hasMergeSelection || isMerging)
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
             .background(.ultraThinMaterial)
@@ -1243,7 +1265,7 @@ private struct CategoryMergeView: View {
         return managementItems.first { $0.category.id == destinationID }
     }
 
-    private var canMerge: Bool {
+    private var hasMergeSelection: Bool {
         sourceID != nil && destinationID != nil && sourceID != destinationID
     }
 
@@ -1356,6 +1378,51 @@ private struct CategoryMergeView: View {
         }
     }
 
+    private func mergeProgressView(sourceItem: CategoryManagementItem, destinationItem: CategoryManagementItem) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 12) {
+                Image(systemName: "arrow.triangle.merge")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(CashRunwayTheme.accentDark)
+                    .frame(width: 40, height: 40)
+                    .background(CashRunwayTheme.accentMuted, in: Circle())
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(mergeStatus)
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(CashRunwayTheme.textPrimary)
+                    Text("\(sourceItem.category.name) is moving into \(destinationItem.category.name)")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(CashRunwayTheme.textSecondary)
+                        .lineLimit(2)
+                }
+
+                Spacer()
+
+                Text("\(Int((mergeProgress * 100).rounded()))%")
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .foregroundStyle(CashRunwayTheme.textSecondary)
+                    .monospacedDigit()
+            }
+
+            ProgressView(value: mergeProgress, total: 1)
+                .progressViewStyle(.linear)
+                .tint(CashRunwayTheme.accentDark)
+                .accessibilityLabel("Merge progress")
+                .accessibilityValue("\(Int((mergeProgress * 100).rounded())) percent")
+
+            Text("Transactions stay intact while category references are updated.")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(CashRunwayTheme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(18)
+        .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+        .accessibilityElement(children: .combine)
+    }
+
     private func mergeSuccessView(_ result: CategoryMergeResult) -> some View {
         VStack(spacing: 24) {
             Spacer(minLength: 24)
@@ -1437,13 +1504,47 @@ private struct CategoryMergeView: View {
     }
 
     private func mergeSelectedCategories() {
-        guard let sourceItem, let destinationItem else { return }
+        guard !isMerging, let sourceItem, let destinationItem else { return }
         let result = CategoryMergeResult(source: sourceItem.category, destination: destinationItem.category, totalTransactionCount: sourceItem.transactionCount + destinationItem.transactionCount)
-        if model.mergeCategory(oldCategoryID: sourceItem.category.id, into: destinationItem.category.id) {
-            sourceID = nil
-            destinationID = nil
-            mergeResult = result
-            reloadItems()
+
+        mergeTask?.cancel()
+        mergeTask = Task { @MainActor in
+            withAnimation(.easeInOut(duration: 0.18)) {
+                isMerging = true
+                mergeProgress = 0.35
+                mergeStatus = "Updating linked records"
+            }
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+
+            let didMerge = model.mergeCategory(oldCategoryID: sourceItem.category.id, into: destinationItem.category.id)
+            guard !Task.isCancelled else { return }
+
+            if didMerge {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    mergeProgress = 0.82
+                    mergeStatus = "Refreshing totals"
+                }
+
+                reloadItems()
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    mergeProgress = 1
+                    mergeStatus = "Merge complete"
+                }
+
+                sourceID = nil
+                destinationID = nil
+                isMerging = false
+                mergeTask = nil
+                mergeResult = result
+            } else {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    isMerging = false
+                    mergeProgress = 0
+                    mergeStatus = "Preparing merge"
+                }
+                mergeTask = nil
+            }
         }
     }
 

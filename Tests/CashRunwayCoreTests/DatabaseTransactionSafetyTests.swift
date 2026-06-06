@@ -259,6 +259,45 @@ struct DatabaseTransactionSafetyTests {
         try TestSupport.assertCategoryTruth(repository)
     }
 
+    @Test func categoryMergeRefreshesSearchIndexForMovedTransactionsOnly() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let walletID = try #require(try repository.wallets().first?.id)
+        let source = CategoryBuilder()
+            .with(name: "OldUniqueDining")
+            .with(kind: .expense)
+            .with(sortOrder: 997)
+            .build()
+        let destination = CategoryBuilder()
+            .with(name: "NewUniqueDining")
+            .with(kind: .expense)
+            .with(sortOrder: 998)
+            .build()
+        try repository.saveCategory(source)
+        try repository.saveCategory(destination)
+
+        try repository.saveTransaction(
+            TransactionDraft(
+                kind: .expense,
+                walletID: walletID,
+                amountMinor: 1_900,
+                occurredAt: .now,
+                categoryID: source.id,
+                merchant: "Neutral Merchant",
+                note: ""
+            )
+        )
+
+        #expect(try repository.transactions(query: .init(searchText: "OldUniqueDining"), limit: nil).count == 1)
+
+        try repository.mergeCategory(oldCategoryID: source.id, into: destination.id)
+
+        #expect(try repository.transactions(query: .init(searchText: "OldUniqueDining"), limit: nil).isEmpty)
+        #expect(try repository.transactions(query: .init(searchText: "NewUniqueDining"), limit: nil).count == 1)
+        try TestSupport.assertCategoryTruth(repository)
+    }
+
     @Test func categoryMergeMovesRecurringAndBankRuleReferences() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()

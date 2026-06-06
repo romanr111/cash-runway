@@ -18,8 +18,8 @@ Rules:
 
 - Goal: Make PR `#24` merge-ready while preserving category-merge data safety.
 - Success criteria: Category merge preserves transactions while only updating category references, remap lookups follow active destinations, the category merge UI communicates data preservation and success, current `origin/main` merges cleanly, and required validation passes.
-- Current state: `origin/main` through `ca1c3fa` was merged into `codex/category-merge-fix`; the only conflict was `CONTINUITY.md`, and local validation passed.
-- Next action: Push PR `#24` and monitor GitHub checks before merge.
+- Current state: Category merge now avoids full FTS and aggregate rebuilds, syncing only moved transactions/search rows and source/destination category spend deltas, and local validation passed.
+- Next action: Review, commit, and push the category merge progress UI update for PR `#24`.
 - Open questions: None.
 - Merge status: not-merged.
 
@@ -70,3 +70,13 @@ Rules:
 - 2026-06-02 [TEST] Post-`ca1c3fa` `swift test` passed 251 tests in 24 suites.
 - 2026-06-02 [BUILD] Post-`ca1c3fa` iPhone 17 clean build ended with `** BUILD SUCCEEDED **`; SQLCipher strip and AppIntents metadata warnings matched existing build noise.
 - 2026-06-02 [SMOKE] Post-`ca1c3fa` install and launch returned `dev.roman.cashrunway: 10918`; severity-filtered app log scan found no error/fault entries.
+- 2026-06-06 [UI] Added a staged progress panel and disabled in-flight controls when tapping Merge Categories before the existing success confirmation.
+- 2026-06-06 [TEST] Category merge progress UI update `swift test --filter 'DatabaseTransactionSafetyTests/categoryMerge'` passed 7 tests.
+- 2026-06-06 [BUILD] Category merge progress UI update iPhone 17 clean build ended with `** BUILD SUCCEEDED **`; SQLCipher strip and AppIntents metadata warnings matched existing build noise.
+- 2026-06-06 [SMOKE] Installed and launched latest `dev.roman.cashrunway` on iPhone 17; severity-filtered app log scan found no error/fault entries.
+- 2026-06-06 [NOTE] Extra broad `swift test` was stopped after hanging with partial output; it is not counted as a passing validation.
+- 2026-06-06 [PERF] Removed fixed category merge progress UI waits and replaced full merge-time FTS rebuild with targeted search sync for moved transactions only.
+- 2026-06-06 [PERF] Replaced full month aggregate rebuilds during category merge with source/destination category spend deltas plus affected-month budget snapshot recompute.
+- 2026-06-06 [TEST] Added category-merge FTS regression coverage for old/destination category search terms after merge.
+- 2026-06-06 [VALIDATED] Real category merge speedup passed 15 focused category merge/remap/import tests, core mirror diff, diff check, iPhone 17 clean build, install/launch smoke; launch log showed only Apple app-launch measurement CA Event errors, no crash/fatal entries.
+- 2026-06-06 [REVIEW] Detailed code review found no blocking or important findings; full `swift test` passed 252 tests in 24 suites, core mirror diff and diff check passed, and iPhone 17 clean build ended with `** BUILD SUCCEEDED **`.
