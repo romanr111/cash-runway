@@ -226,6 +226,47 @@ struct FullBackupTests {
         #expect(targetBalances == sourceBalances)
     }
 
+    @Test func fullBackupImportPreservesTransactionCategoryRelationships() throws {
+        let source = try makePopulatedRepository().0
+        let backup = try source.exportFullBackup()
+        let target = try TestSupport.makeRepository()
+
+        try target.restoreFullBackup(backup)
+
+        for backupTx in backup.transactions where backupTx.type == .expense || backupTx.type == .income {
+            let restoredDraft = try target.transactionDraft(id: backupTx.id)
+            #expect(restoredDraft.categoryID == backupTx.categoryID)
+        }
+    }
+
+    @Test func fullBackupImportPreservesTransactionWalletRelationships() throws {
+        let source = try makePopulatedRepository().0
+        let backup = try source.exportFullBackup()
+        let target = try TestSupport.makeRepository()
+
+        try target.restoreFullBackup(backup)
+
+        for backupTx in backup.transactions where backupTx.type != .transferIn {
+            let restoredDraft = try target.transactionDraft(id: backupTx.id)
+            #expect(restoredDraft.walletID == backupTx.walletID)
+        }
+    }
+
+    @Test func fullBackupImportPreservesLedgerSummary() throws {
+        let source = try makePopulatedRepository().0
+        let monthKey = DateKeys.monthKey(for: Date(timeIntervalSince1970: 1_768_435_200))
+        let sourceOverview = try source.overviewSnapshot(monthKey: monthKey)
+        let backup = try source.exportFullBackup()
+        let target = try TestSupport.makeRepository()
+
+        try target.restoreFullBackup(backup)
+
+        let targetOverview = try target.overviewSnapshot(monthKey: monthKey)
+        #expect(targetOverview.monthExpenseMinor == sourceOverview.monthExpenseMinor)
+        #expect(targetOverview.monthIncomeMinor == sourceOverview.monthIncomeMinor)
+        #expect(targetOverview.monthCashFlowMinor == sourceOverview.monthCashFlowMinor)
+    }
+
     private struct FixtureIDs {
         var expenseCategoryID: UUID
         var labelID: UUID
