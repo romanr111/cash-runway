@@ -16,31 +16,35 @@ Rules:
 
 ## Snapshot
 
-- Goal: Make PR `#24` merge-ready while preserving category-merge data safety.
-- Success criteria: Category merge preserves transactions while only updating category references, remap lookups follow active destinations, the category merge UI communicates data preservation and success, current `origin/main` merges cleanly, and required validation passes.
-- Current state: Category merge now avoids full FTS and aggregate rebuilds, syncing only moved transactions/search rows and source/destination category spend deltas, and local validation passed.
-- Next action: Review, commit, and push the category merge progress UI update for PR `#24`.
+- Goal: Implement and harden text-only user bug/improvement reporting using a Vercel TypeScript API and GitHub App server-side issue creation.
+- Success criteria: Backend has validation, sanitization, GitHub issue formatting, idempotency, Redis/Upstash rate limits, duplicate suppression, safe logging, GitHub failure mapping, mockable GitHub client, tests, and `.env.example`; iOS has Codable payload, validation, idempotency key submission, safe diagnostics, anonymous install hash, service abstraction, SwiftUI Settings form, explicit config gating, and no screenshots/logs/files/financial data upload path.
+- Current state: Text-only reporting plus production hardening was committed locally; detailed self-review fixed unsupported-field acceptance, and all local backend, Swift, build, mirror, diff, and seeded simulator smoke validations passed.
+- Next action: Push `codex/feedback-report-phase1` and open a draft PR against `main`.
 - Open questions: None.
 - Merge status: not-merged.
 
 ## Git context
 
 - Repo root: `/Users/roman/Documents/Development/Cash Runway`
-- Working directory: `/Users/roman/.codex/worktrees/cash-runway-category-merge-fix`
-- Branch: `codex/category-merge-fix`
+- Working directory: `/Users/roman/.codex/worktrees/cash-runway-feedback-report-phase1`
+- Branch: `codex/feedback-report-phase1`
 - Base branch: `origin/main`
-- Worktree reason: review
+- Worktree reason: isolated-feature
 - Merge status: not-merged
 
 ## Working set
 
-- `Sources/CashRunwayCore/CashRunwayRepository.swift`
-- `Modules/CashRunwayCorePackage/Sources/CashRunwayCore/CashRunwayRepository.swift`
-- `Sources/CashRunwayUI/AppModel.swift`
-- `Sources/CashRunwayUI/Editors.swift`
-- `Tests/CashRunwayCoreTests/BankCategoryMapperTests.swift`
-- `Tests/CashRunwayCoreTests/CSVEdgeCaseTests.swift`
-- `Tests/CashRunwayCoreTests/DatabaseTransactionSafetyTests.swift`
+- `Sources/CashRunwayUI/SettingsView.swift`
+- `Sources/CashRunwayUI/AccessibilityIdentifiers.swift`
+- `Sources/CashRunwayCore/FeedbackReport.swift`
+- `Modules/CashRunwayCorePackage/Sources/CashRunwayCore/FeedbackReport.swift`
+- `Sources/CashRunwayUI/FeedbackReportService.swift`
+- `Sources/CashRunwayUI/FeedbackReportView.swift`
+- `CashRunway.xcodeproj/project.pbxproj`
+- `Tests/CashRunwayCoreTests/ReportIssueTests.swift`
+- `Tests/CashRunwayUITests/CashRunwayUITestCase.swift`
+- `Tests/CashRunwayUITests/SettingsNavigationUITests.swift`
+- `reporting-api/**`
 - `CONTINUITY.md`
 
 ## Done (recent)
@@ -80,3 +84,30 @@ Rules:
 - 2026-06-06 [TEST] Added category-merge FTS regression coverage for old/destination category search terms after merge.
 - 2026-06-06 [VALIDATED] Real category merge speedup passed 15 focused category merge/remap/import tests, core mirror diff, diff check, iPhone 17 clean build, install/launch smoke; launch log showed only Apple app-launch measurement CA Event errors, no crash/fatal entries.
 - 2026-06-06 [REVIEW] Detailed code review found no blocking or important findings; full `swift test` passed 252 tests in 24 suites, core mirror diff and diff check passed, and iPhone 17 clean build ended with `** BUILD SUCCEEDED **`.
+- 2026-06-06 [WORKTREE] Created `/Users/roman/.codex/worktrees/cash-runway-feedback-report-phase1` on branch `codex/feedback-report-phase1` from `main` at `d6118d5`.
+- 2026-06-06 [PULL] Primary checkout `main` was already up to date with `origin/main`; pre-existing local edits were stashed, restored, and the temporary stash was dropped.
+- 2026-06-06 [UI] Added a Support settings row that presents `FeedbackReportView` with category, title, description, diagnostics toggle, validation, loading, success, and error states.
+- 2026-06-06 [CODE] Added `FeedbackReportService`, `RemoteFeedbackReportService`, and `MockFeedbackReportService`; remote submission posts only to a configured backend endpoint and never directly to GitHub.
+- 2026-06-06 [TEST] Added `testSettingsToFeedbackReportAndBack` to `SettingsNavigationUITests` and verified the first build-for-testing red failed on missing feedback identifiers.
+- 2026-06-06 [VALIDATED] `xcodebuild ... build-for-testing` passed after implementation; `Scripts/validate-ui-only.sh` passed; `Scripts/smoke-seeded-simulator.sh` passed on iPhone 17 with screenshot/log receipts.
+- 2026-06-07 [CODE] Replaced the missing-backend submit path with a GitHub issue draft URL builder targeting `https://github.com/romanr111/cash-runway/issues/new`; no GitHub token or direct API call is embedded in the app.
+- 2026-06-07 [TEST] Added `FeedbackReportTests`; `swift test --filter FeedbackReportTests` passed 4 tests covering trimming, validation, labels, destination URL, and diagnostics inclusion.
+- 2026-06-07 [DESIGN] Polished `FeedbackReportView` with a clear GitHub-destination header, privacy/diagnostics copy, repository issues link, and honest success state.
+- 2026-06-07 [VALIDATED] `xcodebuild ... build-for-testing`, `Scripts/validate-ui-only.sh`, core mirror diff, and `Scripts/smoke-seeded-simulator.sh` passed on iPhone 17.
+- 2026-06-07 [E2E] Targeted `testFeedbackReportOpensPrefilledGitHubIssueDraft` passed through app UI to Safari/GitHub, but simulator Safari showed the GitHub sign-in screen; no real issue was submitted through UI.
+- 2026-06-07 [BLOCKED] Desktop Playwright MCP could not open the GitHub issue URL because Chrome was missing at `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`; no browser package was installed.
+- 2026-06-07 [CODE] Replaced GitHub-draft feedback with text-only Vercel reporting skeleton, GitHub App installation-token auth shell, mockable GitHub client, validation/sanitization, issue formatting, duplicate hash, `.env.example`, and README.
+- 2026-06-07 [CODE] Replaced iOS feedback draft models with server-backed `ReportIssuePayload`, `ReportIssueDraft`, safe diagnostics, anonymous install hash, URLSession report service, view model, and SwiftUI form that sends no screenshots/logs/files/financial data.
+- 2026-06-07 [TEST] `reporting-api npm test` passed 20 tests; `npm run typecheck` passed.
+- 2026-06-07 [VALIDATED] `Scripts/agent-validate.sh --focused ReportIssueTests --full --ui-build` passed core mirror diff, `git diff --check`, focused Swift tests, full `swift test`, and clean iPhone 17 simulator build.
+- 2026-06-07 [SMOKE] `Scripts/smoke-seeded-simulator.sh` passed on iPhone 17; screenshot/log receipts at `/tmp/cash-runway-agent-validation/20260607-084940-83131/`.
+- 2026-06-07 [REVIEW] Detailed self-review fixed overbroad rejection of safe `balance`/`Monobank token screen` wording while still rejecting pasted balances/tokens.
+- 2026-06-07 [REVIEW] Detailed self-review fixed backend acceptance of forbidden extra JSON fields such as `transactions` and `monobankToken`.
+- 2026-06-07 [VALIDATED] Post-review `reporting-api npm test` passed 24 tests; `npm run typecheck` passed.
+- 2026-06-07 [VALIDATED] Post-review `Scripts/agent-validate.sh --focused ReportIssueTests --full --ui-build` passed core mirror diff, `git diff --check`, focused Swift tests, full `swift test`, and clean iPhone 17 simulator build.
+- 2026-06-07 [SMOKE] Post-review `Scripts/smoke-seeded-simulator.sh` passed on iPhone 17; screenshot/log receipts at `/tmp/cash-runway-agent-validation/20260607-092203-28244/`.
+- 2026-06-07 [CODE] Hardened reporting with idempotency keys, Upstash Redis store abstraction, 24h duplicate suppression, per-install/IP rate limits, strict JSON allowlist validation, safe structured logs, env validation, kill switch, and GitHub API failure mapping.
+- 2026-06-07 [CODE] Updated iOS reporting to send an idempotency key, reuse it for retries of the same unchanged draft, disable unavailable/missing-config reporting, and keep the payload allowlist text-only.
+- 2026-06-07 [REVIEW] Detailed self-review found and fixed backend acceptance of unsupported non-forbidden extra JSON fields.
+- 2026-06-07 [VALIDATED] Hardened reporting passed `reporting-api npm test` (35 tests), `npm run typecheck`, `swift test --filter ReportIssueTests` (11 tests), `Scripts/agent-validate.sh --focused ReportIssueTests --full --ui-build`, and seeded simulator smoke.
+- 2026-06-07 [COMMIT] feat: add hardened text feedback reporting.

@@ -86,4 +86,36 @@ final class SettingsNavigationUITests: CashRunwayUITestCase {
         XCTAssertTrue(app.buttons[CashRunwayUITestIdentifiers.monobankIntroContinueButton].waitForExistence(timeout: 3))
         dismissSheetAndAssertSettingsVisible()
     }
+
+    func testSettingsToFeedbackReportAndBack() {
+        openMoreTab()
+        let feedbackRow = app.buttons[CashRunwayUITestIdentifiers.settingsFeedbackReportRow]
+        if !feedbackRow.waitForExistence(timeout: 1) || !feedbackRow.isHittable {
+            app.swipeUp()
+        }
+        XCTAssertTrue(feedbackRow.waitForExistence(timeout: 3))
+        feedbackRow.tap()
+        XCTAssertTrue(app.navigationBars["Report Feedback"].waitForExistence(timeout: 3))
+        dismissSheetAndAssertSettingsVisible()
+    }
+
+    func testFeedbackReportShowsConfigurationErrorWhenBackendIsMissing() {
+        openMoreTab()
+        let feedbackRow = app.buttons[CashRunwayUITestIdentifiers.settingsFeedbackReportRow]
+        if !feedbackRow.waitForExistence(timeout: 1) || !feedbackRow.isHittable {
+            app.swipeUp()
+        }
+        XCTAssertTrue(feedbackRow.waitForExistence(timeout: 3))
+        feedbackRow.tap()
+        XCTAssertTrue(app.navigationBars["Report Feedback"].waitForExistence(timeout: 3))
+
+        let title = "UITEST feedback report"
+        let description = "This issue report was filled from the Cash Runway feedback form UI."
+        app.textFields[CashRunwayUITestIdentifiers.feedbackTitleField].fastEnterText(title)
+        app.textViews[CashRunwayUITestIdentifiers.feedbackDescriptionField].fastEnterText(description)
+        hideKeyboardIfNeeded()
+
+        app.buttons[CashRunwayUITestIdentifiers.feedbackSubmitButton].tap()
+        XCTAssertTrue(app.staticTexts["Reporting is not configured yet."].waitForExistence(timeout: 5))
+    }
 }

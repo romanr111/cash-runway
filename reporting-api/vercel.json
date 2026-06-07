@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/reports.ts": {
+      "runtime": "nodejs22.x"
+    }
+  }
+}

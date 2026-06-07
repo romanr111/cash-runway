@@ -40,6 +40,9 @@
 		A00100010001000100010020 /* Sources/CashRunwayUI/BackupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010020 /* Sources/CashRunwayUI/BackupView.swift */; };
 		A00100010001000100010021 /* Sources/CashRunwayUI/LabelManagementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010021 /* Sources/CashRunwayUI/LabelManagementView.swift */; };
 		A00100010001000100010022 /* Sources/CashRunwayUI/WalletManagementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010022 /* Sources/CashRunwayUI/WalletManagementView.swift */; };
+		A00100010001000100010025 /* Sources/CashRunwayCore/FeedbackReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010025 /* Sources/CashRunwayCore/FeedbackReport.swift */; };
+		A00100010001000100010026 /* Sources/CashRunwayUI/FeedbackReportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010026 /* Sources/CashRunwayUI/FeedbackReportService.swift */; };
+		A00100010001000100010027 /* Sources/CashRunwayUI/FeedbackReportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010027 /* Sources/CashRunwayUI/FeedbackReportView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -89,6 +92,9 @@
 		A00200010001000100010022 /* Sources/CashRunwayUI/WalletManagementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayUI/WalletManagementView.swift; sourceTree = "<group>"; };
 		A00200010001000100010023 /* Tests/CashRunwayUITests/SettingsNavigationUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/CashRunwayUITests/SettingsNavigationUITests.swift; sourceTree = "<group>"; };
 		A00200010001000100010024 /* AppHost/Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = AppHost/Assets.xcassets; sourceTree = "<group>"; };
+		A00200010001000100010025 /* Sources/CashRunwayCore/FeedbackReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayCore/FeedbackReport.swift; sourceTree = "<group>"; };
+		A00200010001000100010026 /* Sources/CashRunwayUI/FeedbackReportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayUI/FeedbackReportService.swift; sourceTree = "<group>"; };
+		A00200010001000100010027 /* Sources/CashRunwayUI/FeedbackReportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayUI/FeedbackReportView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -153,6 +159,8 @@
 				A00200010001000100010020 /* Sources/CashRunwayUI/BackupView.swift */,
 				A00200010001000100010021 /* Sources/CashRunwayUI/LabelManagementView.swift */,
 				A00200010001000100010022 /* Sources/CashRunwayUI/WalletManagementView.swift */,
+				A00200010001000100010026 /* Sources/CashRunwayUI/FeedbackReportService.swift */,
+				A00200010001000100010027 /* Sources/CashRunwayUI/FeedbackReportView.swift */,
 			);
 			name = UI;
 			sourceTree = "<group>";
@@ -176,6 +184,7 @@
 				A00200010001000100010011 /* Sources/CashRunwayCore/CashRunwayRepository.swift */,
 				A00200010001000100010012 /* Sources/CashRunwayCore/CSVSupport.swift */,
 				A00200010001000100010013 /* Sources/CashRunwayCore/Fixtures.swift */,
+				A00200010001000100010025 /* Sources/CashRunwayCore/FeedbackReport.swift */,
 			);
 			name = Core;
 			sourceTree = "<group>";
@@ -347,6 +356,9 @@
 				A00100010001000100010020 /* Sources/CashRunwayUI/BackupView.swift in Sources */,
 				A00100010001000100010021 /* Sources/CashRunwayUI/LabelManagementView.swift in Sources */,
 				A00100010001000100010022 /* Sources/CashRunwayUI/WalletManagementView.swift in Sources */,
+				A00100010001000100010025 /* Sources/CashRunwayCore/FeedbackReport.swift in Sources */,
+				A00100010001000100010026 /* Sources/CashRunwayUI/FeedbackReportService.swift in Sources */,
+				A00100010001000100010027 /* Sources/CashRunwayUI/FeedbackReportView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
