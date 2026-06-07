@@ -680,15 +680,18 @@ struct TransactionEditorView: View {
 
     private var categoryLearningPromptMessage: String {
         let merchant = draft.merchant.isEmpty ? "this merchant" : draft.merchant
-        let oldName = categoryName(originalCategoryID) ?? "Other Expense"
-        let newName = categoryName(pendingLearnCategoryID ?? draft.categoryID) ?? "this category"
-        return "You changed \"\(merchant)\" from \(oldName) to \(newName). Apply \(newName) to future \(merchant) transactions?"
+        let oldName = categoryName(originalCategoryID) ?? L10n.string("category.otherExpense")
+        let newName = categoryName(pendingLearnCategoryID ?? draft.categoryID) ?? L10n.string("this category")
+        return L10n.string("You changed \"%@\" from %@ to %@. Apply %@ to future %@ transactions?", merchant, oldName, newName, newName, merchant)
     }
 
     private func categoryName(_ id: UUID?) -> String? {
         guard let id else { return nil }
-        return model.expenseCategories.first(where: { $0.id == id })?.name
-            ?? model.incomeCategories.first(where: { $0.id == id })?.name
+        if let category = model.expenseCategories.first(where: { $0.id == id })
+            ?? model.incomeCategories.first(where: { $0.id == id }) {
+            return BuiltInCategoryDisplayName.name(category)
+        }
+        return nil
     }
 
     private func commitTransaction(learnCategoryRule: Bool) {
@@ -844,7 +847,7 @@ private struct TransactionCategorySheet: View {
                                             CategoryGlyph(iconName: category.iconName, colorHex: category.colorHex, size: 62)
                                         }
                                         .frame(width: 80, height: 80)
-                                        Text(category.name)
+                                        Text(BuiltInCategoryDisplayName.name(category))
                                             .font(.system(size: 13, weight: .semibold))
                                             .foregroundStyle(CashRunwayTheme.textPrimary)
                                             .multilineTextAlignment(.center)
@@ -909,10 +912,9 @@ struct CategoryManagementView: View {
         NavigationStack {
             List {
                 VStack(alignment: .leading, spacing: 14) {
-                    Text("\(items.count) total · \(visibleCount) visible · \(hiddenCount) hidden")
+                    Text(L10n.string("%d total · %d visible · %d hidden", items.count, visibleCount, hiddenCount).uppercased(with: L10n.locale))
                         .font(CashRunwayTheme.captionFont)
                         .foregroundStyle(CashRunwayTheme.textSecondary)
-                        .textCase(.uppercase)
                         .padding(.horizontal, 2)
 
                     Picker("Kind", selection: $selectedKind) {
@@ -1051,7 +1053,7 @@ private struct CategoryManagementRow: View {
 
                     VStack(alignment: .leading, spacing: 5) {
                         HStack(spacing: 8) {
-                            Text(item.category.name)
+                            Text(BuiltInCategoryDisplayName.name(item.category))
                                 .font(CashRunwayTheme.subheadingFont)
                                 .foregroundStyle(item.isVisible ? CashRunwayTheme.textPrimary : CashRunwayTheme.textSecondary)
                                 .lineLimit(1)
@@ -1067,7 +1069,7 @@ private struct CategoryManagementRow: View {
                             }
                         }
 
-                        Text("\(item.transactionCount) transactions · \(item.walletCount) wallets")
+                        Text("\(L10n.transactionCount(item.transactionCount)) · \(L10n.walletCount(item.walletCount))")
                             .font(CashRunwayTheme.captionFont)
                             .foregroundStyle(CashRunwayTheme.textSecondary)
                             .lineLimit(1)
@@ -1077,7 +1079,7 @@ private struct CategoryManagementRow: View {
                 }
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Edit \(item.category.name)")
+            .accessibilityLabel(L10n.string("Edit %@", BuiltInCategoryDisplayName.name(item.category)))
             .layoutPriority(1)
 
             Spacer(minLength: 6)
@@ -1124,7 +1126,7 @@ private struct CategoryMergeView: View {
     @State private var mergeResult: CategoryMergeResult?
     @State private var isMerging = false
     @State private var mergeProgress = 0.0
-    @State private var mergeStatus = "Preparing merge"
+    @State private var mergeStatus = L10n.string("Preparing merge")
     @State private var mergeTask: Task<Void, Never>?
 
     var body: some View {
@@ -1136,18 +1138,18 @@ private struct CategoryMergeView: View {
                     mergeForm
                 }
             }
-            .navigationTitle(mergeResult == nil ? "Merge Categories" : "Merge Complete")
+            .navigationTitle(mergeResult == nil ? L10n.string("Merge Categories") : L10n.string("Merge Complete"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     if mergeResult == nil {
-                        Button("Cancel") { dismiss() }
+                        Button(L10n.string("Cancel")) { dismiss() }
                             .disabled(isMerging)
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     if mergeResult != nil {
-                        Button("Done") { dismiss() }
+                        Button(L10n.string("Done")) { dismiss() }
                     }
                 }
             }
@@ -1170,10 +1172,10 @@ private struct CategoryMergeView: View {
                         .background(CashRunwayTheme.accentMuted, in: Circle())
 
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Combine duplicate categories")
+                        Text(L10n.string("Combine duplicate categories"))
                             .font(.system(size: 24, weight: .bold, design: .rounded))
                             .foregroundStyle(CashRunwayTheme.textPrimary)
-                        Text("Transactions, recurring templates, and bank rules move to the category you keep. The source category is hidden after merge.")
+                        Text(L10n.string("Transactions, recurring templates, and bank rules move to the category you keep. The source category is hidden after merge."))
                             .font(.system(size: 15, weight: .medium))
                             .foregroundStyle(CashRunwayTheme.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -1185,9 +1187,9 @@ private struct CategoryMergeView: View {
                 .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
 
                 categoryPicker(
-                    title: "Merge from",
-                    subtitle: "This category will be hidden",
-                    placeholder: "Choose source category",
+                    title: L10n.string("Merge from"),
+                    subtitle: L10n.string("This category will be hidden"),
+                    placeholder: L10n.string("Choose source category"),
                     selection: $sourceID,
                     excludedID: destinationID
                 )
@@ -1200,9 +1202,9 @@ private struct CategoryMergeView: View {
                     .background(CashRunwayTheme.pill, in: Circle())
 
                 categoryPicker(
-                    title: "Keep as destination",
-                    subtitle: "All linked records move here",
-                    placeholder: "Choose destination category",
+                    title: L10n.string("Keep as destination"),
+                    subtitle: L10n.string("All linked records move here"),
+                    placeholder: L10n.string("Choose destination category"),
                     selection: $destinationID,
                     excludedID: sourceID
                 )
@@ -1230,13 +1232,17 @@ private struct CategoryMergeView: View {
                         ProgressView()
                             .controlSize(.small)
                             .tint(.white)
-                        Text("Merging Categories")
+                        Text(L10n.string("Merging Categories"))
                             .font(.system(size: 17, weight: .bold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
                     } else {
                         Image(systemName: "checkmark")
                             .font(.system(size: 16, weight: .bold))
-                        Text("Merge Categories")
+                        Text(L10n.string("Merge Categories"))
                             .font(.system(size: 17, weight: .bold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
                     }
                 }
                 .foregroundStyle(.white)
@@ -1288,14 +1294,14 @@ private struct CategoryMergeView: View {
             }
 
             Menu {
-                Button("Clear Selection") {
+                Button(L10n.string("Clear Selection")) {
                     selection.wrappedValue = nil
                 }
                 ForEach(managementItems.filter { $0.category.id != excludedID }) { item in
                     Button {
                         selection.wrappedValue = item.category.id
                     } label: {
-                        SwiftUI.Label(item.category.name, systemImage: item.category.iconName ?? "circle.fill")
+                        SwiftUI.Label(BuiltInCategoryDisplayName.name(item.category), systemImage: item.category.iconName ?? "circle.fill")
                     }
                 }
             } label: {
@@ -1303,10 +1309,10 @@ private struct CategoryMergeView: View {
                     if let selected = managementItems.first(where: { $0.category.id == selection.wrappedValue }) {
                         CategoryGlyph(iconName: selected.category.iconName, colorHex: selected.category.colorHex, size: 46)
                         VStack(alignment: .leading, spacing: 3) {
-                            Text(selected.category.name)
+                            Text(BuiltInCategoryDisplayName.name(selected.category))
                                 .font(.system(size: 17, weight: .semibold))
                                 .foregroundStyle(CashRunwayTheme.textPrimary)
-                            Text("\(selected.transactionCount) transactions")
+                            Text(L10n.transactionCount(selected.transactionCount))
                                 .font(.system(size: 14, weight: .medium))
                                 .foregroundStyle(CashRunwayTheme.textSecondary)
                         }
@@ -1349,15 +1355,15 @@ private struct CategoryMergeView: View {
                 Text("\(totalTransactions)")
                     .font(.system(size: 30, weight: .bold, design: .rounded))
                     .foregroundStyle(CashRunwayTheme.textPrimary)
-                Text("tx")
+                Text(L10n.string("tx"))
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(CashRunwayTheme.textMuted)
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                mergeFact(icon: "checkmark.seal.fill", text: "Transactions are preserved; only category references change.")
-                mergeFact(icon: "eye.slash.fill", text: "\(sourceItem.category.name) becomes hidden after merge.")
-                mergeFact(icon: "chart.bar.fill", text: "\(destinationItem.category.name) keeps \(totalTransactions) total transactions.")
+                mergeFact(icon: "checkmark.seal.fill", text: L10n.string("Transactions are preserved; only category references change."))
+                mergeFact(icon: "eye.slash.fill", text: L10n.string("%@ becomes hidden after merge.", BuiltInCategoryDisplayName.name(sourceItem.category)))
+                mergeFact(icon: "chart.bar.fill", text: L10n.string("%@ keeps %@ total.", BuiltInCategoryDisplayName.name(destinationItem.category), L10n.transactionCount(totalTransactions)))
             }
         }
         .padding(18)
@@ -1391,7 +1397,7 @@ private struct CategoryMergeView: View {
                     Text(mergeStatus)
                         .font(.system(size: 16, weight: .bold))
                         .foregroundStyle(CashRunwayTheme.textPrimary)
-                    Text("\(sourceItem.category.name) is moving into \(destinationItem.category.name)")
+                    Text(L10n.string("%@ is moving into %@", BuiltInCategoryDisplayName.name(sourceItem.category), BuiltInCategoryDisplayName.name(destinationItem.category)))
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(CashRunwayTheme.textSecondary)
                         .lineLimit(2)
@@ -1399,7 +1405,7 @@ private struct CategoryMergeView: View {
 
                 Spacer()
 
-                Text("\(Int((mergeProgress * 100).rounded()))%")
+                Text(L10n.string("%lld%%", Int((mergeProgress * 100).rounded())))
                     .font(.system(size: 14, weight: .bold, design: .rounded))
                     .foregroundStyle(CashRunwayTheme.textSecondary)
                     .monospacedDigit()
@@ -1408,10 +1414,10 @@ private struct CategoryMergeView: View {
             ProgressView(value: mergeProgress, total: 1)
                 .progressViewStyle(.linear)
                 .tint(CashRunwayTheme.accentDark)
-                .accessibilityLabel("Merge progress")
-                .accessibilityValue("\(Int((mergeProgress * 100).rounded())) percent")
+                .accessibilityLabel(L10n.string("Merge progress"))
+                .accessibilityValue(L10n.string("%lld percent", Int((mergeProgress * 100).rounded())))
 
-            Text("Transactions stay intact while category references are updated.")
+            Text(L10n.string("Transactions stay intact while category references are updated."))
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(CashRunwayTheme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
@@ -1437,11 +1443,11 @@ private struct CategoryMergeView: View {
             }
 
             VStack(spacing: 10) {
-                Text("Merged into \(result.destination.name)")
+                Text(L10n.string("Merged into %@", BuiltInCategoryDisplayName.name(result.destination)))
                     .font(.system(size: 28, weight: .bold, design: .rounded))
                     .foregroundStyle(CashRunwayTheme.textPrimary)
                     .multilineTextAlignment(.center)
-                Text("All existing transactions were preserved and now point to the destination category.")
+                Text(L10n.string("All existing transactions were preserved and now point to the destination category."))
                     .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(CashRunwayTheme.textSecondary)
                     .multilineTextAlignment(.center)
@@ -1459,8 +1465,8 @@ private struct CategoryMergeView: View {
             .padding(.vertical, 4)
 
             VStack(spacing: 10) {
-                successMetric(value: "\(result.totalTransactionCount)", label: "transactions kept")
-                successMetric(value: result.source.name, label: "hidden source")
+                successMetric(value: "\(result.totalTransactionCount)", label: L10n.string("transactions kept"))
+                successMetric(value: result.source.name, label: L10n.string("hidden source"))
             }
             .padding(18)
             .frame(maxWidth: .infinity)
@@ -1476,7 +1482,7 @@ private struct CategoryMergeView: View {
             Button {
                 dismiss()
             } label: {
-                Text("Done")
+                Text(L10n.string("Done"))
                     .font(.system(size: 17, weight: .bold))
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
@@ -1512,7 +1518,7 @@ private struct CategoryMergeView: View {
             withAnimation(.easeInOut(duration: 0.18)) {
                 isMerging = true
                 mergeProgress = 0.35
-                mergeStatus = "Updating linked records"
+                mergeStatus = L10n.string("Updating linked records")
             }
             await Task.yield()
             guard !Task.isCancelled else { return }
@@ -1523,13 +1529,13 @@ private struct CategoryMergeView: View {
             if didMerge {
                 withAnimation(.easeInOut(duration: 0.18)) {
                     mergeProgress = 0.82
-                    mergeStatus = "Refreshing totals"
+                    mergeStatus = L10n.string("Refreshing totals")
                 }
 
                 reloadItems()
                 withAnimation(.easeInOut(duration: 0.18)) {
                     mergeProgress = 1
-                    mergeStatus = "Merge complete"
+                    mergeStatus = L10n.string("Merge complete")
                 }
 
                 sourceID = nil
@@ -1541,7 +1547,7 @@ private struct CategoryMergeView: View {
                 withAnimation(.easeInOut(duration: 0.18)) {
                     isMerging = false
                     mergeProgress = 0
-                    mergeStatus = "Preparing merge"
+                    mergeStatus = L10n.string("Preparing merge")
                 }
                 mergeTask = nil
             }
@@ -1571,7 +1577,7 @@ struct BudgetEditorView: View {
             Form {
                 Picker("Category", selection: $budget.categoryID) {
                     ForEach(model.expenseCategories) { category in
-                        Text(category.name).tag(category.id)
+                        Text(BuiltInCategoryDisplayName.name(category)).tag(category.id)
                     }
                 }
                 TextField("Limit", text: $limitText)
@@ -1611,11 +1617,11 @@ struct WalletEditorView: View {
                         HStack(spacing: 16) {
                             CategoryGlyph(iconName: wallet.iconName ?? "wallet.pass.fill", colorHex: wallet.colorHex ?? "#60788A", size: 64)
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(wallet.name.isEmpty ? "New Wallet" : wallet.name)
+                                Text(wallet.name.isEmpty ? L10n.string("New Wallet") : wallet.name)
                                     .font(CashRunwayTheme.headingFont)
                                     .foregroundStyle(CashRunwayTheme.textPrimary)
                                     .lineLimit(1)
-                                Text(wallet.kind.rawValue.capitalized)
+                                Text(L10n.walletKind(wallet.kind))
                                     .font(CashRunwayTheme.bodyFont)
                                     .foregroundStyle(CashRunwayTheme.textSecondary)
                             }
@@ -1623,19 +1629,19 @@ struct WalletEditorView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 14) {
-                        Text("Wallet Details")
+                        Text(L10n.string("Wallet Details"))
                             .font(.system(size: 13, weight: .bold))
                             .foregroundStyle(CashRunwayTheme.textMuted)
                             .textCase(.uppercase)
                         VStack(spacing: 14) {
-                            TextField("Name", text: $wallet.name)
+                            TextField(L10n.string("Name"), text: $wallet.name)
                                 .textFieldStyle(.roundedBorder)
-                            Picker("Kind", selection: $wallet.kind) {
+                            Picker(L10n.string("Kind"), selection: $wallet.kind) {
                                 ForEach(WalletKind.allCases, id: \.self) { kind in
-                                    Text(kind.rawValue.capitalized).tag(kind)
+                                    Text(L10n.walletKind(kind)).tag(kind)
                                 }
                             }
-                            TextField("Starting Balance", text: $balanceText)
+                            TextField(L10n.string("Starting Balance"), text: $balanceText)
                                 .keyboardType(.decimalPad)
                                 .textFieldStyle(.roundedBorder)
                         }
@@ -1646,7 +1652,7 @@ struct WalletEditorView: View {
                         Button(role: .destructive) {
                             showsDeleteConfirmation = true
                         } label: {
-                            SwiftUI.Label("Delete Wallet", systemImage: "trash")
+                            SwiftUI.Label(L10n.string("Delete Wallet"), systemImage: "trash")
                                 .font(.system(size: 16, weight: .semibold))
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 14)
@@ -1659,12 +1665,12 @@ struct WalletEditorView: View {
                 .padding(.vertical, 16)
             }
             .background(CashRunwayTheme.background)
-            .navigationTitle("Wallet")
+            .navigationTitle(L10n.string("Wallet"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .topBarLeading) { Button(L10n.string("Cancel")) { dismiss() } }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Save") {
+                    Button(L10n.string("Save")) {
                         let balance = (try? MoneyFormatter.parseMinorUnits(balanceText)) ?? 0
                         wallet.startingBalanceMinor = balance
                         wallet.currentBalanceMinor = balance
@@ -1674,14 +1680,14 @@ struct WalletEditorView: View {
                     }
                 }
             }
-            .alert("Delete Wallet?", isPresented: $showsDeleteConfirmation) {
-                Button("Cancel", role: .cancel) {}
-                Button("Delete", role: .destructive) {
+            .alert(L10n.string("Delete Wallet?"), isPresented: $showsDeleteConfirmation) {
+                Button(L10n.string("Cancel"), role: .cancel) {}
+                Button(L10n.string("Delete"), role: .destructive) {
                     model.deleteWallet(id: wallet.id)
                     dismiss()
                 }
             } message: {
-                Text("This will permanently remove the wallet and all of its transactions.")
+                Text(L10n.string("This will permanently remove the wallet and all of its transactions."))
             }
         }
         .onAppear {
@@ -1703,7 +1709,7 @@ struct CategoryEditorView: View {
                         HStack(spacing: 16) {
                             CategoryGlyph(iconName: category.iconName, colorHex: category.colorHex, size: 70)
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(category.name.isEmpty ? "New Category" : category.name)
+                                Text(category.name.isEmpty ? L10n.string("New Category") : BuiltInCategoryDisplayName.name(category))
                                     .font(CashRunwayTheme.headingFont)
                                     .foregroundStyle(CashRunwayTheme.textPrimary)
                                     .lineLimit(1)
@@ -1733,7 +1739,7 @@ struct CategoryEditorView: View {
                                     CashRunwaySwatch(colorHex: choice.colorHex, isSelected: CategoryAppearanceCatalog.normalizedColorHex(category.colorHex) == choice.colorHex)
                                 }
                                 .buttonStyle(.plain)
-                                .accessibilityLabel(choice.name)
+                                .accessibilityLabel(choice.localizedName)
                             }
                         }
                     }
@@ -1746,7 +1752,7 @@ struct CategoryEditorView: View {
                                 } label: {
                                     VStack(spacing: 6) {
                                         CategoryGlyph(iconName: choice.iconName, colorHex: category.colorHex, size: 48)
-                                        Text(choice.name)
+                                        Text(choice.localizedName)
                                             .font(.system(size: 11, weight: .semibold))
                                             .foregroundStyle(CashRunwayTheme.textSecondary)
                                             .lineLimit(1)
@@ -1845,7 +1851,7 @@ struct LabelEditorView: View {
                                     CashRunwaySwatch(colorHex: choice.colorHex, isSelected: CategoryAppearanceCatalog.normalizedColorHex(label.colorHex) == choice.colorHex)
                                 }
                                 .buttonStyle(.plain)
-                                .accessibilityLabel(choice.name)
+                                .accessibilityLabel(choice.localizedName)
                             }
                         }
                     }
@@ -1919,7 +1925,7 @@ struct RecurringTemplateEditorView: View {
                 } else {
                     Picker("Category", selection: Binding(get: { template.categoryID ?? model.expenseCategories.first?.id ?? UUID() }, set: { template.categoryID = $0 })) {
                         ForEach(template.kind == .income ? model.incomeCategories : model.expenseCategories) { category in
-                            Text(category.name).tag(category.id)
+                            Text(BuiltInCategoryDisplayName.name(category)).tag(category.id)
                         }
                     }
                 }
@@ -2024,7 +2030,7 @@ struct RecurringInstanceEditorView: View {
                 )) {
                     Text("Keep Template Category").tag(UUID?.none)
                     ForEach(categories) { category in
-                        Text(category.name).tag(UUID?.some(category.id))
+                        Text(BuiltInCategoryDisplayName.name(category)).tag(UUID?.some(category.id))
                     }
                 }
                 TextField("Override Merchant", text: Binding(
