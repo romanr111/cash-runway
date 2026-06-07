@@ -55,41 +55,41 @@ public enum CashRunwayTheme {
         amountMinor < 0 ? negative : positive
     }
 
-    private static let monthAbbreviationFormatter: DateFormatter = {
+    private static func monthAbbreviationFormatter() -> DateFormatter {
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.locale = L10n.locale
         formatter.dateFormat = "MMM"
         return formatter
-    }()
+    }
 
     public static func monthAbbreviation(for monthKey: Int) -> String {
-        monthAbbreviationFormatter.string(from: DateKeys.startOfMonth(for: monthKey))
+        monthAbbreviationFormatter().string(from: DateKeys.startOfMonth(for: monthKey))
     }
 
-    private static let monthFullLabelFormatter: DateFormatter = {
+    private static func monthFullLabelFormatter() -> DateFormatter {
         let formatter = DateFormatter()
-        formatter.locale = Locale.current
+        formatter.locale = L10n.locale
         formatter.dateFormat = "MMMM yyyy"
         return formatter
-    }()
-
-    public static func monthFullLabel(for monthKey: Int) -> String {
-        monthFullLabelFormatter.string(from: DateKeys.startOfMonth(for: monthKey))
     }
 
-    private static let dayHeaderFormatter: DateFormatter = {
+    public static func monthFullLabel(for monthKey: Int) -> String {
+        monthFullLabelFormatter().string(from: DateKeys.startOfMonth(for: monthKey))
+    }
+
+    private static func dayHeaderFormatter() -> DateFormatter {
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.locale = L10n.locale
         formatter.dateFormat = "EEEE, d MMM"
         return formatter
-    }()
+    }
 
     public static func dayHeader(for dayKey: Int) -> String {
         let year = dayKey / 10_000
         let month = (dayKey / 100) % 100
         let day = dayKey % 100
         let date = DateKeys.calendar.date(from: DateComponents(year: year, month: month, day: day)) ?? .now
-        return dayHeaderFormatter.string(from: date)
+        return dayHeaderFormatter().string(from: date)
     }
 }
 
@@ -185,6 +185,8 @@ struct CategoryAppearanceChoice: Identifiable, Hashable {
     let name: String
     let iconName: String?
     let colorHex: String
+
+    var localizedName: String { L10n.string(name) }
 
     init(name: String, iconName: String? = nil, colorHex: String) {
         self.id = iconName.map { "\(name)-\($0)-\(colorHex)" } ?? "\(name)-\(colorHex)"
@@ -397,7 +399,7 @@ struct SectionHeader: View {
 }
 
 struct ScreenTitle: View {
-    let title: String
+    let title: LocalizedStringKey
 
     var body: some View {
         Text(title)

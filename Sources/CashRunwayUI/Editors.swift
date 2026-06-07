@@ -680,15 +680,18 @@ struct TransactionEditorView: View {
 
     private var categoryLearningPromptMessage: String {
         let merchant = draft.merchant.isEmpty ? "this merchant" : draft.merchant
-        let oldName = categoryName(originalCategoryID) ?? "Other Expense"
-        let newName = categoryName(pendingLearnCategoryID ?? draft.categoryID) ?? "this category"
-        return "You changed \"\(merchant)\" from \(oldName) to \(newName). Apply \(newName) to future \(merchant) transactions?"
+        let oldName = categoryName(originalCategoryID) ?? L10n.string("category.otherExpense")
+        let newName = categoryName(pendingLearnCategoryID ?? draft.categoryID) ?? L10n.string("this category")
+        return L10n.string("You changed \"%@\" from %@ to %@. Apply %@ to future %@ transactions?", merchant, oldName, newName, newName, merchant)
     }
 
     private func categoryName(_ id: UUID?) -> String? {
         guard let id else { return nil }
-        return model.expenseCategories.first(where: { $0.id == id })?.name
-            ?? model.incomeCategories.first(where: { $0.id == id })?.name
+        if let category = model.expenseCategories.first(where: { $0.id == id })
+            ?? model.incomeCategories.first(where: { $0.id == id }) {
+            return BuiltInCategoryDisplayName.name(category)
+        }
+        return nil
     }
 
     private func commitTransaction(learnCategoryRule: Bool) {
@@ -844,7 +847,7 @@ private struct TransactionCategorySheet: View {
                                             CategoryGlyph(iconName: category.iconName, colorHex: category.colorHex, size: 62)
                                         }
                                         .frame(width: 80, height: 80)
-                                        Text(category.name)
+                                        Text(BuiltInCategoryDisplayName.name(category))
                                             .font(.system(size: 13, weight: .semibold))
                                             .foregroundStyle(CashRunwayTheme.textPrimary)
                                             .multilineTextAlignment(.center)
@@ -909,10 +912,9 @@ struct CategoryManagementView: View {
         NavigationStack {
             List {
                 VStack(alignment: .leading, spacing: 14) {
-                    Text("\(items.count) total · \(visibleCount) visible · \(hiddenCount) hidden")
+                    Text(L10n.string("%d total · %d visible · %d hidden", items.count, visibleCount, hiddenCount).uppercased(with: L10n.locale))
                         .font(CashRunwayTheme.captionFont)
                         .foregroundStyle(CashRunwayTheme.textSecondary)
-                        .textCase(.uppercase)
                         .padding(.horizontal, 2)
 
                     Picker("Kind", selection: $selectedKind) {
@@ -1051,7 +1053,7 @@ private struct CategoryManagementRow: View {
 
                     VStack(alignment: .leading, spacing: 5) {
                         HStack(spacing: 8) {
-                            Text(item.category.name)
+                            Text(BuiltInCategoryDisplayName.name(item.category))
                                 .font(CashRunwayTheme.subheadingFont)
                                 .foregroundStyle(item.isVisible ? CashRunwayTheme.textPrimary : CashRunwayTheme.textSecondary)
                                 .lineLimit(1)
@@ -1067,7 +1069,7 @@ private struct CategoryManagementRow: View {
                             }
                         }
 
-                        Text("\(item.transactionCount) transactions · \(item.walletCount) wallets")
+                        Text("\(L10n.transactionCount(item.transactionCount)) · \(L10n.walletCount(item.walletCount))")
                             .font(CashRunwayTheme.captionFont)
                             .foregroundStyle(CashRunwayTheme.textSecondary)
                             .lineLimit(1)
@@ -1077,7 +1079,7 @@ private struct CategoryManagementRow: View {
                 }
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Edit \(item.category.name)")
+            .accessibilityLabel(L10n.string("Edit %@", BuiltInCategoryDisplayName.name(item.category)))
             .layoutPriority(1)
 
             Spacer(minLength: 6)
@@ -1232,11 +1234,15 @@ private struct CategoryMergeView: View {
                             .tint(.white)
                         Text("Merging Categories")
                             .font(.system(size: 17, weight: .bold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
                     } else {
                         Image(systemName: "checkmark")
                             .font(.system(size: 16, weight: .bold))
                         Text("Merge Categories")
                             .font(.system(size: 17, weight: .bold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
                     }
                 }
                 .foregroundStyle(.white)
@@ -1295,7 +1301,7 @@ private struct CategoryMergeView: View {
                     Button {
                         selection.wrappedValue = item.category.id
                     } label: {
-                        SwiftUI.Label(item.category.name, systemImage: item.category.iconName ?? "circle.fill")
+                        SwiftUI.Label(BuiltInCategoryDisplayName.name(item.category), systemImage: item.category.iconName ?? "circle.fill")
                     }
                 }
             } label: {
@@ -1303,10 +1309,10 @@ private struct CategoryMergeView: View {
                     if let selected = managementItems.first(where: { $0.category.id == selection.wrappedValue }) {
                         CategoryGlyph(iconName: selected.category.iconName, colorHex: selected.category.colorHex, size: 46)
                         VStack(alignment: .leading, spacing: 3) {
-                            Text(selected.category.name)
+                            Text(BuiltInCategoryDisplayName.name(selected.category))
                                 .font(.system(size: 17, weight: .semibold))
                                 .foregroundStyle(CashRunwayTheme.textPrimary)
-                            Text("\(selected.transactionCount) transactions")
+                            Text(L10n.transactionCount(selected.transactionCount))
                                 .font(.system(size: 14, weight: .medium))
                                 .foregroundStyle(CashRunwayTheme.textSecondary)
                         }
@@ -1356,8 +1362,8 @@ private struct CategoryMergeView: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 mergeFact(icon: "checkmark.seal.fill", text: "Transactions are preserved; only category references change.")
-                mergeFact(icon: "eye.slash.fill", text: "\(sourceItem.category.name) becomes hidden after merge.")
-                mergeFact(icon: "chart.bar.fill", text: "\(destinationItem.category.name) keeps \(totalTransactions) total transactions.")
+                mergeFact(icon: "eye.slash.fill", text: L10n.string("%@ becomes hidden after merge.", BuiltInCategoryDisplayName.name(sourceItem.category)))
+                mergeFact(icon: "chart.bar.fill", text: L10n.string("%@ keeps %@ total.", BuiltInCategoryDisplayName.name(destinationItem.category), L10n.transactionCount(totalTransactions)))
             }
         }
         .padding(18)
@@ -1391,7 +1397,7 @@ private struct CategoryMergeView: View {
                     Text(mergeStatus)
                         .font(.system(size: 16, weight: .bold))
                         .foregroundStyle(CashRunwayTheme.textPrimary)
-                    Text("\(sourceItem.category.name) is moving into \(destinationItem.category.name)")
+                    Text(L10n.string("%@ is moving into %@", BuiltInCategoryDisplayName.name(sourceItem.category), BuiltInCategoryDisplayName.name(destinationItem.category)))
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(CashRunwayTheme.textSecondary)
                         .lineLimit(2)
@@ -1437,7 +1443,7 @@ private struct CategoryMergeView: View {
             }
 
             VStack(spacing: 10) {
-                Text("Merged into \(result.destination.name)")
+                Text(L10n.string("Merged into %@", BuiltInCategoryDisplayName.name(result.destination)))
                     .font(.system(size: 28, weight: .bold, design: .rounded))
                     .foregroundStyle(CashRunwayTheme.textPrimary)
                     .multilineTextAlignment(.center)
@@ -1571,7 +1577,7 @@ struct BudgetEditorView: View {
             Form {
                 Picker("Category", selection: $budget.categoryID) {
                     ForEach(model.expenseCategories) { category in
-                        Text(category.name).tag(category.id)
+                        Text(BuiltInCategoryDisplayName.name(category)).tag(category.id)
                     }
                 }
                 TextField("Limit", text: $limitText)
@@ -1703,7 +1709,7 @@ struct CategoryEditorView: View {
                         HStack(spacing: 16) {
                             CategoryGlyph(iconName: category.iconName, colorHex: category.colorHex, size: 70)
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(category.name.isEmpty ? "New Category" : category.name)
+                                Text(category.name.isEmpty ? L10n.string("New Category") : BuiltInCategoryDisplayName.name(category))
                                     .font(CashRunwayTheme.headingFont)
                                     .foregroundStyle(CashRunwayTheme.textPrimary)
                                     .lineLimit(1)
@@ -1733,7 +1739,7 @@ struct CategoryEditorView: View {
                                     CashRunwaySwatch(colorHex: choice.colorHex, isSelected: CategoryAppearanceCatalog.normalizedColorHex(category.colorHex) == choice.colorHex)
                                 }
                                 .buttonStyle(.plain)
-                                .accessibilityLabel(choice.name)
+                                .accessibilityLabel(choice.localizedName)
                             }
                         }
                     }
@@ -1746,7 +1752,7 @@ struct CategoryEditorView: View {
                                 } label: {
                                     VStack(spacing: 6) {
                                         CategoryGlyph(iconName: choice.iconName, colorHex: category.colorHex, size: 48)
-                                        Text(choice.name)
+                                        Text(choice.localizedName)
                                             .font(.system(size: 11, weight: .semibold))
                                             .foregroundStyle(CashRunwayTheme.textSecondary)
                                             .lineLimit(1)
@@ -1845,7 +1851,7 @@ struct LabelEditorView: View {
                                     CashRunwaySwatch(colorHex: choice.colorHex, isSelected: CategoryAppearanceCatalog.normalizedColorHex(label.colorHex) == choice.colorHex)
                                 }
                                 .buttonStyle(.plain)
-                                .accessibilityLabel(choice.name)
+                                .accessibilityLabel(choice.localizedName)
                             }
                         }
                     }
@@ -1919,7 +1925,7 @@ struct RecurringTemplateEditorView: View {
                 } else {
                     Picker("Category", selection: Binding(get: { template.categoryID ?? model.expenseCategories.first?.id ?? UUID() }, set: { template.categoryID = $0 })) {
                         ForEach(template.kind == .income ? model.incomeCategories : model.expenseCategories) { category in
-                            Text(category.name).tag(category.id)
+                            Text(BuiltInCategoryDisplayName.name(category)).tag(category.id)
                         }
                     }
                 }
@@ -2024,7 +2030,7 @@ struct RecurringInstanceEditorView: View {
                 )) {
                     Text("Keep Template Category").tag(UUID?.none)
                     ForEach(categories) { category in
-                        Text(category.name).tag(UUID?.some(category.id))
+                        Text(BuiltInCategoryDisplayName.name(category)).tag(UUID?.some(category.id))
                     }
                 }
                 TextField("Override Merchant", text: Binding(

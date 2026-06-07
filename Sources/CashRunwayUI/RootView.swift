@@ -12,6 +12,7 @@ public struct CashRunwayRootView: View {
     // @State private var onboardingBiometrics = true
     // @State private var relockTask: Task<Void, Never>?
     @State private var didRetryStartupOnActive = false
+    @AppStorage(AppLanguagePreference.storageKey) private var languagePreferenceRaw = AppLanguagePreference.system.rawValue
     @Environment(\.scenePhase) private var scenePhase
     private let onboardingStore: UserDefaults
     private let bypassOnboarding: Bool
@@ -60,6 +61,7 @@ public struct CashRunwayRootView: View {
                 startupErrorView
             }
         }
+        .environment(\.locale, languagePreference.locale)
         .transaction { transaction in
             if ProcessInfo.processInfo.environment["CASH_RUNWAY_UI_TEST_MODE"] == "1" {
                 transaction.animation = nil
@@ -146,6 +148,10 @@ public struct CashRunwayRootView: View {
         } message: {
             Text(model.errorMessage ?? "")
         }
+    }
+
+    private var languagePreference: AppLanguagePreference {
+        AppLanguagePreference.value(for: languagePreferenceRaw)
     }
 
     private var startupErrorView: some View {

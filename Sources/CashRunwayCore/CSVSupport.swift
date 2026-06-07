@@ -56,7 +56,7 @@ public final class CSVService: @unchecked Sendable {
     public func preview(data: Data) throws -> CSVImportPreview {
         let text = try decode(data: data)
         let rows = parseRows(text)
-        guard let headers = rows.first else { throw CashRunwayError.validation("CSV file is empty.") }
+        guard let headers = rows.first else { throw CashRunwayError.validation(L10n.string("CSV file is empty.")) }
         return CSVImportPreview(
             headers: headers,
             sampleRows: Array(rows.dropFirst().prefix(5)),
@@ -91,7 +91,7 @@ public final class CSVService: @unchecked Sendable {
     public func importCSV(data: Data, fileName: String, mapping: CSVImportMapping) throws -> CSVImportResult {
         let text = try decode(data: data)
         let rows = parseRows(text)
-        guard let headers = rows.first else { throw CashRunwayError.validation("CSV file is empty.") }
+        guard let headers = rows.first else { throw CashRunwayError.validation(L10n.string("CSV file is empty.")) }
         let headerIndex = Dictionary(uniqueKeysWithValues: headers.enumerated().map { ($1, $0) })
         let sourceName = detectPreset(headers: headers).rawValue
         var invalidRows = 0
@@ -107,7 +107,7 @@ public final class CSVService: @unchecked Sendable {
                 let signedAmount = try parseAmount(row: row, mapping: mapping, headerIndex: headerIndex)
                 let kind = parseKind(row: row, mapping: mapping, headerIndex: headerIndex, signedAmount: signedAmount)
                 guard kind != .transfer else {
-                    throw CashRunwayError.validation("Transfer rows are not supported for CSV import.")
+                    throw CashRunwayError.validation(L10n.string("Transfer rows are not supported for CSV import."))
                 }
                 guard let walletID = parseWalletID(
                     row: row,
@@ -115,7 +115,7 @@ public final class CSVService: @unchecked Sendable {
                     headerIndex: headerIndex,
                     wallets: wallets
                 ) else {
-                    throw CashRunwayError.validation("Wallet ID not found for CSV row.")
+                    throw CashRunwayError.validation(L10n.string("Wallet ID not found for CSV row."))
                 }
                 let merchant = cell(row, mapping.merchantColumn, headerIndex)
                 let note = cell(row, mapping.noteColumn, headerIndex)
@@ -222,7 +222,7 @@ public final class CSVService: @unchecked Sendable {
         if let cp1251 = String(data: data, encoding: String.Encoding(rawValue: cfEncoding)) {
             return cp1251
         }
-        throw CashRunwayError.validation("Unsupported CSV encoding.")
+        throw CashRunwayError.validation(L10n.string("Unsupported CSV encoding."))
     }
 
     private func parseRows(_ text: String) -> [[String]] {
@@ -344,7 +344,7 @@ public final class CSVService: @unchecked Sendable {
         if let date = formatter.date(from: input) {
             return date
         }
-        throw CashRunwayError.validation("Unsupported date format.")
+        throw CashRunwayError.validation(L10n.string("Unsupported date format."))
     }
 
     private func parseAmount(row: [String], mapping: CSVImportMapping, headerIndex: [String: Int]) throws -> Int64 {
@@ -355,7 +355,7 @@ public final class CSVService: @unchecked Sendable {
         let credit = try? MoneyFormatter.parseMinorUnits(cell(row, mapping.creditColumn, headerIndex))
         if let debit, debit != 0 { return -abs(debit) }
         if let credit, credit != 0 { return abs(credit) }
-        throw CashRunwayError.validation("Could not parse amount.")
+        throw CashRunwayError.validation(L10n.string("Could not parse amount."))
     }
 
     private func parseKind(
@@ -399,7 +399,7 @@ public final class CSVService: @unchecked Sendable {
         guard !raw.isEmpty else { return }
         let normalized = raw.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         guard normalized == "UAH" || normalized == "₴" || normalized == "ГРН" else {
-            throw CashRunwayError.validation("Unsupported currency.")
+            throw CashRunwayError.validation(L10n.string("Unsupported currency."))
         }
     }
 
