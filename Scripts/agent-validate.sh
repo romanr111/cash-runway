@@ -5,6 +5,9 @@ set -euo pipefail
 # Usage:
 #   Scripts/agent-validate.sh --focused 'DatabaseTransactionSafetyTests/categoryMerge|BankCategoryMapperTests'
 #   Scripts/agent-validate.sh --focused '...' --full
+#   Scripts/agent-validate.sh --focused '...' --coverage
+#   Scripts/agent-validate.sh --full --coverage
+#   Scripts/agent-validate.sh --focused '...' --full --coverage
 #   Scripts/agent-validate.sh --ui-build
 #   Scripts/agent-validate.sh --ui-only
 #   Scripts/agent-validate.sh --all
@@ -20,6 +23,8 @@ RUN_FULL_TESTS=false
 RUN_UI_BUILD=false
 RUN_UI_ONLY=false
 RUN_ALL=false
+RUN_COVERAGE=false
+COVERAGE_DIR="$PROJECT_DIR/Coverage"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -43,6 +48,10 @@ while [[ $# -gt 0 ]]; do
             RUN_ALL=true
             shift
             ;;
+        --coverage)
+            RUN_COVERAGE=true
+            shift
+            ;;
         *)
             echo "Unknown option: $1" >&2
             exit 1
@@ -51,7 +60,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$FOCUSED_FILTER" && "$RUN_FULL_TESTS" == false && "$RUN_UI_BUILD" == false && "$RUN_UI_ONLY" == false && "$RUN_ALL" == false ]]; then
-    echo "Usage: $0 --focused '<filter>' [--full] | --ui-build | --ui-only | --all" >&2
+    echo "Usage: $0 --focused '<filter>' [--full] [--coverage] | --ui-build | --ui-only | --all" >&2
     exit 1
 fi
 
@@ -93,9 +102,17 @@ else
 fi
 
 # --- Swift tests ---
+SWIFT_TEST_FLAGS=""
+COVERAGE_FLAG=""
+if [[ "$RUN_COVERAGE" == true ]]; then
+    COVERAGE_FLAG="--enable-code-coverage"
+    rm -rf "$COVERAGE_DIR"
+    mkdir -p "$COVERAGE_DIR"
+fi
+
 if [[ -n "$FOCUSED_FILTER" ]]; then
-    log "Running focused swift test --filter '$FOCUSED_FILTER' ..."
-    if swift test --filter "$FOCUSED_FILTER" > "$LOG_DIR/swift-test-focused.log" 2>&1; then
+    log "Running focused swift test --filter '$FOCUSED_FILTER' $COVERAGE_FLAG ..."
+    if swift test --filter "$FOCUSED_FILTER" $COVERAGE_FLAG > "$LOG_DIR/swift-test-focused.log" 2>&1; then
         pass "Focused swift test"
     else
         fail "Focused swift test failed"
@@ -104,12 +121,56 @@ if [[ -n "$FOCUSED_FILTER" ]]; then
 fi
 
 if [[ "$RUN_FULL_TESTS" == true || "$RUN_ALL" == true ]]; then
-    log "Running full swift test ..."
-    if swift test > "$LOG_DIR/swift-test-full.log" 2>&1; then
+    log "Running full swift test $COVERAGE_FLAG ..."
+    if swift test $COVERAGE_FLAG > "$LOG_DIR/swift-test-full.log" 2>&1; then
         pass "Full swift test"
     else
         fail "Full swift test failed"
         tail -60 "$LOG_DIR/swift-test-full.log" >> "$LOG_DIR/validation.log"
+    fi
+fi
+
+# --- Coverage summary (only when --coverage and at least one test run succeeded) ---
+if [[ "$RUN_COVERAGE" == true && (-n "$FOCUSED_FILTER" || "$RUN_FULL_TESTS" == true || "$RUN_ALL" == true) ]]; then
+    if coverage_path="$(swift test --show-codecov-path 2>/dev/null)" && [[ -f "$coverage_path" ]]; then
+        cp "$coverage_path" "$COVERAGE_DIR/coverage.json"
+        log "Generating coverage summary ..."
+        if ruby <<-RUBY >> "$LOG_DIR/validation.log" 2>&1
+            require "json"
+            report = JSON.parse(File.read("${COVERAGE_DIR}/coverage.json"))
+            minimum_percent = 85.0
+            source_root = "/Modules/CashRunwayCorePackage/Sources/CashRunwayCore/"
+            files = report.fetch("data").first.fetch("files").select do |file|
+              file.fetch("filename").include?(source_root)
+            end
+            total_lines = files.sum { |file| file.dig("summary", "lines", "count").to_i }
+            covered_lines = files.sum { |file| file.dig("summary", "lines", "covered").to_i }
+            percent = total_lines.positive? ? (covered_lines.to_f / total_lines * 100.0) : 0.0
+            low_files = files
+              .select { |file| file.dig("summary", "lines", "count").to_i.positive? }
+              .sort_by { |file| [file.dig("summary", "lines", "percent").to_f, -file.dig("summary", "lines", "count").to_i] }
+              .first(10)
+            puts "Coverage: #{'%.2f' % percent}% (#{covered_lines}/#{total_lines})"
+            if low_files.any?
+              puts "Lowest-covered:"
+              low_files.each do |file|
+                lines = file.fetch("summary").fetch("lines")
+                relative_path = file.fetch("filename").split("/Cash Runway/").last
+                puts "  #{relative_path}: #{'%.2f' % lines.fetch("percent").to_f}%"
+              end
+            end
+            if percent < minimum_percent
+              warn "Coverage #{'%.2f' % percent}% below #{'%.2f' % minimum_percent}% minimum"
+              exit 1
+            end
+RUBY
+        then
+            pass "Coverage threshold met"
+        else
+            fail "Coverage below 85% minimum"
+        fi
+    else
+        log "Skipping coverage summary (no coverage data found)"
     fi
 fi
 
