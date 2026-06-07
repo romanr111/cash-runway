@@ -18,8 +18,8 @@ Rules:
 
 - Goal: Implement and harden text-only user bug/improvement reporting using a Vercel TypeScript API and GitHub App server-side issue creation.
 - Success criteria: Backend has validation, sanitization, GitHub issue formatting, idempotency, Redis/Upstash rate limits, duplicate suppression, safe logging, GitHub failure mapping, mockable GitHub client, tests, and `.env.example`; iOS has Codable payload, validation, idempotency key submission, safe diagnostics, anonymous install hash, service abstraction, SwiftUI Settings form, explicit config gating, and no screenshots/logs/files/financial data upload path.
-- Current state: Text-only reporting plus production hardening was committed locally; detailed self-review fixed unsupported-field acceptance, and all local backend, Swift, build, mirror, diff, and seeded simulator smoke validations passed.
-- Next action: Push `codex/feedback-report-phase1` and open a draft PR against `main`.
+- Current state: Draft PR `#32` was opened for text-only reporting plus production hardening; detailed self-review fixed unsupported-field acceptance, and all local backend, Swift, build, mirror, diff, and seeded simulator smoke validations passed.
+- Next action: Create/install the GitHub App, create Vercel staging/production projects, add secrets, configure the iOS production endpoint/client secret, approve privacy copy, and run one real staging E2E report.
 - Open questions: None.
 - Merge status: not-merged.
 
@@ -111,3 +111,4 @@ Rules:
 - 2026-06-07 [REVIEW] Detailed self-review found and fixed backend acceptance of unsupported non-forbidden extra JSON fields.
 - 2026-06-07 [VALIDATED] Hardened reporting passed `reporting-api npm test` (35 tests), `npm run typecheck`, `swift test --filter ReportIssueTests` (11 tests), `Scripts/agent-validate.sh --focused ReportIssueTests --full --ui-build`, and seeded simulator smoke.
 - 2026-06-07 [COMMIT] feat: add hardened text feedback reporting.
+- 2026-06-07 [PR] `#32` — https://github.com/romanr111/cash-runway/pull/32
