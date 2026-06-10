@@ -61,6 +61,16 @@ Every iOS task must pass ALL gates before being marked done, in this order:
 
 ## Project-specific rules (Cash Runway)
 
+### Agent tooling
+- Use `just` for project commands when a recipe exists. Key recipes: `just build`, `just test`, `just lint`, `just ui-check`, `just check`, `just graph-status`.
+- Use Headroom as the primary context-optimization layer, especially for bulky/noisy outputs: build logs, test output, simulator logs, crash logs, JSON, verbose diagnostics, and large diffs. Do not default to RTK when Headroom is available. Retrieve exact original diagnostics when details matter.
+- Use CodeGraph before broad text search or raw file-read loops. Prefer symbol/file/flow lookup first, then read targeted line windows.
+- Treat each git worktree as a separate CodeGraph project.
+- Do not share or copy `.codegraph/` between worktrees.
+- Run `codegraph init -i` once inside every new worktree.
+- Multiple agents in the same worktree can share one CodeGraph daemon; different worktrees should have separate indexes.
+- Practical new-worktree setup: `git worktree add ../MyApp-feature-x -b feature/x && cd ../MyApp-feature-x && codegraph init -i && codegraph status`.
+
 ### Mirrored core sources (D004)
 Core sources live in **two places** and must stay identical:
 - `Sources/CashRunwayCore/` — compiled by the app target
