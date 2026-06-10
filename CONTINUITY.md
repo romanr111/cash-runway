@@ -2,8 +2,8 @@
 
 - Goal: Merge agent tooling setup into `main` via PR and clean up the temporary worktree.
 - Success criteria: Headroom-first guidance and per-worktree CodeGraph rules are documented, `just` command wrappers exist, CodeGraph MCP config exists, `.codegraph/` stays local, validation passes, PR merges, and temporary branch/worktree are removed.
-- Current state: Setup changes are local on `codex/agent-tooling-setup`; publish-readiness validation passed.
-- Next action: Commit, push, open PR, merge to `main`, then clean up the temporary branch/worktree.
+- Current state: Setup branch `codex/agent-tooling-setup` was merged with current `origin/main`; publish-readiness validation passed before the main merge.
+- Next action: Resolve the PR merge, merge to `main`, then remove the temporary branch/worktree.
 - Open questions: None.
 - Merge status: not-merged.
 
@@ -23,6 +23,10 @@
 - `.mcp.json`
 - `justfile`
 - `CONTINUITY.md`
+
+## Done Recent
+
+- 2026-06-06 [LOCALIZATION] `origin/main` carried English/Ukrainian localization context: supported app strings, system default, in-app language selector, localized built-in category display names, and validation receipts.
 
 ## Receipts
 

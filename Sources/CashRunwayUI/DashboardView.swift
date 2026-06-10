@@ -186,19 +186,19 @@ struct DashboardView: View {
                     .accessibilityIdentifier(CashRunwayAccessibilityID.timelineWallet(wallet.name))
                 }
             } label: {
-                pillLabel(text: model.selectedWalletID.flatMap(walletName(for:)) ?? "All Wallets", systemImage: "chevron.down")
+                pillLabel(text: model.selectedWalletID.flatMap(walletName(for:)) ?? L10n.string("All Wallets"), systemImage: "chevron.down")
             }
             .accessibilityIdentifier(CashRunwayAccessibilityID.timelineWalletMenu)
 
             Menu {
                 ForEach(TimelinePeriod.allCases, id: \.self) { period in
-                    Button(period.displayName) {
+                    Button(L10n.timelinePeriod(period)) {
                         model.selectTimelinePeriod(period)
                         Task { await model.reloadAll() }
                     }
                 }
             } label: {
-                pillLabel(text: model.selectedTimelinePeriod.displayName, systemImage: "chevron.down")
+                pillLabel(text: L10n.timelinePeriod(model.selectedTimelinePeriod), systemImage: "chevron.down")
             }
         }
         .frame(maxWidth: .infinity, alignment: .center)
@@ -233,6 +233,7 @@ struct DashboardView: View {
                                 } label: {
                                     MonthChartColumn(
                                         bar: bar,
+                                        period: model.selectedTimelinePeriod,
                                         isSelected: isSelected,
                                         maxValue: maxValue
                                     )
@@ -290,7 +291,7 @@ struct DashboardView: View {
                 ForEach(sections) { section in
                     VStack(alignment: .leading, spacing: 12) {
                         HStack(alignment: .firstTextBaseline) {
-                            Text(section.periodLabel)
+                            Text(CashRunwayTheme.dayHeader(for: section.periodKey))
                                 .font(.system(size: 16, weight: .bold))
                                 .foregroundStyle(CashRunwayTheme.textPrimary)
                             Spacer()
@@ -352,6 +353,7 @@ struct DashboardView: View {
 
 private struct MonthChartColumn: View {
     let bar: TimelineBarPoint
+    let period: TimelinePeriod
     let isSelected: Bool
     let maxValue: Int64
 
@@ -369,6 +371,15 @@ private struct MonthChartColumn: View {
         return max(height, 4)
     }
 
+    private var displayLabel: String {
+        switch period {
+        case .month:
+            "\(CashRunwayTheme.monthAbbreviation(for: bar.periodKey))\n\(bar.periodKey / 100)"
+        case .year:
+            "\(bar.periodKey)"
+        }
+    }
+
     var body: some View {
         VStack(spacing: 8) {
             HStack(alignment: .bottom, spacing: 5) {
@@ -381,7 +392,7 @@ private struct MonthChartColumn: View {
                     .frame(width: 16, height: expenseHeight)
             }
 
-            Text(bar.xLabel)
+            Text(displayLabel)
                 .font(.system(size: isSelected ? 12 : 11, weight: isSelected ? .bold : .medium))
                 .foregroundStyle(isSelected ? CashRunwayTheme.textPrimary : CashRunwayTheme.textMuted)
                 .multilineTextAlignment(.center)
@@ -394,7 +405,7 @@ private struct MonthChartColumn: View {
             RoundedRectangle(cornerRadius: 12)
                 .fill(isSelected ? CashRunwayTheme.accent.opacity(0.08) : Color.clear)
         )
-        .accessibilityLabel("\(bar.xLabel), income \(MoneyFormatter.string(from: bar.incomeMinor)), expense \(MoneyFormatter.string(from: bar.expenseMinor))")
+        .accessibilityLabel("\(displayLabel), income \(MoneyFormatter.string(from: bar.incomeMinor)), expense \(MoneyFormatter.string(from: bar.expenseMinor))")
         .accessibilityAddTraits(.isButton)
     }
 }
@@ -526,7 +537,7 @@ private struct CategoryDonutChart: View {
                     onSelectCategory(segment.category)
                 }
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("\(segment.category.name), \(OverviewDisplayFormatter.percentage(segment.category.percentage))")
+                .accessibilityLabel("\(BuiltInCategoryDisplayName.name(segment.category)), \(OverviewDisplayFormatter.percentage(segment.category.percentage))")
                 .accessibilityAddTraits(.isButton)
             }
 
@@ -583,7 +594,7 @@ private struct CategoryDonutChart: View {
     private var centerContent: some View {
         if let selectedCategory {
             VStack(spacing: 4) {
-                Text(selectedCategory.name)
+                Text(BuiltInCategoryDisplayName.name(selectedCategory))
                     .font(.system(size: 14, weight: .bold, design: .rounded))
                     .foregroundStyle(CashRunwayTheme.textPrimary)
                     .lineLimit(1)
@@ -598,7 +609,7 @@ private struct CategoryDonutChart: View {
                     .foregroundStyle(CashRunwayTheme.textSecondary)
             }
         } else {
-            Text(kind == .expense ? "No expenses yet" : "No income yet")
+            Text(kind == .expense ? L10n.string("No expenses yet") : L10n.string("No income yet"))
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(CashRunwayTheme.textSecondary)
                 .multilineTextAlignment(.center)
@@ -691,7 +702,7 @@ private struct TimelineOverviewView: View {
                 .foregroundStyle(CashRunwayTheme.textPrimary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.72)
-            Text(chartMetric.rawValue)
+            Text(L10n.string(chartMetric.rawValue))
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(CashRunwayTheme.textSecondary)
         }
@@ -801,16 +812,16 @@ private struct TimelineOverviewView: View {
         VStack(spacing: 10) {
             HStack(spacing: 8) {
                 ForEach(OverviewChartMetric.allCases, id: \.self) { metric in
-                    metricCard(title: metric.rawValue, value: chartValue(for: metric), isSelected: chartMetric == metric) { chartMetric = metric }
+                    metricCard(title: L10n.string(metric.rawValue), value: chartValue(for: metric), isSelected: chartMetric == metric) { chartMetric = metric }
                 }
             }
 
             HStack(spacing: 8) {
-                kindCard(title: "Expenses", value: MoneyFormatter.string(from: -(model.overviewSnapshot?.monthExpenseMinor ?? 0)), isSelected: categoryKind == .expense) {
+                kindCard(title: L10n.string("Expenses"), value: MoneyFormatter.string(from: -(model.overviewSnapshot?.monthExpenseMinor ?? 0)), kind: .expense, isSelected: categoryKind == .expense) {
                     categoryKind = .expense
                 }
                 .accessibilityIdentifier(CashRunwayAccessibilityID.overviewExpensesCard)
-                kindCard(title: "Income", value: MoneyFormatter.string(from: model.overviewSnapshot?.monthIncomeMinor ?? 0), isSelected: categoryKind == .income) {
+                kindCard(title: L10n.string("Income"), value: MoneyFormatter.string(from: model.overviewSnapshot?.monthIncomeMinor ?? 0), kind: .income, isSelected: categoryKind == .income) {
                     categoryKind = .income
                 }
                 .accessibilityIdentifier(CashRunwayAccessibilityID.overviewIncomeCard)
@@ -1003,7 +1014,7 @@ private struct TimelineOverviewView: View {
             }
         } label: {
             HStack {
-                Text(showsAllCategories ? "Show Less" : "Show More (\(remainingCategoryCount))")
+                Text(showsAllCategories ? L10n.string("Show Less") : L10n.string("Show More (%d)", remainingCategoryCount))
                     .font(.system(size: 16, weight: .semibold))
                 Spacer()
                 Image(systemName: showsAllCategories ? "chevron.up" : "chevron.down")
@@ -1043,7 +1054,7 @@ private struct TimelineOverviewView: View {
         HStack(spacing: 14) {
             CategoryGlyph(iconName: item.iconName, colorHex: item.colorHex, size: 46)
             VStack(alignment: .leading, spacing: 4) {
-                Text(item.name)
+                Text(BuiltInCategoryDisplayName.name(item))
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(CashRunwayTheme.textPrimary)
                     .lineLimit(1)
@@ -1136,7 +1147,7 @@ private struct TimelineOverviewView: View {
     }
 
     private func transactionCountText(_ count: Int) -> String {
-        count == 1 ? "1 transaction" : "\(count) transactions"
+        L10n.transactionCount(count)
     }
 
     private func chartValue(for metric: OverviewChartMetric) -> String {
@@ -1177,7 +1188,7 @@ private struct TimelineOverviewView: View {
         .buttonStyle(.plain)
     }
 
-    private func kindCard(title: String, value: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+    private func kindCard(title: String, value: String, kind: CategoryKind, isSelected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 8) {
                 Text(title)
@@ -1185,7 +1196,7 @@ private struct TimelineOverviewView: View {
                     .foregroundStyle(isSelected ? CashRunwayTheme.textPrimary : CashRunwayTheme.textSecondary)
                 Text(value)
                     .font(.system(size: 20, weight: .bold, design: .rounded))
-                    .foregroundStyle(title == "Expenses" ? CashRunwayTheme.negative : CashRunwayTheme.positive)
+                    .foregroundStyle(kind == .expense ? CashRunwayTheme.negative : CashRunwayTheme.positive)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
@@ -1259,7 +1270,7 @@ private struct CategoryDetailOverviewView: View {
             await model.loadCategoryDetailTransactions(query: transactionQuery)
         }
         .background(CashRunwayTheme.background)
-        .navigationTitle(category.name)
+        .navigationTitle(BuiltInCategoryDisplayName.name(category))
         .navigationBarTitleDisplayMode(.inline)
         .fullScreenCover(isPresented: $isComposerPresented) {
             TransactionEditorView(model: model, draft: $draft)
@@ -1584,7 +1595,7 @@ private struct TimelineSearchSheet: View {
                     )) {
                         Text("All Categories").tag(UUID?.none)
                         ForEach(model.expenseCategories + model.incomeCategories) { category in
-                            Text(category.name).tag(UUID?.some(category.id))
+                            Text(BuiltInCategoryDisplayName.name(category)).tag(UUID?.some(category.id))
                         }
                     }
 

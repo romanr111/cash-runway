@@ -47,8 +47,8 @@ struct CSVImportView: View {
                         Section("Detected") {
                             summaryRow("Income / Expense", value: typeSummary)
                             summaryRow("Wallet", value: walletSummary)
-                            summaryRow("Categories", value: coordinator.importMapping.categoryColumn == nil ? "Fallback category" : "Matched or created from CSV names")
-                            summaryRow("Labels", value: coordinator.importMapping.labelsColumn == nil ? "Not imported" : "Matched to existing names")
+                            summaryRow("Categories", value: coordinator.importMapping.categoryColumn == nil ? L10n.string("Fallback category") : L10n.string("Matched or created from CSV names"))
+                            summaryRow("Labels", value: coordinator.importMapping.labelsColumn == nil ? L10n.string("Not imported") : L10n.string("Matched to existing names"))
                         }
 
                         Section {
@@ -98,7 +98,7 @@ struct CSVImportView: View {
             .navigationTitle("Import CSV")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(coordinator.importResult == nil && coordinator.importPreparationError == nil ? "Cancel" : "Done") { dismiss() }
+                    Button(coordinator.importResult == nil && coordinator.importPreparationError == nil ? L10n.string("Cancel") : L10n.string("Done")) { dismiss() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     if !coordinator.isImportPreparing, coordinator.importPreparationError == nil, coordinator.importResult == nil {
@@ -113,42 +113,42 @@ struct CSVImportView: View {
     }
 
     private var presetDisplayName: String {
-        coordinator.importPreset == .cashRunwayWallet ? "Cash Runway Wallet CSV" : coordinator.importPreset.rawValue
+        coordinator.importPreset == .cashRunwayWallet ? L10n.string("Cash Runway Wallet CSV") : coordinator.importPreset.rawValue
     }
 
     private var hasRequiredMapping: Bool {
         !coordinator.importMapping.dateColumn.isEmpty && (coordinator.importMapping.amountColumn != nil || coordinator.importMapping.debitColumn != nil || coordinator.importMapping.creditColumn != nil)
     }
 
-    private var requiredMappingTitle: String {
+    private var requiredMappingTitle: LocalizedStringKey {
         hasRequiredMapping ? "Ready To Import" : "Needs Mapping"
     }
 
     private var requiredMappingMessage: String {
-        hasRequiredMapping ? "Required fields are mapped." : "Select a date and amount source."
+        hasRequiredMapping ? L10n.string("Required fields are mapped.") : L10n.string("Select a date and amount source.")
     }
 
     private var defaultKindName: String {
-        coordinator.importMapping.defaultKind == .income ? "Income" : "Expense"
+        L10n.transactionKind(coordinator.importMapping.defaultKind)
     }
 
     private var typeSummary: String {
         if let typeColumn = coordinator.importMapping.typeColumn {
-            "From \(typeColumn) column"
+            L10n.string("From %@ column", typeColumn)
         } else {
-            "Default \(defaultKindName)"
+            L10n.string("Default %@", defaultKindName)
         }
     }
 
     private var selectedWalletName: String {
-        coordinator.model.wallets.first(where: { $0.id == coordinator.importMapping.walletID })?.name ?? "Selected wallet"
+        coordinator.model.wallets.first(where: { $0.id == coordinator.importMapping.walletID })?.name ?? L10n.string("Selected wallet")
     }
 
     private var walletSummary: String {
         if coordinator.importMapping.walletColumn != nil {
-            "CSV names; unmatched use \(selectedWalletName)"
+            L10n.string("CSV names; unmatched use %@", selectedWalletName)
         } else {
-            "All rows use \(selectedWalletName)"
+            L10n.string("All rows use %@", selectedWalletName)
         }
     }
 
@@ -197,7 +197,7 @@ struct CSVImportView: View {
                 date: cell(row, coordinator.importMapping.dateColumn, headerIndex),
                 amount: displayMinor.map(MoneyFormatter.string(from:)) ?? rawAmount,
                 amountColor: displayMinor.map(CashRunwayTheme.amountColor) ?? (kind == .income ? CashRunwayTheme.positive : CashRunwayTheme.negative),
-                title: firstNonEmptyCell(row, columns: [coordinator.importMapping.categoryColumn, coordinator.importMapping.noteColumn, coordinator.importMapping.merchantColumn], headerIndex: headerIndex).ifEmpty("Uncategorized"),
+                title: firstNonEmptyCell(row, columns: [coordinator.importMapping.categoryColumn, coordinator.importMapping.noteColumn, coordinator.importMapping.merchantColumn], headerIndex: headerIndex).ifEmpty(L10n.string("Uncategorized")),
                 subtitle: cell(row, coordinator.importMapping.walletColumn, headerIndex).ifEmpty(selectedWalletName)
             )
         }
@@ -206,28 +206,28 @@ struct CSVImportView: View {
     private func resultSection(_ result: CSVImportResult) -> some View {
         Section("Result") {
             if result.insertedTransactions == 0, result.duplicateRows > 0 {
-                SwiftUI.Label("No new transactions. This file appears to have already been imported.", systemImage: "checkmark.circle")
+                SwiftUI.Label(L10n.string("No new transactions. This file appears to have already been imported."), systemImage: "checkmark.circle")
                     .foregroundStyle(CashRunwayTheme.textSecondary)
             } else if result.insertedTransactions == 0, result.invalidRows > 0 {
-                SwiftUI.Label("No transactions were imported. Review the row errors below.", systemImage: "exclamationmark.triangle")
+                SwiftUI.Label(L10n.string("No transactions were imported. Review the row errors below."), systemImage: "exclamationmark.triangle")
                     .foregroundStyle(CashRunwayTheme.negative)
             } else if result.insertedTransactions > 0, result.invalidRows > 0 {
-                SwiftUI.Label("Imported valid rows. Some rows were skipped because they could not be parsed.", systemImage: "checkmark.circle.fill")
+                SwiftUI.Label(L10n.string("Imported valid rows. Some rows were skipped because they could not be parsed."), systemImage: "checkmark.circle.fill")
                     .foregroundStyle(CashRunwayTheme.positive)
             } else {
-                SwiftUI.Label("Imported \(result.insertedTransactions) transactions", systemImage: "checkmark.circle.fill")
+                SwiftUI.Label(L10n.string("Imported %d transactions", result.insertedTransactions), systemImage: "checkmark.circle.fill")
                     .foregroundStyle(CashRunwayTheme.positive)
             }
 
             if result.duplicateRows > 0 {
-                Text("Skipped duplicates: \(result.duplicateRows)")
+                Text(L10n.string("Skipped duplicates: %d", result.duplicateRows))
                     .foregroundStyle(CashRunwayTheme.textSecondary)
             }
             if result.invalidRows > 0 {
-                Text("Failed rows: \(result.invalidRows)")
+                Text(L10n.string("Failed rows: %d", result.invalidRows))
                     .foregroundStyle(CashRunwayTheme.negative)
                 ForEach(result.rowErrors) { rowError in
-                    Text("Row \(rowError.rowNumber): \(rowError.message)")
+                    Text(L10n.string("Row %d: %@", rowError.rowNumber, rowError.message))
                         .font(.footnote)
                         .foregroundStyle(CashRunwayTheme.textSecondary)
                 }
@@ -240,7 +240,7 @@ struct CSVImportView: View {
             VStack(alignment: .leading, spacing: 10) {
                 ProgressView(value: boundedPreparationProgress)
                     .progressViewStyle(.linear)
-                Text(coordinator.importPreparationStatus.ifEmpty("Reading CSV..."))
+                Text(coordinator.importPreparationStatus.ifEmpty(L10n.string("Reading CSV...")))
                     .font(.footnote)
                     .foregroundStyle(CashRunwayTheme.textSecondary)
             }
@@ -248,7 +248,7 @@ struct CSVImportView: View {
         }
     }
 
-    private func summaryRow(_ title: String, value: String) -> some View {
+    private func summaryRow(_ title: LocalizedStringKey, value: String) -> some View {
         HStack(alignment: .firstTextBaseline) {
             Text(title)
                 .foregroundStyle(CashRunwayTheme.textSecondary)
@@ -259,28 +259,34 @@ struct CSVImportView: View {
         }
     }
 
-    private func walletPicker(title: String) -> some View {
-        Picker(title, selection: $coordinator.importMapping.walletID) {
+    private func walletPicker(title: LocalizedStringKey) -> some View {
+        Picker(selection: $coordinator.importMapping.walletID) {
             ForEach(coordinator.model.wallets) { wallet in
                 Text(wallet.name).tag(wallet.id)
             }
+        } label: {
+            Text(title)
         }
     }
 
-    private func requiredPicker(_ title: String, selection: Binding<String>) -> some View {
-        Picker(title, selection: selection) {
+    private func requiredPicker(_ title: LocalizedStringKey, selection: Binding<String>) -> some View {
+        Picker(selection: selection) {
             ForEach(coordinator.importPreview.headers, id: \.self) { header in
                 Text(header).tag(header)
             }
+        } label: {
+            Text(title)
         }
     }
 
-    private func optionalPicker(_ title: String, selection: Binding<String?>) -> some View {
-        Picker(title, selection: selection) {
-            Text("None").tag(String?.none)
+    private func optionalPicker(_ title: LocalizedStringKey, selection: Binding<String?>) -> some View {
+        Picker(selection: selection) {
+            Text(L10n.string("None")).tag(String?.none)
             ForEach(coordinator.importPreview.headers, id: \.self) { header in
                 Text(header).tag(String?.some(header))
             }
+        } label: {
+            Text(title)
         }
     }
 

@@ -414,7 +414,7 @@ public final class CashRunwayAppModel {
 
     public func deleteWallet(id: UUID) {
         guard wallets.count > 1 else {
-            errorMessage = "At least one active wallet must remain."
+            errorMessage = L10n.string("At least one active wallet must remain.")
             return
         }
         runMutation {
@@ -668,7 +668,7 @@ public final class CashRunwayAppModel {
                 overviewSnapshotCache = previousOverviewSnapshotCache
                 overviewSnapshotCacheOrder = previousOverviewSnapshotCacheOrder
             }
-            errorMessage = "Backup could not be restored. Your current data was not changed."
+            errorMessage = L10n.string("Backup could not be restored. Your current data was not changed.")
             throw error
         }
     }
@@ -1004,7 +1004,7 @@ enum CSVImportFileReader {
             throw coordinatedError
         }
         guard fileManager.fileExists(atPath: destinationURL.path) else {
-            throw CashRunwayError.validation("Imported CSV could not be copied into the app sandbox.")
+            throw CashRunwayError.validation(L10n.string("Imported CSV could not be copied into the app sandbox."))
         }
         return destinationURL
     }

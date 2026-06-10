@@ -147,7 +147,7 @@ public final class MonobankDirectTokenValidator: MonobankTokenValidating, @unche
         case 429:
             throw BankSyncError.rateLimited
         case 500..<600:
-            throw BankSyncError.transient("Monobank API temporarily unavailable.")
+            throw BankSyncError.transient(L10n.string("Monobank API temporarily unavailable."))
         default:
             throw BankSyncError.invalidResponse
         }
@@ -180,7 +180,7 @@ public final class MonobankPersonalAPIClient: MonobankClient, @unchecked Sendabl
 
     public func statement(accountID: String, from: Date, to: Date) async throws -> [MonobankStatementItem] {
         guard to.timeIntervalSince(from) <= 31 * 24 * 60 * 60 else {
-            throw CashRunwayError.validation("Monobank statement window must not exceed 31 days.")
+            throw CashRunwayError.validation(L10n.string("Monobank statement window must not exceed 31 days."))
         }
         let accountPath = accountID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? accountID
         let url = baseURL
@@ -223,7 +223,7 @@ public final class MonobankPersonalAPIClient: MonobankClient, @unchecked Sendabl
         case 429:
             throw BankSyncError.rateLimited
         case 500..<600:
-            throw BankSyncError.transient("Monobank API temporarily unavailable.")
+            throw BankSyncError.transient(L10n.string("Monobank API temporarily unavailable."))
         default:
             throw BankSyncError.invalidResponse
         }
@@ -360,11 +360,11 @@ public final class MonobankConnectionService: @unchecked Sendable {
         guard !trimmedToken.isEmpty else { throw BankSyncError.tokenInvalid }
         let enabledSelections = selections.filter { $0.isEnabled && $0.account.currencyCode == 980 }
         guard !enabledSelections.isEmpty else {
-            throw CashRunwayError.validation("Select at least one UAH Monobank card.")
+            throw CashRunwayError.validation(L10n.string("Select at least one UAH Monobank card."))
         }
         let walletIDs = Set(try repository.wallets().map(\.id))
         guard enabledSelections.allSatisfy({ walletIDs.contains($0.walletID) }) else {
-            throw CashRunwayError.validation("Each selected Monobank account must map to an existing wallet.")
+            throw CashRunwayError.validation(L10n.string("Each selected Monobank account must map to an existing wallet."))
         }
 
         let timestamp = now()
@@ -430,11 +430,11 @@ public final class MonobankConnectionService: @unchecked Sendable {
     }
 
     private static func displayName(for account: MonobankAccount) -> String {
-        let cardName = (account.type?.isEmpty == false ? account.type! : "Card").capitalized
+        let cardName = (account.type?.isEmpty == false ? account.type! : L10n.string("Card")).capitalized
         if let masked = account.maskedPan?.first, !masked.isEmpty {
-            return "\(cardName) card ****\(String(masked.suffix(4)))"
+            return L10n.string("%@ card %@", cardName, "****\(masked.suffix(4))")
         }
-        return "\(cardName) card"
+        return L10n.string("%@ card", cardName)
     }
 }
 
@@ -966,7 +966,7 @@ extension CashRunwayRepository {
                 throw CashRunwayError.notFound
             }
             guard (row["source"] as String) == TransactionSource.bankSync.rawValue else {
-                throw CashRunwayError.validation("Category learning is available only for bank sync transactions.")
+                throw CashRunwayError.validation(L10n.string("Category learning is available only for bank sync transactions."))
             }
             let merchant = [
                 row["counter_name"] as String?,
@@ -976,7 +976,7 @@ extension CashRunwayRepository {
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .first { !$0.isEmpty }
             guard let merchant else {
-                throw CashRunwayError.validation("Bank merchant is required to learn a category rule.")
+                throw CashRunwayError.validation(L10n.string("Bank merchant is required to learn a category rule."))
             }
             let now = Date()
             try db.execute(
@@ -1011,7 +1011,7 @@ extension CashRunwayRepository {
         externalItem: BankExternalExpenseItem,
         draft: TransactionDraft
     ) throws {
-        throw CashRunwayError.validation("Bank expense import is not implemented yet.")
+        throw CashRunwayError.validation(L10n.string("Bank expense import is not implemented yet."))
     }
 
     public func importMonobankExpenseItems(
@@ -1198,7 +1198,7 @@ extension CashRunwayRepository {
             try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM wallets WHERE is_archived = 0") ?? 0
         }
         guard activeCount > 1 else {
-            throw CashRunwayError.validation("At least one active wallet must remain.")
+            throw CashRunwayError.validation(L10n.string("At least one active wallet must remain."))
         }
 
         let txIDs = try databaseManager.dbQueue.read { db in
@@ -1986,7 +1986,7 @@ extension CashRunwayRepository {
                 guard let linkedID = transaction.linkedTransferID,
                       let linkedWalletID = try String.fetchOne(db, sql: "SELECT wallet_id FROM transactions WHERE id = ?", arguments: [linkedID.uuidString]).flatMap(UUID.init(uuidString:))
                 else {
-                    throw CashRunwayError.invalidState("Transfer pair is missing.")
+                    throw CashRunwayError.invalidState(L10n.string("Transfer pair is missing."))
                 }
                 let sourceWalletID = transaction.type == .transferOut ? transaction.walletID : linkedWalletID
                 let destinationWalletID = transaction.type == .transferOut ? linkedWalletID : transaction.walletID
@@ -2068,7 +2068,7 @@ extension CashRunwayRepository {
     public func mergeCategory(oldCategoryID: UUID, into newCategoryID: UUID) throws {
         try databaseManager.dbQueue.write { db in
             guard oldCategoryID != newCategoryID else {
-                throw CashRunwayError.validation("Choose two different categories to merge.")
+                throw CashRunwayError.validation(L10n.string("Choose two different categories to merge."))
             }
             guard let oldKind = try String.fetchOne(
                 db,
@@ -2086,10 +2086,10 @@ extension CashRunwayRepository {
             let newKind: String = newCategoryRow["kind"]
             let newIsArchived: Bool = newCategoryRow["is_archived"]
             guard oldKind == newKind else {
-                throw CashRunwayError.validation("Categories must have the same type to merge.")
+                throw CashRunwayError.validation(L10n.string("Categories must have the same type to merge."))
             }
             guard !newIsArchived else {
-                throw CashRunwayError.validation("Destination category must be active.")
+                throw CashRunwayError.validation(L10n.string("Destination category must be active."))
             }
 
             let now = Date()
@@ -2465,7 +2465,7 @@ extension CashRunwayRepository {
 
     private func saveTransfer(_ db: Database, draft: TransactionDraft, updateDerivedData: Bool = true) throws {
         guard let destinationWalletID = draft.destinationWalletID, destinationWalletID != draft.walletID else {
-            throw CashRunwayError.validation("Transfer requires two different wallets.")
+            throw CashRunwayError.validation(L10n.string("Transfer requires two different wallets."))
         }
         let now = Date()
         let sourceID = draft.id ?? UUID()
@@ -2581,10 +2581,10 @@ extension CashRunwayRepository {
 
     private func validate(_ draft: TransactionDraft) throws {
         guard draft.amountMinor > 0 else {
-            throw CashRunwayError.validation("Amount must be greater than zero.")
+            throw CashRunwayError.validation(L10n.string("Amount must be greater than zero."))
         }
         if draft.kind != .transfer, draft.categoryID == nil {
-            throw CashRunwayError.validation("Category is required for income and expense transactions.")
+            throw CashRunwayError.validation(L10n.string("Category is required for income and expense transactions."))
         }
     }
 
@@ -2825,7 +2825,7 @@ extension CashRunwayRepository {
         }
 
         let sql = """
-        SELECT t.*, w.name AS wallet_name, c.name AS category_name, c.color_hex AS category_color_hex, c.icon_name AS category_icon_name
+        SELECT t.*, w.name AS wallet_name, c.id AS category_id, c.name AS category_name, c.color_hex AS category_color_hex, c.icon_name AS category_icon_name
         FROM transactions t
         JOIN wallets w ON w.id = t.wallet_id
         LEFT JOIN categories c ON c.id = t.category_id
@@ -2877,6 +2877,7 @@ extension CashRunwayRepository {
                 amountMinor: transaction.type == .expense || transaction.type == .transferOut ? -transaction.amountMinor : transaction.amountMinor,
                 occurredAt: transaction.occurredAt,
                 categoryName: row["category_name"],
+                categoryID: row["category_id"],
                 categoryColorHex: row["category_color_hex"],
                 categoryIconName: row["category_icon_name"],
                 merchant: transaction.merchant ?? "",
