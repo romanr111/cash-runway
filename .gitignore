@@ -6,3 +6,4 @@ Packages/
 xcuserdata/
 *.xcuserstate
 Package.resolved
+.codegraph/
