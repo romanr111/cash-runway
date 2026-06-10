@@ -2,8 +2,8 @@
 
 - Goal: Merge agent tooling setup into `main` via PR and clean up the temporary worktree.
 - Success criteria: Headroom-first guidance and per-worktree CodeGraph rules are documented, `just` command wrappers exist, CodeGraph MCP config exists, `.codegraph/` stays local, validation passes, PR merges, and temporary branch/worktree are removed.
-- Current state: Setup branch `codex/agent-tooling-setup` was merged with current `origin/main`; publish-readiness validation passed before the main merge.
-- Next action: Resolve the PR merge, merge to `main`, then remove the temporary branch/worktree.
+- Current state: Setup branch `codex/agent-tooling-setup` was merged with current `origin/main`; publish-readiness validation passed after the main merge.
+- Next action: Push the updated PR branch, merge to `main`, then remove the temporary branch/worktree.
 - Open questions: None.
 - Merge status: not-merged.
 
@@ -36,3 +36,5 @@
 - 2026-06-09 [VALIDATED] `just --list` parsed recipes: build, check, graph-init, graph-reindex, graph-status, graph-sync, lint, test, ui-check.
 - 2026-06-09 [REVIEW] Self-QA found `just build` could hide `xcodebuild` failure behind `grep`; added Bash `pipefail` shell settings.
 - 2026-06-10 [VALIDATED] `Scripts/agent-validate.sh --all` passed core mirror diff, `git diff --check`, full `swift test`, and clean iPhone 17 simulator build; logs at `/tmp/cash-runway-agent-validation/20260610-101019-38316`.
+- 2026-06-10 [MERGE] Merged current `origin/main` into `codex/agent-tooling-setup`; only `CONTINUITY.md` conflicted and was resolved.
+- 2026-06-10 [VALIDATED] Post-main-merge `Scripts/agent-validate.sh --all` passed core mirror diff, `git diff --check`, full `swift test`, and clean iPhone 17 simulator build; logs at `/tmp/cash-runway-agent-validation/20260610-101820-69888`.
