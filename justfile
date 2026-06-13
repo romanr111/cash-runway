@@ -3,16 +3,18 @@ set shell := ["bash", "-o", "pipefail", "-eu", "-c"]
 scheme := "CashRunway"
 dest := "platform=iOS Simulator,name=iPhone 17"
 
-graph-init:
-    codegraph init -i
+graph-bootstrap:
+    Scripts/codegraph-bootstrap.sh
 
-graph-sync:
+graph-init: graph-bootstrap
+
+graph-sync: graph-bootstrap
     codegraph sync
 
-graph-reindex:
+graph-reindex: graph-bootstrap
     codegraph index --force
 
-graph-status:
+graph-status: graph-bootstrap
     codegraph status
 
 build:
