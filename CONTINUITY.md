@@ -2,8 +2,8 @@
 
 - Goal: Enforce repo-local CodeGraph worktree isolation.
 - Success criteria: CodeGraph bootstrap runs from the current worktree root, initializes that worktree's own `.codegraph/codegraph.db`, rejects mismatched CodeGraph project roots, `just` recipes use the bootstrap guard, and guidance documents the required flow.
-- Current state: `Scripts/codegraph-bootstrap.sh`, focused shell tests, `just` recipes, and `AGENTS.md` guidance are implemented on `codex/codegraph-worktree-isolation`.
-- Next action: Finish validation, commit, and report branch status.
+- Current state: CodeGraph worktree isolation guard is implemented and validated on `codex/codegraph-worktree-isolation`.
+- Next action: Report branch status and validation results.
 - Open questions: None.
 - Merge status: not-merged.
 
@@ -30,3 +30,4 @@
 - 2026-06-13 [CODE] Added CodeGraph bootstrap guard and wired `graph-bootstrap`, `graph-status`, `graph-sync`, and `graph-reindex` through `just`.
 - 2026-06-13 [VALIDATED] Focused bootstrap tests passed with fake `codegraph` for initialization, subdirectory rejection, and mismatched project rejection.
 - 2026-06-13 [VALIDATED] Real `just graph-bootstrap` initialized this worktree's CodeGraph index and `just graph-status` ran through the guard.
+- 2026-06-13 [VALIDATED] Disposable detached worktree from commit `c139762` ran `just graph-bootstrap`, created its own `.codegraph/codegraph.db`, reported the disposable worktree path, and was removed.
