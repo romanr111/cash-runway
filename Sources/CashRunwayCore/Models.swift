@@ -37,6 +37,15 @@ public enum TransactionSource: String, CaseIterable, Codable, Sendable {
     case recurring
     case bankSync = "bank_sync"
     case importCSV = "import_csv"
+
+    public var displayName: String {
+        switch self {
+        case .manual: L10n.string("Manual")
+        case .recurring: L10n.string("Scheduled")
+        case .bankSync: L10n.string("Bank Sync")
+        case .importCSV: L10n.string("CSV Import")
+        }
+    }
 }
 
 public enum BankProvider: String, Codable, Sendable {
@@ -1287,6 +1296,7 @@ public struct TransactionListItem: Identifiable, Hashable, Sendable {
     public var amountMinor: Int64
     public var occurredAt: Date
     public var categoryName: String?
+    public var categoryID: UUID?
     public var categoryColorHex: String?
     public var categoryIconName: String?
     public var merchant: String
@@ -1297,6 +1307,9 @@ public struct TransactionListItem: Identifiable, Hashable, Sendable {
     public var dayKey: Int
 
     public var displayTitle: String {
+        if let categoryID, let categoryName, !categoryName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return BuiltInCategoryDisplayName.name(id: categoryID, fallback: categoryName)
+        }
         if let categoryName, !categoryName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return categoryName
         }

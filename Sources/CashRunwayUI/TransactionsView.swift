@@ -41,7 +41,7 @@ struct TransactionsView: View {
                                         Text(wallet.name)
                                             .font(.system(size: 17, weight: .semibold))
                                             .foregroundStyle(CashRunwayTheme.textPrimary)
-                                        Text(wallet.kind.rawValue.capitalized)
+                                        Text(L10n.walletKind(wallet.kind))
                                             .font(.system(size: 14, weight: .medium))
                                             .foregroundStyle(CashRunwayTheme.textSecondary)
                                     }
@@ -109,7 +109,7 @@ struct TransactionsView: View {
             Text(MoneyFormatter.string(from: model.overviewSnapshot?.totalWealthMinor ?? 0))
                 .font(.system(size: 34, weight: .bold, design: .rounded))
                 .foregroundStyle(CashRunwayTheme.textPrimary)
-            Text("\(model.wallets.count) wallets")
+            Text(L10n.walletCount(model.wallets.count))
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(CashRunwayTheme.textMuted)
         }
@@ -168,7 +168,8 @@ struct TransactionRow: View {
 
     private var secondaryTitle: String {
         if let categoryName = item.categoryName, !categoryName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return "\(categoryName) · \(item.walletName)"
+            let localized = item.categoryID.map { BuiltInCategoryDisplayName.name(id: $0, fallback: categoryName) } ?? categoryName
+            return "\(localized) · \(item.walletName)"
         }
         return item.walletName
     }
@@ -180,7 +181,7 @@ struct TransactionRow: View {
             parts.append(note)
         }
         parts.append(item.occurredAt.formatted(date: .abbreviated, time: .omitted))
-        parts.append(item.source.rawValue.replacingOccurrences(of: "_", with: " ").capitalized)
+        parts.append(item.source.displayName)
         if !item.labels.isEmpty {
             parts.append(item.labels.map(\.name).joined(separator: ", "))
         }

@@ -75,7 +75,7 @@ struct MonobankWizardView: View {
                     if let message = coordinator.model.bankSyncMessage ?? currentStatus.lastSyncError {
                         summaryRow("Last result", value: message, valueIdentifier: CashRunwayAccessibilityID.monobankLastResultValue)
                     } else {
-                        summaryRow("Last result", value: "success", valueIdentifier: CashRunwayAccessibilityID.monobankLastResultValue)
+                        summaryRow("Last result", value: L10n.string("success"), valueIdentifier: CashRunwayAccessibilityID.monobankLastResultValue)
                     }
                 } header: {
                     Text("Monobank connected")
@@ -91,7 +91,7 @@ struct MonobankWizardView: View {
                 }
 
                 Section {
-                    Button(coordinator.isSyncing ? "Syncing..." : "Sync now") {
+                    Button(coordinator.isSyncing ? L10n.string("Syncing...") : L10n.string("Sync now")) {
                         coordinator.syncNow()
                     }
                     .disabled(coordinator.isSyncing)
@@ -128,7 +128,7 @@ struct MonobankWizardView: View {
         }
     }
 
-    private func summaryRow(_ title: String, value: String, valueIdentifier: String? = nil) -> some View {
+    private func summaryRow(_ title: LocalizedStringKey, value: String, valueIdentifier: String? = nil) -> some View {
         HStack(alignment: .firstTextBaseline) {
             Text(title)
                 .foregroundStyle(CashRunwayTheme.textSecondary)
@@ -147,16 +147,17 @@ struct MonobankWizardView: View {
     }
 
     private func dateText(_ date: Date?) -> String {
-        guard let date else { return "Never" }
-        return Self.dateFormatter.string(from: date)
+        guard let date else { return L10n.string("Never") }
+        return Self.dateFormatter(locale: L10n.locale).string(from: date)
     }
 
-    private static let dateFormatter: DateFormatter = {
+    private static func dateFormatter(locale: Locale) -> DateFormatter {
         let formatter = DateFormatter()
+        formatter.locale = locale
         formatter.dateStyle = .medium
         formatter.timeStyle = .medium
         return formatter
-    }()
+    }
 }
 
 private struct MonobankTokenIntroView: View {
@@ -292,15 +293,15 @@ private struct MonobankAccountSelectionView: View {
     }
 
     private func accountTitle(_ account: MonobankAccount) -> String {
-        let type = (account.type?.isEmpty == false ? account.type! : "Card").capitalized
+        let type = (account.type?.isEmpty == false ? account.type! : L10n.string("Card")).capitalized
         let suffix = account.maskedPan?.first.map { " ****\(String($0.suffix(4)))" } ?? ""
         let currency = account.currencyCode == 980 ? "UAH" : String(account.currencyCode)
-        return "\(type) card\(suffix) · \(currency)"
+        return L10n.string("%@ card%@ · %@", type, suffix, currency)
     }
 
     private func createWallet(for account: MonobankAccount) {
         let suffix = account.maskedPan?.first.map { " ****\(String($0.suffix(4)))" } ?? ""
-        let type = (account.type?.isEmpty == false ? account.type! : "Card").capitalized
+        let type = (account.type?.isEmpty == false ? account.type! : L10n.string("Card")).capitalized
         let wallet = Wallet(
             id: UUID(),
             name: "Monobank \(type)\(suffix)",
@@ -328,11 +329,11 @@ private struct MonobankStartConfirmationView: View {
     var body: some View {
         Form {
             Section("Sync starts from now") {
-                summaryRow("Start time", value: Self.dateFormatter.string(from: syncStartAt))
+                summaryRow("Start time", value: Self.dateFormatter(locale: L10n.locale).string(from: syncStartAt))
             }
 
             Section("Cash Runway will import") {
-                Text("New Monobank expenses after \(Self.dateFormatter.string(from: syncStartAt))")
+                Text(L10n.string("New Monobank expenses after %@", Self.dateFormatter(locale: L10n.locale).string(from: syncStartAt)))
                 Text("Only selected UAH card accounts")
                 Text("Only outgoing expenses")
             }
@@ -352,14 +353,14 @@ private struct MonobankStartConfirmationView: View {
             }
 
             Section {
-                Button(isConnecting ? "Starting..." : "Start syncing new expenses", action: onStart)
+                Button(isConnecting ? L10n.string("Starting...") : L10n.string("Start syncing new expenses"), action: onStart)
                     .disabled(isConnecting)
                     .accessibilityIdentifier(CashRunwayAccessibilityID.monobankStartSyncButton)
             }
         }
     }
 
-    private func summaryRow(_ title: String, value: String) -> some View {
+    private func summaryRow(_ title: LocalizedStringKey, value: String) -> some View {
         HStack {
             Text(title)
             Spacer()
@@ -368,12 +369,13 @@ private struct MonobankStartConfirmationView: View {
         }
     }
 
-    private static let dateFormatter: DateFormatter = {
+    private static func dateFormatter(locale: Locale) -> DateFormatter {
         let formatter = DateFormatter()
+        formatter.locale = locale
         formatter.dateStyle = .medium
         formatter.timeStyle = .medium
         return formatter
-    }()
+    }
 }
 
 private struct MonobankAccountManagementView: View {
@@ -405,8 +407,8 @@ private struct MonobankAccountManagementView: View {
     }
 
     private func accountSummary(_ account: BankAccount) -> String {
-        let walletName = model.wallets.first(where: { $0.id == account.walletID })?.name ?? "Unknown wallet"
-        let state = account.isEnabled ? "Enabled" : "Disabled"
+        let walletName = model.wallets.first(where: { $0.id == account.walletID })?.name ?? L10n.string("Unknown wallet")
+        let state = account.isEnabled ? L10n.string("Enabled") : L10n.string("Disabled")
         return "\(state) · \(walletName)"
     }
 }

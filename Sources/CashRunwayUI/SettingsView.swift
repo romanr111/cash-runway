@@ -28,6 +28,8 @@ struct SettingsView: View {
     @State private var isBackupExporting = false
     @State private var isFeedbackReportPresented = false
     @State private var isDiagnosticsPresented = false
+    @State private var isLanguageSettingsPresented = false
+    @AppStorage(AppLanguagePreference.storageKey) private var languagePreferenceRaw = AppLanguagePreference.system.rawValue
 
     var body: some View {
         NavigationStack {
@@ -43,17 +45,17 @@ struct SettingsView: View {
                             .padding(.horizontal, 4)
 
                         VStack(spacing: 0) {
-                            moreRow(icon: "square.grid.2x2", tint: "#64D1D5", title: "Categories", subtitle: "Manage visibility, order, and merges") {
+                            moreRow(icon: "square.grid.2x2", tint: "#64D1D5", title: "Categories", subtitle: L10n.string("Manage visibility, order, and merges")) {
                                 isCategoryManagementPresented = true
                             }
                             .accessibilityIdentifier(CashRunwayAccessibilityID.settingsCategoriesRow)
                             rowDivider
-                            moreRow(icon: "tag.fill", tint: "#F7A72A", title: "Labels", subtitle: "\(model.labels.count) labels") {
+                            moreRow(icon: "tag.fill", tint: "#F7A72A", title: "Labels", subtitle: L10n.labelCount(model.labels.count)) {
                                 isLabelsPresented = true
                             }
                             .accessibilityIdentifier(CashRunwayAccessibilityID.settingsLabelsRow)
                             rowDivider
-                            moreRow(icon: "repeat", tint: "#1CC389", title: "Scheduled Transactions", subtitle: "\(model.templates.count) templates") {
+                            moreRow(icon: "repeat", tint: "#1CC389", title: "Scheduled Transactions", subtitle: L10n.templateCount(model.templates.count)) {
                                 isTemplatesPresented = true
                             }
                             .accessibilityIdentifier(CashRunwayAccessibilityID.settingsScheduledTransactionsRow)
@@ -61,7 +63,12 @@ struct SettingsView: View {
                             staticRow(icon: "banknote.fill", tint: "#4A80C1", title: "Main Currency", value: "UAH")
                             .accessibilityIdentifier(CashRunwayAccessibilityID.settingsMainCurrencyRow)
                             rowDivider
-                            moreRow(icon: "wallet.pass.fill", tint: "#60788A", title: "Manual Wallets", subtitle: "\(model.wallets.count) wallets") {
+                            moreRow(icon: "globe", tint: "#2AAAD2", title: "Language", subtitle: languagePreference.displayName) {
+                                isLanguageSettingsPresented = true
+                            }
+                            .accessibilityIdentifier(CashRunwayAccessibilityID.settingsLanguageRow)
+                            rowDivider
+                            moreRow(icon: "wallet.pass.fill", tint: "#60788A", title: "Manual Wallets", subtitle: L10n.walletCount(model.wallets.count)) {
                                 isWalletsPresented = true
                             }
                             .accessibilityIdentifier(CashRunwayAccessibilityID.settingsWalletsRow)
@@ -79,16 +86,16 @@ struct SettingsView: View {
                             .padding(.horizontal, 4)
 
                         VStack(spacing: 0) {
-                            moreRow(icon: "tray.and.arrow.down.fill", tint: "#5FD4BF", title: "Import CSV", subtitle: "Map and load bank exports") {
+                            moreRow(icon: "tray.and.arrow.down.fill", tint: "#5FD4BF", title: "Import CSV", subtitle: L10n.string("Map and load bank exports")) {
                                 if model.hasBootstrapped && model.wallets.isEmpty {
-                                    model.errorMessage = "Create at least one wallet before importing CSV."
+                                    model.errorMessage = L10n.string("Create at least one wallet before importing CSV.")
                                 } else {
                                     isCSVImporterPresented = true
                                 }
                             }
                             .accessibilityIdentifier(CashRunwayAccessibilityID.settingsImportCSVRow)
                             rowDivider
-                            moreRow(icon: "square.and.arrow.up.fill", tint: "#E5862F", title: "Export CSV", subtitle: isExporting ? "Exporting…" : "Share the current filtered export") {
+                            moreRow(icon: "square.and.arrow.up.fill", tint: "#E5862F", title: "Export CSV", subtitle: isExporting ? L10n.string("Exporting…") : L10n.string("Share the current filtered export")) {
                                 guard !isExporting else { return }
                                 isExporting = true
                                 let query = model.transactionQuery
@@ -112,12 +119,12 @@ struct SettingsView: View {
                             }
                             .accessibilityIdentifier(CashRunwayAccessibilityID.settingsExportCSVRow)
                             rowDivider
-                            moreRow(icon: "externaldrive.fill", tint: "#4A80C1", title: "Import Full Backup", subtitle: "Replace data from JSON") {
+                            moreRow(icon: "externaldrive.fill", tint: "#4A80C1", title: "Import Full Backup", subtitle: L10n.string("Replace data from JSON")) {
                                 isBackupImporterPresented = true
                             }
                             .accessibilityIdentifier(CashRunwayAccessibilityID.settingsImportBackupRow)
                             rowDivider
-                            moreRow(icon: "externaldrive.badge.plus", tint: "#7A6FF0", title: "Export Full Backup", subtitle: isBackupExporting ? "Exporting…" : "Share unencrypted backup JSON") {
+                            moreRow(icon: "externaldrive.badge.plus", tint: "#7A6FF0", title: "Export Full Backup", subtitle: isBackupExporting ? L10n.string("Exporting…") : L10n.string("Share unencrypted backup JSON")) {
                                 guard !isBackupExporting else { return }
                                 isBackupExportWarningPresented = true
                             }
@@ -170,7 +177,7 @@ struct SettingsView: View {
                             .padding(.horizontal, 4)
 
                         VStack(spacing: 0) {
-                            moreRow(icon: "wrench.and.screwdriver.fill", tint: "#FF5E57", title: "Diagnostics", subtitle: "Counts and local state") {
+                            moreRow(icon: "wrench.and.screwdriver.fill", tint: "#FF5E57", title: "Diagnostics", subtitle: L10n.string("Counts and local state")) {
                                 isDiagnosticsPresented = true
                             }
                         }
@@ -204,6 +211,9 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $isDiagnosticsPresented) {
                 DiagnosticsView(model: model)
+            }
+            .sheet(isPresented: $isLanguageSettingsPresented) {
+                LanguageSettingsView(selection: $languagePreferenceRaw)
             }
             .sheet(isPresented: $isCSVExporterPresented) {
                 if let url = exportFileURL {
@@ -324,31 +334,40 @@ struct SettingsView: View {
     private var monobankSubtitle: String {
         let status = model.monobankConnectionStatus()
         guard let integration = status.integration, integration.status != .disabled else {
-            return "Connect cards and import new expenses automatically"
+            return L10n.string("Connect cards and import new expenses automatically")
         }
         if integration.status == .tokenInvalid || integration.status == .syncFailed || status.lastSyncError != nil {
-            return "Sync failed · Tap to fix"
+            return L10n.string("Sync failed · Tap to fix")
         }
         if let lastSync = status.lastSuccessfulSyncAt {
-            return "\(status.enabledAccountCount) cards connected · Last sync \(relativeFormatter.localizedString(for: lastSync, relativeTo: Date()))"
+            return L10n.string("%@ connected · Last sync %@", L10n.cardCount(status.enabledAccountCount), relativeFormatter.localizedString(for: lastSync, relativeTo: Date()))
         }
-        return "\(status.enabledAccountCount) cards connected · Waiting for first sync"
+        return L10n.string("%@ connected · Waiting for first sync", L10n.cardCount(status.enabledAccountCount))
     }
 
     private var relativeFormatter: RelativeDateTimeFormatter {
-        let formatter = RelativeDateTimeFormatter()
+        let formatter = Self._cachedFormatter
+        formatter.locale = L10n.locale
         formatter.unitsStyle = .short
         return formatter
     }
 
-    private func moreRow(icon: String, tint: String, title: String, subtitle: String, action: @escaping () -> Void) -> some View {
+    private static let _cachedFormatter: RelativeDateTimeFormatter = {
+        RelativeDateTimeFormatter()
+    }()
+
+    private var languagePreference: AppLanguagePreference {
+        AppLanguagePreference.value(for: languagePreferenceRaw)
+    }
+
+    private func moreRow(icon: String, tint: String, title: LocalizedStringKey, subtitle: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             rowContent(icon: icon, tint: tint, title: title, subtitle: subtitle)
         }
         .buttonStyle(.plain)
     }
 
-    private func staticRow(icon: String, tint: String, title: String, value: String) -> some View {
+    private func staticRow(icon: String, tint: String, title: LocalizedStringKey, value: String) -> some View {
         HStack(spacing: 14) {
             CategoryGlyph(iconName: icon, colorHex: tint, size: 44)
             VStack(alignment: .leading, spacing: 3) {
@@ -365,16 +384,19 @@ struct SettingsView: View {
         .padding(.vertical, 16)
     }
 
-    private func rowContent(icon: String, tint: String, title: String, subtitle: String) -> some View {
+    private func rowContent(icon: String, tint: String, title: LocalizedStringKey, subtitle: String) -> some View {
         HStack(spacing: 14) {
             CategoryGlyph(iconName: icon, colorHex: tint, size: 44)
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(CashRunwayTheme.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
                 Text(subtitle)
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(CashRunwayTheme.textSecondary)
+                    .lineLimit(2)
             }
             Spacer()
             Image(systemName: "chevron.right")
@@ -545,11 +567,11 @@ private struct DiagnosticsView: View {
     var body: some View {
         NavigationStack {
             List {
-                Text("Wallets: \(model.wallets.count)")
-                Text("Transactions: \(model.transactions.count)")
-                Text("Budgets: \(model.budgets.count)")
-                Text("Templates: \(model.templates.count)")
-                Text("Labels: \(model.labels.count)")
+                Text(L10n.string("Wallets: %d", model.wallets.count))
+                Text(L10n.string("Transactions: %d", model.transactions.count))
+                Text(L10n.string("Budgets: %d", model.budgets.count))
+                Text(L10n.string("Templates: %d", model.templates.count))
+                Text(L10n.string("Labels: %d", model.labels.count))
             }
             .navigationTitle("Diagnostics")
             .toolbar {
@@ -557,6 +579,103 @@ private struct DiagnosticsView: View {
                     Button("Done") { dismiss() }
                 }
             }
+        }
+    }
+}
+
+private struct LanguageSettingsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var selection: String
+
+    var body: some View {
+        NavigationStack {
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 22) {
+                    ScreenTitle(title: "Language")
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Choose how Cash Runway decides which language to use.")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(CashRunwayTheme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, 4)
+
+                        VStack(spacing: 0) {
+                            ForEach(AppLanguagePreference.allCases) { option in
+                                Button {
+                                    selection = option.rawValue
+                                } label: {
+                                    HStack(spacing: 14) {
+                                        CategoryGlyph(iconName: option.iconName, colorHex: option.tint, size: 44)
+                                        VStack(alignment: .leading, spacing: 3) {
+                                            Text(option.displayName)
+                                                .font(.system(size: 17, weight: .semibold))
+                                                .foregroundStyle(CashRunwayTheme.textPrimary)
+                                            Text(option.subtitle)
+                                                .font(.system(size: 14, weight: .medium))
+                                                .foregroundStyle(CashRunwayTheme.textSecondary)
+                                                .lineLimit(2)
+                                        }
+                                        Spacer()
+                                        if selection == option.rawValue {
+                                            Image(systemName: "checkmark.circle.fill")
+                                                .font(.system(size: 20, weight: .semibold))
+                                                .foregroundStyle(CashRunwayTheme.accent)
+                                        }
+                                    }
+                                    .padding(.horizontal, 18)
+                                    .padding(.vertical, 16)
+                                }
+                                .buttonStyle(.plain)
+
+                                if option != AppLanguagePreference.allCases.last {
+                                    Divider().overlay(CashRunwayTheme.line).padding(.leading, 72)
+                                }
+                            }
+                        }
+                        .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+                .padding(.bottom, 36)
+            }
+            .background(CashRunwayTheme.background)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+private extension AppLanguagePreference {
+    var subtitle: String {
+        switch self {
+        case .system:
+            L10n.string("Follow iOS language settings")
+        case .english:
+            L10n.string("Use English in Cash Runway")
+        case .ukrainian:
+            L10n.string("Use Ukrainian in Cash Runway")
+        }
+    }
+
+    var iconName: String {
+        switch self {
+        case .system: "gearshape.fill"
+        case .english: "textformat"
+        case .ukrainian: "text.bubble.fill"
+        }
+    }
+
+    var tint: String {
+        switch self {
+        case .system: "#60788A"
+        case .english: "#2AAAD2"
+        case .ukrainian: "#21C596"
         }
     }
 }

@@ -4,22 +4,15 @@ import Testing
 
 @Suite(.serialized)
 struct CSVEdgeCaseTests {
-    @Test func detectPresetPrivatBank() throws {
+    @Test(arguments: [
+        (["Дата операції", "Сума в ГРН"], CSVPreset.privatBank),
+        (["description", "mcc", "amount"], CSVPreset.monobank),
+        (["foo", "bar"], CSVPreset.generic),
+    ])
+    func detectPreset(headers: [String], expected: CSVPreset) throws {
         let repository = try TestSupport.makeRepository()
         let service = CSVService(repository: repository)
-        #expect(service.detectPreset(headers: ["Дата операції", "Сума в ГРН"]) == .privatBank)
-    }
-
-    @Test func detectPresetMonobank() throws {
-        let repository = try TestSupport.makeRepository()
-        let service = CSVService(repository: repository)
-        #expect(service.detectPreset(headers: ["description", "mcc", "amount"]) == .monobank)
-    }
-
-    @Test func detectPresetGeneric() throws {
-        let repository = try TestSupport.makeRepository()
-        let service = CSVService(repository: repository)
-        #expect(service.detectPreset(headers: ["foo", "bar"]) == .generic)
+        #expect(service.detectPreset(headers: headers) == expected)
     }
 
     @Test func previewEmptyCSVThrows() throws {
@@ -39,20 +32,15 @@ struct CSVEdgeCaseTests {
         #expect(preview.totalRows >= 0)
     }
 
-    @Test func previewSemicolonDelimiter() throws {
+    @Test(arguments: [
+        ("Date;Amount\n2025-01-01;100", ["Date", "Amount"]),
+        ("Date\tAmount\n2025-01-01\t100", ["Date", "Amount"]),
+    ])
+    func previewDelimiter(text: String, expectedHeaders: [String]) throws {
         let repository = try TestSupport.makeRepository()
         let service = CSVService(repository: repository)
-        let text = "Date;Amount\n2025-01-01;100"
         let preview = try service.preview(data: Data(text.utf8))
-        #expect(preview.headers == ["Date", "Amount"])
-    }
-
-    @Test func previewTabDelimiter() throws {
-        let repository = try TestSupport.makeRepository()
-        let service = CSVService(repository: repository)
-        let text = "Date\tAmount\n2025-01-01\t100"
-        let preview = try service.preview(data: Data(text.utf8))
-        #expect(preview.headers == ["Date", "Amount"])
+        #expect(preview.headers == expectedHeaders)
     }
 
     @Test func importWithDebitCreditColumns() throws {

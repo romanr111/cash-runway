@@ -23,7 +23,7 @@ struct BackupView: View {
                     }
                 } else if let summary = coordinator.backupImportSummary {
                     Section("Preview") {
-                        summaryRow("Backup created", value: Self.dateFormatter.string(from: summary.createdAt))
+                        summaryRow("Backup created", value: dateText(summary.createdAt))
                         summaryRow("Wallets", value: "\(summary.walletCount)")
                         summaryRow("Transactions", value: "\(summary.transactionCount)")
                         summaryRow("Categories", value: "\(summary.categoryCount)")
@@ -62,7 +62,7 @@ struct BackupView: View {
             .navigationTitle("Import Full Backup")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(coordinator.restoreMessage == nil && coordinator.backupImportPreparationError == nil ? "Cancel" : "Done") { dismiss() }
+                    Button(coordinator.restoreMessage == nil && coordinator.backupImportPreparationError == nil ? L10n.string("Cancel") : L10n.string("Done")) { dismiss() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     if coordinator.backupImportSummary != nil, coordinator.backupImportPreparationError == nil, coordinator.restoreMessage == nil {
@@ -84,7 +84,7 @@ struct BackupView: View {
         }
     }
 
-    private func summaryRow(_ title: String, value: String) -> some View {
+    private func summaryRow(_ title: LocalizedStringKey, value: String) -> some View {
         HStack(alignment: .firstTextBaseline) {
             Text(title)
                 .foregroundStyle(CashRunwayTheme.textSecondary)
@@ -95,10 +95,15 @@ struct BackupView: View {
         }
     }
 
-    private static let dateFormatter: DateFormatter = {
+    private func dateText(_ date: Date) -> String {
+        Self.dateFormatter(locale: L10n.locale).string(from: date)
+    }
+
+    private static func dateFormatter(locale: Locale) -> DateFormatter {
         let formatter = DateFormatter()
+        formatter.locale = locale
         formatter.dateStyle = .medium
         formatter.timeStyle = .none
         return formatter
-    }()
+    }
 }
