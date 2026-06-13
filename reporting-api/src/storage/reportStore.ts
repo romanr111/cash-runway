@@ -118,8 +118,8 @@ export class UpstashReportStore implements ReportStore {
 }
 
 export function reportStoreFromEnv(env: NodeJS.ProcessEnv): ReportStore {
-  const restUrl = env.UPSTASH_REDIS_REST_URL;
-  const token = env.UPSTASH_REDIS_REST_TOKEN;
+  const restUrl = env.KV_REST_API_URL;
+  const token = env.KV_REST_API_TOKEN;
   if (!restUrl || !token) {
     throw new Error("Missing Upstash Redis configuration.");
   }

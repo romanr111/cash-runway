@@ -10,18 +10,18 @@ const completeEnv = {
   GITHUB_APP_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\\nkey\\n-----END PRIVATE KEY-----",
   GITHUB_REPO_OWNER: "romanr111",
   GITHUB_REPO_NAME: "cash-runway",
-  UPSTASH_REDIS_REST_URL: "https://example.upstash.io",
-  UPSTASH_REDIS_REST_TOKEN: "upstash-token"
+  KV_REST_API_URL: "https://example.upstash.io",
+  KV_REST_API_TOKEN: "upstash-token"
 };
 
 test("enabled reporting requires all deployment env vars", () => {
   const config = readReportingEnv({
     ...completeEnv,
-    UPSTASH_REDIS_REST_TOKEN: undefined
+    KV_REST_API_TOKEN: undefined
   });
 
   assert.equal(config.enabled, true);
-  assert.deepEqual(config.missing, ["UPSTASH_REDIS_REST_TOKEN"]);
+  assert.deepEqual(config.missing, ["KV_REST_API_TOKEN"]);
 });
 
 test("disabled reporting does not require secrets", () => {

@@ -18,8 +18,8 @@ const requiredEnabledEnv = [
   "GITHUB_APP_PRIVATE_KEY",
   "GITHUB_REPO_OWNER",
   "GITHUB_REPO_NAME",
-  "UPSTASH_REDIS_REST_URL",
-  "UPSTASH_REDIS_REST_TOKEN"
+  "KV_REST_API_URL",
+  "KV_REST_API_TOKEN"
 ] as const;
 
 export function readReportingEnv(env: NodeJS.ProcessEnv): ReportingEnv {
@@ -37,7 +37,7 @@ export function readReportingEnv(env: NodeJS.ProcessEnv): ReportingEnv {
     githubPrivateKey: env.GITHUB_APP_PRIVATE_KEY,
     githubRepoOwner: env.GITHUB_REPO_OWNER,
     githubRepoName: env.GITHUB_REPO_NAME,
-    upstashRestUrl: env.UPSTASH_REDIS_REST_URL,
-    upstashToken: env.UPSTASH_REDIS_REST_TOKEN
+    upstashRestUrl: env.KV_REST_API_URL,
+    upstashToken: env.KV_REST_API_TOKEN
   };
 }

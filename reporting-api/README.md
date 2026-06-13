@@ -48,8 +48,8 @@ Required enabled configuration:
 - `GITHUB_APP_PRIVATE_KEY`
 - `GITHUB_REPO_OWNER`
 - `GITHUB_REPO_NAME`
-- `UPSTASH_REDIS_REST_URL`
-- `UPSTASH_REDIS_REST_TOKEN`
+- `KV_REST_API_URL`
+- `KV_REST_API_TOKEN`
 
 Set `REPORTING_ENABLED=false` to fail closed with HTTP 503 without creating issues.
 
