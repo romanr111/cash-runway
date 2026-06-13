@@ -7,4 +7,5 @@ xcuserdata/
 *.xcuserstate
 Package.resolved
 reporting-api/node_modules/
+reporting-api/.vercel/
 .codegraph/
