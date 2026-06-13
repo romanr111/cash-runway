@@ -81,6 +81,8 @@ test_initializes_missing_db_for_current_worktree() {
   (cd "$repo" && "$BOOTSTRAP_SCRIPT") >/tmp/codegraph-bootstrap-test.out
 
   assert_file_exists "$repo/.codegraph/codegraph.db"
+  assert_file_exists "$repo/.codegraph/worktree-root"
+  assert_contains "$repo/.codegraph/worktree-root" "$repo"
   assert_contains "$init_log" "init $repo"
 }
 
@@ -121,8 +123,54 @@ test_rejects_mismatched_codegraph_project() {
   assert_contains /tmp/codegraph-bootstrap-mismatch.out "does not match this worktree"
 }
 
+test_rejects_existing_db_without_owner_marker() {
+  local repo="$TMP_ROOT/repo-missing-owner"
+  local bin_dir="$TMP_ROOT/bin-missing-owner"
+  local init_log="$TMP_ROOT/missing-owner-init.log"
+
+  make_repo "$repo"
+  repo="$(cd "$repo" && pwd -P)"
+  install_fake_codegraph "$bin_dir" "$repo" "$init_log"
+  mkdir -p "$repo/.codegraph"
+  : > "$repo/.codegraph/codegraph.db"
+
+  if (cd "$repo" && "$BOOTSTRAP_SCRIPT") >/tmp/codegraph-bootstrap-missing-owner.out 2>&1; then
+    echo "expected bootstrap to fail for existing DB without worktree owner marker" >&2
+    exit 1
+  fi
+
+  assert_contains /tmp/codegraph-bootstrap-missing-owner.out "missing worktree owner marker"
+}
+
+test_rejects_copied_codegraph_directory() {
+  local source_repo="$TMP_ROOT/repo-copy-source"
+  local target_repo="$TMP_ROOT/repo-copy-target"
+  local bin_dir="$TMP_ROOT/bin-copy"
+  local init_log="$TMP_ROOT/copy-init.log"
+
+  make_repo "$source_repo"
+  make_repo "$target_repo"
+  source_repo="$(cd "$source_repo" && pwd -P)"
+  target_repo="$(cd "$target_repo" && pwd -P)"
+  install_fake_codegraph "$bin_dir" "$source_repo" "$init_log"
+
+  (cd "$source_repo" && "$BOOTSTRAP_SCRIPT") >/tmp/codegraph-bootstrap-copy-source.out
+  cp -R "$source_repo/.codegraph" "$target_repo/.codegraph"
+
+  export CODEGRAPH_FAKE_STATUS_PROJECT="$target_repo"
+
+  if (cd "$target_repo" && "$BOOTSTRAP_SCRIPT") >/tmp/codegraph-bootstrap-copy-target.out 2>&1; then
+    echo "expected bootstrap to fail for copied .codegraph directory" >&2
+    exit 1
+  fi
+
+  assert_contains /tmp/codegraph-bootstrap-copy-target.out "belongs to another worktree"
+}
+
 test_initializes_missing_db_for_current_worktree
 test_rejects_running_from_subdirectory
 test_rejects_mismatched_codegraph_project
+test_rejects_existing_db_without_owner_marker
+test_rejects_copied_codegraph_directory
 
 echo "CodeGraph bootstrap tests passed"
