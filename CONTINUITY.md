@@ -2,8 +2,8 @@
 
 - Goal: Enforce repo-local CodeGraph worktree isolation.
 - Success criteria: CodeGraph bootstrap runs from the current worktree root, initializes that worktree's own `.codegraph/codegraph.db`, rejects mismatched CodeGraph project roots, `just` recipes use the bootstrap guard, and guidance documents the required flow.
-- Current state: CodeGraph worktree isolation guard now rejects existing DBs without owner markers and copied `.codegraph/` directories with mismatched owner markers.
-- Next action: Commit the review fix, validate against the updated branch commit, then merge through PR.
+- Current state: CodeGraph worktree isolation guard now rejects existing DBs without owner markers and copied `.codegraph/` directories with mismatched owner markers; PR `#37` is open and Vercel upload-path failure is being fixed.
+- Next action: Commit `.vercelignore`, push PR update, wait for checks, then merge.
 - Open questions: None.
 - Merge status: not-merged.
 
@@ -33,3 +33,4 @@
 - 2026-06-13 [VALIDATED] Disposable detached worktree from commit `c139762` ran `just graph-bootstrap`, created its own `.codegraph/codegraph.db`, reported the disposable worktree path, and was removed.
 - 2026-06-13 [REVIEW] Fixed blocker from code review: existing CodeGraph DBs now require `.codegraph/worktree-root`; missing or mismatched owner markers fail before `codegraph status`.
 - 2026-06-13 [VALIDATED] Focused bootstrap tests now cover owner marker creation, missing-owner rejection, and copied `.codegraph/` rejection.
+- 2026-06-13 [CI] PR `#37` Vercel check failed before build on an overlong vendored GRDB test fixture path; added `.vercelignore` for `Vendor/GRDB.swift/Tests/CustomSQLite/`.
