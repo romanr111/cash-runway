@@ -12,8 +12,8 @@ Rules:
 
 - Goal: Implement and harden text-only user bug/improvement reporting using a Vercel TypeScript API and GitHub App server-side issue creation.
 - Success criteria: Backend validation, sanitization, issue formatting, idempotency, Redis/Upstash rate limits, duplicate suppression, safe logging, GitHub failure mapping, mockable GitHub client, tests, and `.env.example`; iOS Codable payload, validation, idempotency key submission, safe diagnostics, anonymous install hash, service abstraction, SwiftUI Settings form, explicit config gating, and no screenshots/logs/files/financial data upload path.
-- Current state: PR `#32` was locally merge-resolved against current `origin/main`; required GitHub labels and Vercel Preview placeholder environment variables were created, local Vercel build succeeded, backend/Swift/build/smoke validation passed, but Vercel deployments for `cash-runway-reporting-api` remained `UNKNOWN`/deployment-protected instead of returning a public API response.
-- Next action: Push `codex/feedback-report-phase1`, then resolve Vercel deployment protection/status in the dashboard or with real project credentials before wiring the iOS production endpoint.
+- Current state: PR `#32` was mergeable after push; required GitHub labels and Vercel Preview placeholder environment variables were created, the Vercel project root was corrected to `reporting-api`, local validation passed, and local CLI deployments still stalled at `UNKNOWN` while Git-backed Vercel needed one more branch push to redeploy with the corrected root.
+- Next action: Push the Vercel root/ignore ledger update, then verify the new `cash-runway-reporting-api` Vercel check serves `/api/reports` behind deployment protection or disable protection for public iOS access.
 - Open questions: GitHub App installation scope, permissions, webhook state, and private credential storage could not be confirmed through the current `gh` token because GitHub App installation APIs returned 401/403.
 - Merge status: not-merged.
 
@@ -48,4 +48,5 @@ Rules:
 - 2026-06-13 [VERCEL] Created and linked `romanr111s-projects/cash-runway-reporting-api`; connected GitHub repo; added branch-scoped Preview placeholders for reporting, GitHub App, repo, and Upstash env names.
 - 2026-06-13 [VALIDATED] `reporting-api` `npm test` passed 35 tests; `npm run typecheck` passed; production npm audit (`--omit=dev`) found 0 vulnerabilities.
 - 2026-06-13 [VALIDATED] Core mirror diff, `git diff --check`, focused `ReportIssueTests`, full `swift test`, clean iPhone 17 simulator build, and seeded simulator smoke passed.
-- 2026-06-13 [BLOCKED] Vercel remote deploy with explicit `nodejs22.x` runtime failed; removing the runtime made local `vercel build` pass, but preview/prebuilt deployments stayed `UNKNOWN` and public requests returned Vercel deployment protection instead of the API.
+- 2026-06-13 [BLOCKED] Vercel remote deploy with explicit `nodejs22.x` runtime failed; removing the runtime made local `vercel build` pass, but local preview/prebuilt deployments stayed `UNKNOWN`.
+- 2026-06-13 [VERCEL] Git-backed `cash-runway-reporting-api` deployment initially returned `NOT_FOUND` for `/api/reports` because Root Directory was `.`; updated project Root Directory to `reporting-api`.
