@@ -30,7 +30,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   }
   if (config.missing.length > 0) {
     consoleSafeReportLogger({ reportId, status: "config_error", durationMs: Date.now() - startedAt });
-    sendJson(res, 503, { error: "Reporting service is not configured." });
+    sendJson(res, 503, { error: "Reporting service is not configured.", missing: config.missing });
     return;
   }
 
