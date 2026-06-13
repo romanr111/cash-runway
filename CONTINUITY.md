@@ -12,9 +12,9 @@ Rules:
 
 - Goal: Implement and harden text-only user bug/improvement reporting using a Vercel TypeScript API and GitHub App server-side issue creation.
 - Success criteria: Backend validation, sanitization, issue formatting, idempotency, Redis/Upstash rate limits, duplicate suppression, safe logging, GitHub failure mapping, mockable GitHub client, tests, and `.env.example`; iOS Codable payload, validation, idempotency key submission, safe diagnostics, anonymous install hash, service abstraction, SwiftUI Settings form, explicit config gating, and no screenshots/logs/files/financial data upload path.
-- Current state: PR `#32` was mergeable after push; required GitHub labels and Vercel Preview placeholder environment variables were created, the Vercel project root was corrected to `reporting-api`, local validation passed, and the Git-backed Vercel reporting API deployment was ready with `/api/reports` live behind deployment protection.
-- Next action: Disable or intentionally bypass Vercel deployment protection for `cash-runway-reporting-api`, replace placeholder env values with real GitHub App/Upstash credentials, then wire the iOS production endpoint/client marker.
-- Open questions: GitHub App installation scope, permissions, webhook state, and private credential storage could not be confirmed through the current `gh` token because GitHub App installation APIs returned 401/403.
+- Current state: PR `#32` is ready for review. The GitHub App is created and installed; Vercel Preview is deployed with real GitHub App, Upstash, and reporting environment variables; Upstash Redis is connected; backend curl E2E and idempotency passed; iOS Debug staging configuration is clean-clone safe and the simulator E2E successfully created GitHub issue `#41` with correct labels and safe diagnostics. Release reporting remains disabled pending production setup.
+- Next action: Merge PR `#32` after final review, then set production Vercel environment variables and a production-specific reporting secret before enabling Release reporting.
+- Open questions: None.
 - Merge status: not-merged.
 
 ## Git Context
