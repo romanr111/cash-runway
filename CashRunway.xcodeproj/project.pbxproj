@@ -101,6 +101,8 @@
 		A00200010001000100010028 /* Sources/CashRunwayCore/FeedbackReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayCore/FeedbackReport.swift; sourceTree = "<group>"; };
 		A00200010001000100010029 /* Sources/CashRunwayUI/FeedbackReportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayUI/FeedbackReportService.swift; sourceTree = "<group>"; };
 		A0020001000100010001002A /* Sources/CashRunwayUI/FeedbackReportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayUI/FeedbackReportView.swift; sourceTree = "<group>"; };
+		A0020001000100010001002B /* AppHost/ReportingConfig.example.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = AppHost/ReportingConfig.example.xcconfig; sourceTree = "<group>"; };
+		A0020001000100010001002C /* AppHost/ReportingConfig.local.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = AppHost/ReportingConfig.local.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -142,6 +144,8 @@
 					A0020001000100010001000B /* AppHost/CashRunway.entitlements */,
 					A00200010001000100010024 /* AppHost/Assets.xcassets */,
 					A00200010001000100010026 /* AppHost/Localizable.xcstrings */,
+					A0020001000100010001002B /* AppHost/ReportingConfig.example.xcconfig */,
+					A0020001000100010001002C /* AppHost/ReportingConfig.local.xcconfig */,
 				);
 			name = AppHost;
 			sourceTree = "<group>";
@@ -457,12 +461,14 @@
 		};
 		A00B00010001000100010003 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = A0020001000100010001002C /* AppHost/ReportingConfig.local.xcconfig */;
 			buildSettings = {
 				CODE_SIGNING_ALLOWED = YES;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = AppHost/CashRunway.entitlements;
 				DEVELOPMENT_TEAM = N9TN2548UX;
 				EMBED_PACKAGE_RESOURCE_BUNDLE_NAMES = "";
+				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AppHost/Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -482,12 +488,14 @@
 		};
 		A00B00010001000100010004 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = A0020001000100010001002B /* AppHost/ReportingConfig.example.xcconfig */;
 			buildSettings = {
 				CODE_SIGNING_ALLOWED = YES;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = AppHost/CashRunway.entitlements;
 				DEVELOPMENT_TEAM = N9TN2548UX;
 				EMBED_PACKAGE_RESOURCE_BUNDLE_NAMES = "";
+				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AppHost/Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;

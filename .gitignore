@@ -11,3 +11,4 @@ reporting-api/node_modules/
 reporting-api/.vercel/
 .codegraph/
 .vercel
+AppHost/ReportingConfig.local.xcconfig
