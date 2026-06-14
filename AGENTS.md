@@ -3,10 +3,6 @@
 Swift/SwiftUI/GRDB iOS app with a Node/TypeScript reporting API.
 
 ## Always Apply
-
-- Follow existing architecture, naming, formatting, and test style.
-- Prefer the smallest complete change. Do not add dependencies, modules,
-  architectural patterns, formatters, or linters unless required.
 - Keep `Sources/CashRunwayCore/` and
   `Modules/CashRunwayCorePackage/Sources/CashRunwayCore/` identical.
 - Store credentials and sensitive values only in Keychain or server-side
@@ -20,7 +16,8 @@ Swift/SwiftUI/GRDB iOS app with a Node/TypeScript reporting API.
 - Report every skipped validation gate and the reason it was skipped.
 
 ## Token Efficiency
-
+- Always use Headroom for bulky command output, logs, code search, and cross-agent
+  handoff memory when available.
 - Keep routine progress updates to at most two sentences unless more detail is
   requested.
 - Do not emit recurring environment, completed-task, or current-focus recaps.
@@ -39,24 +36,13 @@ Swift/SwiftUI/GRDB iOS app with a Node/TypeScript reporting API.
   into the conversation. Report the outcome, the first relevant failure, and the
   retained log location.
 - Before context compaction, a major task switch, or transfer to a fresh
-  session, update the `CONTINUITY.md` Snapshot.
-
-## Model and Output Routing
-
-- Use deterministic scripts and existing `just` recipes for mechanical checks,
-  formatting, validation, and repeatable inspections.
-- Use Headroom for bulky command output, logs, code search, and cross-agent
-  handoff memory when available.
-- For OpenAI-compatible clients such as OpenCode or Kimi Code CLI, a reachable
-  local proxy is not enough; require an end-to-end smoke request through the
-  target client before calling the setup working.
+  session, update the `CONTINUITY.md` Snapshot. Keep it fresh.
 - Use subagents only for parallel evidence gathering or isolated review tasks
   with clear inputs and expected outputs.
 - Escalate reasoning effort after one concrete failed attempt, an ambiguous
   requirement, a security/privacy decision, or an architectural tradeoff.
 
 ## Generated and Heavy Files
-
 - Do not hand-edit generated files, lock files, coverage output, `.build`,
   `DerivedData`, `.codegraph`, or Xcode project files unless the task explicitly
   requires it. Use the approved generator or project tool instead.
@@ -64,9 +50,7 @@ Swift/SwiftUI/GRDB iOS app with a Node/TypeScript reporting API.
   `DerivedData`, or `.codegraph` files unless the task requires them.
 
 ## Load Only When Relevant
-
 Before editing matching areas, read:
-
 - Swift, SwiftUI, GRDB, app, or core code:
   `agent_docs/instructions/ios.md`
 - `reporting-api/**`:
@@ -77,7 +61,5 @@ Before editing matching areas, read:
   `agent_docs/instructions/validation.md`
 - Branches, worktrees, CodeGraph, or cleanup:
   `agent_docs/instructions/worktrees.md`
-
-Do not load unrelated instruction or reference files.
 
 Historical and troubleshooting material is under `agent_docs/reference/`.
