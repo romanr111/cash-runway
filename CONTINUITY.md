@@ -1,40 +1,102 @@
+Rewrite Snapshot to current truth on every meaningful update. Meaningful update:
+file modified, decision made, blocker hit/resolved, task completed/abandoned, or
+verification result changed. Reading or searching does not trigger rewrite.
+
 ## Snapshot
-- Goal: Fix P0 release blockers that are code-owned: SideStore source metadata and full-backup restore cleanup for Monobank bank sync state.
-- Success criteria: SideStore source declares a supported category (`utilities`) and matching photo privacy permission; full restore clears stale bank integrations/accounts/import IDs/category rules atomically and deletes cleared Monobank token Keychain entries; invalid backup failure leaves ledger and bank state unchanged; iOS deployment target raised to 18.0; release workflow requires `just lint && just verify` before building; Git tag releases are marked as prereleases; conflicting `ios-release.yml` workflow removed.
-- State: Implemented on isolated worktree branch `codex/sidestore-p0-fixes`.
-- Next action: Review/commit/publish if desired. Complete the physical-device SideStore release rehearsal separately; repository validation cannot prove SideStore refresh/update lifecycle behavior.
-- Handoff trigger: Rewrite this Snapshot before context compaction, a major task switch, or task completion.
 
-## Git Context
-- Repo root: `/Users/roman/.codex/worktrees/cash-runway-sidestore-p0`
-- Branch: `codex/sidestore-p0-fixes`
-- Base: `main` at `1d10cf4`
-- Primary worktree note: `/Users/roman/Documents/Development/Cash Runway` remains on `main` with a pre-existing `AppHost/Localizable.xcstrings` edit outside this branch.
+Goal: Make Cash Runway issue screenshot upload work end to end with proper
+GitHub uploads, redeploy, and verify via Xcode MCP that an issue created from
+the app has an attached screenshot.
 
-## Working Set
-- `.github/workflows/sidestore-release.yml`
-- `.swiftlint.yml`
-- `CONTINUITY.md`
-- `CashRunway.xcodeproj/project.pbxproj`
-- `Modules/CashRunwayCorePackage/Package.swift`
-- `Sources/CashRunwayCore/CashRunwayRepository.swift`
-- `Modules/CashRunwayCorePackage/Sources/CashRunwayCore/CashRunwayRepository.swift`
-- `Sources/CashRunwayCore/Models.swift`
-- `Modules/CashRunwayCorePackage/Sources/CashRunwayCore/Models.swift`
-- `Sources/CashRunwayUI/AppModel.swift`
-- `Tests/CashRunwayCoreTests/FullBackupTests.swift`
+Current state: Goal achieved. Production reporting API uses GitHub Contents
+uploads again, and an app-submitted Xcode MCP E2E report created GitHub issue
+`#54` with a visible `raw.githubusercontent.com` screenshot Markdown image and
+no data URI.
+
+Next action: Final status/handoff. Do not create or print reporting secrets.
+
+Open:
+- `just check` / `Scripts/agent-validate.sh --all` previously did not produce a
+  stable exit in this tool session after the wrapper remained running with no
+  visible validation child process. Targeted validations and Xcode MCP E2E are
+  complete.
+
+Repo root: `/Users/roman/Documents/Development/Cash Runway`
+Working directory: `/Users/roman/.codex/worktrees/cash-runway-reporting-e2e`
+Branch: `codex/reporting-e2e-enable`
+Base branch: `main`
+Merge status: not-merged
+
+## Worktree detail
+
+Worktree reason: dirty-primary
+Ownership: `.vercelignore`, `.mcp.json`,
+`Sources/CashRunwayCore/ReportingSecrets.swift`,
+`Modules/CashRunwayCorePackage/Sources/CashRunwayCore/ReportingSecrets.swift`,
+`Sources/CashRunwayCore/FeedbackReport.swift`,
+`Modules/CashRunwayCorePackage/Sources/CashRunwayCore/FeedbackReport.swift`,
+`Sources/CashRunwayUI/FeedbackReportService.swift`,
+`Tests/CashRunwayCoreTests/ReportIssueTests.swift`, `reporting-api/**`,
+`AppHost/Localizable.xcstrings`, `CONTINUITY.md`
+Conflicts: Do not touch unrelated localization edit in primary checkout.
+Cleanup proof: pending
+
+## Working
+
+- Final status/handoff only.
+
+## Done
+
+- 2026-06-14: Created isolated worktree
+  `/Users/roman/.codex/worktrees/cash-runway-reporting-e2e` on branch
+  `codex/reporting-e2e-enable`.
+- 2026-06-14: Added DEBUG launch-environment fallback for
+  `CASH_RUNWAY_REPORT_CLIENT_SECRET`; provider persists it to the existing
+  reporting Keychain account. Later updated DEBUG env to override stale Keychain
+  values during simulator E2E.
+- 2026-06-14: Tightened `.vercelignore` so Vercel deploys the `reporting-api`
+  project root without uploading `.build`, iOS sources, or local dependencies.
+- 2026-06-14: Set production Vercel `REPORTING_ENABLED=true` and replaced empty
+  `CASH_RUNWAY_REPORT_SECRET` with a generated shared secret.
+- 2026-06-14: Text-only backend POST smoke created GitHub issue `#46`; Xcode MCP
+  simulator feedback form created GitHub issue `#47`.
+- 2026-06-14: Added server-side screenshot count/size logging.
+- 2026-06-14: Raised rate limit from 3/hour to 10/hour, 30/day; rate-limit
+  response now includes limit/remaining counter and client shows the counter.
+- 2026-06-14: Merged `origin/main`, resolved `CONTINUITY.md` conflict.
+- 2026-06-14: Reverted the data URI screenshot workaround back to
+  `GitHubClient.uploadFile`, embedding returned file URLs in issue Markdown.
+- 2026-06-14: Redeployed production reporting API:
+  `dpl_AZN87SyJnMBNzSLC3VR7qc9ygkP2`.
+- 2026-06-14: Direct backend screenshot POST smoke created GitHub issue `#53`;
+  body has `raw.githubusercontent.com` screenshot URL and `hasDataUri=false`.
+- 2026-06-14: Added DEBUG-only feedback screenshot preload env hook because the
+  system Photos picker was visible but not exposed in Xcode MCP accessibility
+  snapshots, and `cliclick`/AppleScript coordinate fallback lacked Accessibility
+  permissions.
+- 2026-06-14: Xcode MCP app E2E created GitHub issue `#54` from the feedback UI
+  with preloaded screenshot attached. Verification: author
+  `app/cash-runway-issues-reporter`, `hasVisibleMarkdownImage=true`,
+  `screenshotUrlHost=raw.githubusercontent.com`, `hasDataUri=false`.
 
 ## Receipts
-- 2026-06-14: Created isolated worktree `/Users/roman/.codex/worktrees/cash-runway-sidestore-p0` on branch `codex/sidestore-p0-fixes`.
-- 2026-06-14: `Scripts/pre-flight.sh` passed in isolated worktree; core mirror diff clean before edits.
-- 2026-06-14: `just graph-bootstrap`, `just graph-status`, and post-edit `just graph-sync` completed for the isolated worktree.
-- 2026-06-14: AltStore docs checked: accepted categories include `utilities`, not `finance`; `appPermissions.privacy` should include `UsageDescription` Info.plist keys.
-- 2026-06-14: `python3 -m json.tool altstore.json` passed.
-- 2026-06-14: `swift test --filter FullBackupTests` failed red before implementation on stale bank rows/token cleanup, then passed after implementation.
-- 2026-06-14: `git diff --check` passed.
-- 2026-06-14: Core mirror files remained identical after edits.
-- 2026-06-14: First `just check` failed on unrelated/transient `timelineSnapshotGroupsByPeriod()` `readFailed(-67701)`; targeted `swift test --filter timelineSnapshotGroupsByPeriod` passed immediately after.
-- 2026-06-14: Second `just check` passed, including iPhone 17 simulator build. Logs: `/tmp/cash-runway-agent-validation/20260614-132045-8587`.
 
-## Open Questions
-- SideStore release rehearsal still needs physical-device/manual release validation through `sidestore-release.yml`: install/update same bundle identifier, verify data/Keychain persistence, refresh while locked/backgrounded, and confirm app opens after refresh.
+- 2026-06-14: Primary checkout had existing tracked modification:
+  `M AppHost/Localizable.xcstrings`.
+- 2026-06-14: API RED failed against data URI workaround; GREEN passed after
+  restoring upload behavior.
+- 2026-06-14: `npm test`, `npm run typecheck`, and `npm audit --omit=dev`
+  passed in `reporting-api/`.
+- 2026-06-14: `swift test --filter ReportIssueTests/reportingKeychainSecretProvider`
+  passed after DEBUG env-overrides-stale-Keychain test was added.
+- 2026-06-14: Xcode MCP `build_run_sim` passed after final iOS changes.
+- 2026-06-14: Restored `ReportingSecrets.generated.swift` files to the
+  committed placeholder state before staging; real generated secret payloads
+  must not ship.
+- 2026-06-14: `git diff --check` passed; mirror diff for
+  `ReportingSecrets.swift` and `FeedbackReport.swift` passed; `just graph-sync`
+  completed.
+- 2026-06-14: `just check` and direct `Scripts/agent-validate.sh --all` were
+  attempted earlier but tool sessions stayed running after no matching
+  validation process was visible. Retained log:
+  `/tmp/cash-runway-reporting-e2e-agent-validate.log`.

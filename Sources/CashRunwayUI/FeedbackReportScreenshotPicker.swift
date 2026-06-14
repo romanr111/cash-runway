@@ -6,6 +6,7 @@ struct FeedbackReportScreenshotPicker: View {
     let isLocked: Bool
 
     @State private var selectedItems: [PhotosPickerItem] = []
+    @State private var compressionAlertMessage: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -40,8 +41,9 @@ struct FeedbackReportScreenshotPicker: View {
             .disabled(isLocked || screenshots.count >= ReportIssueDraft.maxScreenshots)
             .accessibilityIdentifier(CashRunwayAccessibilityID.feedbackScreenshotPicker)
             .onChange(of: selectedItems) { _, newItems in
-                Task { await loadScreenshots(from: newItems) }
-            }
+            guard !newItems.isEmpty else { return }
+            Task { await loadScreenshots(from: newItems) }
+        }
 
             Text(
                 L10n.string(
@@ -52,6 +54,19 @@ struct FeedbackReportScreenshotPicker: View {
             .font(CashRunwayTheme.captionFont)
             .foregroundStyle(CashRunwayTheme.textSecondary)
         }
+        .alert(
+            L10n.string("Screenshots Not Attached"),
+            isPresented: .init(
+                get: { compressionAlertMessage != nil },
+                set: { if !$0 { compressionAlertMessage = nil } }
+            ),
+            actions: {
+                Button(L10n.string("OK")) { compressionAlertMessage = nil }
+            },
+            message: {
+                Text(compressionAlertMessage ?? "")
+            }
+        )
     }
 
     @ViewBuilder
@@ -81,36 +96,59 @@ struct FeedbackReportScreenshotPicker: View {
 
     private func loadScreenshots(from items: [PhotosPickerItem]) async {
         var loaded: [ReportIssueScreenshot] = []
+        var droppedCount = 0
         for item in items {
             guard loaded.count < ReportIssueDraft.maxScreenshots else { break }
             if let screenshot = await loadScreenshot(from: item) {
                 loaded.append(screenshot)
+            } else {
+                droppedCount += 1
             }
         }
         await MainActor.run {
             self.screenshots = loaded
             self.selectedItems = []
+            if droppedCount > 0 {
+                compressionAlertMessage = L10n.string(
+                    "%lld screenshot(s) could not be attached because they were too large after compression.",
+                    droppedCount
+                )
+            }
         }
     }
 
     private func loadScreenshot(from item: PhotosPickerItem) async -> ReportIssueScreenshot? {
         guard let data = try? await item.loadTransferable(type: Data.self) else { return nil }
         guard let image = UIImage(data: data) else { return nil }
-        guard let compressed = compress(image: image) else { return nil }
+        let inputBytes = data.count
+        guard let compressed = compress(image: image, inputBytes: inputBytes) else { return nil }
         let filename = generateFilename(mimeType: .jpeg)
         return ReportIssueScreenshot(data: compressed, mimeType: .jpeg, filename: filename)
     }
 
-    private func compress(image: UIImage) -> Data? {
-        let maxDimension: CGFloat = 1200
+    private func compress(image: UIImage, inputBytes: Int) -> Data? {
         let maxBytes = ReportIssueDraft.maxScreenshotBytes
         let targetBytes = Int(Double(maxBytes) * 0.85)
 
+        if let data = compress(image: image, maxDimension: 1200, targetBytes: targetBytes, maxBytes: maxBytes, minQuality: 0.3) {
+            logCompression(inputBytes: inputBytes, outputBytes: data.count, maxDimension: 1200, quality: nil)
+            return data
+        }
+
+        if let data = compress(image: image, maxDimension: 800, targetBytes: targetBytes, maxBytes: maxBytes, minQuality: 0.2) {
+            logCompression(inputBytes: inputBytes, outputBytes: data.count, maxDimension: 800, quality: nil)
+            return data
+        }
+
+        return nil
+    }
+
+    private func compress(image: UIImage, maxDimension: CGFloat, targetBytes: Int, maxBytes: Int, minQuality: CGFloat) -> Data? {
         let resized = image.resized(toFit: maxDimension)
         var quality: CGFloat = 0.9
         guard var data = resized.jpegData(compressionQuality: quality) else { return nil }
 
-        while data.count > targetBytes && quality > 0.3 {
+        while data.count > targetBytes && quality > minQuality {
             quality -= 0.1
             if let smaller = resized.jpegData(compressionQuality: quality) {
                 data = smaller
@@ -118,6 +156,15 @@ struct FeedbackReportScreenshotPicker: View {
         }
 
         return data.count <= maxBytes ? data : nil
+    }
+
+    private func logCompression(inputBytes: Int, outputBytes: Int, maxDimension: CGFloat, quality: CGFloat?) {
+        #if DEBUG
+        NSLog("[Screenshot] %dx%d JPEG: %d → %d bytes (%.1f:1 ratio)",
+              Int(maxDimension), Int(maxDimension),
+              inputBytes, outputBytes,
+              outputBytes > 0 ? Double(inputBytes) / Double(outputBytes) : 0)
+        #endif
     }
 
     private func generateFilename(mimeType: ReportIssueScreenshotMimeType) -> String {

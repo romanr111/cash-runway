@@ -371,7 +371,7 @@ public struct ReportIssueService: Sendable {
         case 400:
             throw ReportIssueServiceError.validation(errorMessage(from: data) ?? "Invalid report.")
         case 429:
-            throw ReportIssueServiceError.rateLimited
+            throw ReportIssueServiceError.rateLimited(limit: rateLimitLimit(from: data, fallback: 10), remaining: rateLimitRemaining(from: data, fallback: 0), windowSeconds: 3600)
         default:
             throw ReportIssueServiceError.server(response.statusCode)
         }
@@ -383,33 +383,64 @@ public struct ReportIssueService: Sendable {
         }
         return errorResponse.error
     }
+
+    private func rateLimitLimit(from data: Data, fallback: Int) -> Int {
+        guard let response = try? JSONDecoder().decode(RateLimitErrorResponse.self, from: data) else {
+            return fallback
+        }
+        return response.limit ?? fallback
+    }
+
+    private func rateLimitRemaining(from data: Data, fallback: Int) -> Int {
+        guard let response = try? JSONDecoder().decode(RateLimitErrorResponse.self, from: data) else {
+            return fallback
+        }
+        return response.remaining ?? fallback
+    }
 }
 
 public enum ReportIssueServiceError: LocalizedError, Equatable, Sendable {
     case invalidResponse
     case validation(String)
-    case rateLimited
+    case rateLimited(limit: Int, remaining: Int, windowSeconds: Int)
     case server(Int)
     case notConfigured
 
     public var errorDescription: String? {
         switch self {
         case .invalidResponse:
-            L10n.string("The reporting service returned an invalid response.")
+            return L10n.string("The reporting service returned an invalid response.")
         case let .validation(message):
-            message
-        case .rateLimited:
-            L10n.string("Too many reports were sent. Try again later.")
+            return message
+        case let .rateLimited(limit, remaining, _):
+            let used = limit - remaining
+            if used >= limit {
+                return L10n.string(
+                    "You've reached the limit of %lld reports this hour. Try again later.",
+                    limit
+                )
+            } else {
+                return L10n.string(
+                    "You've sent %lld of %lld reports this hour. Try again later.",
+                    used, limit
+                )
+            }
         case let .server(statusCode):
-            L10n.string("Could not create the report. Server status: %d.", statusCode)
+            return L10n.string("Could not create the report. Server status: %d.", statusCode)
         case .notConfigured:
-            L10n.string("Reporting is not configured yet.")
+            return L10n.string("Reporting is not configured yet.")
         }
     }
 }
 
 private struct ReportIssueErrorResponse: Codable {
     let error: String
+}
+
+private struct RateLimitErrorResponse: Codable {
+    let limit: Int?
+    let remaining: Int?
+    let error: String?
 }
 
 private func containsForbiddenFinancialText(_ value: String) -> Bool {

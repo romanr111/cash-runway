@@ -164,6 +164,37 @@ struct ReportIssueTests {
         #expect(provider.clientSecret() == "stored-secret")
     }
 
+    #if DEBUG
+    @Test func reportingKeychainSecretProviderStoresDebugEnvironmentSecret() throws {
+        let keychain = TestKeychainStore()
+        let provider = ReportingKeychainSecretProvider(
+            keychain: keychain,
+            environment: {
+                [ReportingKeychainSecretProvider.environmentSecretKey: "debug-secret"]
+            }
+        )
+
+        #expect(provider.clientSecret() == "debug-secret")
+        let stored = try #require(try keychain.read(account: ReportingKeychainSecretProvider.keychainAccount))
+        #expect(String(data: stored, encoding: .utf8) == "debug-secret")
+    }
+
+    @Test func reportingKeychainSecretProviderLetsDebugEnvironmentOverrideStoredSecret() throws {
+        let keychain = TestKeychainStore()
+        try keychain.write(Data("stale-secret".utf8), account: ReportingKeychainSecretProvider.keychainAccount)
+        let provider = ReportingKeychainSecretProvider(
+            keychain: keychain,
+            environment: {
+                [ReportingKeychainSecretProvider.environmentSecretKey: "fresh-debug-secret"]
+            }
+        )
+
+        #expect(provider.clientSecret() == "fresh-debug-secret")
+        let stored = try #require(try keychain.read(account: ReportingKeychainSecretProvider.keychainAccount))
+        #expect(String(data: stored, encoding: .utf8) == "fresh-debug-secret")
+    }
+    #endif
+
     @Test func serviceHandlesCreatedResponse() async throws {
         let service = ReportIssueService(
             endpointURL: URL(string: "https://reports.example.test/api/reports")!,
@@ -183,7 +214,7 @@ struct ReportIssueTests {
         await #expect(throws: ReportIssueServiceError.validation("Invalid report.")) {
             _ = try await ReportIssueService.test(statusCode: 400, body: #"{"error":"Invalid report."}"#).submit(payload)
         }
-        await #expect(throws: ReportIssueServiceError.rateLimited) {
+        await #expect(throws: ReportIssueServiceError.rateLimited(limit: 10, remaining: 0, windowSeconds: 3600)) {
             _ = try await ReportIssueService.test(statusCode: 429, body: #"{"error":"Too many reports."}"#).submit(payload)
         }
         await #expect(throws: ReportIssueServiceError.server(502)) {
