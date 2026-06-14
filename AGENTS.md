@@ -1,8 +1,8 @@
-# Cash Runway — Agent Instructions
+# Cash Runway - Agent Instructions
 
 Swift/SwiftUI/GRDB iOS app with a Node/TypeScript reporting API.
 
-## Always apply
+## Always Apply
 
 - Follow existing architecture, naming, formatting, and test style.
 - Prefer the smallest complete change. Do not add dependencies, modules,
@@ -12,17 +12,18 @@ Swift/SwiftUI/GRDB iOS app with a Node/TypeScript reporting API.
 - Store credentials and sensitive values only in Keychain or server-side
   environment variables. Never commit or log secrets or sensitive user data.
 - Do not use `print()` for production diagnostics.
-- Use existing `just` recipes and repository scripts instead of recreating commands.
-- Do not add, modify, or run XCUITest/E2E tests locally unless explicitly requested.
+- Use existing `just` recipes and repository scripts instead of recreating
+  commands.
+- Do not add, modify, or run XCUITest/E2E tests locally unless explicitly
+  requested.
 - Treat every git worktree as a separate CodeGraph project.
-- Report skipped validation and its reason.
+- Report every skipped validation gate and the reason it was skipped.
 
-## Token efficiency
+## Token Efficiency
 
-- Keep this file concise and do not repeat its rules in status messages.
-- Keep routine progress updates to at most two sentences unless more detail is requested.
+- Keep routine progress updates to at most two sentences unless more detail is
+  requested.
 - Do not emit recurring environment, completed-task, or current-focus recaps.
-  Track active work with the agent's task or todo mechanism.
 - Run `Scripts/pre-flight.sh` before meaningful feature or bug-fix work.
 - Use CodeGraph before broad text searches or repeated raw file reads. Run
   `just graph-bootstrap` before CodeGraph operations in each worktree.
@@ -30,17 +31,39 @@ Swift/SwiftUI/GRDB iOS app with a Node/TypeScript reporting API.
   line range. Do not read the complete file unless necessary.
 - Use `Scripts/localize-xcstrings.py` to modify
   `AppHost/Localizable.xcstrings`; do not rewrite the complete catalog manually.
-- Batch related edits to the same file. Re-read only when the target or resulting
-  state is uncertain.
+- Batch related edits to the same file. Re-read only when the target or
+  resulting state is uncertain.
 - Prefer targeted tests during implementation and repository validation scripts
   for completion. Preserve complete raw logs outside model context.
-- Do not paste complete build logs, test logs, JSON catalogs, or large diffs into
-  the conversation. Report the outcome, the first relevant failure, and the
+- Do not paste complete build logs, test logs, JSON catalogs, or large diffs
+  into the conversation. Report the outcome, the first relevant failure, and the
   retained log location.
-- Before context compaction, a major task switch, or transfer to a fresh session,
-  update the `CONTINUITY.md` Snapshot.
+- Before context compaction, a major task switch, or transfer to a fresh
+  session, update the `CONTINUITY.md` Snapshot.
 
-## Load only when relevant
+## Model and Output Routing
+
+- Use deterministic scripts and existing `just` recipes for mechanical checks,
+  formatting, validation, and repeatable inspections.
+- Use Headroom for bulky command output, logs, code search, and cross-agent
+  handoff memory when available.
+- For OpenAI-compatible clients such as OpenCode or Kimi Code CLI, a reachable
+  local proxy is not enough; require an end-to-end smoke request through the
+  target client before calling the setup working.
+- Use subagents only for parallel evidence gathering or isolated review tasks
+  with clear inputs and expected outputs.
+- Escalate reasoning effort after one concrete failed attempt, an ambiguous
+  requirement, a security/privacy decision, or an architectural tradeoff.
+
+## Generated and Heavy Files
+
+- Do not hand-edit generated files, lock files, coverage output, `.build`,
+  `DerivedData`, `.codegraph`, or Xcode project files unless the task explicitly
+  requires it. Use the approved generator or project tool instead.
+- Do not read generated, vendored, artifact, snapshot, coverage, `.build`,
+  `DerivedData`, or `.codegraph` files unless the task requires them.
+
+## Load Only When Relevant
 
 Before editing matching areas, read:
 

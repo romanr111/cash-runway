@@ -16,41 +16,38 @@ Never commit, print, expose, or persist secrets in:
 
 Use synthetic placeholders in documentation and tests.
 
-## iOS storage
+## iOS Storage
 
 Store credentials, access tokens, and sensitive local values in Keychain.
 
 Do not move security-sensitive values from Keychain to `UserDefaults`, files, or
 database fields without an explicitly approved design change.
 
-## Server configuration
+## Server Configuration
 
 Store reporting API and GitHub App secrets in deployment environment variables.
-
-Preserve explicit configuration gating for Debug, Preview, and Release builds.
 
 Do not silently enable reporting with placeholder or incomplete configuration.
 
 ## Logging
 
 - Use the existing logging mechanism.
-- Use Apple unified logging when no project logging abstraction exists.
+- Use Apple unified logging when no project logging exists.
 - Do not use `print()` for production diagnostics.
 - Do not log tokens, secrets, authorization headers, sensitive financial data,
   user report bodies, or unnecessary device identifiers.
 
-## User data and PII
+## User Data and PII
 
-- Collect only data required for the requested feature.
+- Collect only data required for the approved feature.
 - Prefer allowlists over blocklists.
 - Do not add new PII or device fingerprinting fields without explicit approval.
-- Anonymous installation identifiers must remain non-reversible and non-sensitive.
+- Anonymous installation identifiers must remain non-reversible and
+  non-sensitive.
 
 ## Diagnostics
 
-Diagnostics sent to the reporting API or GitHub must be explicitly allowlisted.
-
-Do not add:
+Do not add diagnostic collection for:
 
 - database exports;
 - arbitrary application logs;
@@ -63,8 +60,7 @@ Do not add:
 
 ## Tests
 
-Use synthetic credentials and user data.
+Use synthetic credentials and synthetic user data.
 
-Tests must not read or mutate production Keychain state, real deployment
-configuration, or external GitHub repositories unless an explicit E2E task
-requires it.
+Do not access production Keychain state, production repositories, or real user
+accounts unless an explicit E2E task requires it.

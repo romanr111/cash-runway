@@ -1,6 +1,6 @@
 # Worktree and CodeGraph Instructions
 
-## Worktree isolation
+## Worktree Isolation
 
 Treat each Git worktree as an independent development environment.
 
@@ -10,22 +10,16 @@ Before meaningful work, run:
 Scripts/pre-flight.sh
 ```
 
-Review:
+Review the current branch, modified files, untracked files, existing diff, and
+mirrored-core drift. Do not overwrite or discard unrelated work.
 
-- current branch;
-- modified files;
-- untracked files;
-- existing diff;
-- mirrored-core drift.
-
-Do not overwrite or discard existing unrelated work.
-
-## CodeGraph lifecycle
+## CodeGraph Lifecycle
 
 Each worktree must have its own:
 
 ```text
 .codegraph/codegraph.db
+.codegraph/worktree-root
 ```
 
 Never copy or share `.codegraph/` between worktrees.
@@ -37,26 +31,22 @@ just graph-bootstrap
 just graph-status
 ```
 
-Use:
+After meaningful source changes, run:
 
 ```bash
 just graph-sync
 ```
 
-after meaningful source changes.
-
-Use:
+Use this only when normal synchronization is insufficient:
 
 ```bash
 just graph-reindex
 ```
 
-only when normal synchronization is insufficient.
+Multiple agents may share one CodeGraph daemon only when they operate in the
+same worktree. Different worktrees require separate indexes.
 
-Multiple agents may share one CodeGraph daemon only when they operate in the same
-worktree. Different worktrees require separate indexes.
-
-## Branch management
+## Branch Management
 
 - Use one feature branch per isolated task.
 - Do not mix unrelated changes.
@@ -65,7 +55,7 @@ worktree. Different worktrees require separate indexes.
 
 ## Cleanup
 
-After a branch is merged and cleanup is approved, run only the applicable steps:
+After a branch is merged and cleanup is approved, run only applicable steps:
 
 ```bash
 git worktree remove <path>
@@ -78,9 +68,7 @@ Do not delete an unmerged branch or a worktree containing uncommitted changes.
 
 ## Continuity
 
-Follow the update contract in `CONTINUITY.md`.
-
-Update its Snapshot when:
+Follow the update contract in `CONTINUITY.md`. Update its Snapshot when:
 
 - repository state materially changes;
 - a decision is made;

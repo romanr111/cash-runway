@@ -4,10 +4,10 @@
 
 These rules apply to `reporting-api/**`.
 
-Follow the existing Node.js and TypeScript architecture. Prefer small changes and
-existing service boundaries.
+Follow existing Node.js and TypeScript architecture. Prefer small changes that
+preserve the current API contract.
 
-## Request validation
+## Request Validation
 
 - Preserve strict request validation.
 - Preserve payload-size limits.
@@ -15,7 +15,7 @@ existing service boundaries.
 - Sanitize all user-controlled text before adding it to GitHub issues.
 - Do not expose raw validation-library or provider errors to clients.
 
-## Security and privacy
+## Security and Privacy
 
 - Keep GitHub App credentials server-side.
 - Keep deployment secrets in environment variables.
@@ -25,7 +25,7 @@ existing service boundaries.
 - Do not accept screenshots, documents, arbitrary files, raw logs, databases, or
   financial data unless separately requested as an approved architecture change.
 
-## GitHub App integration
+## GitHub App Integration
 
 - Preserve minimum required GitHub App permissions.
 - Preserve repository and installation validation.
@@ -33,7 +33,7 @@ existing service boundaries.
 - Preserve mockable GitHub-client boundaries.
 - Map GitHub provider failures to stable, safe application errors.
 
-## Idempotency and abuse protection
+## Idempotency and Abuse Protection
 
 - Preserve idempotency-key handling.
 - Preserve duplicate suppression.
@@ -52,9 +52,8 @@ existing service boundaries.
 
 ## Validation
 
-During implementation, run the smallest relevant API test subset where available.
-
-Before completion of API changes, run:
+During implementation, run the smallest relevant API test subset. Before
+handoff for API changes, run:
 
 ```bash
 cd reporting-api
@@ -68,5 +67,5 @@ Run:
 npm audit --omit=dev
 ```
 
-when dependencies change or when publish-readiness/security verification is
+when dependencies change or when publish-readiness or security verification is
 explicitly required.
