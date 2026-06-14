@@ -68,6 +68,19 @@ jobs:
           /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${{ steps.meta.outputs.version }}" AppHost/Info.plist
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ steps.meta.outputs.build }}" AppHost/Info.plist
 
+      - name: Install validation tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v just >/dev/null 2>&1; then
+            brew install just
+          fi
+          if ! command -v swiftlint >/dev/null 2>&1; then
+            brew install swiftlint
+          fi
+          just --version
+          swiftlint version
+
       - name: Run validation gate
         shell: bash
         run: |
