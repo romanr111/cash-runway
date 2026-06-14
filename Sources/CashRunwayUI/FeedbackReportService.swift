@@ -14,7 +14,17 @@ struct ConfiguredFeedbackReportService: FeedbackReportSubmitting {
 
     init(
         config: ReportingConfig = .bundleDefault,
-        secretProvider: ReportingKeychainSecretProvider = ReportingKeychainSecretProvider(),
+        secretProvider: ReportingKeychainSecretProvider = ReportingKeychainSecretProvider(
+            environment: {
+                var env = ProcessInfo.processInfo.environment
+                if env[ReportingKeychainSecretProvider.environmentSecretKey] == nil,
+                   let plist = Bundle.main.object(forInfoDictionaryKey: "CashRunwayReportClientSecret") as? String,
+                   !plist.isEmpty, plist != "replace-with-your-report-secret" {
+                    env[ReportingKeychainSecretProvider.environmentSecretKey] = plist
+                }
+                return env
+            }
+        ),
         diagnosticsProvider: SafeDiagnosticsProvider = SafeDiagnosticsProvider()
     ) {
         let configMessage = config.unavailableMessage

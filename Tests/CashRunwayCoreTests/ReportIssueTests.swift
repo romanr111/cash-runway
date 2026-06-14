@@ -199,7 +199,7 @@ struct ReportIssueTests {
         await #expect(throws: ReportIssueServiceError.validation("Invalid report.")) {
             _ = try await ReportIssueService.test(statusCode: 400, body: #"{"error":"Invalid report."}"#).submit(payload)
         }
-        await #expect(throws: ReportIssueServiceError.rateLimited) {
+        await #expect(throws: ReportIssueServiceError.rateLimited(limit: 5, remaining: 0, windowSeconds: 3600)) {
             _ = try await ReportIssueService.test(statusCode: 429, body: #"{"error":"Too many reports."}"#).submit(payload)
         }
         await #expect(throws: ReportIssueServiceError.server(502)) {

@@ -59,7 +59,7 @@ test("same normalized report is blocked for twenty four hours", async () => {
   );
 });
 
-test("install hash is limited to three reports per hour", async () => {
+test("install hash is limited to five reports per hour", async () => {
   const store = new MemoryReportStore();
   let issueNumber = 100;
   const client: GitHubClient = {
@@ -72,12 +72,12 @@ test("install hash is limited to three reports per hour", async () => {
     }
   };
 
-  for (let index = 0; index < 3; index += 1) {
+  for (let index = 0; index < 5; index += 1) {
     await submitReport({
       report: { ...report, title: `Unique report ${index}`, description: `A unique enough report description ${index}.` },
       reportId: `report-${index}`,
       idempotencyKey: `attempt-${index}`,
-      ip: "203.0.113.10",
+      ip: "[IP_ADDRESS]",
       store,
       client
     });
@@ -85,10 +85,10 @@ test("install hash is limited to three reports per hour", async () => {
 
   await assert.rejects(
     submitReport({
-      report: { ...report, title: "Unique report 4", description: "A fourth unique report description." },
-      reportId: "report-4",
-      idempotencyKey: "attempt-4",
-      ip: "203.0.113.10",
+      report: { ...report, title: "Unique report 5", description: "A sixth unique report description." },
+      reportId: "report-5",
+      idempotencyKey: "attempt-5",
+      ip: "[IP_ADDRESS]",
       store,
       client
     }),

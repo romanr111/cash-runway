@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { createGitHubIssue } from "../github/createGitHubIssue.js";
-import { checkReportRateLimits } from "../security/rateLimit.js";
+import { checkReportRateLimits, type RateLimitResult } from "../security/rateLimit.js";
 import type { ReportStore } from "../storage/reportStore.js";
 import type { GitHubClient, NormalizedReport } from "../types/report.js";
 import { duplicateHash } from "./duplicateHash.js";
@@ -47,8 +47,13 @@ export async function submitReport(input: SubmitReportInput): Promise<ReportSubm
   }
 
   try {
-    if (!await checkReportRateLimits(input.store, { installHash: input.report.installHash, ip: input.ip })) {
-      throw new ReportSubmissionError(429, "Too many reports. Try again later.");
+    const rateLimit = await checkReportRateLimits(input.store, { installHash: input.report.installHash, ip: input.ip });
+    if (!rateLimit.allowed) {
+      throw new ReportSubmissionError(429, "Too many reports. Try again later.", {
+        limit: rateLimit.limit,
+        remaining: rateLimit.remaining,
+        windowSeconds: rateLimit.windowSeconds
+      });
     }
 
     duplicateStoreKey = `duplicate:${duplicateHash(input.report)}`;
@@ -79,7 +84,11 @@ export async function submitReport(input: SubmitReportInput): Promise<ReportSubm
 }
 
 export class ReportSubmissionError extends Error {
-  constructor(public readonly statusCode: number, message: string) {
+  constructor(
+    public readonly statusCode: number,
+    message: string,
+    public readonly metadata?: Record<string, unknown>
+  ) {
     super(message);
     this.name = "ReportSubmissionError";
   }

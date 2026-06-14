@@ -10,7 +10,7 @@ import { verifySharedSecret } from "../src/security/verifySharedSecret.js";
 import { UpstashReportStore } from "../src/storage/reportStore.js";
 import type { ReportInput } from "../src/types/report.js";
 
-const maxBodyBytes = 4 * 1024 * 1024; // 4 MB to fit base64-encoded screenshots under Vercel limits
+const maxBodyBytes = 5 * 1024 * 1024; // 5 MB to accommodate base64-encoded screenshots
 
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const startedAt = Date.now();
@@ -80,6 +80,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       ...metadata,
       status: "created",
       issueNumber: result.issueNumber,
+      screenshotCount: report.screenshots.length,
+      screenshotBytes: report.screenshots.reduce((sum, s) => sum + s.buffer.length, 0),
       durationMs: Date.now() - startedAt
     });
     sendJson(res, 201, { status: "created", issueNumber: result.issueNumber });
@@ -105,7 +107,13 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         status: error.statusCode === 429 ? "rate_limited" : "duplicate",
         durationMs: Date.now() - startedAt
       });
-      sendJson(res, error.statusCode, { error: error.message });
+      const payload: Record<string, unknown> = { error: error.message };
+      if (error.statusCode === 429 && error.metadata) {
+        payload.limit = error.metadata.limit;
+        payload.remaining = error.metadata.remaining;
+        payload.windowSeconds = error.metadata.windowSeconds;
+      }
+      sendJson(res, error.statusCode, payload);
       return;
     }
     if (error instanceof GitHubIssueError) {

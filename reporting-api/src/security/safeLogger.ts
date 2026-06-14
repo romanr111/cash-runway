@@ -5,6 +5,8 @@ export type SafeReportLogEvent = {
   appVersion?: string;
   status: "created" | "duplicate" | "rate_limited" | "validation_failed" | "disabled" | "config_error" | "server_error";
   issueNumber?: number;
+  screenshotCount?: number;
+  screenshotBytes?: number;
   durationMs: number;
 };
 
