@@ -10,10 +10,10 @@ Rules:
 
 ## Snapshot
 
-- Goal: Implement and harden text-only user bug/improvement reporting using a Vercel TypeScript API and GitHub App server-side issue creation.
-- Success criteria: Backend validation, sanitization, issue formatting, idempotency, Redis/Upstash rate limits, duplicate suppression, safe logging, GitHub failure mapping, mockable GitHub client, tests, and `.env.example`; iOS Codable payload, validation, idempotency key submission, safe diagnostics, anonymous install hash, service abstraction, SwiftUI Settings form, explicit config gating, and no screenshots/logs/files/financial data upload path.
-- Current state: PR `#32` was merged via squash commit `5002cce` on main.
-- Next action: Set production Vercel environment variables and a production-specific reporting secret before enabling Release reporting.
+- Goal: Refactor Cash Runway agent instructions for token efficiency.
+- Success criteria: Compact root `AGENTS.md`, scoped `agent_docs/instructions/` and `agent_docs/reference/` files, internally consistent validation command hierarchy, no agent-specific duplicate files, and no application behavior changes.
+- Current state: PR `#45` was merged via squash commit `7cd38d5` on main; worktree and branch cleaned up.
+- Next action: Resume normal feature work from the main worktree.
 - Open questions: None.
 - Merge status: merged.
 - Handoff trigger: when context is compacted or turns exceed ~50, rewrite this Snapshot to current truth before starting a fresh conversation.
@@ -21,23 +21,25 @@ Rules:
 ## Git Context
 
 - Repo root: `/Users/roman/Documents/Development/Cash Runway`
-- Working directory: `/Users/roman/.codex/worktrees/cash-runway-feedback-report-phase1`
-- Branch: `codex/feedback-report-phase1`
+- Working directory: `/Users/roman/Documents/Development/Cash Runway`
+- Branch: `main`
 - Base branch: `origin/main`
-- Worktree reason: isolated-feature
-- Merge status: not-merged
+- Worktree reason: primary
+- Merge status: merged
 
 ## Working Set
 
-- `Sources/CashRunwayUI/SettingsView.swift`
-- `Sources/CashRunwayUI/AccessibilityIdentifiers.swift`
-- `Tests/CashRunwayUITests/SettingsNavigationUITests.swift`
-- `Sources/CashRunwayCore/FeedbackReport.swift`
-- `Modules/CashRunwayCorePackage/Sources/CashRunwayCore/FeedbackReport.swift`
-- `CashRunway.xcodeproj/project.pbxproj`
-- `reporting-api/**`
-- `.gitignore`
-- `.vercelignore`
+- `AGENTS.md`
+- `agent_docs/instructions/ios.md`
+- `agent_docs/instructions/reporting-api.md`
+- `agent_docs/instructions/security-privacy.md`
+- `agent_docs/instructions/validation.md`
+- `agent_docs/instructions/worktrees.md`
+- `agent_docs/reference/code-location-guide.md`
+- `agent_docs/reference/github-app-setup.md`
+- `agent_docs/reference/simulator-smoke-notes.md`
+- `agent_docs/reference/ui-test-history.md`
+- `justfile`
 - `CONTINUITY.md`
 
 ## Receipts
