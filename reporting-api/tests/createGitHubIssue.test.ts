@@ -43,14 +43,14 @@ test("creates issue through mockable GitHub client", async () => {
 });
 
 test("uploads screenshots and embeds them in issue body", async () => {
-  const uploaded: { path: string; content: Buffer; message: string }[] = [];
+  let capturedBody: string | undefined;
   const client: GitHubClient = {
     async createIssue(input) {
+      capturedBody = input.body;
       return { issueNumber: 456 };
     },
-    async uploadFile(path, content, message) {
-      uploaded.push({ path, content, message });
-      return { rawUrl: `https://example.com/${path}` };
+    async uploadFile() {
+      return { rawUrl: "https://example.com/screenshot.png" };
     }
   };
 
@@ -63,7 +63,6 @@ test("uploads screenshots and embeds them in issue body", async () => {
 
   await createGitHubIssue(client, reportWithScreenshots, "report-2");
 
-  assert.equal(uploaded.length, 1);
-  assert.ok(uploaded[0].path.startsWith("reporting-screenshots/report-2/"));
-  assert.ok(uploaded[0].path.endsWith(".jpg"));
+  assert.ok(capturedBody?.includes("data:image/jpeg;base64,/9j/AA=="), "body should contain base64 data URI");
+  assert.ok(capturedBody?.includes("![Screenshot 1]"), "body should contain markdown image tag");
 });

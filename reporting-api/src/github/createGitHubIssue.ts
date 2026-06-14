@@ -7,7 +7,7 @@ export async function createGitHubIssue(
   report: NormalizedReport,
   reportId: string
 ): Promise<GitHubIssueResult> {
-  const screenshotUrls = await uploadScreenshots(client, report.screenshots, reportId);
+  const screenshotUrls = embedScreenshots(report.screenshots);
   const hash = duplicateHash(report);
   return client.createIssue({
     title: formatIssueTitle(report),
@@ -16,18 +16,10 @@ export async function createGitHubIssue(
   });
 }
 
-async function uploadScreenshots(
-  client: GitHubClient,
-  screenshots: DecodedScreenshot[],
-  reportId: string
-): Promise<string[]> {
-  const urls: string[] = [];
-  for (const screenshot of screenshots) {
-    const ext = screenshot.mimeType === "image/png" ? "png" : "jpg";
-    const path = `reporting-screenshots/${reportId}/${crypto.randomUUID()}.${ext}`;
-    const message = `Add screenshot for report ${reportId}`;
-    const result = await client.uploadFile(path, screenshot.buffer, message);
-    urls.push(result.rawUrl);
-  }
-  return urls;
+function embedScreenshots(screenshots: DecodedScreenshot[]): string[] {
+  return screenshots.map((s) => {
+    const base64 = s.buffer.toString("base64");
+    const mime = s.mimeType === "image/png" ? "image/png" : "image/jpeg";
+    return `data:${mime};base64,${base64}`;
+  });
 }

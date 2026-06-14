@@ -59,7 +59,7 @@ test("same normalized report is blocked for twenty four hours", async () => {
   );
 });
 
-test("install hash is limited to five reports per hour", async () => {
+test("install hash is limited to ten reports per hour", async () => {
   const store = new MemoryReportStore();
   let issueNumber = 100;
   const client: GitHubClient = {
@@ -72,7 +72,7 @@ test("install hash is limited to five reports per hour", async () => {
     }
   };
 
-  for (let index = 0; index < 5; index += 1) {
+  for (let index = 0; index < 10; index += 1) {
     await submitReport({
       report: { ...report, title: `Unique report ${index}`, description: `A unique enough report description ${index}.` },
       reportId: `report-${index}`,
@@ -85,9 +85,9 @@ test("install hash is limited to five reports per hour", async () => {
 
   await assert.rejects(
     submitReport({
-      report: { ...report, title: "Unique report 5", description: "A sixth unique report description." },
-      reportId: "report-5",
-      idempotencyKey: "attempt-5",
+      report: { ...report, title: "Unique report 10", description: "An eleventh unique report description." },
+      reportId: "report-10",
+      idempotencyKey: "attempt-10",
       ip: "[IP_ADDRESS]",
       store,
       client
@@ -136,16 +136,16 @@ test("ip fallback is limited when install hash is missing", async () => {
   );
 });
 
-test("screenshots are uploaded before issue creation", async () => {
+test("screenshots are embedded as data URIs in issue body", async () => {
   const store = new MemoryReportStore();
-  const uploadedPaths: string[] = [];
+  let capturedBody: string | undefined;
   const client: GitHubClient = {
-    async createIssue() {
+    async createIssue(input) {
+      capturedBody = input.body;
       return { issueNumber: 456 };
     },
-    async uploadFile(path) {
-      uploadedPaths.push(path);
-      return { rawUrl: `https://example.com/${path}` };
+    async uploadFile() {
+      return { rawUrl: "https://example.com/screenshot.png" };
     }
   };
 
@@ -157,9 +157,11 @@ test("screenshots are uploaded before issue creation", async () => {
     ]
   };
 
-  const result = await submitReport({ report: reportWithScreenshots, reportId: "report-screenshots", idempotencyKey: "s-1", ip: "203.0.113.10", store, client });
+  const result = await submitReport({ report: reportWithScreenshots, reportId: "report-screenshots", idempotencyKey: "s-1", ip: "[IP_ADDRESS]", store, client });
 
   assert.equal(result.issueNumber, 456);
-  assert.equal(uploadedPaths.length, 2);
-  assert.ok(uploadedPaths.every(path => path.startsWith("reporting-screenshots/report-screenshots/")));
+  assert.ok(capturedBody?.includes("data:image/jpeg;base64"), "body should contain jpeg data URI");
+  assert.ok(capturedBody?.includes("data:image/png;base64"), "body should contain png data URI");
+  assert.ok(capturedBody?.includes("![Screenshot 1]"), "body should contain first screenshot markdown");
+  assert.ok(capturedBody?.includes("![Screenshot 2]"), "body should contain second screenshot markdown");
 });
