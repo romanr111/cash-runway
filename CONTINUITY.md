@@ -11,52 +11,28 @@ Rules:
 
 ## Snapshot
 
-- Goal: Repair the top three token-efficiency audit findings for agent
-  instructions.
-- Success criteria: Root and scoped instruction files have complete readable
-  prose; model/output routing policy is present; continuity reflects this
-  branch and current task.
-- Current state: The top three audit items were addressed in the isolated
-  worktree, and the token-efficiency audit was formalized under `docs/testing/`.
-- Next action: Review the final diff and decide whether to commit or adjust.
-- Handoff trigger: Rewrite this Snapshot before context compaction, a major task
-  switch, or task completion.
+- Goal: Fix screenshot-feedback and CodeGraph status-parser review findings on a branch, then merge the result back to `main`.
+- Success criteria: Preserve the approved `screenshots` feedback field, stop parsing undocumented `Project:` from `codegraph status`, cover the CodeGraph change with regression tests, and land the branch on `main`.
+- Current state: The screenshot-feedback and CodeGraph status-parser fixes landed on local `main`.
+- Next action: None.
+- Handoff trigger: Rewrite this Snapshot before context compaction, a major task switch, or task completion.
 
 ## Git Context
 
-- Repo root: `/Users/roman/.codex/worktrees/cash-runway-agent-instructions-top3`
-- Branch: `codex/agent-instructions-top3`
-- Base: `main` at `eadfa82`
-- Primary checkout: `/Users/roman/Documents/Development/Cash Runway`
-- Primary checkout local state at branch creation: `D PLAN-SettingsUITests.md`,
-  `D PLAN.md`, untracked `PLAN_Optimization.md`, and untracked
-  `docs/testing/token-efficiency-audit-2026-06-14.md`.
+- Repo root: `/Users/roman/Documents/Development/Cash Runway`
+- Branch: `main`
+- Base: `origin/main` at `0cca853`
 
 ## Working Set
 
-- `AGENTS.md`
-- `agent_docs/instructions/ios.md`
 - `agent_docs/instructions/reporting-api.md`
-- `agent_docs/instructions/security-privacy.md`
-- `agent_docs/instructions/validation.md`
-- `agent_docs/instructions/worktrees.md`
-- `docs/testing/token-efficiency-audit-2026-06-14.md`
+- `Scripts/codegraph-bootstrap.sh`
+- `Scripts/test-codegraph-bootstrap.sh`
 - `CONTINUITY.md`
 
 ## Receipts
 
-- 2026-06-14 [DECISION] Used an isolated worktree to avoid modifying unrelated
-  local changes in the primary checkout.
-- 2026-06-14 [VALIDATED] `Scripts/pre-flight.sh` passed in the isolated worktree;
-  mirrored core sources were in sync before edits.
-- 2026-06-14 [VALIDATED] `git diff --check`, `just --list`, shell syntax checks
-  for repository scripts, and `python3 -m py_compile Scripts/localize-xcstrings.py`
-  passed after edits.
-- 2026-06-14 [DECISION] Formalized
-  `docs/testing/token-efficiency-audit-2026-06-14.md` as a clean durable audit
-  note instead of committing the compressed draft verbatim or discarding it.
-- 2026-06-13 [MERGED] PR `#45` was merged via squash commit `7cd38d5`, compacting
-  root/scoped agent instructions.
-- 2026-06-13 [VALIDATED] Core mirror diff, `git diff --check`, focused
-  `ReportIssueTests`, full `swift test`, clean iPhone 17 simulator build, and
-  seeded simulator smoke passed for the prior PR.
+- 2026-06-14 [RESOLVED] Narrowed `agent_docs/instructions/reporting-api.md` so it preserves the approved `screenshots` feedback field while continuing to forbid unapproved files and sensitive data.
+- 2026-06-14 [VALIDATED] Added CodeGraph bootstrap regression coverage for documented status output without `Project:`; `Scripts/test-codegraph-bootstrap.sh`, `just graph-bootstrap`, `Scripts/pre-flight.sh`, `git diff --check`, and `bash -n Scripts/codegraph-bootstrap.sh Scripts/test-codegraph-bootstrap.sh` passed.
+- 2026-06-14 [MERGED] PR `#44` merged as squash commit `0cca853`, and local `main` was fast-forwarded to that commit before this branch.
+- 2026-06-13 [MERGED] PR `#45` was merged via squash commit `7cd38d5`, compacting root/scoped agent instructions.

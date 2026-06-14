@@ -22,8 +22,9 @@ preserve the current API contract.
 - Never include private keys, tokens, installation identifiers, authorization
   headers, or raw provider responses in logs or API responses.
 - Preserve safe diagnostic allowlists.
-- Do not accept screenshots, documents, arbitrary files, raw logs, databases, or
-  financial data unless separately requested as an approved architecture change.
+- Preserve the approved `screenshots` feedback field. Do not accept documents,
+  arbitrary files, raw logs, databases, or financial data unless separately
+  requested as an approved architecture change.
 
 ## GitHub App Integration
 

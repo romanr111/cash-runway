@@ -36,8 +36,25 @@ case "${1:-}" in
     echo "init $(pwd)" >> "$CODEGRAPH_FAKE_INIT_LOG"
     ;;
   status)
-    echo "CodeGraph Status"
-    echo "Project: $CODEGRAPH_FAKE_STATUS_PROJECT"
+    case "${CODEGRAPH_FAKE_STATUS_FORMAT:-project}" in
+      project)
+        echo "CodeGraph Status"
+        echo "Project: $CODEGRAPH_FAKE_STATUS_PROJECT"
+        ;;
+      stats)
+        echo "Index Statistics:"
+        echo "Files indexed: 42"
+        echo "Symbols: 100"
+        ;;
+      fail)
+        echo "status failed" >&2
+        exit 2
+        ;;
+      *)
+        echo "unexpected status format: $CODEGRAPH_FAKE_STATUS_FORMAT" >&2
+        exit 2
+        ;;
+    esac
     ;;
   *)
     echo "unexpected codegraph command: ${1:-}" >&2
@@ -86,6 +103,26 @@ test_initializes_missing_db_for_current_worktree() {
   assert_contains "$init_log" "init $repo"
 }
 
+test_accepts_status_without_project_field_for_owned_db() {
+  local repo="$TMP_ROOT/repo-status-stats"
+  local bin_dir="$TMP_ROOT/bin-status-stats"
+  local init_log="$TMP_ROOT/status-stats-init.log"
+
+  make_repo "$repo"
+  repo="$(cd "$repo" && pwd -P)"
+  install_fake_codegraph "$bin_dir" "$repo" "$init_log"
+
+  (cd "$repo" && "$BOOTSTRAP_SCRIPT") >/tmp/codegraph-bootstrap-status-stats-init.out
+
+  export CODEGRAPH_FAKE_STATUS_FORMAT=stats
+  (cd "$repo" && "$BOOTSTRAP_SCRIPT") >/tmp/codegraph-bootstrap-status-stats.out
+  unset CODEGRAPH_FAKE_STATUS_FORMAT
+
+  assert_file_exists "$repo/.codegraph/codegraph.db"
+  assert_file_exists "$repo/.codegraph/worktree-root"
+  assert_contains "$repo/.codegraph/worktree-root" "$repo"
+}
+
 test_rejects_running_from_subdirectory() {
   local repo="$TMP_ROOT/repo-subdir"
   local bin_dir="$TMP_ROOT/bin-subdir"
@@ -104,23 +141,25 @@ test_rejects_running_from_subdirectory() {
   assert_contains /tmp/codegraph-bootstrap-subdir.out "Run from the git worktree root"
 }
 
-test_rejects_mismatched_codegraph_project() {
-  local repo="$TMP_ROOT/repo-mismatch"
-  local other="$TMP_ROOT/other-worktree"
-  local bin_dir="$TMP_ROOT/bin-mismatch"
-  local init_log="$TMP_ROOT/mismatch-init.log"
+test_rejects_failed_codegraph_status() {
+  local repo="$TMP_ROOT/repo-status-fails"
+  local bin_dir="$TMP_ROOT/bin-status-fails"
+  local init_log="$TMP_ROOT/status-fails-init.log"
 
   make_repo "$repo"
-  mkdir -p "$other"
-  other="$(cd "$other" && pwd -P)"
-  install_fake_codegraph "$bin_dir" "$other" "$init_log"
+  repo="$(cd "$repo" && pwd -P)"
+  install_fake_codegraph "$bin_dir" "$repo" "$init_log"
 
-  if (cd "$repo" && "$BOOTSTRAP_SCRIPT") >/tmp/codegraph-bootstrap-mismatch.out 2>&1; then
-    echo "expected bootstrap to fail for mismatched CodeGraph project" >&2
+  (cd "$repo" && "$BOOTSTRAP_SCRIPT") >/tmp/codegraph-bootstrap-status-fails-init.out
+
+  export CODEGRAPH_FAKE_STATUS_FORMAT=fail
+  if (cd "$repo" && "$BOOTSTRAP_SCRIPT") >/tmp/codegraph-bootstrap-status-fails.out 2>&1; then
+    echo "expected bootstrap to fail when codegraph status fails" >&2
     exit 1
   fi
+  unset CODEGRAPH_FAKE_STATUS_FORMAT
 
-  assert_contains /tmp/codegraph-bootstrap-mismatch.out "does not match this worktree"
+  assert_contains /tmp/codegraph-bootstrap-status-fails.out "CodeGraph status failed"
 }
 
 test_rejects_existing_db_without_owner_marker() {
@@ -168,8 +207,9 @@ test_rejects_copied_codegraph_directory() {
 }
 
 test_initializes_missing_db_for_current_worktree
+test_accepts_status_without_project_field_for_owned_db
 test_rejects_running_from_subdirectory
-test_rejects_mismatched_codegraph_project
+test_rejects_failed_codegraph_status
 test_rejects_existing_db_without_owner_marker
 test_rejects_copied_codegraph_directory
 
