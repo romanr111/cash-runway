@@ -88,8 +88,8 @@ public final class CashRunwayAppModel {
         // lockStore: AppLockStore = AppLockStore(keychain: KeychainStore(service: "dev.roman.cash-runway"))
     ) {
         let csvService = CSVService(repository: repository)
-        let backupService = BackupService(repository: repository)
         let bankTokenStore = KeychainBankTokenStore(keychain: KeychainStore(service: "dev.roman.cash-runway"))
+        let backupService = BackupService(repository: repository, bankTokenStore: bankTokenStore)
         let bankSyncPerformer = BankSyncSerialPerformer(BankSyncCoordinator(repository: repository, tokenStore: bankTokenStore))
         let backgroundWork = BackgroundWork(
             repository: repository,
@@ -114,7 +114,7 @@ public final class CashRunwayAppModel {
         monobankTokenValidator: any MonobankTokenValidating
     ) {
         let csvService = CSVService(repository: repository)
-        let backupService = BackupService(repository: repository)
+        let backupService = BackupService(repository: repository, bankTokenStore: bankTokenStore)
         let performer = BankSyncSerialPerformer(bankSyncPerformer)
         let backgroundWork = BackgroundWork(
             repository: repository,

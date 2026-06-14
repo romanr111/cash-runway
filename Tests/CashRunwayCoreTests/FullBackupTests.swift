@@ -94,7 +94,7 @@ struct FullBackupTests {
         let (repository, _) = try makePopulatedRepository()
         let service = BackupService(repository: repository)
 
-        let json = String(decoding: try service.encode(try service.exportFullBackup()), as: UTF8.self)
+        let json = String(data: try service.encode(try service.exportFullBackup()), encoding: .utf8) ?? ""
 
         #expect(!json.localizedCaseInsensitiveContains("database-key"))
         #expect(!json.localizedCaseInsensitiveContains("keychain"))
@@ -212,6 +212,50 @@ struct FullBackupTests {
         #expect(after.transactions == before.transactions)
         #expect(after.transactionLabels == before.transactionLabels)
         try TestSupport.assertWalletTruth(repository)
+    }
+
+    @Test func fullBackupImportClearsExistingBankSyncState() throws {
+        let backup = try makePopulatedRepository().0.exportFullBackup()
+        let target = try makePopulatedRepository().0
+        try seedBankSyncState(in: target)
+
+        try target.restoreFullBackup(backup)
+
+        #expect(try countRows(target, table: "bank_transaction_imports") == 0)
+        #expect(try countRows(target, table: "bank_accounts") == 0)
+        #expect(try countRows(target, table: "bank_category_rules") == 0)
+        #expect(try countRows(target, table: "bank_integrations") == 0)
+    }
+
+    @Test func invalidFullBackupImportLeavesExistingBankSyncStateUnchanged() throws {
+        let backup = try makePopulatedRepository().0.exportFullBackup()
+        let target = try makePopulatedRepository().0
+        try seedBankSyncState(in: target)
+        var invalid = backup
+        invalid.transactions[0].categoryID = UUID()
+
+        #expect(throws: BackupError.self) {
+            try target.restoreFullBackup(invalid)
+        }
+
+        #expect(try countRows(target, table: "bank_transaction_imports") == 1)
+        #expect(try countRows(target, table: "bank_accounts") == 1)
+        #expect(try countRows(target, table: "bank_category_rules") == 1)
+        #expect(try countRows(target, table: "bank_integrations") == 1)
+    }
+
+    @Test func fullBackupServiceDeletesClearedBankTokensAfterSuccessfulRestore() throws {
+        let backup = try makePopulatedRepository().0.exportFullBackup()
+        let target = try makePopulatedRepository().0
+        let keychain = TestKeychainStore()
+        let tokenStore = KeychainBankTokenStore(keychain: keychain)
+        let tokenAccount = try seedBankSyncState(in: target)
+        try tokenStore.writeToken("stale-token", account: tokenAccount)
+        let service = BackupService(repository: target, bankTokenStore: tokenStore)
+
+        try service.restore(backup)
+
+        #expect(keychain.item(account: tokenAccount) == nil)
     }
 
     @Test func fullBackupExportThenImportRoundTripPreservesBalances() throws {
@@ -375,6 +419,108 @@ struct FullBackupTests {
                 importJobID: importJobID
             )
         )
+    }
+
+    @discardableResult
+    private func seedBankSyncState(in repository: CashRunwayRepository) throws -> String {
+        let walletID = try #require(repository.wallets().first?.id)
+        let categoryID = try #require(repository.categories(kind: .expense).first?.id)
+        let now = Date(timeIntervalSince1970: 1_768_435_200)
+        let integrationID = UUID()
+        let accountID = UUID()
+        let tokenAccount = "bank-token-monobank-\(integrationID.uuidString)"
+        let integration = BankIntegration(
+            id: integrationID,
+            provider: .monobank,
+            displayName: "Monobank",
+            status: .active,
+            syncStartAt: now,
+            tokenKeychainAccount: tokenAccount,
+            lastClientInfoSyncAt: now,
+            lastSuccessfulSyncAt: now,
+            lastSyncError: nil,
+            createdAt: now,
+            updatedAt: now
+        )
+        let account = BankAccount(
+            id: accountID,
+            integrationID: integrationID,
+            provider: .monobank,
+            providerAccountID: "mono-card",
+            walletID: walletID,
+            displayName: "Black Card",
+            accountType: "black",
+            currencyCode: 980,
+            maskedPAN: "4444",
+            iban: nil,
+            isEnabled: true,
+            syncStartAt: now,
+            lastSuccessfulSyncAt: now,
+            lastStatementItemTime: 1_768_435_200,
+            createdAt: now,
+            updatedAt: now
+        )
+        try repository.saveBankConnection(integration: integration, accounts: [account])
+
+        try repository.databaseManager.dbQueue.write { db in
+            try db.execute(
+                sql: """
+                INSERT INTO bank_transaction_imports (
+                    id, provider, integration_id, bank_account_id, provider_account_id,
+                    provider_statement_item_id, statement_time, amount_minor_signed,
+                    operation_amount_minor_signed, currency_code, mcc, original_mcc,
+                    description, comment, counter_name, counter_iban, receipt_id, hold,
+                    raw_json, cash_runway_transaction_id, import_status, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                arguments: [
+                    UUID().uuidString,
+                    BankProvider.monobank.rawValue,
+                    integrationID.uuidString,
+                    accountID.uuidString,
+                    "mono-card",
+                    "statement-1",
+                    1_768_435_200,
+                    -1200,
+                    -1200,
+                    980,
+                    5411,
+                    5411,
+                    "Stale grocery",
+                    nil,
+                    "Market",
+                    nil,
+                    nil,
+                    false,
+                    "{}",
+                    nil,
+                    BankTransactionImportStatus.imported.rawValue,
+                    now,
+                    now,
+                ]
+            )
+            try db.execute(
+                sql: """
+                INSERT INTO bank_category_rules (
+                    id, provider, rule_type, merchant_pattern, mcc, category_id,
+                    confidence, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                arguments: [
+                    UUID().uuidString,
+                    BankProvider.monobank.rawValue,
+                    "merchant",
+                    "Market",
+                    nil,
+                    categoryID.uuidString,
+                    100,
+                    now,
+                    now,
+                ]
+            )
+        }
+
+        return tokenAccount
     }
 
     private func rawTransactionCount(_ repository: CashRunwayRepository) throws -> Int {
