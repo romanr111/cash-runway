@@ -975,9 +975,11 @@ public enum BackupError: LocalizedError, Equatable {
 
 public final class BackupService: @unchecked Sendable {
     private let repository: CashRunwayRepository
+    private let bankTokenStore: (any BankTokenStore)?
 
-    public init(repository: CashRunwayRepository) {
+    public init(repository: CashRunwayRepository, bankTokenStore: (any BankTokenStore)? = nil) {
         self.repository = repository
+        self.bankTokenStore = bankTokenStore
     }
 
     public func exportFullBackup() throws -> CashRunwayBackup {
@@ -1004,8 +1006,13 @@ public final class BackupService: @unchecked Sendable {
     public func restore(_ backup: CashRunwayBackup) throws -> BackupRestoreResult {
         _ = try validate(backup)
         let safetyBackupURL = try writeSafetyBackup()
-        let result = try repository.restoreFullBackup(backup)
-        return BackupRestoreResult(summary: result.summary, safetyBackupURL: safetyBackupURL)
+        let restore = try repository.restoreFullBackupCollectingClearedBankTokens(backup)
+        if let bankTokenStore {
+            for account in restore.tokenAccounts {
+                try bankTokenStore.deleteToken(account: account)
+            }
+        }
+        return BackupRestoreResult(summary: restore.result.summary, safetyBackupURL: safetyBackupURL)
     }
 
     private func writeSafetyBackup() throws -> URL {
