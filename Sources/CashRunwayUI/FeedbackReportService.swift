@@ -77,7 +77,30 @@ final class ReportIssueViewModel: ObservableObject {
 
     init(service: any FeedbackReportSubmitting) {
         self.service = service
+        #if DEBUG
+        preloadDebugScreenshotIfNeeded()
+        #endif
     }
+
+    #if DEBUG
+    private static let debugScreenshotBase64Key = "CASH_RUNWAY_DEBUG_FEEDBACK_SCREENSHOT_BASE64"
+    private static let debugScreenshotMimeTypeKey = "CASH_RUNWAY_DEBUG_FEEDBACK_SCREENSHOT_MIME_TYPE"
+    private static let debugScreenshotFilenameKey = "CASH_RUNWAY_DEBUG_FEEDBACK_SCREENSHOT_FILENAME"
+
+    private func preloadDebugScreenshotIfNeeded(environment: [String: String] = ProcessInfo.processInfo.environment) {
+        guard draft.screenshots.isEmpty,
+              let encoded = environment[Self.debugScreenshotBase64Key],
+              let data = Data(base64Encoded: encoded) else {
+            return
+        }
+
+        let mimeType = environment[Self.debugScreenshotMimeTypeKey]
+            .flatMap(ReportIssueScreenshotMimeType.init(rawValue:)) ?? .png
+        let filename = environment[Self.debugScreenshotFilenameKey]
+            ?? (mimeType == .png ? "debug-feedback-screenshot.png" : "debug-feedback-screenshot.jpg")
+        draft.screenshots = [ReportIssueScreenshot(data: data, mimeType: mimeType, filename: filename)]
+    }
+    #endif
 
     var isSubmitting: Bool {
         if case .submitting = submitState {

@@ -4,38 +4,46 @@ verification result changed. Reading or searching does not trigger rewrite.
 
 ## Snapshot
 
-Goal: Make Cash Runway feedback reporting work end to end and verify through
-Xcode MCP simulator flow.
+Goal: Make Cash Runway issue screenshot upload work end to end with proper
+GitHub uploads, redeploy, and verify via Xcode MCP that an issue created from
+the app has an attached screenshot.
 
-Current state: Reporting now works in production and from the iOS simulator. The
-backend production env was fixed, the reporting API redeployed, and the simulator
-feedback form submitted successfully through the app UI.
+Current state: Goal achieved. Production reporting API uses GitHub Contents
+uploads again, and an app-submitted Xcode MCP E2E report created GitHub issue
+`#54` with a visible `raw.githubusercontent.com` screenshot Markdown image and
+no data URI.
 
-Next action: Final review/status. Do not create or print reporting secrets.
+Next action: Final status/handoff. Do not create or print reporting secrets.
 
 Open:
-- `just check` / `Scripts/agent-validate.sh --all` did not produce a stable exit
-  in this tool session: the wrapper remained running after no validation process
-  was visible. Focused reporting tests and E2E evidence passed.
+- `just check` / `Scripts/agent-validate.sh --all` previously did not produce a
+  stable exit in this tool session after the wrapper remained running with no
+  visible validation child process. Targeted validations and Xcode MCP E2E are
+  complete.
 
 Repo root: `/Users/roman/Documents/Development/Cash Runway`
 Working directory: `/Users/roman/.codex/worktrees/cash-runway-reporting-e2e`
 Branch: `codex/reporting-e2e-enable`
 Base branch: `main`
-Merge status: merged
+Merge status: not-merged
 
 ## Worktree detail
 
 Worktree reason: dirty-primary
-Ownership: `.vercelignore`, `Sources/CashRunwayCore/ReportingSecrets.swift`,
+Ownership: `.vercelignore`, `.mcp.json`,
+`Sources/CashRunwayCore/ReportingSecrets.swift`,
 `Modules/CashRunwayCorePackage/Sources/CashRunwayCore/ReportingSecrets.swift`,
-`Tests/CashRunwayCoreTests/ReportIssueTests.swift`, `CONTINUITY.md`
+`Sources/CashRunwayCore/FeedbackReport.swift`,
+`Modules/CashRunwayCorePackage/Sources/CashRunwayCore/FeedbackReport.swift`,
+`Sources/CashRunwayUI/FeedbackReportService.swift`,
+`Tests/CashRunwayCoreTests/ReportIssueTests.swift`, `reporting-api/**`,
+`AppHost/Localizable.xcstrings`, `CONTINUITY.md`
 Conflicts: Do not touch unrelated localization edit in primary checkout.
 Cleanup proof: pending
 
 ## Working
 
-
+- Final status/handoff only.
 
 ## Done
 
@@ -43,41 +51,52 @@ Cleanup proof: pending
   `/Users/roman/.codex/worktrees/cash-runway-reporting-e2e` on branch
   `codex/reporting-e2e-enable`.
 - 2026-06-14: Added DEBUG launch-environment fallback for
-  `CASH_RUNWAY_REPORT_CLIENT_SECRET`; the provider persists it to the existing
-  reporting Keychain account. Mirrored core files remain identical.
+  `CASH_RUNWAY_REPORT_CLIENT_SECRET`; provider persists it to the existing
+  reporting Keychain account. Later updated DEBUG env to override stale Keychain
+  values during simulator E2E.
 - 2026-06-14: Tightened `.vercelignore` so Vercel deploys the `reporting-api`
   project root without uploading `.build`, iOS sources, or local dependencies.
 - 2026-06-14: Set production Vercel `REPORTING_ENABLED=true` and replaced empty
-  `CASH_RUNWAY_REPORT_SECRET` with a generated shared secret. Temp secret/env
-  files were removed after verification.
-- 2026-06-14: Redeployed production reporting API:
-  `dpl_81AXrnWepDnEr2ZECx2qS5CYxFNz`; canonical route
-  `https://cash-runway-reporting-api.vercel.app/api/reports` returned app-level
-  `405` for GET.
-- 2026-06-14: Backend POST smoke with generated secret created GitHub issue
-  `#46` by `app/cash-runway-issues-reporter`.
-- 2026-06-14: Xcode MCP simulator flow on iPhone 17 submitted app feedback and
-  showed success: `Звіт надіслано. Завдання #47 створено для розгляду.`
-  GitHub issue `#47` exists, opened by `app/cash-runway-issues-reporter`.
-- 2026-06-14: Fixed screenshot loading race (onChange -> selectedItems clearing cycle).
-- 2026-06-14: Added 800px JPEG fallback in compress() for large photos.
-- 2026-06-14: Raised server maxBodyBytes from 4MB to 5MB.
+  `CASH_RUNWAY_REPORT_SECRET` with a generated shared secret.
+- 2026-06-14: Text-only backend POST smoke created GitHub issue `#46`; Xcode MCP
+  simulator feedback form created GitHub issue `#47`.
 - 2026-06-14: Added server-side screenshot count/size logging.
-- 2026-06-14: Raised rate limit from 3/hour to 10/hour, 30/day.
-- 2026-06-14: Rate limit response now includes limit/remaining counter; client shows "X of Y reports sent this hour" message.
+- 2026-06-14: Raised rate limit from 3/hour to 10/hour, 30/day; rate-limit
+  response now includes limit/remaining counter and client shows the counter.
+- 2026-06-14: Merged `origin/main`, resolved `CONTINUITY.md` conflict.
+- 2026-06-14: Reverted the data URI screenshot workaround back to
+  `GitHubClient.uploadFile`, embedding returned file URLs in issue Markdown.
+- 2026-06-14: Redeployed production reporting API:
+  `dpl_AZN87SyJnMBNzSLC3VR7qc9ygkP2`.
+- 2026-06-14: Direct backend screenshot POST smoke created GitHub issue `#53`;
+  body has `raw.githubusercontent.com` screenshot URL and `hasDataUri=false`.
+- 2026-06-14: Added DEBUG-only feedback screenshot preload env hook because the
+  system Photos picker was visible but not exposed in Xcode MCP accessibility
+  snapshots, and `cliclick`/AppleScript coordinate fallback lacked Accessibility
+  permissions.
+- 2026-06-14: Xcode MCP app E2E created GitHub issue `#54` from the feedback UI
+  with preloaded screenshot attached. Verification: author
+  `app/cash-runway-issues-reporter`, `hasVisibleMarkdownImage=true`,
+  `screenshotUrlHost=raw.githubusercontent.com`, `hasDataUri=false`.
 
 ## Receipts
 
 - 2026-06-14: Primary checkout had existing tracked modification:
   `M AppHost/Localizable.xcstrings`.
+- 2026-06-14: API RED failed against data URI workaround; GREEN passed after
+  restoring upload behavior.
 - 2026-06-14: `npm test`, `npm run typecheck`, and `npm audit --omit=dev`
   passed in `reporting-api/`.
-- 2026-06-14: Targeted Swift test RED failed on missing `environment` argument;
-  GREEN `swift test --filter ReportIssueTests/reportingKeychainSecretProviderStoresDebugEnvironmentSecret`
-  passed; `swift test --filter ReportIssueTests` passed.
+- 2026-06-14: `swift test --filter ReportIssueTests/reportingKeychainSecretProvider`
+  passed after DEBUG env-overrides-stale-Keychain test was added.
+- 2026-06-14: Xcode MCP `build_run_sim` passed after final iOS changes.
+- 2026-06-14: Restored `ReportingSecrets.generated.swift` files to the
+  committed placeholder state before staging; real generated secret payloads
+  must not ship.
 - 2026-06-14: `git diff --check` passed; mirror diff for
-  `ReportingSecrets.swift` passed; `just graph-sync` completed.
+  `ReportingSecrets.swift` and `FeedbackReport.swift` passed; `just graph-sync`
+  completed.
 - 2026-06-14: `just check` and direct `Scripts/agent-validate.sh --all` were
-  attempted but tool sessions stayed running after no matching validation process
-  was visible. Retained log: `/tmp/cash-runway-reporting-e2e-agent-validate.log`.
-- 2026-06-14: Merged origin/main, resolved CONTINUITY.md conflict.
+  attempted earlier but tool sessions stayed running after no matching
+  validation process was visible. Retained log:
+  `/tmp/cash-runway-reporting-e2e-agent-validate.log`.

@@ -3,8 +3,8 @@ import type { ReportStore } from "../storage/reportStore.js";
 const hourSeconds = 60 * 60;
 const daySeconds = 24 * hourSeconds;
 
-const hourlyLimit = 5;
-const dailyLimit = 10;
+const hourlyLimit = 10;
+const dailyLimit = 30;
 
 export type RateLimitInput = {
   installHash?: string;

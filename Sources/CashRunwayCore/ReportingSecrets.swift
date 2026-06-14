@@ -17,19 +17,18 @@ public struct ReportingKeychainSecretProvider: Sendable {
     }
 
     public func clientSecret() -> String? {
+        #if DEBUG
+        if let secret = debugEnvironmentSecret() {
+            try? keychain.write(Data(secret.utf8), account: Self.keychainAccount)
+            return secret
+        }
+        #endif
+
         if let existing = try? keychain.read(account: Self.keychainAccount),
            let secret = String(data: existing, encoding: .utf8),
            !secret.isEmpty {
             return secret
         }
-
-        #if DEBUG
-        if let secret = environment()[Self.environmentSecretKey]?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !secret.isEmpty {
-            try? keychain.write(Data(secret.utf8), account: Self.keychainAccount)
-            return secret
-        }
-        #endif
 
         guard !ReportingSecrets.isPlaceholder else {
             return nil
@@ -42,6 +41,16 @@ public struct ReportingKeychainSecretProvider: Sendable {
         try? keychain.write(Data(secret.utf8), account: Self.keychainAccount)
         return secret
     }
+
+    #if DEBUG
+    private func debugEnvironmentSecret() -> String? {
+        guard let secret = environment()[Self.environmentSecretKey]?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !secret.isEmpty else {
+            return nil
+        }
+        return secret
+    }
+    #endif
 
     public func clearSecret() {
         keychain.delete(account: Self.keychainAccount)

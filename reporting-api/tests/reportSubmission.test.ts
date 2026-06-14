@@ -136,7 +136,7 @@ test("ip fallback is limited when install hash is missing", async () => {
   );
 });
 
-test("screenshots are embedded as data URIs in issue body", async () => {
+test("screenshots are uploaded and returned URLs are embedded in issue body", async () => {
   const store = new MemoryReportStore();
   let capturedBody: string | undefined;
   const client: GitHubClient = {
@@ -160,8 +160,10 @@ test("screenshots are embedded as data URIs in issue body", async () => {
   const result = await submitReport({ report: reportWithScreenshots, reportId: "report-screenshots", idempotencyKey: "s-1", ip: "[IP_ADDRESS]", store, client });
 
   assert.equal(result.issueNumber, 456);
-  assert.ok(capturedBody?.includes("data:image/jpeg;base64"), "body should contain jpeg data URI");
-  assert.ok(capturedBody?.includes("data:image/png;base64"), "body should contain png data URI");
+  assert.ok(capturedBody?.includes("![Screenshot 1](https://example.com/screenshot.png)"), "body should contain first uploaded screenshot URL");
+  assert.ok(capturedBody?.includes("![Screenshot 2](https://example.com/screenshot.png)"), "body should contain second uploaded screenshot URL");
+  assert.ok(!capturedBody?.includes("data:image/jpeg;base64"), "body should not contain jpeg data URI");
+  assert.ok(!capturedBody?.includes("data:image/png;base64"), "body should not contain png data URI");
   assert.ok(capturedBody?.includes("![Screenshot 1]"), "body should contain first screenshot markdown");
   assert.ok(capturedBody?.includes("![Screenshot 2]"), "body should contain second screenshot markdown");
 });

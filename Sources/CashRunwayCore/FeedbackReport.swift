@@ -371,7 +371,7 @@ public struct ReportIssueService: Sendable {
         case 400:
             throw ReportIssueServiceError.validation(errorMessage(from: data) ?? "Invalid report.")
         case 429:
-            throw ReportIssueServiceError.rateLimited(limit: rateLimitLimit(from: data, fallback: 5), remaining: rateLimitRemaining(from: data, fallback: 0), windowSeconds: 3600)
+            throw ReportIssueServiceError.rateLimited(limit: rateLimitLimit(from: data, fallback: 10), remaining: rateLimitRemaining(from: data, fallback: 0), windowSeconds: 3600)
         default:
             throw ReportIssueServiceError.server(response.statusCode)
         }
