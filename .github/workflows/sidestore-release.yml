@@ -68,6 +68,13 @@ jobs:
           /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${{ steps.meta.outputs.version }}" AppHost/Info.plist
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ steps.meta.outputs.build }}" AppHost/Info.plist
 
+      - name: Run validation gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          just lint
+          just verify
+
       - name: Build unsigned iOS app
         shell: bash
         run: |
@@ -137,7 +144,7 @@ jobs:
                       "localizedDescription": "Cash Runway is a personal finance app for tracking wallet balances, transactions, recurring costs, and financial runway.",
                       "iconURL": icon_url,
                       "tintColor": "#E85D3A",
-                      "category": "finance",
+                      "category": "utilities",
 
                       "version": version,
                       "versionDate": date,
@@ -153,12 +160,14 @@ jobs:
                               "localizedDescription": "Automated SideStore build from GitHub Actions.",
                               "downloadURL": ipa_url,
                               "size": size,
-                              "minOSVersion": "17.0"
+                              "minOSVersion": "18.0"
                           }
                       ],
                       "appPermissions": {
                           "entitlements": [],
-                          "privacy": {}
+                          "privacy": {
+                              "NSPhotoLibraryUsageDescription": "Cash Runway uses photo access only when you choose to attach screenshots to a bug report."
+                          }
                       }
                   }
               ],
@@ -185,7 +194,8 @@ jobs:
           else
             gh release create "${TAG}" CashRunway.ipa public/source.json \
               --title "${TAG}" \
-              --notes "Automated SideStore build for Cash Runway."
+              --notes "Automated SideStore build for Cash Runway." \
+              --prerelease
           fi
 
       - name: Verify GitHub Pages is enabled

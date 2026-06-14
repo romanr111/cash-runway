@@ -22,7 +22,7 @@ Repo root: `/Users/roman/Documents/Development/Cash Runway`
 Working directory: `/Users/roman/.codex/worktrees/cash-runway-reporting-e2e`
 Branch: `codex/reporting-e2e-enable`
 Base branch: `main`
-Merge status: not-merged
+Merge status: merged
 
 ## Worktree detail
 
@@ -35,7 +35,7 @@ Cleanup proof: pending
 
 ## Working
 
-- Final validation summary and handoff.
+
 
 ## Done
 
@@ -59,6 +59,12 @@ Cleanup proof: pending
 - 2026-06-14: Xcode MCP simulator flow on iPhone 17 submitted app feedback and
   showed success: `Звіт надіслано. Завдання #47 створено для розгляду.`
   GitHub issue `#47` exists, opened by `app/cash-runway-issues-reporter`.
+- 2026-06-14: Fixed screenshot loading race (onChange -> selectedItems clearing cycle).
+- 2026-06-14: Added 800px JPEG fallback in compress() for large photos.
+- 2026-06-14: Raised server maxBodyBytes from 4MB to 5MB.
+- 2026-06-14: Added server-side screenshot count/size logging.
+- 2026-06-14: Raised rate limit from 3/hour to 10/hour, 30/day.
+- 2026-06-14: Rate limit response now includes limit/remaining counter; client shows "X of Y reports sent this hour" message.
 
 ## Receipts
 
@@ -74,3 +80,4 @@ Cleanup proof: pending
 - 2026-06-14: `just check` and direct `Scripts/agent-validate.sh --all` were
   attempted but tool sessions stayed running after no matching validation process
   was visible. Retained log: `/tmp/cash-runway-reporting-e2e-agent-validate.log`.
+- 2026-06-14: Merged origin/main, resolved CONTINUITY.md conflict.

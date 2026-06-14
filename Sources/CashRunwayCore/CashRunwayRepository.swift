@@ -1148,8 +1148,15 @@ extension CashRunwayRepository {
 
     @discardableResult
     public func restoreFullBackup(_ backup: CashRunwayBackup) throws -> BackupRestoreResult {
+        try restoreFullBackupCollectingClearedBankTokens(backup).result
+    }
+
+    func restoreFullBackupCollectingClearedBankTokens(
+        _ backup: CashRunwayBackup
+    ) throws -> (result: BackupRestoreResult, tokenAccounts: [String]) {
         let summary = try BackupValidator.validate(backup)
-        try databaseManager.dbQueue.write { db in
+        let tokenAccounts = try databaseManager.dbQueue.write { db in
+            let tokenAccounts = try clearBankSyncTables(db)
             try clearDerivedTables(db)
             try clearSourceTables(db)
             try insertBackupSourceData(backup, into: db)
@@ -1157,8 +1164,9 @@ extension CashRunwayRepository {
             let monthKeys = Set(backup.transactions.map(\.localMonthKey)).union(backup.budgets.map(\.monthKey))
             try rebuildMonths(db, monthKeys: monthKeys)
             try rebuildFTS(db)
+            return tokenAccounts
         }
-        return BackupRestoreResult(summary: summary)
+        return (BackupRestoreResult(summary: summary), tokenAccounts)
     }
 
     public func latestTransactionMonthKey() throws -> Int? {
@@ -3169,6 +3177,18 @@ extension CashRunwayRepository {
     }
 
     // swiftlint:disable:next function_body_length
+    private func clearBankSyncTables(_ db: Database) throws -> [String] {
+        let tokenAccounts = try String.fetchAll(
+            db,
+            sql: "SELECT token_keychain_account FROM bank_integrations"
+        )
+        try db.execute(sql: "DELETE FROM bank_transaction_imports")
+        try db.execute(sql: "DELETE FROM bank_accounts")
+        try db.execute(sql: "DELETE FROM bank_category_rules")
+        try db.execute(sql: "DELETE FROM bank_integrations")
+        return tokenAccounts
+    }
+
     private func insertBackupSourceData(_ backup: CashRunwayBackup, into db: Database) throws {
         for wallet in backup.wallets {
             try db.execute(

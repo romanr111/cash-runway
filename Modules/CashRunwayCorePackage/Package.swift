@@ -6,7 +6,7 @@ let package = Package(
     name: "CashRunwayCorePackage",
     defaultLocalization: "en",
     platforms: [
-        .iOS(.v17),
+        .iOS(.v18),
         .macOS(.v15),
     ],
     products: [
