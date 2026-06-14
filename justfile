@@ -34,3 +34,10 @@ ui-check:
 
 check:
     Scripts/agent-validate.sh --all
+
+smoke:
+    Scripts/smoke-seeded-simulator.sh
+
+verify:
+    just check
+    just smoke
