@@ -12,10 +12,10 @@ Rules:
 
 - Goal: Implement and harden text-only user bug/improvement reporting using a Vercel TypeScript API and GitHub App server-side issue creation.
 - Success criteria: Backend validation, sanitization, issue formatting, idempotency, Redis/Upstash rate limits, duplicate suppression, safe logging, GitHub failure mapping, mockable GitHub client, tests, and `.env.example`; iOS Codable payload, validation, idempotency key submission, safe diagnostics, anonymous install hash, service abstraction, SwiftUI Settings form, explicit config gating, and no screenshots/logs/files/financial data upload path.
-- Current state: PR `#32` review fixes were pushed in commit `2625108`. The shared client secret was moved from Info.plist to an obfuscated generated Swift file + Keychain, the anonymous install ID was moved from UserDefaults to Keychain, SwiftUI localization gaps were fixed, the screenshot total-size message was aligned to 3 MB, and dead code / lint issues were resolved. All validation gates passed.
-- Next action: Re-review PR `#32` and merge if no further blockers, then set production Vercel environment variables and a production-specific reporting secret before enabling Release reporting.
+- Current state: PR `#32` was merged via squash commit `5002cce` on main.
+- Next action: Set production Vercel environment variables and a production-specific reporting secret before enabling Release reporting.
 - Open questions: None.
-- Merge status: not-merged.
+- Merge status: merged.
 - Handoff trigger: when context is compacted or turns exceed ~50, rewrite this Snapshot to current truth before starting a fresh conversation.
 
 ## Git Context
