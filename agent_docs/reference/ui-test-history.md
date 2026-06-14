@@ -37,3 +37,15 @@ them locally unless explicitly asked.
 When local UI tests are explicitly requested, use deterministic data through the
 `CASH_RUNWAY_UI_TEST_MODE` / `UITEST-*` environment variables and inspect the live
 accessibility tree or logs before changing UI code for a failing selector.
+
+| Variable | Valid values | Consumer |
+|----------|--------------|----------|
+| `CASH_RUNWAY_UI_TEST_MODE` | `1` | Enables UITest runtime |
+| `CASH_RUNWAY_UI_TEST_SCENARIO` | `transaction_core`, `category_merge`, `category_editor`, `monobank_first_start` | `UITestRuntime.swift` |
+| `CASH_RUNWAY_UI_TEST_START_SCREEN` | `category_management`, `category_editor` | `RootView.swift` |
+| `CASH_RUNWAY_UI_TEST_DB_PATH` | Absolute path to temp `.sqlite` | `UITestRuntime.swift` |
+| `CASH_RUNWAY_UI_TEST_RESET` | `1` | Wipes DB + keychain on launch |
+| `CASH_RUNWAY_UI_TEST_MONOBANK_MODE` | `happy_path`, `invalid_token`, `first_sync_fails_then_recovers`, `foreground_new_expense` | `UITestRuntime.swift` |
+
+Pass variables to the simulator with the `SIMCTL_CHILD_*` prefix, for example
+`SIMCTL_CHILD_CASH_RUNWAY_UI_TEST_MODE=1`.

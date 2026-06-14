@@ -11,6 +11,16 @@
 - Do not introduce Docker or container workflows for normal iOS development
   unless explicitly requested.
 
+## Xcode and package-root builds
+
+This repo contains both a `Package.swift` and a `.xcodeproj`. Run `xcodebuild`
+from the repository root so it resolves the project automatically. If an
+XcodeBuild tool requires an explicit project or workspace path, use shell
+`xcodebuild` from the repo root instead.
+
+Filter `xcodebuild` output to warnings, errors, and the build result. For a
+final success confirmation, `tail -5` is sufficient.
+
 ## Concurrency
 
 - Prefer `async/await` for new asynchronous Swift code.
@@ -108,3 +118,6 @@ Validate every new or materially changed shell script with:
 ```bash
 bash -n <script>
 ```
+
+Avoid `status` as a shell variable name; it conflicts with the zsh `status`
+special parameter.
