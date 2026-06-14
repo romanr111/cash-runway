@@ -164,6 +164,22 @@ struct ReportIssueTests {
         #expect(provider.clientSecret() == "stored-secret")
     }
 
+    #if DEBUG
+    @Test func reportingKeychainSecretProviderStoresDebugEnvironmentSecret() throws {
+        let keychain = TestKeychainStore()
+        let provider = ReportingKeychainSecretProvider(
+            keychain: keychain,
+            environment: {
+                [ReportingKeychainSecretProvider.environmentSecretKey: "debug-secret"]
+            }
+        )
+
+        #expect(provider.clientSecret() == "debug-secret")
+        let stored = try #require(try keychain.read(account: ReportingKeychainSecretProvider.keychainAccount))
+        #expect(String(data: stored, encoding: .utf8) == "debug-secret")
+    }
+    #endif
+
     @Test func serviceHandlesCreatedResponse() async throws {
         let service = ReportIssueService(
             endpointURL: URL(string: "https://reports.example.test/api/reports")!,

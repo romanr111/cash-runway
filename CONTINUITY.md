@@ -1,38 +1,76 @@
-<!--
-Rules:
-- Rewrite Snapshot to current truth after a meaningful update.
-- Meaningful update: file modified, decision made, blocker hit or resolved,
-  task completed or abandoned, or validation result changed.
-- Reading or searching does not trigger a rewrite.
-- Current state: one sentence, past tense, what is true now.
-- Next action: one imperative sentence, one concrete step.
-- Receipts: decisions, commits, PRs, failures, unusual tool outcomes only.
--->
+Rewrite Snapshot to current truth on every meaningful update. Meaningful update:
+file modified, decision made, blocker hit/resolved, task completed/abandoned, or
+verification result changed. Reading or searching does not trigger rewrite.
 
 ## Snapshot
 
-- Goal: Fix screenshot-feedback and CodeGraph status-parser review findings on a branch, then merge the result back to `main`.
-- Success criteria: Preserve the approved `screenshots` feedback field, stop parsing undocumented `Project:` from `codegraph status`, cover the CodeGraph change with regression tests, and land the branch on `main`.
-- Current state: The screenshot-feedback and CodeGraph status-parser fixes landed on local `main`.
-- Next action: None.
-- Handoff trigger: Rewrite this Snapshot before context compaction, a major task switch, or task completion.
+Goal: Make Cash Runway feedback reporting work end to end and verify through
+Xcode MCP simulator flow.
 
-## Git Context
+Current state: Reporting now works in production and from the iOS simulator. The
+backend production env was fixed, the reporting API redeployed, and the simulator
+feedback form submitted successfully through the app UI.
 
-- Repo root: `/Users/roman/Documents/Development/Cash Runway`
-- Branch: `main`
-- Base: `origin/main` at `0cca853`
+Next action: Final review/status. Do not create or print reporting secrets.
 
-## Working Set
+Open:
+- `just check` / `Scripts/agent-validate.sh --all` did not produce a stable exit
+  in this tool session: the wrapper remained running after no validation process
+  was visible. Focused reporting tests and E2E evidence passed.
 
-- `agent_docs/instructions/reporting-api.md`
-- `Scripts/codegraph-bootstrap.sh`
-- `Scripts/test-codegraph-bootstrap.sh`
-- `CONTINUITY.md`
+Repo root: `/Users/roman/Documents/Development/Cash Runway`
+Working directory: `/Users/roman/.codex/worktrees/cash-runway-reporting-e2e`
+Branch: `codex/reporting-e2e-enable`
+Base branch: `main`
+Merge status: not-merged
+
+## Worktree detail
+
+Worktree reason: dirty-primary
+Ownership: `.vercelignore`, `Sources/CashRunwayCore/ReportingSecrets.swift`,
+`Modules/CashRunwayCorePackage/Sources/CashRunwayCore/ReportingSecrets.swift`,
+`Tests/CashRunwayCoreTests/ReportIssueTests.swift`, `CONTINUITY.md`
+Conflicts: Do not touch unrelated localization edit in primary checkout.
+Cleanup proof: pending
+
+## Working
+
+- Final validation summary and handoff.
+
+## Done
+
+- 2026-06-14: Created isolated worktree
+  `/Users/roman/.codex/worktrees/cash-runway-reporting-e2e` on branch
+  `codex/reporting-e2e-enable`.
+- 2026-06-14: Added DEBUG launch-environment fallback for
+  `CASH_RUNWAY_REPORT_CLIENT_SECRET`; the provider persists it to the existing
+  reporting Keychain account. Mirrored core files remain identical.
+- 2026-06-14: Tightened `.vercelignore` so Vercel deploys the `reporting-api`
+  project root without uploading `.build`, iOS sources, or local dependencies.
+- 2026-06-14: Set production Vercel `REPORTING_ENABLED=true` and replaced empty
+  `CASH_RUNWAY_REPORT_SECRET` with a generated shared secret. Temp secret/env
+  files were removed after verification.
+- 2026-06-14: Redeployed production reporting API:
+  `dpl_81AXrnWepDnEr2ZECx2qS5CYxFNz`; canonical route
+  `https://cash-runway-reporting-api.vercel.app/api/reports` returned app-level
+  `405` for GET.
+- 2026-06-14: Backend POST smoke with generated secret created GitHub issue
+  `#46` by `app/cash-runway-issues-reporter`.
+- 2026-06-14: Xcode MCP simulator flow on iPhone 17 submitted app feedback and
+  showed success: `Звіт надіслано. Завдання #47 створено для розгляду.`
+  GitHub issue `#47` exists, opened by `app/cash-runway-issues-reporter`.
 
 ## Receipts
 
-- 2026-06-14 [RESOLVED] Narrowed `agent_docs/instructions/reporting-api.md` so it preserves the approved `screenshots` feedback field while continuing to forbid unapproved files and sensitive data.
-- 2026-06-14 [VALIDATED] Added CodeGraph bootstrap regression coverage for documented status output without `Project:`; `Scripts/test-codegraph-bootstrap.sh`, `just graph-bootstrap`, `Scripts/pre-flight.sh`, `git diff --check`, and `bash -n Scripts/codegraph-bootstrap.sh Scripts/test-codegraph-bootstrap.sh` passed.
-- 2026-06-14 [MERGED] PR `#44` merged as squash commit `0cca853`, and local `main` was fast-forwarded to that commit before this branch.
-- 2026-06-13 [MERGED] PR `#45` was merged via squash commit `7cd38d5`, compacting root/scoped agent instructions.
+- 2026-06-14: Primary checkout had existing tracked modification:
+  `M AppHost/Localizable.xcstrings`.
+- 2026-06-14: `npm test`, `npm run typecheck`, and `npm audit --omit=dev`
+  passed in `reporting-api/`.
+- 2026-06-14: Targeted Swift test RED failed on missing `environment` argument;
+  GREEN `swift test --filter ReportIssueTests/reportingKeychainSecretProviderStoresDebugEnvironmentSecret`
+  passed; `swift test --filter ReportIssueTests` passed.
+- 2026-06-14: `git diff --check` passed; mirror diff for
+  `ReportingSecrets.swift` passed; `just graph-sync` completed.
+- 2026-06-14: `just check` and direct `Scripts/agent-validate.sh --all` were
+  attempted but tool sessions stayed running after no matching validation process
+  was visible. Retained log: `/tmp/cash-runway-reporting-e2e-agent-validate.log`.
