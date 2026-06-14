@@ -6,4 +6,11 @@ Packages/
 xcuserdata/
 *.xcuserstate
 Package.resolved
+reporting-api/node_modules/
+.vercel/
+reporting-api/.vercel/
 .codegraph/
+.vercel
+AppHost/ReportingConfig.local.xcconfig
+Scripts/__pycache__/
+__pycache__/

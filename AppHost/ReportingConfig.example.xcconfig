@@ -1,0 +1,14 @@
+// Cash Runway feedback reporting configuration template.
+// Copy this file to ReportingConfig.local.xcconfig and fill in real values
+// for local Debug builds. The local file is git-ignored and must never be committed.
+
+SLASH = /
+CASH_RUNWAY_REPORT_ENDPOINT_URL = https:$(SLASH)$(SLASH)replace-with-your-vercel-preview-url.vercel.app/api/reports
+CASH_RUNWAY_REPORT_CLIENT_SECRET = replace-with-your-report-secret
+CASH_RUNWAY_REPORTING_ENABLED = NO
+CASH_RUNWAY_REPORT_ENVIRONMENT = production
+
+// These keys are merged into the app's Info.plist at build time.
+INFOPLIST_KEY_CashRunwayReportEndpointURL = $(CASH_RUNWAY_REPORT_ENDPOINT_URL)
+INFOPLIST_KEY_CashRunwayReportingEnabled = $(CASH_RUNWAY_REPORTING_ENABLED)
+INFOPLIST_KEY_CashRunwayReportEnvironment = $(CASH_RUNWAY_REPORT_ENVIRONMENT)

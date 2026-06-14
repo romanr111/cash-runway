@@ -23,6 +23,9 @@ build:
 test *args:
     swift test {{args}}
 
+test-filter PATTERN:
+    swift test --filter {{PATTERN}} 2>&1 | tail -40
+
 lint:
     swiftlint lint --strict
 

@@ -1,0 +1,3 @@
+/* Ukrainian localization for Info.plist strings */
+
+NSPhotoLibraryUsageDescription = "Cash Runway використовує доступ до фотографій лише тоді, коли ви обираєте долучити скриншоти до звіту про помилку.";

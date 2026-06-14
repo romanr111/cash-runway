@@ -26,6 +26,7 @@ struct SettingsView: View {
     @State private var isBackupExporterPresented = false
     @State private var backupExportFileURL: URL?
     @State private var isBackupExporting = false
+    @State private var isFeedbackReportPresented = false
     @State private var isDiagnosticsPresented = false
     @State private var isLanguageSettingsPresented = false
     @AppStorage(AppLanguagePreference.storageKey) private var languagePreferenceRaw = AppLanguagePreference.system.rawValue
@@ -150,6 +151,23 @@ struct SettingsView: View {
                         .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
                     }
 
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Support")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(CashRunwayTheme.textMuted)
+                            .textCase(.uppercase)
+                            .padding(.horizontal, 4)
+
+                        VStack(spacing: 0) {
+                            moreRow(icon: "exclamationmark.bubble.fill", tint: "#E5862F", title: "Report Bug or Suggest Improvement", subtitle: "Send a private text report") {
+                                isFeedbackReportPresented = true
+                            }
+                            .accessibilityIdentifier(CashRunwayAccessibilityID.settingsFeedbackReportRow)
+                        }
+                        .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
+                    }
+
                     #if DEBUG
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Debug")
@@ -235,6 +253,9 @@ struct SettingsView: View {
             }
             .sheet(item: $backupCoordinator) { coordinator in
                 BackupView(coordinator: coordinator)
+            }
+            .sheet(isPresented: $isFeedbackReportPresented) {
+                FeedbackReportView(service: ConfiguredFeedbackReportService())
             }
             .alert("Unencrypted Backup", isPresented: $isBackupExportWarningPresented) {
                 Button("Cancel", role: .cancel) {}
