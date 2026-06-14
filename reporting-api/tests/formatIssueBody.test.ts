@@ -8,6 +8,7 @@ const report: NormalizedReport = {
   title: "CSV import crashes",
   description: "The app crashes after selecting a CSV file.",
   screen: "CSVImportView",
+  screenshots: [],
   appVersion: "1.0.0",
   buildNumber: "42",
   iosVersion: "18.7",
@@ -51,5 +52,18 @@ test("excludes forbidden financial fields", () => {
 
   assert.doesNotMatch(body, /120000 UAH/i);
   assert.doesNotMatch(body, /4242 4242/i);
-  assert.match(body, /No financial database, transaction export, Monobank token, CSV file, screenshot, or raw logs were uploaded automatically/);
+  assert.match(body, /Attached screenshots are included above\. No financial database, transaction export, Monobank token, CSV file, or raw logs were uploaded automatically/);
+});
+
+test("embeds screenshot URLs as markdown images", () => {
+  const body = formatIssueBody(report, ["https://example.com/one.png", "https://example.com/two.jpg"]);
+
+  assert.match(body, /!\[Screenshot 1\]\(https:\/\/example\.com\/one\.png\)/);
+  assert.match(body, /!\[Screenshot 2\]\(https:\/\/example\.com\/two\.jpg\)/);
+});
+
+test("shows no screenshots message when URLs are empty", () => {
+  const body = formatIssueBody(report);
+
+  assert.match(body, /No screenshots attached\./);
 });

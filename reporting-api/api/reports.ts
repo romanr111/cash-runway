@@ -10,7 +10,7 @@ import { verifySharedSecret } from "../src/security/verifySharedSecret.js";
 import { UpstashReportStore } from "../src/storage/reportStore.js";
 import type { ReportInput } from "../src/types/report.js";
 
-const maxBodyBytes = 32 * 1024;
+const maxBodyBytes = 4 * 1024 * 1024; // 4 MB to fit base64-encoded screenshots under Vercel limits
 
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const startedAt = Date.now();
@@ -69,6 +69,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     });
     const result = await submitReport({
       report,
+      reportId,
       idempotencyKey: idempotencyKeyFromBody(body),
       ip: clientIp(req),
       store,

@@ -1,5 +1,5 @@
 import { normalizeCategory, normalizeReport } from "./normalizeReport.js";
-import type { NormalizedReport, ReportInput } from "../types/report.js";
+import type { DecodedScreenshot, NormalizedReport, ReportInput } from "../types/report.js";
 
 const forbiddenFinancialPattern = /\b(account\s+(balance|number)\s*(is|:)?\s*[-+]?[\d\s.,]{3,}\b|balance\s*(is|:)\s*[-+]?[\d\s.,]{3,}\s*(uah|usd|eur|₴|\$|€)?\b|monobank\s+token\s*(is|:)\s*[A-Za-z0-9_\-]{16,}\b|transaction\s+(data|details)\s*(is|:)|database\s+file\s*(is|:)|raw\s+logs?\s*(are|is|:))/i;
 const csvHeaderPattern = /(^|\n)\s*(date|account|amount|currency|description|merchant|mcc)\s*,\s*(date|account|amount|currency|description|merchant|mcc)/i;
@@ -12,6 +12,7 @@ const allowedFields = new Set([
   "title",
   "description",
   "screen",
+  "screenshots",
   "appVersion",
   "buildNumber",
   "iosVersion",
@@ -20,6 +21,10 @@ const allowedFields = new Set([
   "timezone",
   "installHash"
 ]);
+
+const maxScreenshots = 3;
+const maxScreenshotBytes = 1_048_576; // 1 MB
+const maxTotalScreenshotBytes = 3 * maxScreenshotBytes; // 3 MB
 const forbiddenFieldPattern = /(transaction|transactions|balance|balances|account|accounts|csv|database|log|logs|screenshot|screenshots|monobanktoken|token|file|files|attachment|attachments)/i;
 
 export function validateReport(input: ReportInput): NormalizedReport {
@@ -57,7 +62,42 @@ export function validateReport(input: ReportInput): NormalizedReport {
     throw new ReportValidationError("Repeated garbage text is not accepted.");
   }
 
+  validateScreenshots(report.screenshots);
+
   return report;
+}
+
+function validateScreenshots(screenshots: DecodedScreenshot[]): void {
+  if (screenshots.length > maxScreenshots) {
+    throw new ReportValidationError(`You can attach up to ${maxScreenshots} screenshots.`);
+  }
+  let totalSize = 0;
+  for (const screenshot of screenshots) {
+    if (screenshot.buffer.length > maxScreenshotBytes) {
+      throw new ReportValidationError("Each screenshot must be smaller than 1 MB.");
+    }
+    if (!hasValidImageMagicBytes(screenshot.buffer, screenshot.mimeType)) {
+      throw new ReportValidationError("Screenshots must be JPEG or PNG images.");
+    }
+    totalSize += screenshot.buffer.length;
+  }
+  if (totalSize > maxTotalScreenshotBytes) {
+    throw new ReportValidationError("Screenshots must be smaller than 3 MB in total.");
+  }
+}
+
+function hasValidImageMagicBytes(buffer: Buffer, mimeType: string): boolean {
+  if (buffer.length < 8) {
+    return false;
+  }
+  if (mimeType === "image/jpeg") {
+    return buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF;
+  }
+  if (mimeType === "image/png") {
+    const pngSignature = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+    return buffer.subarray(0, 8).equals(pngSignature);
+  }
+  return false;
 }
 
 function rejectForbiddenExtraFields(input: Record<string, unknown>): void {

@@ -39,11 +39,11 @@
 	<dict/>
 	<key>CashRunwayReportEndpointURL</key>
 	<string>$(CASH_RUNWAY_REPORT_ENDPOINT_URL)</string>
-	<key>CashRunwayReportClientSecret</key>
-	<string>$(CASH_RUNWAY_REPORT_CLIENT_SECRET)</string>
 	<key>CashRunwayReportingEnabled</key>
 	<string>$(CASH_RUNWAY_REPORTING_ENABLED)</string>
 	<key>CashRunwayReportEnvironment</key>
 	<string>$(CASH_RUNWAY_REPORT_ENVIRONMENT)</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Cash Runway uses photo access only when you choose to attach screenshots to a bug report.</string>
 </dict>
 </plist>

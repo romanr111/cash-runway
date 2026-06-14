@@ -6,7 +6,8 @@ export function duplicateHash(report: NormalizedReport): string {
     report.category,
     normalizeForHash(report.title),
     normalizeForHash(report.description),
-    report.installHash ?? ""
+    report.installHash ?? "",
+    screenshotHash(report.screenshots)
   ].join("\n");
 
   return createHash("sha256").update(normalized).digest("hex");
@@ -14,4 +15,10 @@ export function duplicateHash(report: NormalizedReport): string {
 
 function normalizeForHash(value: string): string {
   return value.trim().toLocaleLowerCase().replace(/\s+/g, " ");
+}
+
+function screenshotHash(screenshots: NormalizedReport["screenshots"]): string {
+  return screenshots
+    .map((screenshot) => createHash("sha256").update(screenshot.buffer).digest("hex"))
+    .join(",");
 }

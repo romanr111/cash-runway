@@ -18,6 +18,7 @@ export type ReportSubmissionResult = {
 
 export type SubmitReportInput = {
   report: NormalizedReport;
+  reportId: string;
   idempotencyKey?: string;
   ip?: string;
   store: ReportStore;
@@ -56,7 +57,7 @@ export async function submitReport(input: SubmitReportInput): Promise<ReportSubm
       throw new ReportSubmissionError(409, "Duplicate report already received.");
     }
 
-    const result = await createGitHubIssue(input.client, input.report);
+    const result = await createGitHubIssue(input.client, input.report, input.reportId);
     const stored: StoredSubmission = { status: "created", issueNumber: result.issueNumber };
     await input.store.setJson(duplicateStoreKey, stored, oneDaySeconds);
     if (idempotencyStoreKey) {

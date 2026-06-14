@@ -8,6 +8,7 @@ const report: NormalizedReport = {
   title: "CSV import crashes",
   description: "The app crashes after selecting a CSV file.",
   screen: "CSVImportView",
+  screenshots: [],
   appVersion: "1.0.0",
   buildNumber: "42",
   iosVersion: "18.7",
@@ -33,4 +34,18 @@ test("screen changes do not affect duplicate hash", () => {
     duplicateHash(report),
     duplicateHash({ ...report, screen: "SettingsView" })
   );
+});
+
+test("different screenshots produce different hash", () => {
+  const withScreenshot = {
+    ...report,
+    screenshots: [{ buffer: Buffer.from([0xFF, 0xD8, 0xFF, 0x00]), mimeType: "image/jpeg" as const, filename: "a.jpg" }]
+  };
+  const withDifferentScreenshot = {
+    ...report,
+    screenshots: [{ buffer: Buffer.from([0xFF, 0xD8, 0xFF, 0x01]), mimeType: "image/jpeg" as const, filename: "b.jpg" }]
+  };
+
+  assert.notEqual(duplicateHash(withScreenshot), duplicateHash(report));
+  assert.notEqual(duplicateHash(withScreenshot), duplicateHash(withDifferentScreenshot));
 });

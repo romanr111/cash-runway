@@ -68,6 +68,8 @@ enum CashRunwayAccessibilityID {
     static let feedbackDescriptionField = "feedback.description.field"
     static let feedbackSubmitButton = "feedback.submit.button"
     static let feedbackSuccessMessage = "feedback.success.message"
+    static let feedbackScreenshotPicker = "feedback.screenshot.picker"
+    static let feedbackScreenshotList = "feedback.screenshot.list"
     static let monobankIntroContinueButton = "monobank.intro.continueButton"
     static let monobankTokenField = "monobank.token.field"
     static let monobankPasteTokenButton = "monobank.token.pasteButton"

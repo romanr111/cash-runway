@@ -188,6 +188,7 @@
     },
     "%lld": {},
     "%lld percent": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -204,6 +205,7 @@
       }
     },
     "%lld%%": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -352,6 +354,7 @@
       }
     },
     "All existing transactions were preserved and now point to the destination category.": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -1492,6 +1495,7 @@
       }
     },
     "Clear Selection": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -1559,6 +1563,7 @@
       }
     },
     "Combine duplicate categories": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -1767,6 +1772,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "Створіть перший гаманець"
+          }
+        }
+      }
+    },
+    "Creating report...": {
+      "localizations": {
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Створення звіту..."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Creating report..."
           }
         }
       }
@@ -2020,6 +2041,7 @@
       }
     },
     "Delete Wallet": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -2036,6 +2058,7 @@
       }
     },
     "Delete Wallet?": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -2086,7 +2109,6 @@
       }
     },
     "Details": {
-      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -2134,6 +2156,22 @@
         }
       }
     },
+    "Diagnostics include app version, build, iOS version, device model, locale, timezone, and an anonymous install hash.": {
+      "localizations": {
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Діагностика містить версію застосунку, збірку, версію iOS, модель пристрою, мову, часовий пояс та анонімний ідентифікатор встановлення."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diagnostics include app version, build, iOS version, device model, locale, timezone, and an anonymous install hash."
+          }
+        }
+      }
+    },
     "Disabled": {
       "extractionState": "stale",
       "localizations": {
@@ -2164,6 +2202,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "Відключити Monobank?"
+          }
+        }
+      }
+    },
+    "Do not include account numbers, balances, transaction details, Monobank tokens, or private financial information.": {
+      "localizations": {
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не вказуйте номери рахунків, баланси, деталі транзакцій, токени Monobank чи приватну фінансову інформацію."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Do not include account numbers, balances, transaction details, Monobank tokens, or private financial information."
           }
         }
       }
@@ -2382,7 +2436,22 @@
         }
       }
     },
-    "Error": {},
+    "Error": {
+      "localizations": {
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Помилка"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Error"
+          }
+        }
+      }
+    },
     "Existing Cash Runway transactions will not be changed.": {
       "localizations": {
         "en": {
@@ -3064,6 +3133,22 @@
     },
     "Importing": {},
     "Importing transactions...": {},
+    "Include safe diagnostics": {
+      "localizations": {
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Долучити безпечну діагностику"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Include safe diagnostics"
+          }
+        }
+      }
+    },
     "Income": {
       "localizations": {
         "en": {
@@ -3529,6 +3614,7 @@
       }
     },
     "Merge Categories": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -3578,6 +3664,7 @@
       }
     },
     "Merge Complete": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -3611,6 +3698,7 @@
       }
     },
     "Merge progress": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -3627,6 +3715,7 @@
       }
     },
     "Merging Categories": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -4473,6 +4562,22 @@
         }
       }
     },
+    "Private by default": {
+      "localizations": {
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Приватно за замовчуванням"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Private by default"
+          }
+        }
+      }
+    },
     "Provider": {
       "localizations": {
         "en": {
@@ -4637,6 +4742,54 @@
           "stringUnit": {
             "state": "translated",
             "value": "Замінити дані з JSON"
+          }
+        }
+      }
+    },
+    "Report Bug or Suggest Improvement": {
+      "localizations": {
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Повідомити про помилку чи запропонувати покращення"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Report Bug or Suggest Improvement"
+          }
+        }
+      }
+    },
+    "Report Feedback": {
+      "localizations": {
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Надіслати відгук"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Report Feedback"
+          }
+        }
+      }
+    },
+    "Report sent. Issue #%lld was created for triage.": {
+      "localizations": {
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Звіт надіслано. Завдання #%lld створено для розгляду."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Report sent. Issue #%lld was created for triage."
           }
         }
       }
@@ -5039,6 +5192,54 @@
         }
       }
     },
+    "Send Report": {
+      "localizations": {
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Надіслати звіт"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send Report"
+          }
+        }
+      }
+    },
+    "Sending": {
+      "localizations": {
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Надсилання"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sending"
+          }
+        }
+      }
+    },
+    "Sent": {
+      "localizations": {
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Надіслано"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sent"
+          }
+        }
+      }
+    },
     "Settings": {
       "localizations": {
         "en": {
@@ -5324,6 +5525,7 @@
     },
     "Start time": {},
     "Starting Balance": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -5389,6 +5591,7 @@
         }
       }
     },
+    "Support": {},
     "Symbol": {
       "extractionState": "stale",
       "localizations": {
@@ -5608,6 +5811,7 @@
       }
     },
     "This will permanently remove the wallet and all of its transactions.": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -5635,6 +5839,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "Стрічка"
+          }
+        }
+      }
+    },
+    "Title": {
+      "localizations": {
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Заголовок"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Title"
           }
         }
       }
@@ -5787,6 +6007,7 @@
       }
     },
     "Transactions stay intact while category references are updated.": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -5803,6 +6024,7 @@
       }
     },
     "Transactions, recurring templates, and bank rules move to the category you keep. The source category is hidden after merge.": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -6002,6 +6224,7 @@
       }
     },
     "tx": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -6047,6 +6270,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "Українська"
+          }
+        }
+      }
+    },
+    "Unavailable": {
+      "localizations": {
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Недоступно"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unavailable"
           }
         }
       }
@@ -6225,7 +6464,22 @@
     "Used when the CSV wallet is empty or does not match an existing wallet.": {},
     "Validate Token": {},
     "Validating...": {},
-    "Validation Error": {},
+    "Validation Error": {
+      "localizations": {
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Помилка перевірки"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Validation Error"
+          }
+        }
+      }
+    },
     "Value": {},
     "Violet": {
       "extractionState": "stale",
@@ -6278,6 +6532,7 @@
       }
     },
     "Wallet Details": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -6541,6 +6796,326 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ваш токен Monobank залишається на цьому iPhone."
+          }
+        }
+      }
+    },
+    "Bug": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bug"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Помилка"
+          }
+        }
+      }
+    },
+    "Improvement": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Improvement"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Покращення"
+          }
+        }
+      }
+    },
+    "Title must be 5-120 characters.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Title must be 5-120 characters."
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Заголовок має містити від 5 до 120 символів."
+          }
+        }
+      }
+    },
+    "Description must be 20-4000 characters.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Description must be 20-4000 characters."
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Опис має містити від 20 до 4000 символів."
+          }
+        }
+      }
+    },
+    "Do not include account numbers, balances, transaction details, Monobank tokens, CSV exports, database files, screenshots, or logs.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Do not include account numbers, balances, transaction details, Monobank tokens, CSV exports, database files, screenshots, or logs."
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не вказуйте номери рахунків, баланси, деталі транзакцій, токени Monobank, CSV-файли, файли бази даних, скриншоти чи журнали."
+          }
+        }
+      }
+    },
+    "The reporting service returned an invalid response.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The reporting service returned an invalid response."
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Служба звітів повернула некоректну відповідь."
+          }
+        }
+      }
+    },
+    "Too many reports were sent. Try again later.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Too many reports were sent. Try again later."
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Надіслано забагато звітів. Спробуйте пізніше."
+          }
+        }
+      }
+    },
+    "Could not create the report. Server status: %d.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not create the report. Server status: %d."
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не вдалося створити звіт. Код стану сервера: %d."
+          }
+        }
+      }
+    },
+    "Reporting is not configured yet.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reporting is not configured yet."
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Звіти ще не налаштовані."
+          }
+        }
+      }
+    },
+    "Reporting is currently disabled.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reporting is currently disabled."
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Надсилання звітів зараз вимкнено."
+          }
+        }
+      }
+    },
+    "Send a private text report": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send a private text report"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Надіслати приватний текстовий звіт"
+          }
+        }
+      }
+    },
+    "Only the text you enter, attached screenshots, and basic app/device diagnostics are sent. Logs, CSV files, databases, balances, transactions, and Monobank tokens are never uploaded.": {
+      "localizations": {
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Передається лише текст, який ви ввели, долучені скриншоти та базова діагностика застосунку/пристрою. Журнали, CSV-файли, бази даних, баланси, транзакції та токени Monobank ніколи не вивантажуються."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only the text you enter, attached screenshots, and basic app/device diagnostics are sent. Logs, CSV files, databases, balances, transactions, and Monobank tokens are never uploaded."
+          }
+        }
+      }
+    },
+    "You can attach up to %d screenshots.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You can attach up to %d screenshots."
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Можна долучити не більше %d скриншотів."
+          }
+        }
+      }
+    },
+    "Each screenshot must be smaller than 1 MB.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Each screenshot must be smaller than 1 MB."
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Кожен скриншот має бути меншим за 1 МБ."
+          }
+        }
+      }
+    },
+    "Screenshots must be JPEG or PNG images.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screenshots must be JPEG or PNG images."
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Скриншоти мають бути зображеннями JPEG або PNG."
+          }
+        }
+      }
+    },
+    "Do not include account numbers, balances, transaction details, Monobank tokens, CSV exports, database files, or raw logs.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Do not include account numbers, balances, transaction details, Monobank tokens, CSV exports, database files, or raw logs."
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не вказуйте номери рахунків, баланси, деталі транзакцій, токени Monobank, CSV-файли, файли бази даних чи сирі журнали."
+          }
+        }
+      }
+    },
+    "Add screenshots": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add screenshots"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Додати скриншоти"
+          }
+        }
+      }
+    },
+    "Change screenshots": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Change screenshots"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Змінити скриншоти"
+          }
+        }
+      }
+    },
+    "You can attach up to %d screenshots. Images are compressed before sending.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You can attach up to %d screenshots. Images are compressed before sending."
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Можна долучити не більше %d скриншотів. Зображення стискаються перед надсиланням."
+          }
+        }
+      }
+    },
+    "Screenshots must be smaller than 3 MB in total.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screenshots must be smaller than 3 MB in total."
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Скриншоти мають бути менші за 3 МБ загалом."
           }
         }
       }

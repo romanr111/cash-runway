@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 @MainActor
@@ -13,15 +14,18 @@ struct ConfiguredFeedbackReportService: FeedbackReportSubmitting {
 
     init(
         config: ReportingConfig = .bundleDefault,
+        secretProvider: ReportingKeychainSecretProvider = ReportingKeychainSecretProvider(),
         diagnosticsProvider: SafeDiagnosticsProvider = SafeDiagnosticsProvider()
     ) {
-        unavailableMessage = config.unavailableMessage
-        if unavailableMessage == nil,
+        let configMessage = config.unavailableMessage
+        if configMessage == nil,
            let endpointURL = config.endpointURL,
-           let clientSecret = config.clientSecret {
+           let clientSecret = secretProvider.clientSecret() {
             reportService = ReportIssueService(endpointURL: endpointURL, clientSecret: clientSecret)
+            unavailableMessage = nil
         } else {
             reportService = nil
+            unavailableMessage = configMessage ?? L10n.string("Reporting is not configured yet.")
         }
         self.diagnosticsProvider = diagnosticsProvider
     }
@@ -104,7 +108,8 @@ final class ReportIssueViewModel: ObservableObject {
             draft.trimmedTitle,
             draft.trimmedDescription,
             draft.screen ?? "",
-            String(draft.includeDiagnostics)
+            String(draft.includeDiagnostics),
+            screenshotFingerprint()
         ].joined(separator: "\n")
         if activeAttemptFingerprint != fingerprint {
             activeAttemptFingerprint = fingerprint
@@ -116,6 +121,14 @@ final class ReportIssueViewModel: ObservableObject {
         let created = UUID().uuidString
         activeAttemptKey = created
         return created
+    }
+
+    private func screenshotFingerprint() -> String {
+        draft.screenshots.map { screenshotDataHash($0.data) }.joined(separator: ",")
+    }
+
+    private func screenshotDataHash(_ data: Data) -> String {
+        SHA256.hash(data: data).compactMap { String(format: "%02x", $0) }.joined()
     }
 }
 
@@ -141,19 +154,15 @@ enum ReportingEnvironment: String, Equatable, Sendable {
 
 struct ReportingConfig: Equatable, Sendable {
     let endpointURL: URL?
-    let clientSecret: String?
     let isReportingEnabled: Bool
     let environment: ReportingEnvironment
 
     var unavailableMessage: String? {
         guard isReportingEnabled else {
-            return "Reporting is currently disabled."
+            return L10n.string("Reporting is currently disabled.")
         }
         guard let endpointURL, !endpointURL.isPlaceholderReportingURL else {
-            return "Reporting is not configured yet."
-        }
-        guard let clientSecret, !clientSecret.isEmpty, !clientSecret.contains("replace-with") else {
-            return "Reporting is not configured yet."
+            return L10n.string("Reporting is not configured yet.")
         }
         return nil
     }
@@ -164,19 +173,16 @@ struct ReportingConfig: Equatable, Sendable {
 
     init(
         endpointURL: URL?,
-        clientSecret: String?,
         isReportingEnabled: Bool,
         environment: ReportingEnvironment
     ) {
         self.endpointURL = endpointURL
-        self.clientSecret = clientSecret
         self.isReportingEnabled = isReportingEnabled
         self.environment = environment
     }
 
     init(bundle: Bundle) {
         endpointURL = bundle.reportIssueEndpointURL
-        clientSecret = bundle.reportIssueClientSecret
         isReportingEnabled = bundle.reportIssueEnabled
         environment = bundle.reportIssueEnvironment
     }
@@ -194,10 +200,6 @@ private extension Bundle {
             return nil
         }
         return URL(string: value)
-    }
-
-    var reportIssueClientSecret: String? {
-        object(forInfoDictionaryKey: "CashRunwayReportClientSecret") as? String
     }
 
     var reportIssueEnabled: Bool {

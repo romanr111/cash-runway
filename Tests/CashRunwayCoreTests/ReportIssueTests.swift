@@ -11,6 +11,7 @@ struct ReportIssueTests {
             title: "CSV import crashes",
             description: "The app crashes after selecting a CSV file.",
             screen: "CSVImportView",
+            screenshots: [],
             diagnostics: ReportIssueDiagnostics(
                 appVersion: "1.0.0",
                 buildNumber: "42",
@@ -41,7 +42,6 @@ struct ReportIssueTests {
         #expect(!json.contains("monobankToken"))
         #expect(!json.contains("logs"))
         #expect(!json.contains("csv"))
-        #expect(!json.contains("screenshot"))
     }
 
     @Test func draftValidationRejectsInvalidTitle() {
@@ -49,7 +49,7 @@ struct ReportIssueTests {
         draft.title = "Bug"
         draft.description = "The app crashes after selecting a CSV file."
 
-        #expect(throws: ReportIssueValidationError.invalid("Title must be 5-120 characters.")) {
+        #expect(throws: ReportIssueValidationError.invalid(L10n.string("Title must be 5-120 characters."))) {
             _ = try draft.validatedPayload(diagnostics: nil, idempotencyKey: "attempt-1")
         }
     }
@@ -59,7 +59,7 @@ struct ReportIssueTests {
         draft.title = "CSV import crashes"
         draft.description = "Too short"
 
-        #expect(throws: ReportIssueValidationError.invalid("Description must be 20-4000 characters.")) {
+        #expect(throws: ReportIssueValidationError.invalid(L10n.string("Description must be 20-4000 characters."))) {
             _ = try draft.validatedPayload(diagnostics: nil, idempotencyKey: "attempt-1")
         }
     }
@@ -88,10 +88,11 @@ struct ReportIssueTests {
             description: "My Monobank token is abcdef1234567890abcdef1234567890 and validation fails."
         )
 
-        #expect(throws: ReportIssueValidationError.invalid("Do not include account numbers, balances, transaction details, Monobank tokens, CSV exports, database files, screenshots, or logs.")) {
+        let expected = L10n.string("Do not include account numbers, balances, transaction details, Monobank tokens, CSV exports, database files, or raw logs.")
+        #expect(throws: ReportIssueValidationError.invalid(expected)) {
             _ = try balanceDraft.validatedPayload(diagnostics: nil, idempotencyKey: "attempt-1")
         }
-        #expect(throws: ReportIssueValidationError.invalid("Do not include account numbers, balances, transaction details, Monobank tokens, CSV exports, database files, screenshots, or logs.")) {
+        #expect(throws: ReportIssueValidationError.invalid(expected)) {
             _ = try tokenDraft.validatedPayload(diagnostics: nil, idempotencyKey: "attempt-1")
         }
     }
@@ -99,6 +100,11 @@ struct ReportIssueTests {
     @Test func categoryMapsToBackendString() throws {
         #expect(ReportIssueCategory.bug.rawValue == "bug")
         #expect(ReportIssueCategory.improvement.rawValue == "improvement")
+    }
+
+    @Test func categoryDisplayTitleUsesLocalization() {
+        #expect(ReportIssueCategory.bug.displayTitle == L10n.string("Bug"))
+        #expect(ReportIssueCategory.improvement.displayTitle == L10n.string("Improvement"))
     }
 
     @Test func diagnosticsToggleControlsPayloadDiagnostics() throws {
@@ -130,6 +136,34 @@ struct ReportIssueTests {
         #expect(provider.installHash().hasPrefix("sha256:"))
     }
 
+    @Test func installHashPersistsInKeychain() throws {
+        let keychain = TestKeychainStore()
+        let provider = AnonymousInstallIDProvider(
+            loadID: {
+                guard let data = try? keychain.read(account: AnonymousInstallIDProvider.storageKey) else { return nil }
+                return String(data: data, encoding: .utf8)
+            },
+            saveID: { id in
+                try? keychain.write(Data(id.utf8), account: AnonymousInstallIDProvider.storageKey)
+            }
+        )
+
+        let firstHash = provider.installHash()
+        let secondHash = provider.installHash()
+
+        #expect(firstHash == secondHash)
+        #expect(firstHash.hasPrefix("sha256:"))
+    }
+
+    @Test func reportingKeychainSecretProviderReadsStoredSecret() throws {
+        let keychain = TestKeychainStore()
+        try keychain.write(Data("stored-secret".utf8), account: ReportingKeychainSecretProvider.keychainAccount)
+
+        let provider = ReportingKeychainSecretProvider(keychain: keychain)
+
+        #expect(provider.clientSecret() == "stored-secret")
+    }
+
     @Test func serviceHandlesCreatedResponse() async throws {
         let service = ReportIssueService(
             endpointURL: URL(string: "https://reports.example.test/api/reports")!,
@@ -157,6 +191,57 @@ struct ReportIssueTests {
         }
     }
 
+    @Test func draftValidationAcceptsValidScreenshots() throws {
+        let draft = ReportIssueDraft(
+            title: "CSV import crashes",
+            description: "The app crashes after selecting a CSV file.",
+            screenshots: [ReportIssueScreenshot(data: jpegData(), mimeType: .jpeg, filename: "screenshot.jpg")]
+        )
+
+        let payload = try draft.validatedPayload(diagnostics: nil, idempotencyKey: "attempt-1")
+
+        #expect(payload.screenshots.count == 1)
+        #expect(payload.screenshots[0].mimeType == "image/jpeg")
+        #expect(!payload.screenshots[0].data.isEmpty)
+    }
+
+    @Test func draftValidationRejectsTooManyScreenshots() {
+        let draft = ReportIssueDraft(
+            title: "CSV import crashes",
+            description: "The app crashes after selecting a CSV file.",
+            screenshots: Array(repeating: ReportIssueScreenshot(data: jpegData(), mimeType: .jpeg, filename: "s.jpg"), count: 4)
+        )
+
+        #expect(throws: ReportIssueValidationError.invalid(L10n.string("You can attach up to %d screenshots.", ReportIssueDraft.maxScreenshots))) {
+            _ = try draft.validatedPayload(diagnostics: nil, idempotencyKey: "attempt-1")
+        }
+    }
+
+    @Test func draftValidationRejectsOversizedScreenshot() {
+        let oversized = Data(repeating: 0xFF, count: 1_048_577)
+        let draft = ReportIssueDraft(
+            title: "CSV import crashes",
+            description: "The app crashes after selecting a CSV file.",
+            screenshots: [ReportIssueScreenshot(data: oversized, mimeType: .jpeg, filename: "big.jpg")]
+        )
+
+        #expect(throws: ReportIssueValidationError.invalid(L10n.string("Each screenshot must be smaller than 1 MB."))) {
+            _ = try draft.validatedPayload(diagnostics: nil, idempotencyKey: "attempt-1")
+        }
+    }
+
+    @Test func draftValidationRejectsInvalidImageFormat() {
+        let draft = ReportIssueDraft(
+            title: "CSV import crashes",
+            description: "The app crashes after selecting a CSV file.",
+            screenshots: [ReportIssueScreenshot(data: Data("not an image".utf8), mimeType: .jpeg, filename: "fake.jpg")]
+        )
+
+        #expect(throws: ReportIssueValidationError.invalid(L10n.string("Screenshots must be JPEG or PNG images."))) {
+            _ = try draft.validatedPayload(diagnostics: nil, idempotencyKey: "attempt-1")
+        }
+    }
+
     private func validPayload(idempotencyKey: String = "attempt-1") -> ReportIssuePayload {
         ReportIssuePayload(
             category: .bug,
@@ -164,8 +249,13 @@ struct ReportIssueTests {
             title: "CSV import crashes",
             description: "The app crashes after selecting a CSV file.",
             screen: "CSVImportView",
+            screenshots: [],
             diagnostics: nil
         )
+    }
+
+    private func jpegData() -> Data {
+        Data([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46])
     }
 }
 

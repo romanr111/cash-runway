@@ -182,3 +182,65 @@ test("rejects unsupported extra fields", () => {
     /Unsupported report field/
   );
 });
+
+const jpegBytes = Buffer.from([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46]);
+const pngBytes = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00]);
+
+test("accepts valid screenshot", () => {
+  const report = validateReport({
+    ...validReport,
+    screenshots: [{ data: jpegBytes.toString("base64"), mimeType: "image/jpeg", filename: "screenshot.jpg" }]
+  });
+
+  assert.equal(report.screenshots.length, 1);
+  assert.equal(report.screenshots[0].mimeType, "image/jpeg");
+});
+
+test("rejects more than three screenshots", () => {
+  assert.throws(
+    () => validateReport({
+      ...validReport,
+      screenshots: Array.from({ length: 4 }, () => ({
+        data: jpegBytes.toString("base64"),
+        mimeType: "image/jpeg",
+        filename: "screenshot.jpg"
+      }))
+    }),
+    /You can attach up to 3 screenshots/
+  );
+});
+
+test("rejects oversized screenshot", () => {
+  const large = Buffer.alloc(1_048_577, 0xFF);
+  large[0] = 0xFF;
+  large[1] = 0xD8;
+  large[2] = 0xFF;
+
+  assert.throws(
+    () => validateReport({
+      ...validReport,
+      screenshots: [{ data: large.toString("base64"), mimeType: "image/jpeg", filename: "big.jpg" }]
+    }),
+    /Each screenshot must be smaller than 1 MB/
+  );
+});
+
+test("rejects screenshot with invalid magic bytes", () => {
+  assert.throws(
+    () => validateReport({
+      ...validReport,
+      screenshots: [{ data: Buffer.from("not an image").toString("base64"), mimeType: "image/jpeg", filename: "fake.jpg" }]
+    }),
+    /Screenshots must be JPEG or PNG images/
+  );
+});
+
+test("rejects screenshot with mism MIME type", () => {
+  assert.throws(
+    () => validateReport({
+      ...validReport,
+      screenshots: [{ data: pngBytes.toString("base64"), mimeType: "image/jpeg", filename: "mismatch.jpg" }]
+    }),
+    /Screenshots must be JPEG or PNG images/
+  );
+});

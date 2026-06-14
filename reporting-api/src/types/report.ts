@@ -6,6 +6,7 @@ export type ReportInput = ({
   title?: unknown;
   description?: unknown;
   screen?: unknown;
+  screenshots?: unknown;
   appVersion?: unknown;
   buildNumber?: unknown;
   iosVersion?: unknown;
@@ -15,11 +16,24 @@ export type ReportInput = ({
   installHash?: unknown;
 } & Record<string, unknown>) | null | undefined;
 
+export type ReportScreenshot = {
+  data: string;
+  mimeType: string;
+  filename: string;
+};
+
+export type DecodedScreenshot = {
+  buffer: Buffer;
+  mimeType: "image/jpeg" | "image/png";
+  filename: string;
+};
+
 export type NormalizedReport = {
   category: ReportCategory;
   title: string;
   description: string;
   screen?: string;
+  screenshots: DecodedScreenshot[];
   appVersion?: string;
   buildNumber?: string;
   iosVersion?: string;
@@ -42,4 +56,9 @@ export type GitHubIssueResult = {
 
 export type GitHubClient = {
   createIssue(input: GitHubIssueInput): Promise<GitHubIssueResult>;
+  uploadFile(path: string, content: Buffer, message: string): Promise<GitHubFileUploadResult>;
+};
+
+export type GitHubFileUploadResult = {
+  rawUrl: string;
 };

@@ -3,6 +3,7 @@ import XCTest
 @MainActor
 final class SettingsNavigationUITests: CashRunwayUITestCase {
 
+    // swiftlint:disable:next static_over_final_class
     override class func setUp() {
         super.setUp()
         launchSharedApp(reset: true, scenario: "transaction_core")

@@ -25,7 +25,7 @@ struct FeedbackReportView: View {
                             Text("Private by default")
                                 .font(.system(size: 19, weight: .semibold))
                                 .foregroundStyle(CashRunwayTheme.textPrimary)
-                            Text("Only the text you enter and basic app/device diagnostics are sent. Screenshots, logs, CSV files, databases, balances, transactions, and Monobank tokens are never uploaded.")
+                            Text("Only the text you enter, attached screenshots, and basic app/device diagnostics are sent. Logs, CSV files, databases, balances, transactions, and Monobank tokens are never uploaded.")
                                 .font(CashRunwayTheme.captionFont)
                                 .foregroundStyle(CashRunwayTheme.textSecondary)
                         }
@@ -65,6 +65,13 @@ struct FeedbackReportView: View {
                         }
                         Text("Do not include account numbers, balances, transaction details, Monobank tokens, or private financial information.")
                     }
+                }
+
+                Section("Screenshots") {
+                    FeedbackReportScreenshotPicker(
+                        screenshots: $viewModel.draft.screenshots,
+                        isLocked: viewModel.isLocked
+                    )
                 }
 
                 Section {
@@ -123,8 +130,8 @@ struct FeedbackReportView: View {
                 ProgressView("Creating report...")
             }
         case let .success(issueNumber):
-            Section("Sent") {
-                Text("Report sent. Issue #\(issueNumber) was created for triage.")
+            Section(L10n.string("Sent")) {
+                Text(L10n.string("Report sent. Issue #%lld was created for triage.", issueNumber))
                     .foregroundStyle(CashRunwayTheme.positive)
                     .accessibilityIdentifier(CashRunwayAccessibilityID.feedbackSuccessMessage)
             }

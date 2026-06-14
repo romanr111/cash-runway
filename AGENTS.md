@@ -70,6 +70,24 @@ Every iOS task must pass ALL gates before being marked done, in this order:
 - Multiple agents in the same worktree can share one CodeGraph daemon; different worktrees must use separate indexes.
 - Practical new-worktree setup: `git worktree add ../MyApp-feature-x -b feature/x && cd ../MyApp-feature-x && just graph-bootstrap && just graph-status`.
 
+### Token efficiency
+AGENTS.md is loaded every turn; keep this file concise and do not duplicate its rules in chat.
+- Status replies are ≤2 sentences unless asked. If a reply needs more, escalate: ask permission, compress with Headroom, or hand off to a fresh conversation.
+- Do not emit "Current Focus / Environment / Completed Tasks" recaps. Track state with `TodoList`.
+- For open-ended tasks, set a token/turn budget at the start (e.g., ≤50 turns or one Headroom compression); if the budget is exceeded, compress with Headroom or hand off.
+- Hand off to a fresh conversation when context is compacted, turns exceed ~50, or the task changes substantially; update `CONTINUITY.md` Snapshot first.
+- Run `Scripts/pre-flight.sh` before starting a task to surface untracked files and core mirror drift.
+- For symbols and unknown code locations, use CodeGraph first (see `### Agent tooling` for commands).
+- For files >500 lines, use `Read` with `line_offset`; never read the whole file unless requested.
+- Use `Scripts/localize-xcstrings.py` to patch `AppHost/Localizable.xcstrings`; do not rewrite the entire catalog by hand.
+- Batch edits to the same file; re-read only when the exact target is unknown.
+- Use filtered commands by default:
+  - `just build` for simulator builds (already filtered).
+  - `swift test --filter <Pattern> 2>&1 | tail -40` for targeted tests.
+  - Capture full runs to `/tmp/cash-runway-swift-test.log` and `tail -60`.
+- Pipe `xcodebuild` and `swift test` through `grep` or Headroom; surface only errors, success/failure, and first failure.
+- Do not paste full `git diff`, JSON catalogs, or build logs into the chat; summarize or compress with Headroom.
+
 ### Mirrored core sources (D004)
 Core sources live in **two places** and must stay identical:
 - `Sources/CashRunwayCore/` — compiled by the app target

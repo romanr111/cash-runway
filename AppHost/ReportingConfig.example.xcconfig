@@ -10,6 +10,5 @@ CASH_RUNWAY_REPORT_ENVIRONMENT = production
 
 // These keys are merged into the app's Info.plist at build time.
 INFOPLIST_KEY_CashRunwayReportEndpointURL = $(CASH_RUNWAY_REPORT_ENDPOINT_URL)
-INFOPLIST_KEY_CashRunwayReportClientSecret = $(CASH_RUNWAY_REPORT_CLIENT_SECRET)
 INFOPLIST_KEY_CashRunwayReportingEnabled = $(CASH_RUNWAY_REPORTING_ENABLED)
 INFOPLIST_KEY_CashRunwayReportEnvironment = $(CASH_RUNWAY_REPORT_ENVIRONMENT)

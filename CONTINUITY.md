@@ -16,6 +16,7 @@ Rules:
 - Next action: Merge PR `#32` after final review, then set production Vercel environment variables and a production-specific reporting secret before enabling Release reporting.
 - Open questions: None.
 - Merge status: not-merged.
+- Handoff trigger: when context is compacted or turns exceed ~50, rewrite this Snapshot to current truth before starting a fresh conversation.
 
 ## Git Context
 
