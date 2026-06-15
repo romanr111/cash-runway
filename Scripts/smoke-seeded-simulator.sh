@@ -26,6 +26,7 @@ mkdir -p "$LOG_DIR"
 DB_PATH="/tmp/cash-runway-ui-smoke-${RUN_ID}.sqlite"
 BUNDLE_ID="dev.roman.cashrunway"
 PASS=true
+BOOT_TIMEOUT_SECONDS="${CASH_RUNWAY_SMOKE_BOOT_TIMEOUT_SECONDS:-120}"
 
 log() {
     echo "$1" | tee -a "$LOG_DIR/smoke.log"
@@ -34,6 +35,49 @@ log() {
 fail() {
     PASS=false
     log "❌ $1"
+}
+
+wait_for_simulator_boot() {
+    local phase="$1"
+    local status=0
+
+    perl -e '
+        my $timeout = shift @ARGV;
+        my $pid = fork();
+        die "fork failed\n" unless defined $pid;
+        if ($pid == 0) {
+            exec @ARGV;
+            die "exec failed: $!\n";
+        }
+        $SIG{ALRM} = sub {
+            kill "TERM", $pid;
+            sleep 1;
+            kill "KILL", $pid;
+            waitpid($pid, 0);
+            exit 124;
+        };
+        alarm $timeout;
+        waitpid($pid, 0);
+        my $status = $?;
+        exit($status & 127 ? 128 + ($status & 127) : $status >> 8);
+    ' "$BOOT_TIMEOUT_SECONDS" xcrun simctl bootstatus "$DEVICE_UDID" > /dev/null 2>&1 || status=$?
+
+    if [[ "$status" -eq 0 ]]; then
+        return 0
+    fi
+
+    if [[ "$status" -eq 124 ]]; then
+        fail "Timed out waiting for $DEVICE_NAME simulator to boot during $phase"
+        echo "❌ Seeded simulator smoke failed: $DEVICE_NAME"
+        echo "Logs: $LOG_DIR"
+        exit 1
+    fi
+
+    return "$status"
+}
+
+simulator_is_booted() {
+    xcrun simctl list devices available | grep -q "$DEVICE_UDID.*(Booted)"
 }
 
 cd "$PROJECT_DIR"
@@ -58,11 +102,12 @@ fi
 log "Using simulator: $DEVICE_NAME ($DEVICE_UDID)"
 
 # Boot if not already booted
-if ! xcrun simctl bootstatus "$DEVICE_UDID" > /dev/null 2>&1; then
+if ! simulator_is_booted; then
     log "Booting simulator ..."
-    xcrun simctl boot "$DEVICE_UDID"
-    sleep 3
+    xcrun simctl boot "$DEVICE_UDID" > "$LOG_DIR/boot.log" 2>&1 || true
 fi
+wait_for_simulator_boot "boot"
+sleep 3
 
 # --- Build ---
 log "Building for simulator ..."

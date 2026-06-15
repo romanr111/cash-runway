@@ -24,6 +24,7 @@ concurrency:
 jobs:
   build-release-deploy:
     runs-on: macos-26
+    timeout-minutes: 90
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -69,6 +70,7 @@ jobs:
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ steps.meta.outputs.build }}" AppHost/Info.plist
 
       - name: Install validation tools
+        timeout-minutes: 10
         shell: bash
         run: |
           set -euo pipefail
@@ -81,12 +83,36 @@ jobs:
           just --version
           swiftlint version
 
-      - name: Run validation gate
+      - name: Run SwiftLint
+        timeout-minutes: 10
         shell: bash
         run: |
           set -euo pipefail
           just lint
-          just verify
+
+      - name: Run repository validation
+        timeout-minutes: 45
+        shell: bash
+        run: |
+          set -euo pipefail
+          just check
+
+      - name: Run simulator smoke
+        timeout-minutes: 15
+        shell: bash
+        env:
+          CASH_RUNWAY_SMOKE_BOOT_TIMEOUT_SECONDS: "120"
+        run: |
+          set -euo pipefail
+          just smoke
+
+      - name: Upload validation logs
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sidestore-release-validation-logs
+          path: /tmp/cash-runway-agent-validation
+          if-no-files-found: ignore
 
       - name: Build unsigned iOS app
         shell: bash
