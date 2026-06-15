@@ -125,6 +125,8 @@ jobs:
             -sdk iphoneos \
             -destination 'generic/platform=iOS' \
             -derivedDataPath DerivedData \
+            MARKETING_VERSION="${{ steps.meta.outputs.version }}" \
+            CURRENT_PROJECT_VERSION="${{ steps.meta.outputs.build }}" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
@@ -145,6 +147,22 @@ jobs:
 
           cp sidestore/icon.png public/icon.png
           touch public/.nojekyll
+
+      - name: Verify packaged app metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_INFO="Payload/CashRunway.app/Info.plist"
+          packaged_version="$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "${APP_INFO}")"
+          packaged_build="$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "${APP_INFO}")"
+          if [[ "${packaged_version}" != "${{ steps.meta.outputs.version }}" ]]; then
+            echo "Packaged app version ${packaged_version} does not match source version ${{ steps.meta.outputs.version }}." >&2
+            exit 1
+          fi
+          if [[ "${packaged_build}" != "${{ steps.meta.outputs.build }}" ]]; then
+            echo "Packaged app build ${packaged_build} does not match source build ${{ steps.meta.outputs.build }}." >&2
+            exit 1
+          fi
 
       - name: Generate SideStore source JSON
         shell: bash
