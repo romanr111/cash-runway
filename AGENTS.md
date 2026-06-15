@@ -5,6 +5,8 @@ Swift/SwiftUI/GRDB iOS app with a Node/TypeScript reporting API.
 ## Always Apply
 - Keep `Sources/CashRunwayCore/` and
   `Modules/CashRunwayCorePackage/Sources/CashRunwayCore/` identical.
+  After modifying either tree, update the mirror and verify the two trees are
+  identical before finishing.
 - Store credentials and sensitive values only in Keychain or server-side
   environment variables. Never commit or log secrets or sensitive user data.
 - Do not use `print()` for production diagnostics.
@@ -14,6 +16,12 @@ Swift/SwiftUI/GRDB iOS app with a Node/TypeScript reporting API.
   requested.
 - Treat every git worktree as a separate CodeGraph project.
 - Report every skipped validation gate and the reason it was skipped.
+- Keep repo validation, runtime smoke tests, backend/API reachability, and
+  release readiness as separate status buckets. Green checks do not imply the
+  app launched, integrations worked, or release gates are complete.
+- For SideStore or release work, keep the physical-device rehearsal as an
+  explicit manual gate. Do not describe release readiness as complete until that
+  rehearsal has actually passed.
 
 ## Token Efficiency
 - Use Headroom by default for bulky command output, logs, code search, and
