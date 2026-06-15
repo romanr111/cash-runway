@@ -16,8 +16,8 @@ Swift/SwiftUI/GRDB iOS app with a Node/TypeScript reporting API.
 - Report every skipped validation gate and the reason it was skipped.
 
 ## Token Efficiency
-- Always use Headroom for bulky command output, logs, code search, and cross-agent
-  handoff memory when available.
+- Use Headroom by default for bulky command output, logs, code search, and
+  cross-agent handoff memory.
 - Keep routine progress updates to at most two sentences unless more detail is
   requested.
 - Do not emit recurring environment, completed-task, or current-focus recaps.
