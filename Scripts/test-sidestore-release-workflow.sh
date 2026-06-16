@@ -33,4 +33,34 @@ if ! grep -q 'CFBundleVersion' "$WORKFLOW"; then
     exit 1
 fi
 
+if ! grep -q 'Configure feedback reporting' "$WORKFLOW"; then
+    echo "release workflow must configure feedback reporting before building" >&2
+    exit 1
+fi
+
+if ! grep -q 'CASH_RUNWAY_REPORTING_ENABLED=YES' "$WORKFLOW"; then
+    echo "release workflow must enable feedback reporting for SideStore builds" >&2
+    exit 1
+fi
+
+if ! grep -q 'CASH_RUNWAY_REPORT_ENDPOINT_URL="${REPORT_ENDPOINT_URL}"' "$WORKFLOW"; then
+    echo "release workflow must pass the reporting endpoint to xcodebuild" >&2
+    exit 1
+fi
+
+if ! grep -q 'CASH_RUNWAY_REPORT_ENVIRONMENT=sidestore' "$WORKFLOW"; then
+    echo "release workflow must mark SideStore report environment" >&2
+    exit 1
+fi
+
+if ! grep -q 'Scripts/generate-reporting-secrets.swift' "$WORKFLOW"; then
+    echo "release workflow must generate reporting secrets before building" >&2
+    exit 1
+fi
+
+if ! grep -q 'CashRunwayReportingEnabled' "$WORKFLOW"; then
+    echo "release workflow must verify packaged reporting flag" >&2
+    exit 1
+fi
+
 echo "SideStore release workflow metadata test passed"

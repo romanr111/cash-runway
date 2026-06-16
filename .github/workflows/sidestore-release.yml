@@ -69,6 +69,30 @@ jobs:
           /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${{ steps.meta.outputs.version }}" AppHost/Info.plist
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ steps.meta.outputs.build }}" AppHost/Info.plist
 
+      - name: Configure feedback reporting
+        shell: bash
+        env:
+          REPORT_ENDPOINT_URL: ${{ vars.CASH_RUNWAY_REPORT_ENDPOINT_URL || secrets.CASH_RUNWAY_REPORT_ENDPOINT_URL }}
+          REPORT_CLIENT_SECRET: ${{ secrets.CASH_RUNWAY_REPORT_CLIENT_SECRET || secrets.CASH_RUNWAY_REPORT_SECRET }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${REPORT_ENDPOINT_URL}" ]]; then
+            echo "::error::CASH_RUNWAY_REPORT_ENDPOINT_URL is required for SideStore release reporting." >&2
+            exit 1
+          fi
+          if [[ -z "${REPORT_CLIENT_SECRET}" ]]; then
+            echo "::error::CASH_RUNWAY_REPORT_CLIENT_SECRET or CASH_RUNWAY_REPORT_SECRET is required for SideStore release reporting." >&2
+            exit 1
+          fi
+          umask 077
+          cat > AppHost/ReportingConfig.local.xcconfig <<EOF
+          CASH_RUNWAY_REPORT_ENDPOINT_URL = ${REPORT_ENDPOINT_URL}
+          CASH_RUNWAY_REPORT_CLIENT_SECRET = ${REPORT_CLIENT_SECRET}
+          CASH_RUNWAY_REPORTING_ENABLED = YES
+          CASH_RUNWAY_REPORT_ENVIRONMENT = sidestore
+          EOF
+          swift Scripts/generate-reporting-secrets.swift
+
       - name: Install validation tools
         timeout-minutes: 10
         shell: bash
@@ -116,6 +140,8 @@ jobs:
 
       - name: Build unsigned iOS app
         shell: bash
+        env:
+          REPORT_ENDPOINT_URL: ${{ vars.CASH_RUNWAY_REPORT_ENDPOINT_URL || secrets.CASH_RUNWAY_REPORT_ENDPOINT_URL }}
         run: |
           set -euo pipefail
           xcodebuild \
@@ -127,6 +153,9 @@ jobs:
             -derivedDataPath DerivedData \
             MARKETING_VERSION="${{ steps.meta.outputs.version }}" \
             CURRENT_PROJECT_VERSION="${{ steps.meta.outputs.build }}" \
+            CASH_RUNWAY_REPORT_ENDPOINT_URL="${REPORT_ENDPOINT_URL}" \
+            CASH_RUNWAY_REPORTING_ENABLED=YES \
+            CASH_RUNWAY_REPORT_ENVIRONMENT=sidestore \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
@@ -161,6 +190,11 @@ jobs:
           fi
           if [[ "${packaged_build}" != "${{ steps.meta.outputs.build }}" ]]; then
             echo "Packaged app build ${packaged_build} does not match source build ${{ steps.meta.outputs.build }}." >&2
+            exit 1
+          fi
+          reporting_enabled="$(/usr/libexec/PlistBuddy -c "Print :CashRunwayReportingEnabled" "${APP_INFO}")"
+          if [[ "${reporting_enabled}" != "YES" ]]; then
+            echo "Packaged app reporting flag ${reporting_enabled} does not match expected YES." >&2
             exit 1
           fi
 
