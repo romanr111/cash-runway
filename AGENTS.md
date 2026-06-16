@@ -34,8 +34,9 @@ Swift/SwiftUI/GRDB iOS app with a Node/TypeScript reporting API.
   `just graph-bootstrap` before CodeGraph operations in each worktree.
 - Detailed command references:
   `agent_docs/reference/headroom-commands.md`,
-  `agent_docs/reference/codegraph-commands.md`, and
-  `agent_docs/reference/token-efficiency.md`.
+  `agent_docs/reference/codegraph-commands.md`,
+  `agent_docs/reference/token-efficiency.md`, and
+  `agent_docs/reference/verification-strategies.md`.
 - For files over 500 lines, locate the relevant symbol first and read a narrow
   line range. Do not read the complete file unless necessary.
 - Batch related reads in one response; emit multiple `Read` calls in parallel
@@ -57,7 +58,8 @@ Swift/SwiftUI/GRDB iOS app with a Node/TypeScript reporting API.
   into the conversation. Report the outcome, the first relevant failure, and the
   retained log location.
 - For visual verification, prefer MCP Xcode screenshots. If using raw simulator
-  screenshots, downsample before reading them back.
+  screenshots, downsample before reading them back. Take screenshots only at
+  milestones, not after every build.
 - Before context compaction, a major task switch, or transfer to a fresh
   session, update the `CONTINUITY.md` Snapshot. Keep it fresh.
 - Use subagents only for parallel evidence gathering or isolated review tasks

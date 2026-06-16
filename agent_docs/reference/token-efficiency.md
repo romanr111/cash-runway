@@ -168,11 +168,22 @@ Then read `/tmp/screen.jpg` instead of the PNG.
 
 ### When screenshots are unnecessary
 
-- Build success / failure → exit code + error grep
-- Localization loaded → `plutil -p` on generated `.strings` files
-- UI element exists → `xcrun simctl spawn <udid> ui` or view hierarchy dump
+- Build success / failure → exit code + error grep.
+- Localization loaded → `plutil -p` on generated `.strings` files.
+- Code-level UI structure → read the SwiftUI view source; do not screenshot to
+  verify view hierarchy.
+- Dynamic values (wallet counts, language name, etc.) → trust the data source
+  or unit tests.
 
-Take screenshots only for layout/visual verification, and only at milestones.
+### Milestone-based screenshot discipline
+
+- Screenshot once after the final design is implemented.
+- Screenshot once after the fix is applied.
+- Skip intermediate "did the build work?" screenshots.
+- For a full flow, use 2–3 MCP screenshots, not 8–10.
+
+For deep UI inspection (view hierarchy, accessibility labels) use Xcode's
+View Debugger or a focused UI test, not simulator screenshots.
 
 ---
 
