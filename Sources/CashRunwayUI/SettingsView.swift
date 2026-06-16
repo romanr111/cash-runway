@@ -48,8 +48,8 @@ struct SettingsView: View {
                             moreRow(
                                 icon: "exclamationmark.bubble.fill",
                                 tint: "#E5862F",
-                                title: "Report Bug or Suggest Improvement",
-                                subtitle: "Send a private text report"
+                                title: "Feedback",
+                                subtitle: L10n.string("Report a bug or suggest a feature")
                             ) {
                                 isFeedbackReportPresented = true
                             }
