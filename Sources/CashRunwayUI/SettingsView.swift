@@ -38,6 +38,28 @@ struct SettingsView: View {
                     ScreenTitle(title: "More")
 
                     VStack(alignment: .leading, spacing: 10) {
+                        Text("Support")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(CashRunwayTheme.textMuted)
+                            .textCase(.uppercase)
+                            .padding(.horizontal, 4)
+
+                        VStack(spacing: 0) {
+                            moreRow(
+                                icon: "exclamationmark.bubble.fill",
+                                tint: "#E5862F",
+                                title: "Report Bug or Suggest Improvement",
+                                subtitle: "Send a private text report"
+                            ) {
+                                isFeedbackReportPresented = true
+                            }
+                            .accessibilityIdentifier(CashRunwayAccessibilityID.settingsFeedbackReportRow)
+                        }
+                        .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
+                    }
+
+                    VStack(alignment: .leading, spacing: 10) {
                         Text("Settings")
                             .font(.system(size: 14, weight: .bold))
                             .foregroundStyle(CashRunwayTheme.textMuted)
@@ -146,23 +168,6 @@ struct SettingsView: View {
                                 monobankCoordinator = MonobankCoordinator(model: model)
                             }
                             .accessibilityIdentifier(CashRunwayAccessibilityID.settingsMonobankRow)
-                        }
-                        .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
-                    }
-
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Support")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(CashRunwayTheme.textMuted)
-                            .textCase(.uppercase)
-                            .padding(.horizontal, 4)
-
-                        VStack(spacing: 0) {
-                            moreRow(icon: "exclamationmark.bubble.fill", tint: "#E5862F", title: "Report Bug or Suggest Improvement", subtitle: "Send a private text report") {
-                                isFeedbackReportPresented = true
-                            }
-                            .accessibilityIdentifier(CashRunwayAccessibilityID.settingsFeedbackReportRow)
                         }
                         .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
