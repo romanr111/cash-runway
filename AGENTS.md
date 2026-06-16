@@ -30,8 +30,11 @@ Swift/SwiftUI/GRDB iOS app with a Node/TypeScript reporting API.
   requested.
 - Do not emit recurring environment, completed-task, or current-focus recaps.
 - Run `Scripts/pre-flight.sh` before meaningful feature or bug-fix work.
-- Use CodeGraph before broad text searches or repeated raw file reads. Run
+- Use CodeGraph before broad code searches or repeated raw file reads. Run
   `just graph-bootstrap` before CodeGraph operations in each worktree.
+- Detailed command references:
+  `agent_docs/reference/headroom-commands.md` and
+  `agent_docs/reference/codegraph-commands.md`.
 - For files over 500 lines, locate the relevant symbol first and read a narrow
   line range. Do not read the complete file unless necessary.
 - Use `Scripts/localize-xcstrings.py` to modify
