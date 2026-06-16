@@ -33,10 +33,18 @@ Swift/SwiftUI/GRDB iOS app with a Node/TypeScript reporting API.
 - Use CodeGraph before broad code searches or repeated raw file reads. Run
   `just graph-bootstrap` before CodeGraph operations in each worktree.
 - Detailed command references:
-  `agent_docs/reference/headroom-commands.md` and
-  `agent_docs/reference/codegraph-commands.md`.
+  `agent_docs/reference/headroom-commands.md`,
+  `agent_docs/reference/codegraph-commands.md`, and
+  `agent_docs/reference/token-efficiency.md`.
 - For files over 500 lines, locate the relevant symbol first and read a narrow
   line range. Do not read the complete file unless necessary.
+- Batch related reads in one response; emit multiple `Read` calls in parallel
+  instead of reading one file per turn.
+- Use `just build` for iOS builds instead of raw `xcodebuild`. If you must run
+  `xcodebuild` directly, pipe output to a file and report only the exit code,
+  errors/warnings, and the log path.
+- For long-running builds, prefer `Bash` with `run_in_background=true` and
+  inspect the result when notified.
 - Use `Scripts/localize-xcstrings.py` to modify
   `AppHost/Localizable.xcstrings`; do not rewrite the complete catalog manually.
 - Batch related edits to the same file. Re-read only when the target or
@@ -46,6 +54,8 @@ Swift/SwiftUI/GRDB iOS app with a Node/TypeScript reporting API.
 - Do not paste complete build logs, test logs, JSON catalogs, or large diffs
   into the conversation. Report the outcome, the first relevant failure, and the
   retained log location.
+- For visual verification, prefer MCP Xcode screenshots. If using raw simulator
+  screenshots, downsample before reading them back.
 - Before context compaction, a major task switch, or transfer to a fresh
   session, update the `CONTINUITY.md` Snapshot. Keep it fresh.
 - Use subagents only for parallel evidence gathering or isolated review tasks
