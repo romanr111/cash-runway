@@ -8,6 +8,14 @@ Concrete patterns to keep token usage low when working on Cash Runway.
 
 ### Default: use the justfile recipe
 
+| Task | Command |
+|------|---------|
+| iOS build | `just build` |
+| Swift tests | `just test` or `just test-filter <pattern>` |
+| Full validation | `just check` |
+| Smoke tests | `just smoke` |
+| Lint | `just lint` |
+
 ```bash
 just build
 ```
@@ -15,9 +23,14 @@ just build
 This already pipes `xcodebuild` through `grep` and only shows warnings, errors,
 and the final `BUILD SUCCEEDED` / `BUILD FAILED` line.
 
-### When you need raw xcodebuild
+**Hard rule:** start with `just build`. Only fall back to raw `xcodebuild` if
+you have verified the justfile recipe cannot satisfy the specific need, and
+pipe the output to a file.
 
-Pipe the output to a file and report only what matters:
+### When the justfile recipe is insufficient
+
+If you must run `xcodebuild` directly, pipe the output to a file and report only
+what matters:
 
 ```bash
 xcodebuild -scheme CashRunway -sdk iphonesimulator \

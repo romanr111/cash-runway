@@ -40,9 +40,11 @@ Swift/SwiftUI/GRDB iOS app with a Node/TypeScript reporting API.
   line range. Do not read the complete file unless necessary.
 - Batch related reads in one response; emit multiple `Read` calls in parallel
   instead of reading one file per turn.
-- Use `just build` for iOS builds instead of raw `xcodebuild`. If you must run
-  `xcodebuild` directly, pipe output to a file and report only the exit code,
-  errors/warnings, and the log path.
+- Always use existing `just` recipes for repository tasks. Do not run raw
+  `xcodebuild`, `swift test`, `swiftlint`, or validation scripts directly unless
+  the justfile recipe is clearly insufficient for the specific case.
+- For iOS builds use `just build`. For Swift tests use `just test` or
+  `just test-filter <pattern>`. For full validation use `just check`.
 - For long-running builds, prefer `Bash` with `run_in_background=true` and
   inspect the result when notified.
 - Use `Scripts/localize-xcstrings.py` to modify
