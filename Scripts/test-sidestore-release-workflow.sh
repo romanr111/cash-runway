@@ -44,13 +44,24 @@ if ! grep -q 'CASH_RUNWAY_REPORTING_ENABLED=YES' "$WORKFLOW"; then
 fi
 
 if ! grep -q 'CASH_RUNWAY_REPORT_ENDPOINT_URL="${REPORT_ENDPOINT_URL}"' "$WORKFLOW"; then
-    echo "release workflow must pass the reporting endpoint to xcodebuild" >&2
-    exit 1
+  echo "release workflow must pass the reporting endpoint to xcodebuild" >&2
+  exit 1
+fi
+
+if ! grep -q 'REPORT_ENDPOINT_URL="${REPORT_ENDPOINT_URL%/}"' "$WORKFLOW" ||
+  ! grep -q 'REPORT_ENDPOINT_URL="${REPORT_ENDPOINT_URL}/api/reports"' "$WORKFLOW"; then
+  echo "release workflow must normalize bare reporting domains to /api/reports" >&2
+  exit 1
+fi
+
+if ! grep -q "REPORT_ENDPOINT_URL=%s\\\\n" "$WORKFLOW"; then
+  echo "release workflow must persist the normalized reporting endpoint for build steps" >&2
+  exit 1
 fi
 
 if ! grep -q 'CASH_RUNWAY_REPORT_ENVIRONMENT=sidestore' "$WORKFLOW"; then
-    echo "release workflow must mark SideStore report environment" >&2
-    exit 1
+  echo "release workflow must mark SideStore report environment" >&2
+  exit 1
 fi
 
 if ! grep -q 'Scripts/generate-reporting-secrets.swift' "$WORKFLOW"; then

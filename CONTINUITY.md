@@ -1,12 +1,16 @@
 ## Snapshot
 
-- Goal: Commit and push project-specific high-value agent-instruction
-  recommendations.
-- Success criteria: Project `AGENTS.md` includes mirrored-core verification,
-  validation-bucket separation, and explicit SideStore physical-device release
-  gate guidance. `CONTINUITY.md` reflects the project-only commit state.
-- State: Complete.
-- Next action: None for this task.
+- Goal: Fix SideStore feedback report submission returning server status `404`.
+- Success criteria: Existing build `16` can reach the reporting API through the
+  currently packaged bare-domain endpoint after deployment, and future SideStore
+  releases package the canonical `/api/reports` endpoint.
+- State: Fix implemented on `codex/reporting-404-fix`: `reporting-api/vercel.json`
+  rewrites `/` to `/api/reports`; the SideStore release workflow trims/appends
+  `/api/reports`, persists the normalized URL through `GITHUB_ENV`, and keeps
+  `xcodebuild` on the normalized value; regression checks cover both.
+- Next action: Commit, push, merge, then verify the Vercel deployment makes
+  `https://cash-runway-reporting-api.vercel.app/` reach the report handler
+  instead of returning Vercel `404`.
 
 ## Git Context
 
