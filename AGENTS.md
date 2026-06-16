@@ -60,6 +60,12 @@ Swift/SwiftUI/GRDB iOS app with a Node/TypeScript reporting API.
 - For visual verification, prefer MCP Xcode screenshots. If using raw simulator
   screenshots, downsample before reading them back. Take screenshots only at
   milestones, not after every build.
+- Before changing a helper or shared component signature, check at least one
+  caller/site to confirm the change is safe and to avoid silent regressions
+  (e.g., `LocalizedStringKey` vs. `String`).
+- Do not mutate `RootView` or other core app routing just to take screenshots.
+  Use the `CASHRUNWAY_DEBUG_ROOT_SCREEN` environment variable (DEBUG builds)
+  documented in `agent_docs/reference/verification-strategies.md`.
 - Before context compaction, a major task switch, or transfer to a fresh
   session, update the `CONTINUITY.md` Snapshot. Keep it fresh.
 - Use subagents only for parallel evidence gathering or isolated review tasks

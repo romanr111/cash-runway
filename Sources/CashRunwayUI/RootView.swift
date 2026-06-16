@@ -1,6 +1,44 @@
 import SwiftUI
 import OSLog
 
+#if DEBUG
+/// Debug-only launch target for non-invasive UI verification.
+///
+/// Set `CASHRUNWAY_DEBUG_ROOT_SCREEN` when launching the app to bypass the
+/// main tab bar and render a specific screen directly. This avoids editing
+/// `RootView` just to take screenshots during development.
+///
+/// Example:
+///   SIMCTL_CHILD_CASHRUNWAY_DEBUG_ROOT_SCREEN=FeedbackReportView \\
+///     xcrun simctl launch <udid> dev.roman.cashrunway
+private enum DebugRootScreen: String {
+    case dashboard = "DashboardView"
+    case transactions = "TransactionsView"
+    case settings = "SettingsView"
+    case feedbackReport = "FeedbackReportView"
+
+    static var current: DebugRootScreen? {
+        ProcessInfo.processInfo.environment["CASHRUNWAY_DEBUG_ROOT_SCREEN"]
+            .flatMap(DebugRootScreen.init(rawValue:))
+    }
+
+    @MainActor
+    @ViewBuilder
+    func view(model: CashRunwayAppModel) -> some View {
+        switch self {
+        case .dashboard:
+            DashboardView(model: model)
+        case .transactions:
+            TransactionsView(model: model)
+        case .settings:
+            SettingsView(model: model)
+        case .feedbackReport:
+            FeedbackReportView()
+        }
+    }
+}
+#endif
+
 public struct CashRunwayRootView: View {
     @State private var model: CashRunwayAppModel?
     @State private var startupFailure: CashRunwayStartupFailure?
@@ -85,20 +123,32 @@ public struct CashRunwayRootView: View {
             // if model.isLocked { lockView(model: model) }
             // else if shouldShowOnboarding(for: model) { onboardingView(model: model) }
             // else {
-                TabView {
-                    DashboardView(model: model)
-                        .tabItem { SwiftUI.Label("Timeline", systemImage: "list.bullet.clipboard") }
-
-                    TransactionsView(model: model)
-                        .tabItem { SwiftUI.Label("Wallets", systemImage: "wallet.pass.fill") }
-
-                    SettingsView(model: model)
-                        .tabItem { SwiftUI.Label("More", systemImage: "ellipsis") }
+                #if DEBUG
+                if let debugScreen = DebugRootScreen.current {
+                    debugScreen.view(model: model)
+                } else {
+                    mainTabView(model: model)
                 }
-                .tint(CashRunwayTheme.accent)
-                .background(CashRunwayTheme.background)
+                #else
+                mainTabView(model: model)
+                #endif
             // }
         }
+    }
+
+    private func mainTabView(model: CashRunwayAppModel) -> some View {
+        TabView {
+            DashboardView(model: model)
+                .tabItem { SwiftUI.Label("Timeline", systemImage: "list.bullet.clipboard") }
+
+            TransactionsView(model: model)
+                .tabItem { SwiftUI.Label("Wallets", systemImage: "wallet.pass.fill") }
+
+            SettingsView(model: model)
+                .tabItem { SwiftUI.Label("More", systemImage: "ellipsis") }
+        }
+        .tint(CashRunwayTheme.accent)
+        .background(CashRunwayTheme.background)
         #if DEBUG
         .sheet(item: $debugStartScreenSheet) { sheet in
             switch sheet {
