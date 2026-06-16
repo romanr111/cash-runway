@@ -68,6 +68,65 @@ Inspect failures later with `xcresulttool` only if needed.
 
 ---
 
+## MCP Xcode tools
+
+MCP Xcode tools are useful for quick operations and optimized screenshots, but
+require correct setup. If they time out, fall back to the equivalent `just` or
+Bash command rather than retrying indefinitely.
+
+### Required one-time setup per session
+
+Set session defaults once:
+
+```
+mcp__xcode__session_set_defaults
+  projectPath: /Users/roman/Documents/Development/Cash Runway/CashRunway.xcodeproj
+  scheme: CashRunway
+  simulatorId: <udid>
+  simulatorPlatform: iOS Simulator
+  configuration: Debug
+```
+
+Verify with:
+
+```
+mcp__xcode__session_show_defaults
+```
+
+### Pre-warm the server
+
+The first MCP Xcode call in a session may time out while the server starts.
+Warm it up with a fast call before expensive operations:
+
+```
+mcp__xcode__list_sims enabled:true
+```
+
+### Reliable screenshot workflow
+
+1. Ensure the simulator is booted:
+   ```
+   mcp__xcode__boot_sim
+   ```
+2. Build and run:
+   ```
+   mcp__xcode__build_run_sim
+   ```
+3. Capture:
+   ```
+   mcp__xcode__screenshot returnFormat:path
+   ```
+
+If `build_run_sim` times out, build with `just build`, install manually, then
+use `mcp__xcode__screenshot`.
+
+### Fallback when MCP is unavailable
+
+- Build: `just build`
+- Screenshot: `xcrun simctl io <udid> screenshot /tmp/raw.png` then downsample.
+
+---
+
 ## File reads
 
 ### Avoid whole-file reads for large files

@@ -10,7 +10,7 @@ Choose the cheapest verification method that gives confidence for the task.
 | Swift logic works | `just test` or `just test-filter <pattern>` | Simulator launch + manual check |
 | Localization strings loaded | `plutil -p` on generated `.strings` files | Screenshot of every label |
 | View exists / is wired | Read the SwiftUI source | Screenshot of static layout |
-| Visual layout / spacing | MCP Xcode screenshot at final state | Raw 1206×2622 PNGs |
+| Visual layout / spacing | MCP Xcode screenshot at final state (after session setup) | Raw 1206×2622 PNGs |
 | Full user flow | 2–3 MCP screenshots at milestones | Screenshot after every build |
 | Deep UI hierarchy | Xcode View Debugger or focused UI test | Guessing from screenshots |
 | End-to-end behavior | `just smoke` | Manual simulator tapping |

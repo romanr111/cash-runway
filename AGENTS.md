@@ -46,6 +46,12 @@ Swift/SwiftUI/GRDB iOS app with a Node/TypeScript reporting API.
   the justfile recipe is clearly insufficient for the specific case.
 - For iOS builds use `just build`. For Swift tests use `just test` or
   `just test-filter <pattern>`. For full validation use `just check`.
+- MCP Xcode tools (`mcp__xcode__*`) are available for screenshots and quick
+  Xcode operations. They require session defaults to be set
+  (`session_set_defaults`) and may time out on the first call or on long
+  operations. Pre-warm with `session_show_defaults` or `list_sims`, boot the
+  simulator first, then retry. If an MCP tool times out, fall back to the
+  equivalent `just` / Bash command rather than retrying repeatedly.
 - For long-running builds, prefer `Bash` with `run_in_background=true` and
   inspect the result when notified.
 - Use `Scripts/localize-xcstrings.py` to modify
