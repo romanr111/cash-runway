@@ -84,6 +84,11 @@ jobs:
             echo "::error::CASH_RUNWAY_REPORT_CLIENT_SECRET or CASH_RUNWAY_REPORT_SECRET is required for SideStore release reporting." >&2
             exit 1
           fi
+          REPORT_ENDPOINT_URL="${REPORT_ENDPOINT_URL%/}"
+          if [[ "${REPORT_ENDPOINT_URL}" != */api/reports ]]; then
+            REPORT_ENDPOINT_URL="${REPORT_ENDPOINT_URL}/api/reports"
+          fi
+          printf 'REPORT_ENDPOINT_URL=%s\n' "${REPORT_ENDPOINT_URL}" >> "${GITHUB_ENV}"
           umask 077
           cat > AppHost/ReportingConfig.local.xcconfig <<EOF
           CASH_RUNWAY_REPORT_ENDPOINT_URL = ${REPORT_ENDPOINT_URL}
@@ -140,8 +145,6 @@ jobs:
 
       - name: Build unsigned iOS app
         shell: bash
-        env:
-          REPORT_ENDPOINT_URL: ${{ vars.CASH_RUNWAY_REPORT_ENDPOINT_URL || secrets.CASH_RUNWAY_REPORT_ENDPOINT_URL }}
         run: |
           set -euo pipefail
           xcodebuild \
