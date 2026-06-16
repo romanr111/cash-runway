@@ -35,8 +35,9 @@ Swift/SwiftUI/GRDB iOS app with a Node/TypeScript reporting API.
 - Detailed command references:
   `agent_docs/reference/headroom-commands.md`,
   `agent_docs/reference/codegraph-commands.md`,
-  `agent_docs/reference/token-efficiency.md`, and
-  `agent_docs/reference/verification-strategies.md`.
+  `agent_docs/reference/token-efficiency.md`,
+  `agent_docs/reference/verification-strategies.md`, and
+  `agent_docs/reference/code-review.md`.
 - For files over 500 lines, locate the relevant symbol first and read a narrow
   line range. Do not read the complete file unless necessary.
 - Batch related reads in one response; emit multiple `Read` calls in parallel
@@ -70,8 +71,8 @@ Swift/SwiftUI/GRDB iOS app with a Node/TypeScript reporting API.
   caller/site to confirm the change is safe and to avoid silent regressions
   (e.g., `LocalizedStringKey` vs. `String`).
 - Do not mutate `RootView` or other core app routing just to take screenshots.
-  Use the `CASHRUNWAY_DEBUG_ROOT_SCREEN` environment variable (DEBUG builds)
-  documented in `agent_docs/reference/verification-strategies.md`.
+  For visual verification, build and install normally, then navigate to the
+  screen or use SwiftUI previews.
 - Before context compaction, a major task switch, or transfer to a fresh
   session, update the `CONTINUITY.md` Snapshot. Keep it fresh.
 - Use subagents only for parallel evidence gathering or isolated review tasks

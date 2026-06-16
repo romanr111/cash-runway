@@ -1,44 +1,6 @@
 import SwiftUI
 import OSLog
 
-#if DEBUG
-/// Debug-only launch target for non-invasive UI verification.
-///
-/// Set `CASHRUNWAY_DEBUG_ROOT_SCREEN` when launching the app to bypass the
-/// main tab bar and render a specific screen directly. This avoids editing
-/// `RootView` just to take screenshots during development.
-///
-/// Example:
-///   SIMCTL_CHILD_CASHRUNWAY_DEBUG_ROOT_SCREEN=FeedbackReportView \\
-///     xcrun simctl launch <udid> dev.roman.cashrunway
-private enum DebugRootScreen: String {
-    case dashboard = "DashboardView"
-    case transactions = "TransactionsView"
-    case settings = "SettingsView"
-    case feedbackReport = "FeedbackReportView"
-
-    static var current: DebugRootScreen? {
-        ProcessInfo.processInfo.environment["CASHRUNWAY_DEBUG_ROOT_SCREEN"]
-            .flatMap(DebugRootScreen.init(rawValue:))
-    }
-
-    @MainActor
-    @ViewBuilder
-    func view(model: CashRunwayAppModel) -> some View {
-        switch self {
-        case .dashboard:
-            DashboardView(model: model)
-        case .transactions:
-            TransactionsView(model: model)
-        case .settings:
-            SettingsView(model: model)
-        case .feedbackReport:
-            FeedbackReportView()
-        }
-    }
-}
-#endif
-
 public struct CashRunwayRootView: View {
     @State private var model: CashRunwayAppModel?
     @State private var startupFailure: CashRunwayStartupFailure?
@@ -123,15 +85,7 @@ public struct CashRunwayRootView: View {
             // if model.isLocked { lockView(model: model) }
             // else if shouldShowOnboarding(for: model) { onboardingView(model: model) }
             // else {
-                #if DEBUG
-                if let debugScreen = DebugRootScreen.current {
-                    debugScreen.view(model: model)
-                } else {
-                    mainTabView(model: model)
-                }
-                #else
                 mainTabView(model: model)
-                #endif
             // }
         }
     }
