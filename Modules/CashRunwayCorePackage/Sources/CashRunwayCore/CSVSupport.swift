@@ -85,6 +85,12 @@ public final class CSVService: @unchecked Sendable {
         if lowercased.contains("description") && lowercased.contains("mcc") {
             return .monobank
         }
+        let hasUkrainianDate = lowercased.contains { $0.contains("дата і час операції") || $0.contains("дата i час операції") }
+        let hasUkrainianDetails = lowercased.contains { $0.contains("деталі операції") }
+        let hasUkrainianCardAmount = lowercased.contains { $0.contains("сума в валюті картки") }
+        if hasUkrainianDate && hasUkrainianDetails && lowercased.contains("mcc") && hasUkrainianCardAmount {
+            return .monobank
+        }
         return .generic
     }
 
@@ -172,6 +178,47 @@ public final class CSVService: @unchecked Sendable {
             preparedRows: preparedRows,
             rowErrors: rowErrors,
             invalidRows: invalidRows
+        )
+    }
+
+    public func defaultMapping(headers: [String], preset: CSVPreset, walletID: UUID?) -> CSVImportMapping {
+        let dateColumn = header(
+            named: ["Дата і час операції", "Дата i час операції", "Дата операції", "Date and time", "Date", "date"],
+            in: headers
+        ) ?? headers.first ?? ""
+        let amountColumn = header(named: ["Сума в грн", "Amount", "amount", "sum"], in: headers)
+            ?? header(matchingPrefix: ["Сума в валюті картки", "Card currency amount"], in: headers)
+        let debitColumn = header(named: ["Debit", "debit", "Витрати"], in: headers)
+        let creditColumn = header(named: ["Credit", "credit", "Надходження"], in: headers)
+        let typeColumn = header(named: ["Type", "type"], in: headers)
+        let walletColumn = header(named: ["Wallet", "wallet"], in: headers)
+        let currencyColumn: String? = preset == .monobank
+            ? nil
+            : header(named: ["Currency", "currency", "Валюта"], in: headers)
+        let merchantColumn = header(
+            named: ["Деталі операції", "Description", "description", "Merchant", "merchant", "Призначення"],
+            in: headers
+        )
+        let noteColumn = header(named: ["Comment", "comment", "Note", "note"], in: headers)
+        let categoryColumn = header(named: ["Category", "category", "Category name", "category name"], in: headers)
+        let labelsColumn = header(named: ["Labels", "labels", "Tags"], in: headers)
+        let authorColumn = header(named: ["Author", "author"], in: headers)
+
+        return CSVImportMapping(
+            dateColumn: dateColumn,
+            amountColumn: amountColumn,
+            debitColumn: preset == .generic ? debitColumn : nil,
+            creditColumn: preset == .generic ? creditColumn : nil,
+            merchantColumn: merchantColumn,
+            noteColumn: noteColumn,
+            categoryColumn: categoryColumn,
+            labelsColumn: labelsColumn,
+            walletID: walletID,
+            defaultKind: preset == .monobank ? .income : .expense,
+            typeColumn: typeColumn,
+            walletColumn: walletColumn,
+            currencyColumn: currencyColumn,
+            authorColumn: authorColumn
         )
     }
 
@@ -333,12 +380,20 @@ public final class CSVService: @unchecked Sendable {
                 return date
             }
         }
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "uk_UA")
-        formatter.dateFormat = "dd.MM.yyyy"
-        if let date = formatter.date(from: input) {
+        let ukrainianTimeFormatter = DateFormatter()
+        ukrainianTimeFormatter.locale = Locale(identifier: "uk_UA")
+        ukrainianTimeFormatter.timeZone = TimeZone(identifier: "Europe/Kyiv")
+        ukrainianTimeFormatter.dateFormat = "dd.MM.yyyy HH:mm:ss"
+        if let date = ukrainianTimeFormatter.date(from: input) {
             return date
         }
+        let ukrainianDateFormatter = DateFormatter()
+        ukrainianDateFormatter.locale = Locale(identifier: "uk_UA")
+        ukrainianDateFormatter.dateFormat = "dd.MM.yyyy"
+        if let date = ukrainianDateFormatter.date(from: input) {
+            return date
+        }
+        let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyy-MM-dd"
         if let date = formatter.date(from: input) {
@@ -727,6 +782,20 @@ public final class CSVService: @unchecked Sendable {
             colorHex: "#2AAAD2"
         )
     ]
+
+    private func header(named candidates: [String], in headers: [String]) -> String? {
+        headers.first { header in
+            candidates.contains { $0.caseInsensitiveCompare(header) == .orderedSame }
+        }
+    }
+
+    private func header(matchingPrefix prefixes: [String], in headers: [String]) -> String? {
+        headers.first { header in
+            prefixes.contains { prefix in
+                header.range(of: prefix, options: [.caseInsensitive, .diacriticInsensitive]) != nil
+            }
+        }
+    }
 
     private func escape(_ value: String) -> String {
         let escaped = value.replacingOccurrences(of: "\"", with: "\"\"")
