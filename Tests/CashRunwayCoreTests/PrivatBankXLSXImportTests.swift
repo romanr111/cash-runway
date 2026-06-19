@@ -87,14 +87,17 @@ struct PrivatBankXLSXImportTests {
         let expense = try #require(transactions.first { $0.merchant == "Temu" })
         #expect(expense.kind == .expense)
         #expect(expense.amountMinor == -49_999)
+        #expect(expense.categoryName == "Groceries")
 
         let transfer = try #require(transactions.first { $0.merchant == "Новосад С." })
         #expect(transfer.kind == .income)
         #expect(transfer.amountMinor == 280_000)
+        #expect(transfer.categoryName == "Other Income")
 
         let foreign = try #require(transactions.first { $0.merchant == "SIXT, Monaco" })
         #expect(foreign.kind == .expense)
         #expect(foreign.amountMinor == -204_188)
+        #expect(foreign.categoryName == "Transport")
     }
 
     @Test func legacyPrivatBankCSVStillImportsAsExpense() throws {

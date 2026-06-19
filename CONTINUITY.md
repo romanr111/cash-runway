@@ -1,49 +1,16 @@
-## Snapshot
+Snapshot
+- Goal: Add MCC and Ukrainian bank-category-name fallback mapping for CSV bank imports, preserving Cash Runway Wallet round-trip.
+- Success criteria: Bank-imported transactions resolve sensible categories from MCC and Ukrainian category names; legacy Cash Runway Wallet CSV imports preserve exact category labels; `swift test` and `just build` pass; core mirror stays in sync.
+- State: Curated per-MCC mapping, deterministic generator with `--check` mode, conservative Ukrainian/Russian bank-category-name mapper, source-aware `BankCategoryResolution` resolver, CSV/XLSX wired through the resolver, bank-sync aligned, categoryID validation in `commitCSVImport`, and regression tests are complete. `just check` passed, `swift test` passed, `just build` succeeded, `just lint` clean, core mirror `diff -r` clean.
+- Next action: Merge after final code review; no further implementation work is required.
 
-- Goal: Fix SideStore feedback report submission returning server status `404`.
-- Success criteria: Existing build `16` can reach the reporting API through the
-  currently packaged bare-domain endpoint after deployment, and future SideStore
-  releases package the canonical `/api/reports` endpoint.
-- State: Fix implemented on `codex/reporting-404-fix`: `reporting-api/vercel.json`
-  rewrites `/` to `/api/reports`; the SideStore release workflow trims/appends
-  `/api/reports`, persists the normalized URL through `GITHUB_ENV`, and keeps
-  `xcodebuild` on the normalized value; regression checks cover both.
-- Next action: Commit, push, merge, then verify the Vercel deployment makes
-  `https://cash-runway-reporting-api.vercel.app/` reach the report handler
-  instead of returning Vercel `404`.
-
-## Git Context
-
+Git Context
 - Repo root: `/Users/roman/Documents/Development/Cash Runway`
 - Branch: `main`
-- HEAD before commit: `2dd1a67`
-- Files touched for project commit:
-  - `AGENTS.md`
-  - `CONTINUITY.md`
-- Global `/Users/roman/.codex/AGENTS.md` was updated locally outside this repo
-  and is not part of this project commit.
 
-## Receipts
-
-- 2026-06-15: Added Cash Runway guidance for mirrored core verification,
-  status-bucket separation, and the SideStore physical-device release gate.
-- 2026-06-15: Restored the concrete SideStore manual-check list after
-  self-review.
-- 2026-06-15: Documentation-only task; no build or test suite was run.
-
-## Done (recent)
-
-- SideStore smoke-timeout worktree review: timeout/logging hardening remained
-  useful for the opaque long `Run validation gate`, but not for the already
-  fixed missing-`just` failure. Targeted shell checks passed in the timeout
-  worktree.
-- RTK cleanup: active Cash Runway and global Codex agent docs now make Headroom
-  the default context-optimization layer and treat RTK as an explicit fallback.
-
-## Open Questions
-
-- SideStore release rehearsal still needs physical-device/manual release
-  validation through `sidestore-release.yml`: install/update same bundle
-  identifier, verify data/Keychain persistence, refresh while locked or
-  backgrounded, and confirm app opens after refresh. Repo-side validation cannot
-  prove SideStore refresh/update lifecycle behavior.
+Receipts
+- 2026-06-17: PrivatBank XLSX import implemented: `XLSXConverter` converts the first worksheet to CSV; `CSVService` detects PrivatBank headers and maps signed card-currency amounts to income default; UI row renamed to “Import Bank Statement” and document picker accepts `.xlsx`.
+- 2026-06-17: `CashRunway.xcodeproj/project.pbxproj` updated to include `Sources/CashRunwayCore/XLSXConverter.swift` and link the remote `CoreXLSX` package.
+- 2026-06-17: `swift test` passed (333 tests); `just build` succeeded for iOS Simulator.
+- 2026-06-18: Initial MCC and Ukrainian bank-category-name mapping added.
+- 2026-06-19: Revised implementation per self-QA: replaced broad MCC group mapping with curated per-MCC table; added deterministic generator with `--check`; narrowed bank-category keyword matching with word-aware logic; introduced source-aware `BankCategoryResolution` with explicit precedence; wired CSV/XLSX and bank sync through the resolver; added categoryID validation in commit; added precedence and round-trip regression tests. `just check`, `swift test`, `just build`, `just lint` all pass; core mirror clean.

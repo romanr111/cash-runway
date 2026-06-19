@@ -1,118 +1,6 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "Could not find a header row in the XLSX file.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Could not find a header row in the XLSX file."
-          }
-        },
-        "uk": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Не вдалося знайти рядок заголовка у файлі XLSX."
-          }
-        }
-      }
-    },
-    "The XLSX file does not contain a worksheet.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The XLSX file does not contain a worksheet."
-          }
-        },
-        "uk": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Файл XLSX не містить робочий аркуш."
-          }
-        }
-      }
-    },
-    "The XLSX file does not contain a workbook.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The XLSX file does not contain a workbook."
-          }
-        },
-        "uk": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Файл XLSX не містить робочу книгу."
-          }
-        }
-      }
-    },
-    "Bank statement import is unavailable on this platform.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bank statement import is unavailable on this platform."
-          }
-        },
-        "uk": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Імпорт банківської виписки недоступний на цій платформі."
-          }
-        }
-      }
-    },
-    "Create at least one wallet before importing.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Create at least one wallet before importing."
-          }
-        },
-        "uk": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Створіть принаймні один гаманець перед імпортом."
-          }
-        }
-      }
-    },
-    "Import CSV or bank XLSX exports": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Import CSV or bank XLSX exports"
-          }
-        },
-        "uk": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Імпорт CSV або банківських XLSX-виписок"
-          }
-        }
-      }
-    },
-    "Import Bank Statement": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Import Bank Statement"
-          }
-        },
-        "uk": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Імпорт банківської виписки"
-          }
-        }
-      }
-    },
     "" : {
 
     },
@@ -859,6 +747,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Для навчання правил категорій потрібен банківський отримувач."
+          }
+        }
+      }
+    },
+    "Bank statement import is unavailable on this platform." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bank statement import is unavailable on this platform."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Імпорт банківської виписки недоступний на цій платформі."
           }
         }
       }
@@ -1907,6 +1812,23 @@
         }
       }
     },
+    "Could not find a header row in the XLSX file." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not find a header row in the XLSX file."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не вдалося знайти рядок заголовка у файлі XLSX."
+          }
+        }
+      }
+    },
     "Could not parse amount." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1972,6 +1894,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Створіть принаймні один гаманець перед імпортом CSV."
+          }
+        }
+      }
+    },
+    "Create at least one wallet before importing." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Create at least one wallet before importing."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Створіть принаймні один гаманець перед імпортом."
           }
         }
       }
@@ -3267,7 +3206,24 @@
         }
       }
     },
+    "Import Bank Statement" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import Bank Statement"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Імпорт банківської виписки"
+          }
+        }
+      }
+    },
     "Import CSV" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3279,6 +3235,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Імпорт CSV"
+          }
+        }
+      }
+    },
+    "Import CSV or bank XLSX exports" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import CSV or bank XLSX exports"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Імпорт CSV або банківських XLSX-виписок"
           }
         }
       }
@@ -6328,6 +6301,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Служба звітів повернула некоректну відповідь."
+          }
+        }
+      }
+    },
+    "The XLSX file does not contain a workbook." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The XLSX file does not contain a workbook."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Файл XLSX не містить робочу книгу."
+          }
+        }
+      }
+    },
+    "The XLSX file does not contain a worksheet." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The XLSX file does not contain a worksheet."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Файл XLSX не містить робочий аркуш."
           }
         }
       }

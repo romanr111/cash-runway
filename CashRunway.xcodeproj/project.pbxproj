@@ -53,6 +53,8 @@
 		A0010001000100010001002C /* Sources/CashRunwayUI/FeedbackReportScreenshotPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0020001000100010001002C /* Sources/CashRunwayUI/FeedbackReportScreenshotPicker.swift */; };
 			A00100010001000100010026 /* AppHost/Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010026 /* AppHost/Localizable.xcstrings */; };
 			A0010001000100010001002F /* AppHost/uk.lproj/InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = A0020001000100010001002E /* AppHost/uk.lproj/InfoPlist.strings */; };
+		A01100010001000100010001 /* Sources/CashRunwayCore/MCCCategoryMapping.swift in Sources */ = {isa = PBXBuildFile; fileRef = A01100010001000100010002 /* Sources/CashRunwayCore/MCCCategoryMapping.swift */; };
+		A01200010001000100010001 /* Sources/CashRunwayCore/BankCategoryNameMapping.swift in Sources */ = {isa = PBXBuildFile; fileRef = A01200010001000100010002 /* Sources/CashRunwayCore/BankCategoryNameMapping.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -114,6 +116,8 @@
 		A0020001000100010001002C /* Sources/CashRunwayUI/FeedbackReportScreenshotPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayUI/FeedbackReportScreenshotPicker.swift; sourceTree = "<group>"; };
 		A0020001000100010001002B /* AppHost/ReportingConfig.example.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = AppHost/ReportingConfig.example.xcconfig; sourceTree = "<group>"; };
 		A0020001000100010001002D /* AppHost/ReportingConfig.debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = AppHost/ReportingConfig.debug.xcconfig; sourceTree = "<group>"; };
+		A01100010001000100010002 /* Sources/CashRunwayCore/MCCCategoryMapping.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayCore/MCCCategoryMapping.swift; sourceTree = "<group>"; };
+		A01200010001000100010002 /* Sources/CashRunwayCore/BankCategoryNameMapping.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayCore/BankCategoryNameMapping.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -213,6 +217,8 @@
 				A00200010001000100010012 /* Sources/CashRunwayCore/CSVSupport.swift */,
 				A00200010001000100010013 /* Sources/CashRunwayCore/Fixtures.swift */,
 				A01000010001000100010002 /* Sources/CashRunwayCore/XLSXConverter.swift */,
+				A01100010001000100010002 /* Sources/CashRunwayCore/MCCCategoryMapping.swift */,
+				A01200010001000100010002 /* Sources/CashRunwayCore/BankCategoryNameMapping.swift */,
 			);
 			name = Core;
 			sourceTree = "<group>";
@@ -407,6 +413,8 @@
 				A0010001000100010001000F /* Sources/CashRunwayCore/CSVSupport.swift in Sources */,
 				A00100010001000100010010 /* Sources/CashRunwayCore/Fixtures.swift in Sources */,
 				A01000010001000100010001 /* Sources/CashRunwayCore/XLSXConverter.swift in Sources */,
+				A01100010001000100010001 /* Sources/CashRunwayCore/MCCCategoryMapping.swift in Sources */,
+				A01200010001000100010001 /* Sources/CashRunwayCore/BankCategoryNameMapping.swift in Sources */,
 				A00100010001000100010012 /* AppHost/UITestRuntime.swift in Sources */,
 				A00100010001000100010013 /* Sources/CashRunwayUI/AccessibilityIdentifiers.swift in Sources */,
 				A0010001000100010001001B /* Sources/CashRunwayUI/MonobankCoordinator.swift in Sources */,

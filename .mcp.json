@@ -10,7 +10,10 @@
     },
     "xcode": {
       "type": "stdio",
-      "command": "xcodebuildmcp"
+      "command": "xcodebuildmcp",
+      "args": [
+        "mcp"
+      ]
     }
   }
 }

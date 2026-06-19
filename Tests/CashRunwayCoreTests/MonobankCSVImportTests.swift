@@ -46,6 +46,7 @@ struct MonobankCSVImportTests {
         #expect(mapping.dateColumn == "Дата і час операції")
         #expect(mapping.amountColumn == "Сума в валюті картки (UAH)")
         #expect(mapping.merchantColumn == "Деталі операції")
+        #expect(mapping.mccColumn == "MCC")
         #expect(mapping.currencyColumn == nil)
         #expect(mapping.defaultKind == .income)
     }
@@ -180,6 +181,39 @@ struct MonobankCSVImportTests {
         #expect(bolt.merchant == "Bolt")
         #expect(bolt.kind == .expense)
         #expect(bolt.amountMinor == -12_800)
+    }
+
+    @Test func importAssignsCategoriesFromMCCForExpenses() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let walletID = try #require(try repository.wallets().first?.id)
+        let service = CSVService(repository: repository)
+        let text = """
+        Дата і час операції,Деталі операції,MCC,Сума в валюті картки (UAH)
+        18.06.2026 19:48:21,The Bar,5812,-1113.0
+        18.06.2026 18:52:23,Рукавичка,5499,-1659.49
+        17.06.2026 12:09:02,ОККО,5541,-243.0
+        """
+        let mapping = service.defaultMapping(headers: monobankHeaders, preset: .monobank, walletID: walletID)
+
+        let result = try service.importCSV(data: Data(text.utf8), fileName: "mono.csv", mapping: mapping)
+
+        #expect(result.insertedTransactions == 3)
+        #expect(result.invalidRows == 0)
+        let transactions = try repository.transactions()
+
+        let restaurant = try #require(transactions.first { $0.merchant == "The Bar" })
+        #expect(restaurant.kind == .expense)
+        #expect(restaurant.categoryName == "Restaurants")
+
+        let grocery = try #require(transactions.first { $0.merchant == "Рукавичка" })
+        #expect(grocery.kind == .expense)
+        #expect(grocery.categoryName == "Groceries")
+
+        let transport = try #require(transactions.first { $0.merchant == "ОККО" })
+        #expect(transport.kind == .expense)
+        #expect(transport.categoryName == "Transport")
     }
 
     @Test func importingSameMonobankFileTwiceIsIdempotent() throws {

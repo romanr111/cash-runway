@@ -105,7 +105,9 @@ public final class CSVService: @unchecked Sendable {
         let rows = parseRows(text)
         guard let headers = rows.first else { throw CashRunwayError.validation(L10n.string("CSV file is empty.")) }
         let headerIndex = Dictionary(uniqueKeysWithValues: headers.enumerated().map { ($1, $0) })
-        let sourceName = detectPreset(headers: headers).rawValue
+        let preset = detectPreset(headers: headers)
+        let sourceName = preset.rawValue
+        let isBankPreset = preset == .monobank || preset == .privatBank
         var invalidRows = 0
         var rowErrors: [CSVRowError] = []
         let wallets = try repository.wallets()
@@ -132,9 +134,25 @@ public final class CSVService: @unchecked Sendable {
                 let merchant = cell(row, mapping.merchantColumn, headerIndex)
                 let note = cell(row, mapping.noteColumn, headerIndex)
                 let rawCategoryName = normalizedCategoryName(cell(row, mapping.categoryColumn, headerIndex))
+                let mcc = parsedMCC(cell(row, mapping.mccColumn, headerIndex))
                 let rawLabels = rawLabelNames(from: cell(row, mapping.labelsColumn, headerIndex))
                 let currency = normalizedCurrency(cell(row, mapping.currencyColumn, headerIndex))
-                let appearance = rawCategoryName.flatMap { importedCategoryAppearance(for: $0, kind: kind) }
+
+                let resolutionSource: BankCategoryResolutionSource = isBankPreset
+                    ? .bankStatement(preset == .monobank ? .monobank : .privatBank)
+                    : .cashRunwayWallet
+                let resolvedCategory = try BankCategoryMapper(repository: repository).resolve(
+                    source: resolutionSource,
+                    kind: kind,
+                    merchant: merchant,
+                    description: merchant,
+                    rawCategoryName: rawCategoryName,
+                    mcc: mcc,
+                    originalMcc: nil
+                )
+                let resolvedCategoryName = resolvedCategory?.categoryName ?? rawCategoryName
+                let appearance = resolvedCategoryName.flatMap { importedCategoryAppearance(for: $0, kind: kind) }
+
                 let fingerprint = importFingerprint(
                     .init(
                         sourceName: sourceName,
@@ -144,7 +162,7 @@ public final class CSVService: @unchecked Sendable {
                         amountMinor: abs(signedAmount),
                         merchant: merchant,
                         note: note,
-                        categoryName: rawCategoryName,
+                        categoryName: resolvedCategoryName,
                         currency: currency
                     )
                 )
@@ -163,11 +181,12 @@ public final class CSVService: @unchecked Sendable {
                         draft: draft,
                         fingerprint: fingerprint,
                         sourceName: sourceName,
-                        rawCategoryName: rawCategoryName,
+                        rawCategoryName: resolvedCategoryName,
                         rawLabelNames: rawLabels,
                         currency: currency,
                         categoryIconName: appearance?.iconName,
-                        categoryColorHex: appearance?.colorHex
+                        categoryColorHex: appearance?.colorHex,
+                        categoryID: resolvedCategory?.categoryID
                     )
                 )
             } catch {
@@ -211,6 +230,7 @@ public final class CSVService: @unchecked Sendable {
         )
         let noteColumn = header(named: ["Comment", "comment", "Note", "note"], in: headers)
         let categoryColumn = header(named: ["Категорія", "Category", "category", "Category name", "category name"], in: headers)
+        let mccColumn = header(named: ["MCC", "mcc"], in: headers)
         let labelsColumn = header(named: ["Labels", "labels", "Tags"], in: headers)
         let authorColumn = header(named: ["Author", "author"], in: headers)
 
@@ -228,7 +248,8 @@ public final class CSVService: @unchecked Sendable {
             typeColumn: typeColumn,
             walletColumn: walletColumn,
             currencyColumn: currencyColumn,
-            authorColumn: authorColumn
+            authorColumn: authorColumn,
+            mccColumn: mccColumn
         )
     }
 
@@ -466,6 +487,19 @@ public final class CSVService: @unchecked Sendable {
         guard normalized == "UAH" || normalized == "₴" || normalized == "ГРН" else {
             throw CashRunwayError.validation(L10n.string("Unsupported currency."))
         }
+    }
+
+    private func parsedMCC(_ raw: String) -> Int? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        if let intValue = Int(trimmed), intValue > 0 {
+            return intValue
+        }
+        let withoutDecimalZeros = trimmed.replacingOccurrences(of: "\\.0+$", with: "", options: .regularExpression)
+        if let intValue = Int(withoutDecimalZeros), intValue > 0 {
+            return intValue
+        }
+        return nil
     }
 
     private func importedCategoryAppearance(
