@@ -82,6 +82,12 @@ public final class CSVService: @unchecked Sendable {
         if lowercased.contains("дата операції") || lowercased.contains("сума в грн") {
             return .privatBank
         }
+        let hasPrivatBankDate = lowercased.contains { $0.contains("дата") }
+        let hasPrivatBankDescription = lowercased.contains { $0.contains("опис операції") }
+        let hasPrivatBankCardAmount = lowercased.contains { $0.contains("сума в валюті картки") }
+        if hasPrivatBankDate && hasPrivatBankDescription && hasPrivatBankCardAmount {
+            return .privatBank
+        }
         if lowercased.contains("description") && lowercased.contains("mcc") {
             return .monobank
         }
@@ -183,7 +189,7 @@ public final class CSVService: @unchecked Sendable {
 
     public func defaultMapping(headers: [String], preset: CSVPreset, walletID: UUID?) -> CSVImportMapping {
         let dateColumn = header(
-            named: ["Дата і час операції", "Дата i час операції", "Дата операції", "Date and time", "Date", "date"],
+            named: ["Дата і час операції", "Дата i час операції", "Дата операції", "Дата", "Date and time", "Date", "date"],
             in: headers
         ) ?? headers.first ?? ""
         let amountColumn = header(named: ["Сума в грн", "Amount", "amount", "sum"], in: headers)
@@ -192,15 +198,19 @@ public final class CSVService: @unchecked Sendable {
         let creditColumn = header(named: ["Credit", "credit", "Надходження"], in: headers)
         let typeColumn = header(named: ["Type", "type"], in: headers)
         let walletColumn = header(named: ["Wallet", "wallet"], in: headers)
-        let currencyColumn: String? = preset == .monobank
+        let isSignedAmount = amountColumn.map {
+            $0.range(of: "валюті картки", options: [.caseInsensitive, .diacriticInsensitive]) != nil
+                || $0.range(of: "card currency amount", options: [.caseInsensitive, .diacriticInsensitive]) != nil
+        } ?? false
+        let currencyColumn: String? = (preset == .monobank || (preset == .privatBank && isSignedAmount))
             ? nil
-            : header(named: ["Currency", "currency", "Валюта"], in: headers)
+            : header(named: ["Currency", "currency", "Валюта", "Валюта картки"], in: headers)
         let merchantColumn = header(
-            named: ["Деталі операції", "Description", "description", "Merchant", "merchant", "Призначення"],
+            named: ["Деталі операції", "Опис операції", "Description", "description", "Merchant", "merchant", "Призначення"],
             in: headers
         )
         let noteColumn = header(named: ["Comment", "comment", "Note", "note"], in: headers)
-        let categoryColumn = header(named: ["Category", "category", "Category name", "category name"], in: headers)
+        let categoryColumn = header(named: ["Категорія", "Category", "category", "Category name", "category name"], in: headers)
         let labelsColumn = header(named: ["Labels", "labels", "Tags"], in: headers)
         let authorColumn = header(named: ["Author", "author"], in: headers)
 
@@ -214,7 +224,7 @@ public final class CSVService: @unchecked Sendable {
             categoryColumn: categoryColumn,
             labelsColumn: labelsColumn,
             walletID: walletID,
-            defaultKind: preset == .monobank ? .income : .expense,
+            defaultKind: (preset == .monobank || (preset == .privatBank && isSignedAmount)) ? .income : .expense,
             typeColumn: typeColumn,
             walletColumn: walletColumn,
             currencyColumn: currencyColumn,
