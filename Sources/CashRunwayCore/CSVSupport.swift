@@ -111,6 +111,7 @@ public final class CSVService: @unchecked Sendable {
         var invalidRows = 0
         var rowErrors: [CSVRowError] = []
         let wallets = try repository.wallets()
+        let resolver = try BankCategoryMapper(repository: repository)
 
         var preparedRows: [PreparedImportRow] = []
 
@@ -141,7 +142,7 @@ public final class CSVService: @unchecked Sendable {
                 let resolutionSource: BankCategoryResolutionSource = isBankPreset
                     ? .bankStatement(preset == .monobank ? .monobank : .privatBank)
                     : .cashRunwayWallet
-                let resolvedCategory = try BankCategoryMapper(repository: repository).resolve(
+                let resolvedCategory = resolver.resolve(
                     source: resolutionSource,
                     kind: kind,
                     merchant: merchant,
