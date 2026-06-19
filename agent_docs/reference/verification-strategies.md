@@ -71,28 +71,6 @@ sips -Z 800 /tmp/raw.png --out /tmp/screen.jpg
 
 Read `/tmp/screen.jpg`, not the PNG.
 
-### Non-invasive debug root screen
-
-For DEBUG simulator builds, set `CASHRUNWAY_DEBUG_ROOT_SCREEN` to render a
-specific screen directly without editing `RootView`:
-
-```bash
-APP_PATH="/Users/roman/Library/Developer/Xcode/DerivedData/.../CashRunway.app"
-SIMULATOR="<udid>"
-xcrun simctl install "$SIMULATOR" "$APP_PATH"
-SIMCTL_CHILD_CASHRUNWAY_DEBUG_ROOT_SCREEN=FeedbackReportView \
-  xcrun simctl launch "$SIMULATOR" dev.roman.cashrunway
-```
-
-Supported values:
-- `DashboardView`
-- `TransactionsView`
-- `SettingsView`
-- `FeedbackReportView`
-
-Use this for visual verification instead of temporarily replacing `TabView` in
-`RootView.swift`.
-
 ### When to skip screenshots entirely
 
 - Verifying that code compiles.

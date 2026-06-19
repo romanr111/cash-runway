@@ -11,7 +11,7 @@ public enum BankCategoryNameMapping {
         let words = Set(normalized.components(separatedBy: " "))
         let rules = kind == .income ? incomeRules : expenseRules
         for rule in rules {
-            if rule.keywords.contains(where: { matches(keyword: $0, in: normalized, words: words) }) {
+            if rule.keywords.contains(where: { matches(keyword: normalizedText($0), in: normalized, words: words) }) {
                 return rule.categoryName
             }
         }
@@ -122,8 +122,22 @@ public enum BankCategoryNameMapping {
         ),
         Rule(
             keywords: [
-                "послуги", "кредит", "страхування", "банк", "комісія",
-                "услуги", "страхование", "комиссия"
+                "фінанси", "банк", "банки", "кредит", "кредити", "комісія",
+                "финансы", "банк", "банки", "кредит", "кредиты", "комиссия"
+            ],
+            categoryName: "Utilities"
+        ),
+        Rule(
+            keywords: [
+                "освіта", "курси", "навчання", "школа", "університет",
+                "образование", "курсы", "обучение", "школа", "университет"
+            ],
+            categoryName: "Education"
+        ),
+        Rule(
+            keywords: [
+                "послуги", "страхування",
+                "услуги", "страхование"
             ],
             categoryName: "Other Expense"
         )

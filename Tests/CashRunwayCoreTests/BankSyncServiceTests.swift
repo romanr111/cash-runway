@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 import Testing
 @testable import CashRunwayCore
 
@@ -148,6 +149,36 @@ struct BankSyncServiceTests {
         #expect(try bankSyncTransactionCount(repository) == 1)
     }
 
+    @Test func unrecognizedMCCUsesActiveOtherExpenseDestination() async throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let otherExpenseID = try #require(try repository.categories(kind: .expense).first { $0.name == "Other Expense" }?.id)
+        let reviewedFallbackID = try createCategory(repository, name: "Reviewed Other Expense", kind: .expense)
+        try repository.mergeCategory(oldCategoryID: otherExpenseID, into: reviewedFallbackID)
+
+        let syncStartAt = Date(timeIntervalSince1970: 1_700_000_000)
+        let now = syncStartAt.addingTimeInterval(60 * 60)
+        let setup = try makeBankSetup(repository: repository, syncStartAt: syncStartAt)
+        let client = FakeMonobankClient(items: [
+            monobankItem(
+                id: "unknown-mcc",
+                time: Int(syncStartAt.addingTimeInterval(3).timeIntervalSince1970),
+                amount: -2_500,
+                currencyCode: 980,
+                mcc: 9999
+            ),
+        ])
+        let service = BankSyncService(repository: repository, client: client, now: { now })
+
+        let result = try await service.syncIntegration(setup.integration.id)
+
+        #expect(result.importedCount == 1)
+        let transaction = try #require(try repository.transactions().first { $0.merchant == "Merchant" })
+        #expect(transaction.categoryID == reviewedFallbackID)
+        #expect(transaction.categoryName == "Reviewed Other Expense")
+    }
+
     private func makeBankSetup(
         repository: CashRunwayRepository,
         syncStartAt: Date,
@@ -192,12 +223,12 @@ struct BankSyncServiceTests {
         return (integration, account)
     }
 
-    private func monobankItem(id: String, time: Int, amount: Int64, currencyCode: Int) -> MonobankStatementItem {
+    private func monobankItem(id: String, time: Int, amount: Int64, currencyCode: Int, mcc: Int? = nil) -> MonobankStatementItem {
         MonobankStatementItem(
             id: id,
             time: time,
             description: "Merchant",
-            mcc: nil,
+            mcc: mcc,
             originalMcc: nil,
             amount: amount,
             operationAmount: nil,
@@ -212,6 +243,20 @@ struct BankSyncServiceTests {
             counterIban: nil,
             counterName: "Merchant"
         )
+    }
+
+    private func createCategory(_ repository: CashRunwayRepository, name: String, kind: CategoryKind) throws -> UUID {
+        let id = UUID()
+        try repository.databaseManager.dbQueue.write { db in
+            try db.execute(
+                sql: """
+                INSERT INTO categories (id, name, kind, icon_name, color_hex, parent_id, is_system, is_archived, sort_order, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, NULL, 0, 0, 0, ?, ?)
+                """,
+                arguments: [id.uuidString, name, kind.rawValue, "questionmark.circle.fill", "#60788A", Date(), Date()]
+            )
+        }
+        return id
     }
 
     private func bankSyncTransactionCount(_ repository: CashRunwayRepository) throws -> Int {

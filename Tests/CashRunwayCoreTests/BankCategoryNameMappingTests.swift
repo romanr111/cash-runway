@@ -43,7 +43,18 @@ struct BankCategoryNameMappingTests {
 
     @Test func mapsUkrainianServicesToOtherExpense() {
         #expect(BankCategoryNameMapping.categoryName(for: "Послуги", kind: .expense) == "Other Expense")
-        #expect(BankCategoryNameMapping.categoryName(for: "Кредити", kind: .expense) == "Other Expense")
+    }
+
+    @Test func mapsFinanceLabelsToUtilities() {
+        #expect(BankCategoryNameMapping.categoryName(for: "Фінанси та банки", kind: .expense) == "Utilities")
+        #expect(BankCategoryNameMapping.categoryName(for: "БАНКИ И ФИНАНСЫ", kind: .expense) == "Utilities")
+        #expect(BankCategoryNameMapping.categoryName(for: "Кредити", kind: .expense) == "Utilities")
+    }
+
+    @Test func mapsEducationLabelsToEducation() {
+        #expect(BankCategoryNameMapping.categoryName(for: "Освіта", kind: .expense) == "Education")
+        #expect(BankCategoryNameMapping.categoryName(for: "Курси та навчання", kind: .expense) == "Education")
+        #expect(BankCategoryNameMapping.categoryName(for: "ОБРАЗОВАНИЕ", kind: .expense) == "Education")
     }
 
     @Test func mapsUkrainianIncomeCategory() {
@@ -62,11 +73,17 @@ struct BankCategoryNameMappingTests {
     @Test func normalizesCaseAndWhitespace() {
         #expect(BankCategoryNameMapping.categoryName(for: "  ресторани  ", kind: .expense) == "Restaurants")
         #expect(BankCategoryNameMapping.categoryName(for: "РЕСТОРАНИ", kind: .expense) == "Restaurants")
+        #expect(BankCategoryNameMapping.categoryName(for: "рестораны", kind: .expense) == "Restaurants")
+        #expect(BankCategoryNameMapping.categoryName(for: "Ресторани     кафе", kind: .expense) == "Restaurants")
     }
 
     @Test func normalizesPunctuationAndApostrophes() {
         #expect(BankCategoryNameMapping.categoryName(for: "Ресторани, кафе - бари", kind: .expense) == "Restaurants")
         #expect(BankCategoryNameMapping.categoryName(for: "Супермаркети та продукти", kind: .expense) == "Groceries")
+        #expect(BankCategoryNameMapping.categoryName(for: "Комп'ютерна техніка", kind: .expense) == "Shopping")
+        #expect(BankCategoryNameMapping.categoryName(for: "Комп’ютерна техніка", kind: .expense) == "Shopping")
+        #expect(BankCategoryNameMapping.categoryName(for: "Фаст-фуд", kind: .expense) == "Restaurants")
+        #expect(BankCategoryNameMapping.categoryName(for: "Фаст / фуд", kind: .expense) == "Restaurants")
     }
 
     @Test func avoidsShortTokenFalseMatches() {

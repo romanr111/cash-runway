@@ -514,6 +514,7 @@ public final class BankCategoryResolver: @unchecked Sendable {
     private var categoriesByNormalizedName: [CategoryKind: [String: CategoryEntry]] = [:]
     private var categoriesByID: [UUID: CategoryEntry] = [:]
 
+    // swiftlint:disable:next cyclomatic_complexity
     public init(repository: CashRunwayRepository) throws {
         try repository.databaseManager.dbQueue.read { db in
             // Load all categories (including archived) so remapped names resolve.
@@ -604,6 +605,7 @@ public final class BankCategoryResolver: @unchecked Sendable {
         }
     }
 
+    // swiftlint:disable:next cyclomatic_complexity
     public func resolve(
         source: BankCategoryResolutionSource,
         kind: TransactionDraft.Kind,

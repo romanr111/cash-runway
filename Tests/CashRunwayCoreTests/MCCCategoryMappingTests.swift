@@ -29,8 +29,22 @@ struct MCCCategoryMappingTests {
         #expect(MCCCategoryMapping.categoryName(for: 7011) == "Travel")
     }
 
-    @Test func mapsFinanceMCCToOtherExpense() {
-        #expect(MCCCategoryMapping.categoryName(for: 4829) == "Other Expense")
+    @Test func returnsNilForAmbiguousReviewMCCs() {
+        #expect(MCCCategoryMapping.categoryName(for: 7211) == nil)
+        #expect(MCCCategoryMapping.categoryName(for: 7230) == nil)
+        #expect(MCCCategoryMapping.categoryName(for: 8661) == nil)
+        #expect(MCCCategoryMapping.categoryName(for: 9311) == nil)
+        #expect(MCCCategoryMapping.categoryName(for: 9402) == nil)
+    }
+
+    @Test func returnsNilForBroadTravelRanges() {
+        #expect(MCCCategoryMapping.categoryName(for: 3000) == nil)
+        #expect(MCCCategoryMapping.categoryName(for: 3501) == nil)
+        #expect(MCCCategoryMapping.categoryName(for: 4722) == nil)
+    }
+
+    @Test func returnsNilForAmbiguousFinanceMCC() {
+        #expect(MCCCategoryMapping.categoryName(for: 4829) == nil)
     }
 
     @Test func returnsNilForUnknownMCC() {

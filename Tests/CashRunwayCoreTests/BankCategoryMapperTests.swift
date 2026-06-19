@@ -50,9 +50,9 @@ struct BankCategoryMapperTests {
         try repository.seedIfNeeded()
         let groceriesID = try categoryID(repository, named: "Groceries")
         let otherExpenseID = try categoryID(repository, named: "Other Expense")
-        let mapper = BankCategoryMapper(repository: repository)
+        let mapper = try BankCategoryMapper(repository: repository)
 
-        let builtIn = try mapper.resolve(
+        let builtIn = mapper.resolve(
             source: .bankStatement(.monobank),
             kind: .expense,
             merchant: nil,
@@ -61,7 +61,7 @@ struct BankCategoryMapperTests {
             mcc: 5411,
             originalMcc: nil
         )
-        let fallback = try mapper.resolve(
+        let fallback = mapper.resolve(
             source: .bankStatement(.monobank),
             kind: .expense,
             merchant: nil,

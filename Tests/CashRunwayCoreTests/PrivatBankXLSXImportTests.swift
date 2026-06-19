@@ -84,19 +84,19 @@ struct PrivatBankXLSXImportTests {
         #expect(result.invalidRows == 0)
         let transactions = try repository.transactions()
 
-        let expense = try #require(transactions.first { $0.merchant == "Temu" })
+        let expense = try #require(transactions.first { $0.merchant == "Synthetic Market" })
         #expect(expense.kind == .expense)
-        #expect(expense.amountMinor == -49_999)
+        #expect(expense.amountMinor == -12_345)
         #expect(expense.categoryName == "Groceries")
 
-        let transfer = try #require(transactions.first { $0.merchant == "Новосад С." })
+        let transfer = try #require(transactions.first { $0.merchant == "Тестовий Відправник" })
         #expect(transfer.kind == .income)
-        #expect(transfer.amountMinor == 280_000)
+        #expect(transfer.amountMinor == 25_000)
         #expect(transfer.categoryName == "Other Income")
 
-        let foreign = try #require(transactions.first { $0.merchant == "SIXT, Monaco" })
+        let foreign = try #require(transactions.first { $0.merchant == "Sample Fuel Rental" })
         #expect(foreign.kind == .expense)
-        #expect(foreign.amountMinor == -204_188)
+        #expect(foreign.amountMinor == -6_789)
         #expect(foreign.categoryName == "Transport")
     }
 

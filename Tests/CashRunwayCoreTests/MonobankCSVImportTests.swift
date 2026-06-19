@@ -117,9 +117,9 @@ struct MonobankCSVImportTests {
         let service = CSVService(repository: repository)
         let text = """
         Дата і час операції,Деталі операції,MCC,Сума в валюті картки (UAH),Сума в валюті операції,Валюта,Курс,Сума комісій (UAH),Сума кешбеку (UAH),Залишок після операції
-        16.06.2026 14:15:08,Bolt,4121,-128.0,-128.0,UAH,—,—,6.4,401279.78
-        15.06.2026 13:11:03,Від: Ольга Ярмош,4829,2700.0,2700.0,UAH,—,—,—,405151.78
-        12.06.2026 11:57:44,OpenAI,5734,-904.0,-20.0,USD,45.2,—,—,410399.07
+        16.06.2026 14:15:08,Bolt,4121,-42.0,-42.0,UAH,—,—,1.0,10042.00
+        15.06.2026 13:11:03,Від: Тестовий Відправник,4829,250.0,250.0,UAH,—,—,—,10250.00
+        12.06.2026 11:57:44,OpenAI,5734,-99.0,-2.0,USD,49.5,—,—,9950.00
         """
         let mapping = service.defaultMapping(headers: monobankHeaders, preset: .monobank, walletID: walletID)
 
@@ -133,17 +133,17 @@ struct MonobankCSVImportTests {
         let openAI = transactions[0]
         #expect(openAI.merchant == "OpenAI")
         #expect(openAI.kind == .expense)
-        #expect(openAI.amountMinor == -90_400)
+        #expect(openAI.amountMinor == -9_900)
 
         let income = transactions[1]
-        #expect(income.merchant == "Від: Ольга Ярмош")
+        #expect(income.merchant == "Від: Тестовий Відправник")
         #expect(income.kind == .income)
-        #expect(income.amountMinor == 270_000)
+        #expect(income.amountMinor == 25_000)
 
         let bolt = transactions[2]
         #expect(bolt.merchant == "Bolt")
         #expect(bolt.kind == .expense)
-        #expect(bolt.amountMinor == -12_800)
+        #expect(bolt.amountMinor == -4_200)
     }
 
     @Test func importEnglishMonobankSampleRows() throws {
@@ -154,9 +154,9 @@ struct MonobankCSVImportTests {
         let service = CSVService(repository: repository)
         let text = """
         Date and time,Description,MCC,"Card currency amount, (UAH)",Operation amount,Operation currency,Exchange rate,"Commission, (UAH)","Cashback amount, (UAH)",Balance
-        16.06.2026 14:15:08,Bolt,4121,-128.0,-128.0,UAH,—,—,6.4,401279.78
-        15.06.2026 13:11:03,From: Ольга Ярмош,4829,2700.0,2700.0,UAH,—,—,—,405151.78
-        12.06.2026 11:57:44,OpenAI,5734,-904.0,-20.0,USD,45.2,—,—,410399.07
+        16.06.2026 14:15:08,Bolt,4121,-42.0,-42.0,UAH,—,—,1.0,10042.00
+        15.06.2026 13:11:03,From: Test Sender,4829,250.0,250.0,UAH,—,—,—,10250.00
+        12.06.2026 11:57:44,OpenAI,5734,-99.0,-2.0,USD,49.5,—,—,9950.00
         """
         let mapping = service.defaultMapping(headers: englishMonobankHeaders, preset: .monobank, walletID: walletID)
 
@@ -170,17 +170,17 @@ struct MonobankCSVImportTests {
         let openAI = transactions[0]
         #expect(openAI.merchant == "OpenAI")
         #expect(openAI.kind == .expense)
-        #expect(openAI.amountMinor == -90_400)
+        #expect(openAI.amountMinor == -9_900)
 
         let income = transactions[1]
-        #expect(income.merchant == "From: Ольга Ярмош")
+        #expect(income.merchant == "From: Test Sender")
         #expect(income.kind == .income)
-        #expect(income.amountMinor == 270_000)
+        #expect(income.amountMinor == 25_000)
 
         let bolt = transactions[2]
         #expect(bolt.merchant == "Bolt")
         #expect(bolt.kind == .expense)
-        #expect(bolt.amountMinor == -12_800)
+        #expect(bolt.amountMinor == -4_200)
     }
 
     @Test func importAssignsCategoriesFromMCCForExpenses() throws {
