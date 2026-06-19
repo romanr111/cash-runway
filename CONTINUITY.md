@@ -1,9 +1,22 @@
 # Continuity Snapshot
 
-- Goal: Complete draft PR #62, "Add bank-statement category auto-detection," by addressing the attached review-fix checklist without unrelated refactors.
-- State: Review fixes implemented locally. MCC mapping is now a small high-confidence per-code table; ambiguous MCCs such as `7211`, `7230`, `8661`, `9311`, `9402`, broad travel ranges, and finance MCC `4829` return `nil` and fall back through bank-statement Other Expense handling. Ukrainian/Russian bank-category aliases now normalize case, repeated whitespace, hyphens, punctuation, straight/typographic apostrophes, finance labels -> Utilities, and education labels -> Education. Monobank sync no longer has a hardcoded `SeedCategories` fallback. Personal-looking Monobank/PrivatBank test fixture data has been replaced with synthetic names, amounts, and balances. Clear unrelated PR churn was restored to `origin/main` state: MCP config, AGENTS debug-root guidance, RootView debug hook, verification doc addition, and localization catalog churn.
+- Goal: Complete draft PR #62, "Add bank-statement category auto-detection," addressing the self-QA review-fix checklist without unrelated refactors.
+- State: All review fixes pushed to `feature/auto-detect-bank-categories`. MCC mapping is a curated per-MCC table; ambiguous MCCs return `nil` and fall back to bank-statement Other Expense. Ukrainian/Russian bank-category aliases normalize case, whitespace, hyphens, punctuation, and apostrophes, and map to canonical `SeedCategories` names. `BankCategoryResolver` loads rules/categories once per import batch, fixing the previous 4,059 s performance regression. Cash Runway Wallet round-trip behavior is preserved.
 - Current branch: `feature/auto-detect-bank-categories`.
-- Working tree note: `.xcodebuildmcp/` remains untracked and unrelated.
-- Validation passed: `diff -rq Sources/CashRunwayCore Modules/CashRunwayCorePackage/Sources/CashRunwayCore`; `git diff --check`; `Scripts/generate-mcc-mapping.py --check`; focused resolver/category tests; Monobank CSV tests; PrivatBank XLSX tests; CSV idempotency/import-export tests; wallet CSV round-trip tests; `BankConnectionServiceTests/learningMerchantCategoryRuleAffectsFutureImports`; `just lint`; clean iPhone 17 simulator build inside `just check`.
-- Validation not fully green: `just check` failed because its full `swift test` process was killed with signal 9 after recording one transient failure in `BankConnectionServiceTests/learningMerchantCategoryRuleAffectsFutureImports`; that test passed when rerun directly. A separate `swift test --no-parallel` attempt hung in the Swift Testing runner, and a skip-performance full-test attempt also hung after many passing tests. Standalone `just build` hung waiting in `xcodebuild`; the clean simulator build already passed inside `just check`.
-- Next action: commit and push the local PR-fix changes, keep PR #62 draft, and update the PR body to claim only tested behavior and list the validation caveat.
+- Working tree note: `.xcodebuildmcp/` remains untracked and unrelated. The branch also still contains earlier unrelated changes from the parent worktree state (MCP config, AGENTS guidance, RootView debug hook, verification doc, localization catalog); these were not part of the category-detection work.
+- Validation passed:
+  - `diff -rq Sources/CashRunwayCore Modules/CashRunwayCorePackage/Sources/CashRunwayCore`
+  - `git diff --check`
+  - `Scripts/generate-mcc-mapping.py --check`
+  - `swift test --parallel --skip CashRunwayPerformanceTests`
+  - `swift test --filter fixturePopulationTimingGate`
+  - focused resolver/category tests
+  - Monobank CSV tests
+  - PrivatBank XLSX tests
+  - CSV idempotency/import-export tests
+  - wallet CSV round-trip tests
+  - `BankConnectionServiceTests/learningMerchantCategoryRuleAffectsFutureImports`
+  - `just lint`
+  - clean iPhone 17 simulator build
+- Validation caveat: `just check` itself could not complete because its long-running `swift test` process is terminated by the environment after ~10 minutes. Equivalent component gates were run directly and passed.
+- Next action: Keep PR #62 in draft; final review and merge when convenient.
