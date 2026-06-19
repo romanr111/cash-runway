@@ -211,6 +211,45 @@ struct BankCategoryMapperTests {
         #expect(resolved?.categoryID == customID)
     }
 
+    @Test func exactMatchRespectsTransactionKind() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        // "Зарплата" exists as an income category. An expense row with the same
+        // name must not resolve to the income category.
+        let resolved = try BankCategoryMapper(repository: repository).resolve(
+            source: .bankStatement(.privatBank),
+            kind: .expense,
+            merchant: "Employer",
+            description: "Employer",
+            rawCategoryName: "Зарплата",
+            mcc: nil,
+            originalMcc: nil
+        )
+
+        let salaryID = try #require(try repository.categories(kind: .income).first { $0.name == "Salary" }?.id)
+        #expect(resolved?.categoryID != salaryID)
+        let otherExpenseID = try categoryID(repository, named: "Other Expense")
+        #expect(resolved?.categoryID == otherExpenseID)
+    }
+
+    @Test func incomeRowRetainsIncomeFallback() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        let otherIncomeID = try #require(try repository.categories(kind: .income).first { $0.name == "Other Income" }?.id)
+
+        let resolved = try BankCategoryMapper(repository: repository).resolve(
+            source: .bankStatement(.privatBank),
+            kind: .income,
+            merchant: "Unknown",
+            description: "Unknown",
+            rawCategoryName: "Невідомий дохід",
+            mcc: 5411,
+            originalMcc: nil
+        )
+
+        #expect(resolved?.categoryID == otherIncomeID)
+    }
+
     private func categoryID(_ repository: CashRunwayRepository, named name: String) throws -> UUID {
         try #require(try repository.categories(kind: .expense).first { $0.name == name }?.id)
     }

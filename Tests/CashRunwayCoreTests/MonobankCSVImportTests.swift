@@ -216,6 +216,36 @@ struct MonobankCSVImportTests {
         #expect(transport.categoryName == "Transport")
     }
 
+    @Test func importParsesMCCVariants() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let walletID = try #require(try repository.wallets().first?.id)
+        let service = CSVService(repository: repository)
+        let text = """
+        Дата і час операції,Деталі операції,MCC,Сума в валюті картки (UAH)
+        18.06.2026 19:48:21,Spreadsheet MCC,5812.0,-1113.0
+        18.06.2026 18:52:23,Padded MCC, 5499 ,-1659.49
+        17.06.2026 12:09:02,No MCC,,-243.0
+        """
+        let mapping = service.defaultMapping(headers: monobankHeaders, preset: .monobank, walletID: walletID)
+
+        let result = try service.importCSV(data: Data(text.utf8), fileName: "mono.csv", mapping: mapping)
+
+        #expect(result.insertedTransactions == 3)
+        #expect(result.invalidRows == 0)
+        let transactions = try repository.transactions()
+
+        let spreadsheet = try #require(transactions.first { $0.merchant == "Spreadsheet MCC" })
+        #expect(spreadsheet.categoryName == "Restaurants")
+
+        let padded = try #require(transactions.first { $0.merchant == "Padded MCC" })
+        #expect(padded.categoryName == "Groceries")
+
+        let noMCC = try #require(transactions.first { $0.merchant == "No MCC" })
+        #expect(noMCC.categoryName == "Other Expense")
+    }
+
     @Test func importingSameMonobankFileTwiceIsIdempotent() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()

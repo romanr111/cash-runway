@@ -58,4 +58,19 @@ struct BankCategoryNameMappingTests {
     @Test func returnsNilForUnknownName() {
         #expect(BankCategoryNameMapping.categoryName(for: "FooBarBaz", kind: .expense) == nil)
     }
+
+    @Test func normalizesCaseAndWhitespace() {
+        #expect(BankCategoryNameMapping.categoryName(for: "  ресторани  ", kind: .expense) == "Restaurants")
+        #expect(BankCategoryNameMapping.categoryName(for: "РЕСТОРАНИ", kind: .expense) == "Restaurants")
+    }
+
+    @Test func normalizesPunctuationAndApostrophes() {
+        #expect(BankCategoryNameMapping.categoryName(for: "Ресторани, кафе - бари", kind: .expense) == "Restaurants")
+        #expect(BankCategoryNameMapping.categoryName(for: "Супермаркети та продукти", kind: .expense) == "Groceries")
+    }
+
+    @Test func avoidsShortTokenFalseMatches() {
+        // "дом" must not match inside "невідома".
+        #expect(BankCategoryNameMapping.categoryName(for: "Невідома категорія", kind: .expense) == nil)
+    }
 }
