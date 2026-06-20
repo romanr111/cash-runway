@@ -17,6 +17,7 @@ MCC_TO_CATEGORY: dict[int, str] = {
     4112: "Transport",  # Passenger railways
     4121: "Transport",  # Taxicabs and limousines
     4131: "Transport",  # Bus lines
+    4814: "Utilities",  # Telecommunication services
     4784: "Transport",  # Tolls and bridge fees
     4789: "Transport",  # Passenger transportation services
     5541: "Transport",  # Service stations
@@ -29,10 +30,12 @@ MCC_TO_CATEGORY: dict[int, str] = {
     5451: "Groceries",    # Dairy product stores
     5462: "Groceries",    # Bakeries
     5499: "Groceries",    # Miscellaneous food stores
+    5818: "Entertainment", # Digital goods: media, books, movies, and music
     5811: "Restaurants",  # Caterers
     5812: "Restaurants",  # Eating places and restaurants
     5813: "Restaurants",  # Drinking places
     5814: "Restaurants",  # Fast food restaurants
+    5921: "Groceries",    # Package stores: beer, wine, and liquor
 
     # Health
     5122: "Health",  # Drug proprietaries and sundries
@@ -57,6 +60,15 @@ MCC_TO_CATEGORY: dict[int, str] = {
     8249: "Education",  # Vocational and trade schools
     8299: "Education",  # Schools and educational services
 
+    # Shopping, housing, and education
+    5211: "Housing",     # Lumber and building materials stores
+    5310: "Shopping",    # Discount stores
+    5399: "Shopping",    # Miscellaneous general merchandise
+    5712: "Housing",     # Furniture and home furnishings stores
+    5734: "Shopping",    # Computer software stores
+    5942: "Education",   # Book stores
+    5992: "Shopping",    # Florists
+
     # Travel and entertainment
     4411: "Travel",         # Cruise lines
     4511: "Travel",         # Airlines and air carriers
@@ -72,6 +84,7 @@ MCC_TO_CATEGORY: dict[int, str] = {
     7941: "Entertainment",  # Commercial sports
     7991: "Entertainment",  # Tourist attractions and exhibits
     7996: "Entertainment",  # Amusement parks
+    7997: "Entertainment",  # Membership clubs: sports and recreation
     7999: "Entertainment",  # Recreation services
 }
 # fmt: on

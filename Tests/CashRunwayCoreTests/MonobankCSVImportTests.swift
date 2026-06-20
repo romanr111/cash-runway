@@ -246,6 +246,54 @@ struct MonobankCSVImportTests {
         #expect(noMCC.categoryName == "Other Expense")
     }
 
+    @Test func importAssignsCategoriesForCommonMonobankExportMCCs() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let walletID = try #require(try repository.wallets().first?.id)
+        let service = CSVService(repository: repository)
+        let headers = [
+            "Дата i час операції",
+            "Деталі операції",
+            "MCC",
+            "Сума в валюті картки (UAH)",
+            "Валюта",
+            "Курс",
+            "Сума комісій (UAH)",
+            "Сума кешбеку (UAH)",
+            "Сума (UAH)",
+            "Залишок після операції"
+        ]
+        let text = """
+        Дата i час операції,Деталі операції,MCC,Сума в валюті картки (UAH),Валюта,Курс,Сума комісій (UAH),Сума кешбеку (UAH),Сума (UAH),Залишок після операції
+        19.06.2026 10:00:00,Mobile operator,4814,-120.0,UAH,1,0,0,-120.0,10000.00
+        19.06.2026 10:05:00,Sports club,7997,-600.0,UAH,1,0,0,-600.0,9400.00
+        19.06.2026 10:07:00,Discount store,5310,-100.0,UAH,1,0,0,-100.0,9300.00
+        19.06.2026 10:10:00,Marketplace,5399,-750.0,UAH,1,0,0,-750.0,8650.00
+        19.06.2026 10:15:00,Software store,5734,-300.0,UAH,1,0,0,-300.0,8350.00
+        19.06.2026 10:20:00,Book store,5942,-200.0,UAH,1,0,0,-200.0,8150.00
+        19.06.2026 10:25:00,Home materials,5211,-500.0,UAH,1,0,0,-500.0,7650.00
+        """
+        let mapping = service.defaultMapping(
+            headers: headers,
+            preset: .monobank,
+            walletID: walletID
+        )
+
+        let result = try service.importCSV(data: Data(text.utf8), fileName: "mono.csv", mapping: mapping)
+
+        #expect(result.insertedTransactions == 7)
+        #expect(result.invalidRows == 0)
+        let transactions = try repository.transactions()
+        #expect(try #require(transactions.first { $0.merchant == "Mobile operator" }).categoryName == "Utilities")
+        #expect(try #require(transactions.first { $0.merchant == "Sports club" }).categoryName == "Entertainment")
+        #expect(try #require(transactions.first { $0.merchant == "Discount store" }).categoryName == "Shopping")
+        #expect(try #require(transactions.first { $0.merchant == "Marketplace" }).categoryName == "Shopping")
+        #expect(try #require(transactions.first { $0.merchant == "Software store" }).categoryName == "Shopping")
+        #expect(try #require(transactions.first { $0.merchant == "Book store" }).categoryName == "Education")
+        #expect(try #require(transactions.first { $0.merchant == "Home materials" }).categoryName == "Housing")
+    }
+
     @Test func importingSameMonobankFileTwiceIsIdempotent() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()

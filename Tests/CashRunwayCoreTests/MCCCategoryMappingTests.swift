@@ -45,6 +45,7 @@ struct MCCCategoryMappingTests {
 
     @Test func returnsNilForAmbiguousFinanceMCC() {
         #expect(MCCCategoryMapping.categoryName(for: 4829) == nil)
+        #expect(MCCCategoryMapping.categoryName(for: 6012) == nil)
     }
 
     @Test func returnsNilForUnknownMCC() {
