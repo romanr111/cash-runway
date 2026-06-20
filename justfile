@@ -23,11 +23,35 @@ build:
 test *args:
     swift test {{args}}
 
+check-unit-parallel:
+    swift test --parallel --filter '(ModelSerializationTests|UtilityAndModelTests|BankCategoryMapperTests|BankConnectionServiceTests|BankSyncServiceTests)'
+
+check-integration:
+    swift test --parallel --skip '(ModelSerializationTests|UtilityAndModelTests|BankCategoryMapperTests|BankConnectionServiceTests|BankSyncServiceTests)' --skip CashRunwayPerformanceTests
+
+check-perf:
+    Scripts/check-perf.sh
+
+test-isolated *args:
+    scratch="$(mktemp -d /tmp/cash-runway-swiftpm.XXXXXX)"; trap 'rm -rf "$scratch"' EXIT; swift test --scratch-path "$scratch" {{args}}
+
+check-isolated:
+    scratch="$(mktemp -d /tmp/cash-runway-swiftpm.XXXXXX)"; trap 'rm -rf "$scratch"' EXIT; swift test --scratch-path "$scratch"
+
 test-filter PATTERN:
     swift test --filter {{PATTERN}} 2>&1 | tail -40
 
 lint:
     swiftlint lint --strict
+
+mirror-core:
+    Scripts/mirror-core.sh
+
+pr-status PR="":
+    Scripts/pr-status.sh '{{PR}}'
+
+pr-comment PR FILE:
+    Scripts/pr-comment.sh '{{PR}}' '{{FILE}}'
 
 ui-check:
     Scripts/validate-ui-only.sh

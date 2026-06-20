@@ -11,7 +11,8 @@ Scripts/pre-flight.sh
 ```
 
 Review the current branch, modified files, untracked files, existing diff, and
-mirrored-core drift. Do not overwrite or discard unrelated work.
+mirrored-core drift. If drift is caused by your core edits, run
+`just mirror-core`. Do not overwrite or discard unrelated work.
 
 ## CodeGraph Lifecycle
 

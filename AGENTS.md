@@ -23,6 +23,19 @@ Swift/SwiftUI/GRDB iOS app with a Node/TypeScript reporting API.
   explicit manual gate. Do not describe release readiness as complete until that
   rehearsal has actually passed.
 
+## Workflow Helpers
+
+- After editing `Sources/CashRunwayCore/` or
+  `Modules/CashRunwayCorePackage/Sources/CashRunwayCore/`, run
+  `just mirror-core`.
+- For Swift validation, prefer `just check-unit-parallel`,
+  `just check-integration`, and `just check-perf` before falling back to raw
+  `just test` arguments.
+- If SwiftPM appears blocked by stale build state or lock contention, retry once
+  with `just test-isolated` or `just check-isolated`.
+- For PR handoff, use `just pr-status <PR>` for the status snapshot and
+  `just pr-comment <PR> <markdown-file>` for multiline comments.
+
 ## Token Efficiency
 - Use Headroom by default for bulky command output, logs, code search, and
   cross-agent handoff memory.

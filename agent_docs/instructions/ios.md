@@ -41,7 +41,8 @@ Core source files exist in both:
 - `Modules/CashRunwayCorePackage/Sources/CashRunwayCore/`
 
 Any edit to one mirrored core file must be applied to the corresponding file in
-the same change batch. `Scripts/agent-validate.sh` checks for drift.
+the same change batch. Use `just mirror-core` to sync the package mirror from
+`Sources/CashRunwayCore/`; `Scripts/agent-validate.sh` checks for drift.
 
 ## Swift Testing
 
