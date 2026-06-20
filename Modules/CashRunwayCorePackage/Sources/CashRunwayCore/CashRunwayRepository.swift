@@ -482,125 +482,221 @@ public final class BankSyncCoordinator: BankSyncPerforming, @unchecked Sendable 
     }
 }
 
-public final class BankCategoryMapper: @unchecked Sendable {
-    private let repository: CashRunwayRepository
+public enum BankCategoryResolutionSource {
+    case cashRunwayWallet
+    case bankStatement(BankProvider)
+}
 
-    public init(repository: CashRunwayRepository) {
-        self.repository = repository
+public struct BankCategoryResolutionResult: Sendable {
+    public let categoryID: UUID
+    public let categoryName: String
+}
+
+/// Loads bank-category rules and active categories once, then resolves rows
+/// in-memory. This avoids a database read per imported row, which is critical
+/// for large CSV/XLSX imports.
+public final class BankCategoryResolver: @unchecked Sendable {
+    private struct Rule {
+        let provider: BankProvider
+        let merchantPattern: String?
+        let mcc: Int?
+        let categoryID: UUID
     }
 
-    public func resolve(
-        merchant: String?,
-        description: String,
-        mcc: Int?,
-        originalMcc: Int?
-    ) throws -> UUID {
+    private struct CategoryEntry {
+        let id: UUID
+        let name: String
+        let kind: CategoryKind
+    }
+
+    private var merchantRules: [Rule] = []
+    private var mccRules: [Rule] = []
+    private var categoriesByNormalizedName: [CategoryKind: [String: CategoryEntry]] = [:]
+    private var categoriesByID: [UUID: CategoryEntry] = [:]
+
+    // swiftlint:disable:next cyclomatic_complexity
+    public init(repository: CashRunwayRepository) throws {
         try repository.databaseManager.dbQueue.read { db in
-            try BankCategoryResolution.resolve(
+            // Load all categories (including archived) so remapped names resolve.
+            let allCategoryRows = try Row.fetchAll(
                 db,
-                provider: .monobank,
-                merchant: merchant,
-                description: description,
-                mcc: mcc,
-                originalMcc: originalMcc
+                sql: "SELECT id, name, kind, is_archived FROM categories"
             )
+            var allCategoriesByID: [UUID: CategoryEntry] = [:]
+            for row in allCategoryRows {
+                guard let id = UUID(uuidString: row["id"]) else { continue }
+                guard let kind = CategoryKind(rawValue: row["kind"]) else { continue }
+                let entry = CategoryEntry(id: id, name: row["name"], kind: kind)
+                allCategoriesByID[id] = entry
+            }
+
+            // Build remap chain map.
+            let remapRows = try Row.fetchAll(db, sql: "SELECT old_category_id, new_category_id FROM category_remaps")
+            var remaps: [UUID: UUID] = [:]
+            for row in remapRows {
+                guard let oldID = UUID(uuidString: row["old_category_id"]),
+                      let newID = UUID(uuidString: row["new_category_id"]) else { continue }
+                remaps[oldID] = newID
+            }
+
+            func finalCategoryID(_ id: UUID) -> UUID {
+                var visited: Set<UUID> = []
+                var current = id
+                while let next = remaps[current], visited.insert(current).inserted {
+                    current = next
+                }
+                return current
+            }
+
+            // Active categories by ID, plus name lookup for active categories.
+            var activeByID: [UUID: CategoryEntry] = [:]
+            var byName: [CategoryKind: [String: CategoryEntry]] = [:]
+            for (_, entry) in allCategoriesByID where entry.id == finalCategoryID(entry.id) {
+                activeByID[entry.id] = entry
+                let key = BankCategoryResolver.normalize(entry.name)
+                byName[entry.kind, default: [:]][key] = entry
+            }
+
+            // Map names of archived/remapped categories to their active destination.
+            for (_, entry) in allCategoriesByID {
+                let finalID = finalCategoryID(entry.id)
+                guard finalID != entry.id, let activeEntry = activeByID[finalID] else { continue }
+                let key = BankCategoryResolver.normalize(entry.name)
+                byName[entry.kind, default: [:]][key] = activeEntry
+            }
+
+            self.categoriesByID = activeByID
+            self.categoriesByNormalizedName = byName
+
+            // Load rules and point them at their final active category.
+            let ruleRows = try Row.fetchAll(
+                db,
+                sql: """
+                SELECT provider, rule_type, merchant_pattern, mcc, category_id
+                FROM bank_category_rules
+                ORDER BY confidence DESC, created_at
+                """
+            )
+            var merchantRules: [Rule] = []
+            var mccRules: [Rule] = []
+            for row in ruleRows {
+                guard let provider = BankProvider(rawValue: row["provider"]) else { continue }
+                guard let rawCategoryID = UUID(uuidString: row["category_id"]),
+                      activeByID[finalCategoryID(rawCategoryID)] != nil else { continue }
+                let ruleType: String = row["rule_type"]
+                if ruleType == "merchant" {
+                    merchantRules.append(Rule(
+                        provider: provider,
+                        merchantPattern: row["merchant_pattern"],
+                        mcc: nil,
+                        categoryID: finalCategoryID(rawCategoryID)
+                    ))
+                } else if ruleType == "mcc" {
+                    mccRules.append(Rule(
+                        provider: provider,
+                        merchantPattern: nil,
+                        mcc: row["mcc"],
+                        categoryID: finalCategoryID(rawCategoryID)
+                    ))
+                }
+            }
+            self.merchantRules = merchantRules
+            self.mccRules = mccRules
         }
     }
-}
 
-private enum BankCategoryResolution {
-    static func resolve(
-        _ db: Database,
-        provider: BankProvider,
+    // swiftlint:disable:next cyclomatic_complexity
+    public func resolve(
+        source: BankCategoryResolutionSource,
+        kind: TransactionDraft.Kind,
         merchant: String?,
         description: String,
+        rawCategoryName: String?,
         mcc: Int?,
         originalMcc: Int?
-    ) throws -> UUID {
-        if let ruleCategoryID = try merchantRuleCategoryID(db, provider: provider, merchant: merchant, description: description) {
-            return ruleCategoryID
-        }
-        if let ruleCategoryID = try mccRuleCategoryID(db, provider: provider, mcc: mcc, originalMcc: originalMcc) {
-            return ruleCategoryID
-        }
-        for code in [mcc, originalMcc].compactMap({ $0 }) {
-            if let categoryName = builtInCategoryName(mcc: code),
-               let categoryID = try resolvedCategoryID(db, kind: .expense, named: categoryName) {
-                return categoryID
+    ) -> BankCategoryResolutionResult? {
+        guard kind != .transfer else { return nil }
+        let categoryKind: CategoryKind = kind == .income ? .income : .expense
+        let fallbackName = kind == .income ? "Other Income" : "Other Expense"
+
+        if case .bankStatement(let provider) = source {
+            let haystack = [merchant, description]
+                .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+                .joined(separator: " ")
+            if !haystack.isEmpty {
+                for rule in merchantRules where rule.provider == provider {
+                    if let pattern = rule.merchantPattern, !pattern.isEmpty, haystack.contains(pattern.lowercased()) {
+                        return result(for: rule.categoryID, fallbackName: fallbackName)
+                    }
+                }
+            }
+
+            let codes = Set([mcc, originalMcc].compactMap { $0 })
+            if !codes.isEmpty {
+                for rule in mccRules where rule.provider == provider {
+                    guard let ruleMCC = rule.mcc, codes.contains(ruleMCC) else { continue }
+                    return result(for: rule.categoryID, fallbackName: fallbackName)
+                }
             }
         }
-        if let fallbackID = try resolvedCategoryID(db, kind: .expense, named: "Other Expense") {
-            return fallbackID
+
+        if let rawCategoryName {
+            let key = BankCategoryResolver.normalize(rawCategoryName)
+            if let entry = categoriesByNormalizedName[categoryKind]?[key] {
+                return BankCategoryResolutionResult(categoryID: entry.id, categoryName: entry.name)
+            }
         }
-        throw CashRunwayError.notFound
+
+        if case .bankStatement = source {
+            if let rawCategoryName,
+               let canonicalName = BankCategoryNameMapping.categoryName(for: rawCategoryName, kind: kind) {
+                let key = BankCategoryResolver.normalize(canonicalName)
+                if let entry = categoriesByNormalizedName[categoryKind]?[key] {
+                    return BankCategoryResolutionResult(categoryID: entry.id, categoryName: canonicalName)
+                }
+            }
+
+            for code in [mcc, originalMcc].compactMap({ $0 }) {
+                if let canonicalName = MCCCategoryMapping.categoryName(for: code),
+                   let entry = categoriesByNormalizedName[categoryKind]?[BankCategoryResolver.normalize(canonicalName)] {
+                    return BankCategoryResolutionResult(categoryID: entry.id, categoryName: canonicalName)
+                }
+            }
+        }
+
+        if case .bankStatement = source,
+           let entry = categoriesByNormalizedName[categoryKind]?[BankCategoryResolver.normalize(fallbackName)] {
+            return BankCategoryResolutionResult(categoryID: entry.id, categoryName: fallbackName)
+        }
+        return nil
     }
 
-    private static func merchantRuleCategoryID(_ db: Database, provider: BankProvider, merchant: String?, description: String) throws -> UUID? {
-        let haystack = [merchant, description]
-            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+    private func result(for categoryID: UUID, fallbackName: String) -> BankCategoryResolutionResult? {
+        guard let entry = categoriesByID[categoryID] else {
+            return nil
+        }
+        return BankCategoryResolutionResult(categoryID: entry.id, categoryName: entry.name)
+    }
+
+    static func normalize(_ input: String) -> String {
+        input
+            .precomposedStringWithCanonicalMapping
+            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "uk_UA"))
+            .lowercased()
+            .replacingOccurrences(of: "'", with: " ")
+            .replacingOccurrences(of: "\u{2019}", with: " ")
+            .replacingOccurrences(of: "&", with: " ")
+            .replacingOccurrences(of: "-", with: " ")
+            .replacingOccurrences(of: "_", with: " ")
+            .replacingOccurrences(of: "/", with: " ")
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
             .joined(separator: " ")
-        guard !haystack.isEmpty else { return nil }
-
-        let rows = try Row.fetchAll(
-            db,
-            sql: """
-            SELECT merchant_pattern, category_id
-            FROM bank_category_rules
-            WHERE provider = ? AND rule_type = 'merchant' AND merchant_pattern IS NOT NULL
-            ORDER BY confidence DESC, created_at
-            """,
-            arguments: [provider.rawValue]
-        )
-        for row in rows {
-            let pattern = (row["merchant_pattern"] as String).trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            if !pattern.isEmpty, haystack.contains(pattern) {
-                return UUID(uuidString: row["category_id"])
-            }
-        }
-        return nil
-    }
-
-    private static func mccRuleCategoryID(_ db: Database, provider: BankProvider, mcc: Int?, originalMcc: Int?) throws -> UUID? {
-        let codes = Set([mcc, originalMcc].compactMap { $0 })
-        guard !codes.isEmpty else { return nil }
-        let rows = try Row.fetchAll(
-            db,
-            sql: """
-            SELECT mcc, category_id
-            FROM bank_category_rules
-            WHERE provider = ? AND rule_type = 'mcc' AND mcc IS NOT NULL
-            ORDER BY confidence DESC, created_at
-            """,
-            arguments: [provider.rawValue]
-        )
-        for row in rows where codes.contains(row["mcc"] as Int) {
-            return UUID(uuidString: row["category_id"])
-        }
-        return nil
-    }
-
-    private static func builtInCategoryName(mcc: Int?) -> String? {
-        guard let mcc else { return nil }
-        return switch mcc {
-        case 5411, 5422, 5441, 5451, 5462, 5499:
-            "Groceries"
-        case 5811, 5812, 5813, 5814:
-            "Restaurants"
-        case 4111, 4112, 4121, 4131, 4789:
-            "Transport"
-        case 5912, 8011, 8021, 8062, 8099:
-            "Health"
-        case 5311, 5399, 5611, 5621, 5651, 5699, 5732:
-            "Shopping"
-        case 7832, 7922, 7991, 7996, 7999:
-            "Entertainment"
-        case 3000...3299, 3500...3999, 4411, 4511, 4722, 7011:
-            "Travel"
-        default:
-            nil
-        }
     }
 }
+
+/// Backward-compatible alias for code that previously used the per-row mapper.
+public typealias BankCategoryMapper = BankCategoryResolver
 
 private func resolvedCategoryID(_ db: Database, kind: CategoryKind, named name: String) throws -> UUID? {
     if let activeID = try String.fetchOne(
@@ -1019,7 +1115,8 @@ extension CashRunwayRepository {
         account: BankAccount,
         integration: BankIntegration
     ) throws -> BankSyncImportResult {
-        try databaseManager.dbQueue.write { db in
+        let resolver = try BankCategoryResolver(repository: self)
+        return try databaseManager.dbQueue.write { db in
             var result = BankSyncImportResult()
             let lowerBound = max(integration.syncStartAt, account.syncStartAt)
 
@@ -1037,14 +1134,18 @@ extension CashRunwayRepository {
                 let transactionID = UUID()
                 let importID = UUID()
                 let now = Date()
-                let categoryID = try BankCategoryResolution.resolve(
-                    db,
-                    provider: .monobank,
+                guard let resolvedCategory = resolver.resolve(
+                    source: .bankStatement(.monobank),
+                    kind: .expense,
                     merchant: item.counterName,
                     description: item.description,
+                    rawCategoryName: nil,
                     mcc: item.mcc,
                     originalMcc: item.originalMcc
-                )
+                ) else {
+                    throw CashRunwayError.notFound
+                }
+                let categoryID = resolvedCategory.categoryID
                 let draft = TransactionDraft(
                     id: transactionID,
                     kind: .expense,
@@ -2235,13 +2336,18 @@ extension CashRunwayRepository {
                     continue
                 }
 
-                let categoryID = try resolveOrCreateCategory(
-                    db,
-                    rawName: row.rawCategoryName,
-                    kind: row.draft.kind,
-                    iconName: row.categoryIconName,
-                    colorHex: row.categoryColorHex
-                )
+                let categoryID: UUID?
+                if let preparedID = row.categoryID, let validID = try validCategoryID(db, id: preparedID, kind: row.draft.kind) {
+                    categoryID = validID
+                } else {
+                    categoryID = try resolveOrCreateCategory(
+                        db,
+                        rawName: row.rawCategoryName,
+                        kind: row.draft.kind,
+                        iconName: row.categoryIconName,
+                        colorHex: row.categoryColorHex
+                    )
+                }
                 let labelIDs = try row.rawLabelNames.map { try resolveOrCreateLabel(db, name: $0) }
 
                 var draft = row.draft
@@ -2353,6 +2459,16 @@ extension CashRunwayRepository {
             ]
         )
         return id
+    }
+
+    private func validCategoryID(_ db: Database, id: UUID, kind: TransactionDraft.Kind) throws -> UUID? {
+        guard kind != .transfer else { return nil }
+        let categoryKind: CategoryKind = kind == .income ? .income : .expense
+        return try String.fetchOne(
+            db,
+            sql: "SELECT id FROM categories WHERE id = ? AND kind = ? AND is_archived = 0",
+            arguments: [id.uuidString, categoryKind.rawValue]
+        ).flatMap(UUID.init(uuidString:))
     }
 
     private func resolveOrCreateLabel(_ db: Database, name: String) throws -> UUID {

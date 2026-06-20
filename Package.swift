@@ -16,7 +16,8 @@ let package = Package(
             dependencies: [
                 .product(name: "CashRunwayCore", package: "CashRunwayCorePackage"),
             ],
-            path: "Tests/CashRunwayCoreTests"
+            path: "Tests/CashRunwayCoreTests",
+            exclude: ["Fixtures"]
         ),
     ]
 )

@@ -1,49 +1,22 @@
-## Snapshot
+# Continuity Snapshot
 
-- Goal: Fix SideStore feedback report submission returning server status `404`.
-- Success criteria: Existing build `16` can reach the reporting API through the
-  currently packaged bare-domain endpoint after deployment, and future SideStore
-  releases package the canonical `/api/reports` endpoint.
-- State: Fix implemented on `codex/reporting-404-fix`: `reporting-api/vercel.json`
-  rewrites `/` to `/api/reports`; the SideStore release workflow trims/appends
-  `/api/reports`, persists the normalized URL through `GITHUB_ENV`, and keeps
-  `xcodebuild` on the normalized value; regression checks cover both.
-- Next action: Commit, push, merge, then verify the Vercel deployment makes
-  `https://cash-runway-reporting-api.vercel.app/` reach the report handler
-  instead of returning Vercel `404`.
-
-## Git Context
-
-- Repo root: `/Users/roman/Documents/Development/Cash Runway`
-- Branch: `main`
-- HEAD before commit: `2dd1a67`
-- Files touched for project commit:
-  - `AGENTS.md`
-  - `CONTINUITY.md`
-- Global `/Users/roman/.codex/AGENTS.md` was updated locally outside this repo
-  and is not part of this project commit.
-
-## Receipts
-
-- 2026-06-15: Added Cash Runway guidance for mirrored core verification,
-  status-bucket separation, and the SideStore physical-device release gate.
-- 2026-06-15: Restored the concrete SideStore manual-check list after
-  self-review.
-- 2026-06-15: Documentation-only task; no build or test suite was run.
-
-## Done (recent)
-
-- SideStore smoke-timeout worktree review: timeout/logging hardening remained
-  useful for the opaque long `Run validation gate`, but not for the already
-  fixed missing-`just` failure. Targeted shell checks passed in the timeout
-  worktree.
-- RTK cleanup: active Cash Runway and global Codex agent docs now make Headroom
-  the default context-optimization layer and treat RTK as an explicit fallback.
-
-## Open Questions
-
-- SideStore release rehearsal still needs physical-device/manual release
-  validation through `sidestore-release.yml`: install/update same bundle
-  identifier, verify data/Keychain persistence, refresh while locked or
-  backgrounded, and confirm app opens after refresh. Repo-side validation cannot
-  prove SideStore refresh/update lifecycle behavior.
+- Goal: Complete draft PR #62, "Add bank-statement category auto-detection," addressing the self-QA review-fix checklist without unrelated refactors.
+- State: All review fixes pushed to `feature/auto-detect-bank-categories`. MCC mapping is a curated per-MCC table; ambiguous MCCs return `nil` and fall back to bank-statement Other Expense. Ukrainian/Russian bank-category aliases normalize case, whitespace, hyphens, punctuation, and apostrophes, and map to canonical `SeedCategories` names. `BankCategoryResolver` loads rules/categories once per import batch, fixing the previous 4,059 s performance regression. Cash Runway Wallet round-trip behavior is preserved.
+- Current branch: `feature/auto-detect-bank-categories`.
+- Working tree note: `.xcodebuildmcp/` remains untracked and unrelated. The branch also still contains earlier unrelated changes from the parent worktree state (MCP config, AGENTS guidance, RootView debug hook, verification doc, localization catalog); these were not part of the category-detection work.
+- Validation passed:
+  - `diff -rq Sources/CashRunwayCore Modules/CashRunwayCorePackage/Sources/CashRunwayCore`
+  - `git diff --check`
+  - `Scripts/generate-mcc-mapping.py --check`
+  - `swift test --parallel --skip CashRunwayPerformanceTests`
+  - `swift test --filter fixturePopulationTimingGate`
+  - focused resolver/category tests
+  - Monobank CSV tests
+  - PrivatBank XLSX tests
+  - CSV idempotency/import-export tests
+  - wallet CSV round-trip tests
+  - `BankConnectionServiceTests/learningMerchantCategoryRuleAffectsFutureImports`
+  - `just lint`
+  - clean iPhone 17 simulator build
+- Validation caveat: `just check` itself could not complete because its long-running `swift test` process is terminated by the environment after ~10 minutes. Equivalent component gates were run directly and passed.
+- Next action: Keep PR #62 in draft; final review and merge when convenient.

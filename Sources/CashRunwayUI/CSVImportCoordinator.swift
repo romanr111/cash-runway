@@ -90,58 +90,10 @@ final class CSVImportCoordinator: Identifiable {
     }
 
     private func defaultMapping(headers: [String], preset: CSVPreset) -> CSVImportMapping {
-        guard let walletID = model.wallets.first?.id else {
-            return CSVImportMapping(
-                dateColumn: headers.first ?? "",
-                amountColumn: nil,
-                debitColumn: nil,
-                creditColumn: nil,
-                merchantColumn: nil,
-                noteColumn: nil,
-                categoryColumn: nil,
-                labelsColumn: nil,
-                walletID: nil,
-                defaultKind: .expense,
-                typeColumn: nil,
-                walletColumn: nil,
-                currencyColumn: nil,
-                authorColumn: nil
-            )
-        }
-        let dateColumn = header(named: ["Дата операції", "Date", "date"], in: headers) ?? headers.first ?? ""
-        let amountColumn = header(named: ["Сума в грн", "Amount", "amount", "sum"], in: headers)
-        let debitColumn = header(named: ["Debit", "debit", "Витрати"], in: headers)
-        let creditColumn = header(named: ["Credit", "credit", "Надходження"], in: headers)
-        let typeColumn = header(named: ["Type", "type"], in: headers)
-        let walletColumn = header(named: ["Wallet", "wallet"], in: headers)
-        let currencyColumn = header(named: ["Currency", "currency"], in: headers)
-        let merchantColumn = header(named: ["Description", "description", "Merchant", "merchant", "Призначення"], in: headers)
-        let noteColumn = header(named: ["Comment", "comment", "Note", "note"], in: headers)
-        let categoryColumn = header(named: ["Category", "category", "Category name", "category name"], in: headers)
-        let labelsColumn = header(named: ["Labels", "labels", "Tags"], in: headers)
-        let authorColumn = header(named: ["Author", "author"], in: headers)
-
-        return CSVImportMapping(
-            dateColumn: dateColumn,
-            amountColumn: amountColumn,
-            debitColumn: preset == .generic ? debitColumn : nil,
-            creditColumn: preset == .generic ? creditColumn : nil,
-            merchantColumn: merchantColumn,
-            noteColumn: noteColumn,
-            categoryColumn: categoryColumn,
-            labelsColumn: labelsColumn,
-            walletID: walletID,
-            defaultKind: .expense,
-            typeColumn: typeColumn,
-            walletColumn: walletColumn,
-            currencyColumn: currencyColumn,
-            authorColumn: authorColumn
+        model.csvService.defaultMapping(
+            headers: headers,
+            preset: preset,
+            walletID: model.wallets.first?.id
         )
-    }
-
-    private func header(named candidates: [String], in headers: [String]) -> String? {
-        headers.first { header in
-            candidates.contains { $0.caseInsensitiveCompare(header) == .orderedSame }
-        }
     }
 }

@@ -95,7 +95,7 @@ struct CSVImportView: View {
                     }
                 }
             }
-            .navigationTitle("Import CSV")
+            .navigationTitle(L10n.string("Import Bank Statement"))
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(coordinator.importResult == nil && coordinator.importPreparationError == nil ? L10n.string("Cancel") : L10n.string("Done")) { dismiss() }

@@ -915,9 +915,16 @@ private actor BackgroundWork {
 
     func prepareCSVImport(from url: URL) throws -> CSVImportPreparation {
         let data = try CSVImportFileReader.readData(from: url)
-        let preview = try csvService.preview(data: data)
+        let csvData: Data
+        if url.pathExtension.lowercased() == "xlsx" {
+            let csvText = try XLSXConverter.convertToCSV(data: data)
+            csvData = Data(csvText.utf8)
+        } else {
+            csvData = data
+        }
+        let preview = try csvService.preview(data: csvData)
         let preset = csvService.detectPreset(headers: preview.headers)
-        return CSVImportPreparation(data: data, preview: preview, preset: preset)
+        return CSVImportPreparation(data: csvData, preview: preview, preset: preset)
     }
 
     func prepareBackupImport(from url: URL) throws -> BackupImportPreparation {

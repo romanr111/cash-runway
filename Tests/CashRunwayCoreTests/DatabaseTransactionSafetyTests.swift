@@ -361,13 +361,16 @@ struct DatabaseTransactionSafetyTests {
         #expect(mergedTemplate.categoryID == restaurants.id)
         let mergedInstance = try #require(try repository.recurringInstances().first { $0.id == instance.id })
         #expect(mergedInstance.overrideCategoryID == restaurants.id)
-        let mappedCategoryID = try BankCategoryMapper(repository: repository).resolve(
+        let mappedCategory = try BankCategoryMapper(repository: repository).resolve(
+            source: .bankStatement(.monobank),
+            kind: .expense,
             merchant: "Corner Restaurant",
             description: "Lunch",
+            rawCategoryName: nil,
             mcc: nil,
             originalMcc: nil
         )
-        #expect(mappedCategoryID == restaurants.id)
+        #expect(mappedCategory?.categoryID == restaurants.id)
     }
 
     @Test func categoryMergeRecordsRemapAndAuditEntries() throws {

@@ -50,6 +50,7 @@ public enum TransactionSource: String, CaseIterable, Codable, Sendable {
 
 public enum BankProvider: String, Codable, Sendable {
     case monobank
+    case privatBank
 }
 
 public enum BankIntegrationStatus: String, Codable, Sendable {
@@ -1589,6 +1590,7 @@ public struct CSVImportMapping: Sendable {
     public var merchantColumn: String?
     public var noteColumn: String?
     public var categoryColumn: String?
+    public var mccColumn: String?
     public var labelsColumn: String?
     public var authorColumn: String?
     public var walletID: UUID?
@@ -1608,7 +1610,8 @@ public struct CSVImportMapping: Sendable {
         typeColumn: String? = nil,
         walletColumn: String? = nil,
         currencyColumn: String? = nil,
-        authorColumn: String? = nil
+        authorColumn: String? = nil,
+        mccColumn: String? = nil
     ) {
         self.dateColumn = dateColumn
         self.amountColumn = amountColumn
@@ -1620,6 +1623,7 @@ public struct CSVImportMapping: Sendable {
         self.merchantColumn = merchantColumn
         self.noteColumn = noteColumn
         self.categoryColumn = categoryColumn
+        self.mccColumn = mccColumn
         self.labelsColumn = labelsColumn
         self.authorColumn = authorColumn
         self.walletID = walletID
@@ -1646,6 +1650,7 @@ public struct PreparedImportRow: Sendable {
     public var currency: String?
     public var categoryIconName: String?
     public var categoryColorHex: String?
+    public var categoryID: UUID?
 
     public init(
         rowNumber: Int,
@@ -1656,7 +1661,8 @@ public struct PreparedImportRow: Sendable {
         rawLabelNames: [String] = [],
         currency: String? = nil,
         categoryIconName: String? = nil,
-        categoryColorHex: String? = nil
+        categoryColorHex: String? = nil,
+        categoryID: UUID? = nil
     ) {
         self.rowNumber = rowNumber
         self.draft = draft
@@ -1667,6 +1673,7 @@ public struct PreparedImportRow: Sendable {
         self.currency = currency
         self.categoryIconName = categoryIconName
         self.categoryColorHex = categoryColorHex
+        self.categoryID = categoryID
     }
 }
 

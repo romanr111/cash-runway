@@ -602,4 +602,42 @@ struct CSVIdempotencyTests {
         #expect(result.rowErrors.count == 20)
         #expect(result.job.invalidRows == 25)
     }
+
+    @Test func commitIgnoresInvalidPreparedCategoryID() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let walletID = try #require(try repository.wallets().first?.id)
+        let otherExpenseID = try #require(try repository.categories(kind: .expense).first { $0.name == "Other Expense" }?.id)
+
+        let row = PreparedImportRow(
+            rowNumber: 2,
+            draft: TransactionDraft(
+                kind: .expense,
+                walletID: walletID,
+                amountMinor: 12345,
+                occurredAt: Date(timeIntervalSince1970: 1_700_000_000),
+                merchant: "Shop",
+                note: "Note",
+                source: .importCSV
+            ),
+            fingerprint: "fp-invalid-cat",
+            sourceName: "Test",
+            rawCategoryName: nil,
+            rawLabelNames: [],
+            currency: "UAH",
+            categoryID: UUID() // does not exist
+        )
+
+        let result = try repository.commitCSVImport(
+            fileName: "invalid-cat.csv",
+            sourceName: "Test",
+            preparedRows: [row],
+            rowErrors: []
+        )
+
+        #expect(result.insertedTransactions == 1)
+        let transaction = try #require(try repository.transactions().first { $0.merchant == "Shop" })
+        #expect(transaction.categoryID == otherExpenseID)
+    }
 }

@@ -108,9 +108,9 @@ struct SettingsView: View {
                             .padding(.horizontal, 4)
 
                         VStack(spacing: 0) {
-                            moreRow(icon: "tray.and.arrow.down.fill", tint: "#5FD4BF", title: "Import CSV", subtitle: L10n.string("Map and load bank exports")) {
+                            moreRow(icon: "tray.and.arrow.down.fill", tint: "#5FD4BF", title: "Import Bank Statement", subtitle: L10n.string("Import CSV or bank XLSX exports")) {
                                 if model.hasBootstrapped && model.wallets.isEmpty {
-                                    model.errorMessage = L10n.string("Create at least one wallet before importing CSV.")
+                                    model.errorMessage = L10n.string("Create at least one wallet before importing.")
                                 } else {
                                     isCSVImporterPresented = true
                                 }
@@ -240,11 +240,11 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $isCSVImporterPresented) {
                 #if canImport(UIKit)
-                DocumentPicker(allowedContentTypes: [.commaSeparatedText, .plainText]) { result in
+                DocumentPicker(allowedContentTypes: [.commaSeparatedText, .plainText, UTType(filenameExtension: "xlsx") ?? .spreadsheet]) { result in
                     handleCSVImporterResult(result)
                 }
                 #else
-                Text("CSV import is unavailable on this platform.")
+                Text("Bank statement import is unavailable on this platform.")
                 #endif
             }
             .sheet(isPresented: $isBackupImporterPresented) {

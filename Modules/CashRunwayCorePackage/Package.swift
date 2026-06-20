@@ -14,12 +14,14 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../../Vendor/GRDB.swift"),
+        .package(url: "https://github.com/CoreOffice/CoreXLSX.git", from: "0.14.2"),
     ],
     targets: [
         .target(
             name: "CashRunwayCore",
             dependencies: [
                 .product(name: "GRDB", package: "GRDB.swift"),
+                .product(name: "CoreXLSX", package: "CoreXLSX"),
             ],
             path: "Sources/CashRunwayCore"
         ),
