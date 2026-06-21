@@ -764,6 +764,7 @@ public struct RecurringInstance: Identifiable, Codable, Hashable, Sendable {
 public struct ImportJob: Identifiable, Codable, Hashable, Sendable {
     public var id: UUID
     public var sourceName: String
+    public var sourceFormatID: String? = nil
     public var fileName: String
     public var status: ImportJobStatus
     public var totalRows: Int
@@ -907,6 +908,7 @@ public struct BackupRecurringInstance: Identifiable, Codable, Hashable, Sendable
 public struct BackupImportJob: Identifiable, Codable, Hashable, Sendable {
     public var id: UUID
     public var sourceName: String
+    public var sourceFormatID: String? = nil
     public var fileName: String
     public var status: ImportJobStatus
     public var totalRows: Int

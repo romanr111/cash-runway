@@ -250,4 +250,316 @@ struct CSVEdgeCaseTests {
         #expect(importedDraft.categoryID == groceriesID)
         #expect(try repository.categories(kind: .expense).contains { $0.name == "Restaurants" } == false)
     }
+
+    @Test func genericCSVManualMCCMappingUsesCuratedBankCategoryFallbacks() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let walletID = try #require(try repository.wallets().first?.id)
+        let restaurantsID = try #require(try repository.categories(kind: .expense).first { $0.name == "Restaurants" }?.id)
+
+        let service = CSVService(repository: repository)
+        let text = """
+        Posted,Value,Details,Merchant category code
+        2026-05-01,-24.50,Cafe Terminal,5812
+        """
+        let preview = try service.preview(data: Data(text.utf8))
+        #expect(service.detectPreset(headers: preview.headers) == .generic)
+
+        let mapping = CSVImportMapping(
+            dateColumn: "Posted",
+            amountColumn: "Value",
+            debitColumn: nil,
+            creditColumn: nil,
+            merchantColumn: "Details",
+            noteColumn: nil,
+            categoryColumn: nil,
+            labelsColumn: nil,
+            walletID: walletID,
+            defaultKind: .expense,
+            mccColumn: "Merchant category code"
+        )
+
+        let result = try service.importStatement(
+            normalizedData: Data(text.utf8),
+            fileName: "unsupported-bank.csv",
+            format: .genericBankCSV,
+            mapping: mapping
+        )
+
+        #expect(result.insertedTransactions == 1)
+        let imported = try #require(try repository.transactions().first { $0.merchant == "Cafe Terminal" })
+        let importedDraft = try repository.transactionDraft(id: imported.id)
+        #expect(importedDraft.categoryID == restaurantsID)
+    }
+
+    @Test func defaultMappingAutoDetectsStandardMCCHeader() throws {
+        let repository = try TestSupport.makeRepository()
+        let service = CSVService(repository: repository)
+
+        let mapping = service.defaultMapping(
+            headers: ["Date", "Amount", "Description", "MCC"],
+            preset: .generic,
+            walletID: nil
+        )
+
+        #expect(mapping.mccColumn == "MCC")
+    }
+
+    @Test func cashRunwayExportWithBOMDateHeaderKeepsWalletCategorySemantics() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let walletID = try #require(try repository.wallets().first?.id)
+
+        let service = CSVService(repository: repository)
+        let text = """
+        \u{feff}Date,Wallet,Type,Category name,Merchant,Amount,Currency,Note,Labels,Author
+        2026-05-01T00:00:00Z,Main,Expense,Custom Exported Category,Craft Store,12.34,UAH,Imported from wallet export,,
+        """
+        let preview = try service.preview(data: Data(text.utf8))
+        let format = service.detectFormat(headers: preview.headers)
+        let mapping = service.defaultMapping(headers: preview.headers, preset: service.detectPreset(headers: preview.headers), walletID: walletID)
+
+        #expect(format == .cashRunwayCSV)
+
+        let result = try service.importStatement(
+            normalizedData: Data(text.utf8),
+            fileName: "wallet-export.csv",
+            format: format,
+            mapping: mapping
+        )
+
+        #expect(result.insertedTransactions == 1)
+        let imported = try #require(try repository.transactions().first { $0.merchant == "Craft Store" })
+        #expect(imported.categoryName == "Custom Exported Category")
+    }
+
+    @Test func ambiguousBankHeadersFallBackToGenericBankCSV() throws {
+        let repository = try TestSupport.makeRepository()
+        let service = CSVService(repository: repository)
+
+        let headers = ["Дата операції", "Сума в грн", "Description", "MCC"]
+
+        #expect(service.detectFormat(headers: headers) == .genericBankCSV)
+        #expect(service.detectPreset(headers: headers) == .generic)
+    }
+
+    @Test func importStatementUsesSuppliedFormatWithoutSecondDetection() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let walletID = try #require(try repository.wallets().first?.id)
+
+        let service = CSVService(repository: repository)
+        let text = """
+        Date,Wallet,Type,Category name,Merchant,Amount,Currency,Note,Labels,Author
+        2026-05-01T00:00:00Z,Main,Expense,Custom Exported Category,Craft Store,12.34,UAH,Imported with forced generic format,,
+        """
+        let preview = try service.preview(data: Data(text.utf8))
+        let mapping = service.defaultMapping(headers: preview.headers, preset: .cashRunwayWallet, walletID: walletID)
+
+        #expect(service.detectFormat(headers: preview.headers) == .cashRunwayCSV)
+
+        let result = try service.importStatement(
+            normalizedData: Data(text.utf8),
+            fileName: "wallet-export.csv",
+            format: .genericBankCSV,
+            mapping: mapping
+        )
+
+        #expect(result.insertedTransactions == 1)
+        let imported = try #require(try repository.transactions().first { $0.merchant == "Craft Store" })
+        #expect(imported.categoryName == "Other Expense")
+    }
+
+    @Test func genericCSVRecognizedCommonBankCategoryAlias() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let walletID = try #require(try repository.wallets().first?.id)
+        let restaurantsID = try #require(try repository.categories(kind: .expense).first { $0.name == "Restaurants" }?.id)
+
+        let service = CSVService(repository: repository)
+        let text = """
+        Posted,Value,Details,Bank category
+        2026-05-01,-24.50,Cafe Terminal,Ресторани
+        """
+        let mapping = CSVImportMapping(
+            dateColumn: "Posted",
+            amountColumn: "Value",
+            debitColumn: nil,
+            creditColumn: nil,
+            merchantColumn: "Details",
+            noteColumn: nil,
+            categoryColumn: "Bank category",
+            labelsColumn: nil,
+            walletID: walletID,
+            defaultKind: .expense
+        )
+
+        let result = try service.importStatement(
+            normalizedData: Data(text.utf8),
+            fileName: "unsupported-bank.csv",
+            format: .genericBankCSV,
+            mapping: mapping
+        )
+
+        #expect(result.insertedTransactions == 1)
+        let imported = try #require(try repository.transactions().first { $0.merchant == "Cafe Terminal" })
+        let importedDraft = try repository.transactionDraft(id: imported.id)
+        #expect(importedDraft.categoryID == restaurantsID)
+    }
+
+    @Test func malformedGenericMCCFallsBackSafely() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let walletID = try #require(try repository.wallets().first?.id)
+        let fallbackID = try #require(try repository.categories(kind: .expense).first { $0.name == "Other Expense" }?.id)
+
+        let service = CSVService(repository: repository)
+        let text = """
+        Posted,Value,Details,MCC
+        2026-05-01,-24.50,Unknown Merchant,not-a-code
+        """
+        let mapping = CSVImportMapping(
+            dateColumn: "Posted",
+            amountColumn: "Value",
+            debitColumn: nil,
+            creditColumn: nil,
+            merchantColumn: "Details",
+            noteColumn: nil,
+            categoryColumn: nil,
+            labelsColumn: nil,
+            walletID: walletID,
+            defaultKind: .expense,
+            mccColumn: "MCC"
+        )
+
+        let result = try service.importStatement(
+            normalizedData: Data(text.utf8),
+            fileName: "unsupported-bank.csv",
+            format: .genericBankCSV,
+            mapping: mapping
+        )
+
+        #expect(result.insertedTransactions == 1)
+        let imported = try #require(try repository.transactions().first { $0.merchant == "Unknown Merchant" })
+        let importedDraft = try repository.transactionDraft(id: imported.id)
+        #expect(importedDraft.categoryID == fallbackID)
+    }
+
+    @Test func genericCSVDoesNotUseProviderSpecificLearnedRules() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let walletID = try #require(try repository.wallets().first?.id)
+        let shoppingID = try #require(try repository.categories(kind: .expense).first { $0.name == "Shopping" }?.id)
+        let fallbackID = try #require(try repository.categories(kind: .expense).first { $0.name == "Other Expense" }?.id)
+        try repository.databaseManager.dbQueue.write { db in
+            try db.execute(
+                sql: """
+                INSERT INTO bank_category_rules (
+                    id, provider, rule_type, merchant_pattern, mcc, category_id, confidence, created_at, updated_at
+                )
+                VALUES (?, ?, 'merchant', ?, NULL, ?, 100, ?, ?)
+                """,
+                arguments: [
+                    UUID().uuidString,
+                    BankProvider.monobank.rawValue,
+                    "provider-only-merchant",
+                    shoppingID.uuidString,
+                    Date(timeIntervalSince1970: 1_800_000_000),
+                    Date(timeIntervalSince1970: 1_800_000_000)
+                ]
+            )
+        }
+
+        let service = CSVService(repository: repository)
+        let text = """
+        Posted,Value,Details
+        2026-05-01,-24.50,Provider Only Merchant
+        """
+        let mapping = CSVImportMapping(
+            dateColumn: "Posted",
+            amountColumn: "Value",
+            debitColumn: nil,
+            creditColumn: nil,
+            merchantColumn: "Details",
+            noteColumn: nil,
+            categoryColumn: nil,
+            labelsColumn: nil,
+            walletID: walletID,
+            defaultKind: .expense
+        )
+
+        let result = try service.importStatement(
+            normalizedData: Data(text.utf8),
+            fileName: "unsupported-bank.csv",
+            format: .genericBankCSV,
+            mapping: mapping
+        )
+
+        #expect(result.insertedTransactions == 1)
+        let imported = try #require(try repository.transactions().first { $0.merchant == "Provider Only Merchant" })
+        let importedDraft = try repository.transactionDraft(id: imported.id)
+        #expect(importedDraft.categoryID == fallbackID)
+    }
+
+    @Test func syntheticThirdBankDefinitionCanDetectMapAndImport() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let walletID = try #require(try repository.wallets().first?.id)
+        let restaurantsID = try #require(try repository.categories(kind: .expense).first { $0.name == "Restaurants" }?.id)
+        let syntheticFormat = BankStatementFormat(
+            id: "synthetic-bank.csv.v1",
+            displayName: "Synthetic Bank CSV",
+            fileKind: .csv,
+            role: .bankStatement(provider: nil)
+        )
+        let syntheticDefinition = BankStatementFormatDefinition(
+            format: syntheticFormat,
+            preset: .generic,
+            requiredHeaderGroups: [
+                ["Synthetic Posted"],
+                ["Synthetic Value"],
+                ["Synthetic Merchant"]
+            ],
+            minimumConfidence: 3,
+            defaultMapping: BankStatementDefaultMapping(
+                dateColumns: ["Synthetic Posted"],
+                amountColumns: ["Synthetic Value"],
+                merchantColumns: ["Synthetic Merchant"],
+                mccColumns: ["Synthetic MCC"]
+            )
+        )
+        let service = CSVService(
+            repository: repository,
+            formatDefinitions: CSVService.defaultFormatDefinitions + [syntheticDefinition]
+        )
+        let text = """
+        Synthetic Posted,Synthetic Value,Synthetic Merchant,Synthetic MCC
+        2026-05-01,-24.50,Synthetic Cafe,5812
+        """
+        let preview = try service.preview(data: Data(text.utf8))
+        let format = service.detectFormat(headers: preview.headers)
+        let mapping = service.defaultMapping(headers: preview.headers, format: format, walletID: walletID)
+
+        #expect(format == syntheticFormat)
+        #expect(mapping.mccColumn == "Synthetic MCC")
+
+        let result = try service.importStatement(
+            normalizedData: Data(text.utf8),
+            fileName: "synthetic-bank.csv",
+            format: format,
+            mapping: mapping
+        )
+
+        #expect(result.insertedTransactions == 1)
+        let imported = try #require(try repository.transactions().first { $0.merchant == "Synthetic Cafe" })
+        let importedDraft = try repository.transactionDraft(id: imported.id)
+        #expect(importedDraft.categoryID == restaurantsID)
+    }
 }

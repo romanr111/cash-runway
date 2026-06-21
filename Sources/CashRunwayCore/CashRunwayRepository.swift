@@ -482,9 +482,10 @@ public final class BankSyncCoordinator: BankSyncPerforming, @unchecked Sendable 
     }
 }
 
-public enum BankCategoryResolutionSource {
+public enum BankCategoryResolutionSource: Sendable {
     case cashRunwayWallet
     case bankStatement(BankProvider)
+    case genericBankStatement
 }
 
 public struct BankCategoryResolutionResult: Sendable {
@@ -618,6 +619,12 @@ public final class BankCategoryResolver: @unchecked Sendable {
         guard kind != .transfer else { return nil }
         let categoryKind: CategoryKind = kind == .income ? .income : .expense
         let fallbackName = kind == .income ? "Other Income" : "Other Expense"
+        let allowsBankFallbacks = switch source {
+        case .bankStatement, .genericBankStatement:
+            true
+        case .cashRunwayWallet:
+            false
+        }
 
         if case .bankStatement(let provider) = source {
             let haystack = [merchant, description]
@@ -647,7 +654,7 @@ public final class BankCategoryResolver: @unchecked Sendable {
             }
         }
 
-        if case .bankStatement = source {
+        if allowsBankFallbacks {
             if let rawCategoryName,
                let canonicalName = BankCategoryNameMapping.categoryName(for: rawCategoryName, kind: kind) {
                 let key = BankCategoryResolver.normalize(canonicalName)
@@ -664,7 +671,7 @@ public final class BankCategoryResolver: @unchecked Sendable {
             }
         }
 
-        if case .bankStatement = source,
+        if allowsBankFallbacks,
            let entry = categoriesByNormalizedName[categoryKind]?[BankCategoryResolver.normalize(fallbackName)] {
             return BankCategoryResolutionResult(categoryID: entry.id, categoryName: fallbackName)
         }
@@ -2304,6 +2311,7 @@ extension CashRunwayRepository {
     public func commitCSVImport(
         fileName: String,
         sourceName: String,
+        sourceFormatID: String? = nil,
         preparedRows: [PreparedImportRow],
         rowErrors: [CSVRowError],
         invalidRows: Int? = nil
@@ -2316,11 +2324,11 @@ extension CashRunwayRepository {
         return try databaseManager.dbQueue.write { db in
             try db.execute(
                 sql: """
-                INSERT INTO import_jobs (id, source_name, file_name, status, total_rows, valid_rows, invalid_rows, duplicate_rows, started_at, finished_at, error_summary)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO import_jobs (id, source_name, source_format_id, file_name, status, total_rows, valid_rows, invalid_rows, duplicate_rows, started_at, finished_at, error_summary)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 arguments: [
-                    jobID.uuidString, sourceName, fileName, ImportJobStatus.validated.rawValue, totalRows,
+                        jobID.uuidString, sourceName, sourceFormatID, fileName, ImportJobStatus.validated.rawValue, totalRows,
                     preparedRows.count, resolvedInvalidRows, 0, now, nil, resolvedInvalidRows > 0 ? "\(resolvedInvalidRows) rows failed validation." : nil,
                 ]
             )
@@ -2385,10 +2393,11 @@ extension CashRunwayRepository {
                 ]
             )
 
-            let job = ImportJob(
-                id: jobID,
-                sourceName: sourceName,
-                fileName: fileName,
+        let job = ImportJob(
+            id: jobID,
+            sourceName: sourceName,
+            sourceFormatID: sourceFormatID,
+            fileName: fileName,
                 status: .committed,
                 totalRows: totalRows,
                 validRows: insertedRows,
@@ -3344,11 +3353,11 @@ extension CashRunwayRepository {
         for importJob in backup.importJobs {
             try db.execute(
                 sql: """
-                INSERT INTO import_jobs (id, source_name, file_name, status, total_rows, valid_rows, invalid_rows, started_at, finished_at, error_summary)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO import_jobs (id, source_name, source_format_id, file_name, status, total_rows, valid_rows, invalid_rows, started_at, finished_at, error_summary)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 arguments: [
-                    importJob.id.uuidString, importJob.sourceName, importJob.fileName, importJob.status.rawValue,
+                    importJob.id.uuidString, importJob.sourceName, importJob.sourceFormatID, importJob.fileName, importJob.status.rawValue,
                     importJob.totalRows, importJob.validRows, importJob.invalidRows, importJob.startedAt,
                     importJob.finishedAt, importJob.errorSummary,
                 ]
@@ -3817,6 +3826,7 @@ extension CashRunwayRepository {
         BackupImportJob(
             id: UUID(uuidString: row["id"])!,
             sourceName: row["source_name"],
+            sourceFormatID: row["source_format_id"],
             fileName: row["file_name"],
             status: ImportJobStatus(rawValue: row["status"]) ?? .created,
             totalRows: row["total_rows"],

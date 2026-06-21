@@ -42,7 +42,7 @@ struct PrivatBankXLSXImportTests {
         let repository = try TestSupport.makeRepository()
         let service = CSVService(repository: repository)
 
-        let mapping = service.defaultMapping(headers: privatBankXLSXHeaders, preset: .privatBank, walletID: nil)
+        let mapping = service.defaultMapping(headers: privatBankXLSXHeaders, format: .privatBankXLSXv1, walletID: nil)
 
         #expect(mapping.dateColumn == "Дата")
         #expect(mapping.amountColumn == "Сума в валюті картки")
@@ -74,13 +74,19 @@ struct PrivatBankXLSXImportTests {
         let data = try Data(contentsOf: fixtureURL)
         let csvText = try XLSXConverter.convertToCSV(data: data)
         let preview = try service.preview(data: Data(csvText.utf8))
-        let preset = service.detectPreset(headers: preview.headers)
-        #expect(preset == .privatBank)
-        let mapping = service.defaultMapping(headers: preview.headers, preset: preset, walletID: walletID)
+        let format = service.detectFormat(headers: preview.headers, fileKind: .xlsx)
+        #expect(format == .privatBankXLSXv1)
+        let mapping = service.defaultMapping(headers: preview.headers, format: format, walletID: walletID)
 
-        let result = try service.importCSV(data: Data(csvText.utf8), fileName: "privat.xlsx", mapping: mapping)
+        let result = try service.importStatement(
+            normalizedData: Data(csvText.utf8),
+            fileName: "privat.xlsx",
+            format: format,
+            mapping: mapping
+        )
 
         #expect(result.insertedTransactions == 3)
+        #expect(result.job.sourceFormatID == BankStatementFormat.privatBankXLSXv1.id)
         #expect(result.invalidRows == 0)
         let transactions = try repository.transactions()
 

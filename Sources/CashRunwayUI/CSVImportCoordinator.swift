@@ -12,6 +12,7 @@ final class CSVImportCoordinator: Identifiable {
 
     var importData = Data()
     var importFileName = ""
+    var importFormat: BankStatementFormat = .genericBankCSV
     var importPreview = CSVImportPreview(headers: [], sampleRows: [], totalRows: 0)
     var importMapping = CSVImportMapping(
         dateColumn: "",
@@ -45,9 +46,10 @@ final class CSVImportCoordinator: Identifiable {
 
         importData = Data()
         importFileName = fileName
+        importFormat = .genericBankCSV
         importPreview = CSVImportPreview(headers: [], sampleRows: [], totalRows: 0)
         importPreset = .generic
-        importMapping = defaultMapping(headers: [], preset: .generic)
+        importMapping = defaultMapping(headers: [], format: .genericBankCSV)
         importPreparationError = nil
         importPreparationProgress = 0.12
         importPreparationStatus = "Opening selected file..."
@@ -58,10 +60,11 @@ final class CSVImportCoordinator: Identifiable {
                 importPreparationProgress = 0.55
                 importPreparationStatus = "Reading CSV rows..."
                 let preparedImport = try await model.prepareCSVImport(from: url)
-                importData = preparedImport.data
+                importData = preparedImport.normalizedData
+                importFormat = preparedImport.format
                 importPreview = preparedImport.preview
                 importPreset = preparedImport.preset
-                importMapping = defaultMapping(headers: preparedImport.preview.headers, preset: preparedImport.preset)
+                importMapping = defaultMapping(headers: preparedImport.preview.headers, format: preparedImport.format)
                 importPreparationProgress = 1.0
                 importPreparationStatus = "Ready to review."
                 isImportPreparing = false
@@ -81,7 +84,12 @@ final class CSVImportCoordinator: Identifiable {
         Task { @MainActor in
             await Task.yield()
             do {
-                importResult = try await model.importCSV(data: importData, fileName: importFileName, mapping: importMapping)
+                importResult = try await model.importStatement(
+                    normalizedData: importData,
+                    fileName: importFileName,
+                    format: importFormat,
+                    mapping: importMapping
+                )
             } catch {
                 importError = error.localizedDescription
             }
@@ -89,10 +97,10 @@ final class CSVImportCoordinator: Identifiable {
         }
     }
 
-    private func defaultMapping(headers: [String], preset: CSVPreset) -> CSVImportMapping {
+    private func defaultMapping(headers: [String], format: BankStatementFormat) -> CSVImportMapping {
         model.csvService.defaultMapping(
             headers: headers,
-            preset: preset,
+            format: format,
             walletID: model.wallets.first?.id
         )
     }

@@ -719,6 +719,11 @@ public final class DatabaseManager: @unchecked Sendable {
             try db.create(index: "idx_bank_category_rules_provider_type", on: "bank_category_rules", columns: ["provider", "rule_type"])
         }
 
+        migrator.registerMigration("v4_import_source_format") { db in
+            try db.execute(sql: "ALTER TABLE import_jobs ADD COLUMN source_format_id TEXT")
+            try db.execute(sql: "UPDATE import_jobs SET source_format_id = source_name WHERE source_format_id IS NULL")
+        }
+
         return migrator
     }
 }

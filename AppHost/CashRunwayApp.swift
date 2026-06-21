@@ -292,16 +292,18 @@ private enum DebugCSVImportSelfTest {
         let service = CSVService(repository: repository)
         let data = try CSVImportFileReader.readData(from: csvURL)
         let preview = try service.preview(data: data)
-        guard service.detectPreset(headers: preview.headers) == .cashRunwayWallet else {
+        let format = service.detectFormat(headers: preview.headers)
+        guard format == .cashRunwayCSV else {
             throw CashRunwayError.validation("Self-test CSV headers were not detected as Cash Runway wallet CSV.")
         }
 
         guard let walletID = try repository.wallets().first?.id else {
             throw CashRunwayError.validation("Self-test repository has no wallet.")
         }
-        let result = try service.importCSV(
-            data: data,
+        let result = try service.importStatement(
+            normalizedData: data,
             fileName: csvURL.lastPathComponent,
+            format: format,
             mapping: CSVImportMapping(
                 dateColumn: "Date",
                 amountColumn: "Amount",

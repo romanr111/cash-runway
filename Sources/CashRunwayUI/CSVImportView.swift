@@ -95,6 +95,17 @@ struct CSVImportView: View {
                     }
                 }
             }
+
+                    if !reviewRows.isEmpty {
+                        Section("Preview") {
+                            ForEach(reviewRows) { row in
+                                CSVImportPreviewRowView(row: row)
+                                    .padding(.vertical, 4)
+                            }
+                        }
+                    }
+                }
+            }
             .navigationTitle(L10n.string("Import Bank Statement"))
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
