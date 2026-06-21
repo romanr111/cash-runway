@@ -9,6 +9,20 @@ public enum CSVPreset: String, CaseIterable, Sendable {
     case generic = "Generic CSV"
 }
 
+public enum CSVCategoryMappingDisplayMode: Equatable, Sendable {
+    case autoBankRules
+    case sourceColumn(String?)
+}
+
+public extension CSVImportMapping {
+    func categoryMappingDisplayMode(for preset: CSVPreset) -> CSVCategoryMappingDisplayMode {
+        if categoryColumn == nil, preset == .monobank || preset == .privatBank {
+            return .autoBankRules
+        }
+        return .sourceColumn(categoryColumn)
+    }
+}
+
 private struct ImportFingerprintInput {
     let sourceName: String
     let walletID: UUID
@@ -98,6 +112,106 @@ public final class CSVService: @unchecked Sendable {
             return .monobank
         }
         return .generic
+    }
+
+    public func previewPreparedRows(data: Data, mapping: CSVImportMapping, limit: Int = 3) throws -> [PreparedImportRow] {
+        guard limit > 0 else { return [] }
+
+        let text = try decode(data: data)
+        let rows = parseRows(text)
+        guard let headers = rows.first else { throw CashRunwayError.validation(L10n.string("CSV file is empty.")) }
+        let headerIndex = Dictionary(uniqueKeysWithValues: headers.enumerated().map { ($1, $0) })
+        let preset = detectPreset(headers: headers)
+        let sourceName = preset.rawValue
+        let isBankPreset = preset == .monobank || preset == .privatBank
+        let wallets = try repository.wallets()
+        let resolver = try BankCategoryMapper(repository: repository)
+
+        var preparedRows: [PreparedImportRow] = []
+
+        for (offset, row) in rows.dropFirst().enumerated() {
+            guard preparedRows.count < limit else { break }
+
+            do {
+                let date = try parseDate(from: cell(row, mapping.dateColumn, headerIndex))
+                try validateCurrency(row: row, mapping: mapping, headerIndex: headerIndex)
+                let signedAmount = try parseAmount(row: row, mapping: mapping, headerIndex: headerIndex)
+                let kind = parseKind(row: row, mapping: mapping, headerIndex: headerIndex, signedAmount: signedAmount)
+                guard kind != .transfer else {
+                    throw CashRunwayError.validation(L10n.string("Transfer rows are not supported for CSV import."))
+                }
+                guard let walletID = parseWalletID(
+                    row: row,
+                    mapping: mapping,
+                    headerIndex: headerIndex,
+                    wallets: wallets
+                ) else {
+                    throw CashRunwayError.validation(L10n.string("Wallet ID not found for CSV row."))
+                }
+                let merchant = cell(row, mapping.merchantColumn, headerIndex)
+                let note = cell(row, mapping.noteColumn, headerIndex)
+                let rawCategoryName = normalizedCategoryName(cell(row, mapping.categoryColumn, headerIndex))
+                let mcc = parsedMCC(cell(row, mapping.mccColumn, headerIndex))
+                let rawLabels = rawLabelNames(from: cell(row, mapping.labelsColumn, headerIndex))
+                let currency = normalizedCurrency(cell(row, mapping.currencyColumn, headerIndex))
+
+                let resolutionSource: BankCategoryResolutionSource = isBankPreset
+                    ? .bankStatement(preset == .monobank ? .monobank : .privatBank)
+                    : .cashRunwayWallet
+                let resolvedCategory = resolver.resolve(
+                    source: resolutionSource,
+                    kind: kind,
+                    merchant: merchant,
+                    description: merchant,
+                    rawCategoryName: rawCategoryName,
+                    mcc: mcc,
+                    originalMcc: nil
+                )
+                let resolvedCategoryName = resolvedCategory?.categoryName ?? rawCategoryName
+                let appearance = resolvedCategoryName.flatMap { importedCategoryAppearance(for: $0, kind: kind) }
+
+                let fingerprint = importFingerprint(
+                    .init(
+                        sourceName: sourceName,
+                        walletID: walletID,
+                        kind: kind,
+                        occurredAt: date,
+                        amountMinor: abs(signedAmount),
+                        merchant: merchant,
+                        note: note,
+                        categoryName: resolvedCategoryName,
+                        currency: currency
+                    )
+                )
+                let draft = TransactionDraft(
+                    kind: kind,
+                    walletID: walletID,
+                    amountMinor: abs(signedAmount),
+                    occurredAt: date,
+                    merchant: merchant,
+                    note: note,
+                    source: .importCSV
+                )
+                preparedRows.append(
+                    PreparedImportRow(
+                        rowNumber: offset + 2,
+                        draft: draft,
+                        fingerprint: fingerprint,
+                        sourceName: sourceName,
+                        rawCategoryName: resolvedCategoryName,
+                        rawLabelNames: rawLabels,
+                        currency: currency,
+                        categoryIconName: appearance?.iconName,
+                        categoryColorHex: appearance?.colorHex,
+                        categoryID: resolvedCategory?.categoryID
+                    )
+                )
+            } catch {
+                continue
+            }
+        }
+
+        return preparedRows
     }
 
     public func importCSV(data: Data, fileName: String, mapping: CSVImportMapping) throws -> CSVImportResult {

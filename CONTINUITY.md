@@ -1,40 +1,44 @@
-Goal: Implement workflow helpers for faster Cash Runway validation, core mirror sync, PR status/comment safety, isolated SwiftPM retries, and related agent documentation.
+Goal: Review and finalize Monobank/PrivatBank import category mapping UI follow-up on `main`.
 
 State:
-- Worktree: `/Users/roman/.codex/worktrees/cash-runway-workflow-validation-helpers`
-- Branch: `codex/workflow-validation-helpers`
-- Base: `origin/main` at `854c4a0`
-- Main checkout had pre-existing edits and was left untouched.
+- Branch: `main` at `7abc0b7` (`origin/main`).
+- Working tree has local, uncommitted category-import changes plus pre-existing
+  localization catalog edits.
+- `.xcodebuildmcp/` remains untracked and unrelated.
+- Core mirrors are in sync:
+  `Sources/CashRunwayCore/` matches
+  `Modules/CashRunwayCorePackage/Sources/CashRunwayCore/`.
 
 Implemented:
-- Added `just check-unit-parallel`, `just check-integration`, `just check-perf`, `just test-isolated`, `just check-isolated`, `just mirror-core`, `just pr-status`, and `just pr-comment`.
-- Added scripts:
-  - `Scripts/check-perf.sh`
-  - `Scripts/mirror-core.sh`
-  - `Scripts/pr-comment.sh`
-  - `Scripts/pr-status.sh`
-- Updated `AGENTS.md`, `agent_docs/instructions/ios.md`, `agent_docs/instructions/validation.md`, and `agent_docs/instructions/worktrees.md`.
-- Updated global skill files:
-  - `/Users/roman/.codex/skills/cash-runway-validation/SKILL.md`
-  - `/Users/roman/.codex/skills/cash-runway-validation/references/validation-matrix.md`
-- Fixed review blocker: `Scripts/mirror-core.sh` now treats
-  `Sources/CashRunwayCore/` as canonical, refuses to overwrite local package
-  mirror edits by default, and supports explicit `--force` after review.
+- `CSVImportMapping.categoryMappingDisplayMode(for:)` returns read-only
+  `.autoBankRules` for Monobank/PrivatBank mappings when no raw CSV category
+  column exists.
+- `CSVImportView` displays `Category` as `Auto: MCC / bank rules` for those
+  bank presets and keeps the normal optional category-column picker for generic
+  CSV and Cash Runway Wallet CSV.
+- `CSVService.previewPreparedRows(...)` resolves preview categories through the
+  same bank/MCC resolver path used by final import, without inserting
+  transactions.
+- Monobank regression coverage now verifies MCC preview category detection and
+  category-row display mode behavior for bank, generic, and wallet CSV presets.
+- Added localized `Auto: MCC / bank rules` / `Авто: MCC / правила банку`.
 
-Validation:
-- `Scripts/pre-flight.sh` passed before edits.
-- `bash -n Scripts/check-perf.sh Scripts/mirror-core.sh Scripts/pr-comment.sh Scripts/pr-status.sh` passed.
-- `just --summary` lists all new recipes.
-- `just mirror-core` passed and confirmed core sources are in sync.
-- `just mirror-core` refused a temporary local package mirror edit as expected.
-- `just mirror-core --force` deliberately overwrote a temporary mirror-side test
-  file and passed.
-- `just pr-status` passed local status checks and skipped GitHub checks without a PR argument.
+Validation receipts:
+- `Scripts/pre-flight.sh` passed.
+- `just test-filter MonobankCSVImportTests` passed.
+- `just test-filter MCCCategoryMappingTests` passed.
+- `diff -rq Sources/CashRunwayCore Modules/CashRunwayCorePackage/Sources/CashRunwayCore`
+  passed.
 - `git diff --check` passed.
-- `just check-unit-parallel` passed.
-- `just check-integration` passed.
-- `just test-isolated --filter ModelSerializationTests` passed.
-- `just check-perf` now runs through the cleaned perf wrapper, but the existing `fixturePopulationTimingGate` failed at about 95 seconds against a 30 second threshold. Earlier stale perf temp data caused disk-full failures; `Scripts/check-perf.sh` now cleans stale perf temp data before and after the run.
+- `just build` passed.
+- `python3 -m json.tool AppHost/Localizable.xcstrings` passed.
+- `ruby /Users/roman/.codex/skills/cash-runway-localization/scripts/validate_xcstrings_json.rb AppHost/Localizable.xcstrings`
+  failed on pre-existing missing Ukrainian localization entries; the new
+  auto-category key has both `en` and `uk` values.
+- `just check` passed: mirror diff, whitespace check, full Swift tests, and
+  clean iPhone 17 simulator build.
 
 Open:
-- Decide whether to tune or investigate `fixturePopulationTimingGate`; this is separate from the workflow-helper implementation.
+- Decide whether to keep, split, or clean up the broader pre-existing
+  `AppHost/Localizable.xcstrings` semantic/formatting edits before commit.
+- `.xcodebuildmcp/` is still untracked and unrelated.

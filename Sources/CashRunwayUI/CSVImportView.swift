@@ -76,14 +76,14 @@ struct CSVImportView: View {
                                 }
                                 optionalPicker("Type", selection: $coordinator.importMapping.typeColumn)
                                 optionalPicker("Wallet", selection: $coordinator.importMapping.walletColumn)
-                                optionalPicker("Currency", selection: $coordinator.importMapping.currencyColumn)
-                                optionalPicker("Merchant", selection: $coordinator.importMapping.merchantColumn)
-                                optionalPicker("Note", selection: $coordinator.importMapping.noteColumn)
-                                optionalPicker("Category", selection: $coordinator.importMapping.categoryColumn)
-                                optionalPicker("Labels", selection: $coordinator.importMapping.labelsColumn)
-                            }
-                        }
+                        optionalPicker("Currency", selection: $coordinator.importMapping.currencyColumn)
+                        optionalPicker("Merchant", selection: $coordinator.importMapping.merchantColumn)
+                        optionalPicker("Note", selection: $coordinator.importMapping.noteColumn)
+                        categoryMappingRow
+                        optionalPicker("Labels", selection: $coordinator.importMapping.labelsColumn)
                     }
+                }
+            }
 
                     if !reviewRows.isEmpty {
                         Section("Preview") {
@@ -185,7 +185,41 @@ struct CSVImportView: View {
         }
     }
 
+    @ViewBuilder
+    private var categoryMappingRow: some View {
+        switch coordinator.importMapping.categoryMappingDisplayMode(for: coordinator.importPreset) {
+        case .autoBankRules:
+            summaryRow("Category", value: L10n.string("Auto: MCC / bank rules"))
+        case .sourceColumn(_):
+            optionalPicker("Category", selection: $coordinator.importMapping.categoryColumn)
+        }
+    }
+
     private var reviewRows: [CSVImportReviewRow] {
+        if let preparedRows = try? coordinator.model.csvService.previewPreparedRows(
+            data: coordinator.importData,
+            mapping: coordinator.importMapping,
+            limit: 3
+        ), !preparedRows.isEmpty {
+            return preparedRows.enumerated().map { offset, row in
+                let signedAmount = row.draft.kind == .expense ? -row.draft.amountMinor : row.draft.amountMinor
+                let fallbackCategoryName = row.rawCategoryName ?? selectedWalletName
+                let categoryName = row.categoryID.map {
+                    BuiltInCategoryDisplayName.name(id: $0, fallback: fallbackCategoryName)
+                } ?? fallbackCategoryName
+                let merchant = row.draft.merchant
+                let note = row.draft.note
+                return CSVImportReviewRow(
+                    id: offset,
+                    date: row.draft.occurredAt.formatted(date: .numeric, time: .standard),
+                    amount: MoneyFormatter.string(from: signedAmount),
+                    amountColor: CashRunwayTheme.amountColor(signedAmount),
+                    title: merchant.ifEmpty(note.ifEmpty(L10n.string("Uncategorized"))),
+                    subtitle: categoryName.ifEmpty(selectedWalletName)
+                )
+            }
+        }
+
         let headerIndex = Dictionary(uniqueKeysWithValues: coordinator.importPreview.headers.enumerated().map { ($1, $0) })
         return coordinator.importPreview.sampleRows.prefix(3).enumerated().map { offset, row in
             let signedAmount = previewAmount(row: row, headerIndex: headerIndex)

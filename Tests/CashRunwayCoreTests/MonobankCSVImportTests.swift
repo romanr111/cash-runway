@@ -216,6 +216,44 @@ struct MonobankCSVImportTests {
         #expect(transport.categoryName == "Transport")
     }
 
+    @Test func previewAssignsCategoriesFromMonobankMCC() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let walletID = try #require(try repository.wallets().first?.id)
+        let service = CSVService(repository: repository)
+        let text = """
+        Дата і час операції,Деталі операції,MCC,Сума в валюті картки (UAH)
+        18.06.2026 18:52:23,Рукавичка,5499,-1659.49
+        """
+        let mapping = service.defaultMapping(headers: monobankHeaders, preset: .monobank, walletID: walletID)
+
+        let rows = try service.previewPreparedRows(data: Data(text.utf8), mapping: mapping, limit: 3)
+
+        let row = try #require(rows.first)
+        #expect(row.draft.kind == .expense)
+        #expect(row.draft.merchant == "Рукавичка")
+        #expect(row.rawCategoryName == "Groceries")
+        #expect(row.categoryID != nil)
+        #expect(try repository.transactions().isEmpty)
+    }
+
+    @Test func bankStatementCategoryMappingDisplaysAutoSourceWhenNoCategoryColumn() throws {
+        let repository = try TestSupport.makeRepository()
+        let service = CSVService(repository: repository)
+        let monobankMapping = service.defaultMapping(headers: monobankHeaders, preset: .monobank, walletID: nil)
+        let genericMapping = service.defaultMapping(headers: ["Date", "Amount"], preset: .generic, walletID: nil)
+        let walletMapping = service.defaultMapping(
+            headers: ["Date", "Wallet", "Type", "Category name", "Amount", "Currency", "Note", "Labels", "Author"],
+            preset: .cashRunwayWallet,
+            walletID: nil
+        )
+
+        #expect(monobankMapping.categoryMappingDisplayMode(for: .monobank) == .autoBankRules)
+        #expect(genericMapping.categoryMappingDisplayMode(for: .generic) == .sourceColumn(nil))
+        #expect(walletMapping.categoryMappingDisplayMode(for: .cashRunwayWallet) == .sourceColumn("Category name"))
+    }
+
     @Test func importParsesMCCVariants() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
