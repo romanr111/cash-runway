@@ -15,7 +15,7 @@ struct CSVImportView: View {
                 Section("Source") {
                     summaryRow("File", value: coordinator.importFileName)
                     if !coordinator.isImportPreparing, coordinator.importPreparationError == nil {
-                        summaryRow("Format", value: presetDisplayName)
+                        summaryRow("Format", value: coordinator.importFormat.displayName)
                         summaryRow("Rows", value: "\(coordinator.importPreview.totalRows)")
                     }
                 }
@@ -43,7 +43,7 @@ struct CSVImportView: View {
                         }
                     }
 
-                    if coordinator.importPreset == .cashRunwayWallet {
+                    if coordinator.importFormat.role == .cashRunwayExport {
                         Section("Detected") {
                             summaryRow("Income / Expense", value: typeSummary)
                             summaryRow("Wallet", value: walletSummary)
@@ -123,9 +123,6 @@ struct CSVImportView: View {
         }
     }
 
-    private var presetDisplayName: String {
-        coordinator.importPreset == .cashRunwayWallet ? L10n.string("Cash Runway Wallet CSV") : coordinator.importPreset.rawValue
-    }
 
     private var hasRequiredMapping: Bool {
         !coordinator.importMapping.dateColumn.isEmpty && (coordinator.importMapping.amountColumn != nil || coordinator.importMapping.debitColumn != nil || coordinator.importMapping.creditColumn != nil)

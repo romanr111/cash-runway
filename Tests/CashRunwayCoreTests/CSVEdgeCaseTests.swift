@@ -5,14 +5,21 @@ import Testing
 @Suite(.serialized)
 struct CSVEdgeCaseTests {
     @Test(arguments: [
-        (["Дата операції", "Сума в ГРН"], CSVPreset.privatBank),
-        (["description", "mcc", "amount"], CSVPreset.monobank),
+        (["Дата операції", "Сума в грн"], CSVPreset.privatBank),
+        (["Date and time", "Description", "MCC", "Operation amount"], CSVPreset.monobank),
         (["foo", "bar"], CSVPreset.generic),
     ])
     func detectPreset(headers: [String], expected: CSVPreset) throws {
         let repository = try TestSupport.makeRepository()
         let service = CSVService(repository: repository)
         #expect(service.detectPreset(headers: headers) == expected)
+    }
+
+    @Test func detectGenericXLSXFallsBackToGenericBankXLSX() throws {
+        let repository = try TestSupport.makeRepository()
+        let service = CSVService(repository: repository)
+
+        #expect(service.detectFormat(headers: ["Anything"], fileKind: .xlsx) == .genericBankXLSX)
     }
 
     @Test func previewEmptyCSVThrows() throws {

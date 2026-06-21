@@ -26,7 +26,6 @@ final class CSVImportCoordinator: Identifiable {
         walletID: UUID(),
         defaultKind: .expense
     )
-    var importPreset: CSVPreset = .generic
     var isImportPreparing = false
     var importPreparationProgress = 0.0
     var importPreparationStatus = ""
@@ -42,17 +41,15 @@ final class CSVImportCoordinator: Identifiable {
     }
 
     func prepareImport(from url: URL) {
+    func prepareImport(from url: URL) {
         let fileName = url.lastPathComponent.isEmpty ? "import.csv" : url.lastPathComponent
 
         importData = Data()
         importFileName = fileName
         importFormat = .genericBankCSV
         importPreview = CSVImportPreview(headers: [], sampleRows: [], totalRows: 0)
-        importPreset = .generic
         importMapping = defaultMapping(headers: [], format: .genericBankCSV)
         importPreparationError = nil
-        importPreparationProgress = 0.12
-        importPreparationStatus = "Opening selected file..."
         isImportPreparing = true
 
         Task { @MainActor in

@@ -721,7 +721,19 @@ public final class DatabaseManager: @unchecked Sendable {
 
         migrator.registerMigration("v4_import_source_format") { db in
             try db.execute(sql: "ALTER TABLE import_jobs ADD COLUMN source_format_id TEXT")
-            try db.execute(sql: "UPDATE import_jobs SET source_format_id = source_name WHERE source_format_id IS NULL")
+            try db.execute(sql: """
+                UPDATE import_jobs
+                SET source_format_id = CASE
+                    WHEN source_name = 'Cash Runway Wallet' THEN 'cash-runway.csv.v1'
+                    WHEN source_name = 'Monobank' THEN 'monobank.csv.v1'
+                    WHEN source_name = 'Generic CSV' THEN 'generic-bank.csv.v1'
+                    WHEN source_name = 'PrivatBank' AND lower(file_name) LIKE '%.xlsx' THEN 'privatbank.xlsx.v1'
+                    WHEN source_name = 'PrivatBank' AND lower(file_name) LIKE '%.csv' THEN 'privatbank.csv.v1'
+                    ELSE NULL
+                END
+                WHERE source_format_id IS NULL
+                """)
+        }
         }
 
         return migrator

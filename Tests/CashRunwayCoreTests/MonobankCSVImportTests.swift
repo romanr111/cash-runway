@@ -58,6 +58,14 @@ struct MonobankCSVImportTests {
         #expect(service.detectPreset(headers: englishMonobankHeaders) == .monobank)
     }
 
+    @Test func weakMonobankHeadersFallBackToGeneric() throws {
+        let repository = try TestSupport.makeRepository()
+        let service = CSVService(repository: repository)
+
+        #expect(service.detectPreset(headers: ["Description", "MCC", "Operation amount"]) == .generic)
+    }
+    }
+
     @Test func defaultMappingForEnglishMonobank() throws {
         let repository = try TestSupport.makeRepository()
         let service = CSVService(repository: repository)
