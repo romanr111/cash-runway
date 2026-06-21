@@ -10,6 +10,7 @@ reporting-api/node_modules/
 .vercel/
 reporting-api/.vercel/
 .codegraph/
+.xcodebuildmcp/
 .vercel
 AppHost/ReportingConfig.local.xcconfig
 Scripts/__pycache__/
