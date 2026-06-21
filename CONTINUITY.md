@@ -17,12 +17,18 @@ Implemented:
 - Updated global skill files:
   - `/Users/roman/.codex/skills/cash-runway-validation/SKILL.md`
   - `/Users/roman/.codex/skills/cash-runway-validation/references/validation-matrix.md`
+- Fixed review blocker: `Scripts/mirror-core.sh` now treats
+  `Sources/CashRunwayCore/` as canonical, refuses to overwrite local package
+  mirror edits by default, and supports explicit `--force` after review.
 
 Validation:
 - `Scripts/pre-flight.sh` passed before edits.
 - `bash -n Scripts/check-perf.sh Scripts/mirror-core.sh Scripts/pr-comment.sh Scripts/pr-status.sh` passed.
 - `just --summary` lists all new recipes.
 - `just mirror-core` passed and confirmed core sources are in sync.
+- `just mirror-core` refused a temporary local package mirror edit as expected.
+- `just mirror-core --force` deliberately overwrote a temporary mirror-side test
+  file and passed.
 - `just pr-status` passed local status checks and skipped GitHub checks without a PR argument.
 - `git diff --check` passed.
 - `just check-unit-parallel` passed.

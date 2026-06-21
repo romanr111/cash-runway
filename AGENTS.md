@@ -25,9 +25,10 @@ Swift/SwiftUI/GRDB iOS app with a Node/TypeScript reporting API.
 
 ## Workflow Helpers
 
-- After editing `Sources/CashRunwayCore/` or
-  `Modules/CashRunwayCorePackage/Sources/CashRunwayCore/`, run
-  `just mirror-core`.
+- Treat `Sources/CashRunwayCore/` as canonical. After editing it, run
+  `just mirror-core` to sync `Modules/CashRunwayCorePackage/Sources/CashRunwayCore/`.
+  If the package mirror has local edits, review them before using
+  `just mirror-core --force`.
 - For Swift validation, prefer `just check-unit-parallel`,
   `just check-integration`, and `just check-perf` before falling back to raw
   `just test` arguments.
