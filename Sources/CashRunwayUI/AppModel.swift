@@ -937,7 +937,7 @@ private actor BackgroundWork {
         }
         let preview = try csvService.preview(data: csvData)
         let format = csvService.detectFormat(headers: preview.headers, fileKind: fileKind)
-        return CSVImportPreparation(normalizedData: csvData, preview: preview, format: format)
+        return CSVImportPreparation(data: csvData, preview: preview, format: format)
     }
 
     func prepareBackupImport(from url: URL) throws -> BackupImportPreparation {
@@ -973,8 +973,7 @@ fileprivate struct MutableSnapshots: Sendable {
 }
 
 struct CSVImportPreparation: Sendable {
-struct CSVImportPreparation: Sendable {
-    let normalizedData: Data
+    let data: Data
     let preview: CSVImportPreview
     let format: BankStatementFormat
 }

@@ -12,7 +12,6 @@ final class CSVImportCoordinator: Identifiable {
 
     var importData = Data()
     var importFileName = ""
-    var importFormat: BankStatementFormat = .genericBankCSV
     var importPreview = CSVImportPreview(headers: [], sampleRows: [], totalRows: 0)
     var importMapping = CSVImportMapping(
         dateColumn: "",
@@ -41,15 +40,16 @@ final class CSVImportCoordinator: Identifiable {
     }
 
     func prepareImport(from url: URL) {
-    func prepareImport(from url: URL) {
         let fileName = url.lastPathComponent.isEmpty ? "import.csv" : url.lastPathComponent
 
         importData = Data()
         importFileName = fileName
-        importFormat = .genericBankCSV
         importPreview = CSVImportPreview(headers: [], sampleRows: [], totalRows: 0)
+        importFormat = .genericBankCSV
         importMapping = defaultMapping(headers: [], format: .genericBankCSV)
         importPreparationError = nil
+        importPreparationProgress = 0.12
+        importPreparationStatus = "Opening selected file..."
         isImportPreparing = true
 
         Task { @MainActor in
@@ -57,10 +57,9 @@ final class CSVImportCoordinator: Identifiable {
                 importPreparationProgress = 0.55
                 importPreparationStatus = "Reading CSV rows..."
                 let preparedImport = try await model.prepareCSVImport(from: url)
-                importData = preparedImport.normalizedData
+                importData = preparedImport.data
                 importFormat = preparedImport.format
                 importPreview = preparedImport.preview
-                importPreset = preparedImport.preset
                 importMapping = defaultMapping(headers: preparedImport.preview.headers, format: preparedImport.format)
                 importPreparationProgress = 1.0
                 importPreparationStatus = "Ready to review."
@@ -81,12 +80,7 @@ final class CSVImportCoordinator: Identifiable {
         Task { @MainActor in
             await Task.yield()
             do {
-                importResult = try await model.importStatement(
-                    normalizedData: importData,
-                    fileName: importFileName,
-                    format: importFormat,
-                    mapping: importMapping
-                )
+                importResult = try await model.importStatement(normalizedData: importData, fileName: importFileName, format: importFormat, mapping: importMapping)
             } catch {
                 importError = error.localizedDescription
             }

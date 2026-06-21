@@ -639,6 +639,27 @@ public final class DatabaseManager: @unchecked Sendable {
             try db.execute(sql: "CREATE UNIQUE INDEX idx_transactions_import_fingerprint ON transactions(import_fingerprint) WHERE import_fingerprint IS NOT NULL")
         }
 
+        migrator.registerMigration("v4_import_job_source_format_id") { db in
+            try db.execute(sql: "ALTER TABLE import_jobs ADD COLUMN source_format_id TEXT")
+            try db.execute(sql: """
+                UPDATE import_jobs
+                SET source_format_id = CASE source_name
+                    WHEN 'Cash Runway Wallet' THEN 'cash-runway.csv.v1'
+                    WHEN 'Cash Runway Wallet CSV' THEN 'cash-runway.csv.v1'
+                    WHEN 'Monobank' THEN 'monobank.csv.v1'
+                    WHEN 'Monobank CSV' THEN 'monobank.csv.v1'
+                    WHEN 'PrivatBank' THEN 'privatbank.csv.v1'
+                    WHEN 'PrivatBank CSV' THEN 'privatbank.csv.v1'
+                    WHEN 'PrivatBank XLSX' THEN 'privatbank.xlsx.v1'
+                    WHEN 'Generic CSV' THEN 'generic-bank.csv.v1'
+                    WHEN 'Generic Bank CSV' THEN 'generic-bank.csv.v1'
+                    WHEN 'Generic Bank XLSX' THEN 'generic-bank.xlsx.v1'
+                    ELSE NULL
+                END
+                WHERE source_format_id IS NULL
+                """)
+        }
+
         migrator.registerMigration("v3_bank_sync") { db in
             try db.create(table: "bank_integrations") { table in
                 table.column("id", .text).primaryKey()
@@ -717,23 +738,6 @@ public final class DatabaseManager: @unchecked Sendable {
             try db.create(index: "idx_bank_imports_account_time", on: "bank_transaction_imports", columns: ["bank_account_id", "statement_time"])
             try db.create(index: "idx_bank_imports_cash_transaction", on: "bank_transaction_imports", columns: ["cash_runway_transaction_id"])
             try db.create(index: "idx_bank_category_rules_provider_type", on: "bank_category_rules", columns: ["provider", "rule_type"])
-        }
-
-        migrator.registerMigration("v4_import_source_format") { db in
-            try db.execute(sql: "ALTER TABLE import_jobs ADD COLUMN source_format_id TEXT")
-            try db.execute(sql: """
-                UPDATE import_jobs
-                SET source_format_id = CASE
-                    WHEN source_name = 'Cash Runway Wallet' THEN 'cash-runway.csv.v1'
-                    WHEN source_name = 'Monobank' THEN 'monobank.csv.v1'
-                    WHEN source_name = 'Generic CSV' THEN 'generic-bank.csv.v1'
-                    WHEN source_name = 'PrivatBank' AND lower(file_name) LIKE '%.xlsx' THEN 'privatbank.xlsx.v1'
-                    WHEN source_name = 'PrivatBank' AND lower(file_name) LIKE '%.csv' THEN 'privatbank.csv.v1'
-                    ELSE NULL
-                END
-                WHERE source_format_id IS NULL
-                """)
-        }
         }
 
         return migrator

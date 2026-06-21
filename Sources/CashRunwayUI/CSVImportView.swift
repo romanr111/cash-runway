@@ -15,7 +15,7 @@ struct CSVImportView: View {
                 Section("Source") {
                     summaryRow("File", value: coordinator.importFileName)
                     if !coordinator.isImportPreparing, coordinator.importPreparationError == nil {
-                        summaryRow("Format", value: coordinator.importFormat.displayName)
+                        summaryRow("Format", value: presetDisplayName)
                         summaryRow("Rows", value: "\(coordinator.importPreview.totalRows)")
                     }
                 }
@@ -43,7 +43,7 @@ struct CSVImportView: View {
                         }
                     }
 
-                    if coordinator.importFormat.role == .cashRunwayExport {
+        if coordinator.importFormat == .cashRunwayCSV {
                         Section("Detected") {
                             summaryRow("Income / Expense", value: typeSummary)
                             summaryRow("Wallet", value: walletSummary)
@@ -95,17 +95,6 @@ struct CSVImportView: View {
                     }
                 }
             }
-
-                    if !reviewRows.isEmpty {
-                        Section("Preview") {
-                            ForEach(reviewRows) { row in
-                                CSVImportPreviewRowView(row: row)
-                                    .padding(.vertical, 4)
-                            }
-                        }
-                    }
-                }
-            }
             .navigationTitle(L10n.string("Import Bank Statement"))
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -123,6 +112,9 @@ struct CSVImportView: View {
         }
     }
 
+    private var presetDisplayName: String {
+        coordinator.importFormat.displayName
+    }
 
     private var hasRequiredMapping: Bool {
         !coordinator.importMapping.dateColumn.isEmpty && (coordinator.importMapping.amountColumn != nil || coordinator.importMapping.debitColumn != nil || coordinator.importMapping.creditColumn != nil)
@@ -195,7 +187,7 @@ struct CSVImportView: View {
 
     @ViewBuilder
     private var categoryMappingRow: some View {
-        switch coordinator.importMapping.categoryMappingDisplayMode(for: coordinator.importPreset) {
+        switch coordinator.importMapping.categoryMappingDisplayMode(for: coordinator.importFormat) {
         case .autoBankRules:
             summaryRow("Category", value: L10n.string("Auto: MCC / bank rules"))
         case .sourceColumn(_):
@@ -206,6 +198,7 @@ struct CSVImportView: View {
     private var reviewRows: [CSVImportReviewRow] {
         if let preparedRows = try? coordinator.model.csvService.previewPreparedRows(
             data: coordinator.importData,
+                format: coordinator.importFormat,
             mapping: coordinator.importMapping,
             limit: 3
         ), !preparedRows.isEmpty {
