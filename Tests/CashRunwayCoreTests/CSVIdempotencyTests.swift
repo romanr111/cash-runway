@@ -761,15 +761,16 @@ struct CSVIdempotencyTests {
             mccColumn: "MCC"
         )
 
-        let result = try service.importStatement(
-            normalizedData: Data(text.utf8),
-            fileName: "legacy-mcc.csv",
-            format: .genericBankCSV,
-            mapping: mapping
-        )
+        withKnownIssue("Known limitation: legacy generic CSV dedup broken when category changes (MCC resolution)") {
+            let result = try service.importStatement(
+                normalizedData: Data(text.utf8),
+                fileName: "legacy-mcc.csv",
+                format: .genericBankCSV,
+                mapping: mapping
+            )
 
-        #expect(result.duplicateRows == 0,
-            "MCC-resolved 'Groceries' category differs from old 'Other Expense' — dedup broken: fingerprint includes categoryName")
+            #expect(result.duplicateRows == 1)
+        }
     }
 
     @Test func legacyGenericBankAliasCategoryFingerprintMismatch() throws {
@@ -822,15 +823,16 @@ struct CSVIdempotencyTests {
             defaultKind: .expense
         )
 
-        let result = try service.importStatement(
-            normalizedData: Data(text.utf8),
-            fileName: "legacy-alias.csv",
-            format: .genericBankCSV,
-            mapping: mapping
-        )
+withKnownIssue("Known limitation: legacy generic CSV dedup broken when category changes (bank alias 'Продукти' → 'Groceries')") {
+            let result = try service.importStatement(
+                normalizedData: Data(text.utf8),
+                fileName: "legacy-alias.csv",
+                format: .genericBankCSV,
+                mapping: mapping
+            )
 
-        #expect(result.duplicateRows == 0,
-            "Bank alias 'Продукти' → 'Groceries' differs from old 'Other Expense' — dedup broken")
+            #expect(result.duplicateRows == 1)
+        }
     }
 
     @Test func legacyGenericUnknownRawCategoryFingerprintIsStable() throws {
@@ -884,15 +886,16 @@ struct CSVIdempotencyTests {
             defaultKind: .expense
         )
 
-        let result = try service.importStatement(
-            normalizedData: Data(text.utf8),
-            fileName: "legacy-unknown-cat.csv",
-            format: .genericBankCSV,
-            mapping: mapping
-        )
+        withKnownIssue("Known limitation: legacy generic CSV dedup broken for unknown raw category that creates new category") {
+            let result = try service.importStatement(
+                normalizedData: Data(text.utf8),
+                fileName: "legacy-unknown-cat.csv",
+                format: .genericBankCSV,
+                mapping: mapping
+            )
 
-        #expect(result.duplicateRows == 0,
-            "Unknown raw category creates new category, fingerprint includes original rawName — dedup broken")
+            #expect(result.duplicateRows == 1)
+        }
     }
 
     private func historicalImportFingerprint(
