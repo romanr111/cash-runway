@@ -12,11 +12,20 @@ public struct ReportingKeychainSecretProvider: Sendable {
     public init(
         keychain: any KeychainStoring = KeychainStore(service: keychainService),
         environment: @escaping @Sendable () -> [String: String] = { ProcessInfo.processInfo.environment },
-        isPlaceholder: Bool = ReportingSecrets.isPlaceholder
+        isPlaceholder: Bool
     ) {
         self.keychain = keychain
         self.environment = environment
         self.isPlaceholder = isPlaceholder
+    }
+
+    public init(
+        keychain: any KeychainStoring = KeychainStore(service: keychainService),
+        environment: @escaping @Sendable () -> [String: String] = { ProcessInfo.processInfo.environment }
+    ) {
+        self.isPlaceholder = ReportingSecrets.isPlaceholder
+        self.keychain = keychain
+        self.environment = environment
     }
 
     public func clientSecret() -> String? {
