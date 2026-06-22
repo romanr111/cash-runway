@@ -9,6 +9,20 @@ public enum CSVPreset: String, CaseIterable, Sendable {
     case generic = "Generic CSV"
 }
 
+public enum CSVImportRowFilter: Equatable, Sendable {
+    case allTransactions
+    case expensesOnly
+
+    fileprivate func includes(_ kind: TransactionDraft.Kind) -> Bool {
+        switch self {
+        case .allTransactions:
+            true
+        case .expensesOnly:
+            kind == .expense
+        }
+    }
+}
+
 public enum CSVCategoryMappingDisplayMode: Equatable, Sendable {
     case autoBankRules
     case sourceColumn(String?)
@@ -114,7 +128,12 @@ public final class CSVService: @unchecked Sendable {
         return .generic
     }
 
-    public func previewPreparedRows(data: Data, mapping: CSVImportMapping, limit: Int = 3) throws -> [PreparedImportRow] {
+    public func previewPreparedRows(
+        data: Data,
+        mapping: CSVImportMapping,
+        rowFilter: CSVImportRowFilter = .allTransactions,
+        limit: Int = 3
+    ) throws -> [PreparedImportRow] {
         guard limit > 0 else { return [] }
 
         let text = try decode(data: data)
@@ -137,6 +156,9 @@ public final class CSVService: @unchecked Sendable {
                 try validateCurrency(row: row, mapping: mapping, headerIndex: headerIndex)
                 let signedAmount = try parseAmount(row: row, mapping: mapping, headerIndex: headerIndex)
                 let kind = parseKind(row: row, mapping: mapping, headerIndex: headerIndex, signedAmount: signedAmount)
+                guard rowFilter.includes(kind) else {
+                    continue
+                }
                 guard kind != .transfer else {
                     throw CashRunwayError.validation(L10n.string("Transfer rows are not supported for CSV import."))
                 }
@@ -214,7 +236,12 @@ public final class CSVService: @unchecked Sendable {
         return preparedRows
     }
 
-    public func importCSV(data: Data, fileName: String, mapping: CSVImportMapping) throws -> CSVImportResult {
+    public func importCSV(
+        data: Data,
+        fileName: String,
+        mapping: CSVImportMapping,
+        rowFilter: CSVImportRowFilter = .allTransactions
+    ) throws -> CSVImportResult {
         let text = try decode(data: data)
         let rows = parseRows(text)
         guard let headers = rows.first else { throw CashRunwayError.validation(L10n.string("CSV file is empty.")) }
@@ -235,6 +262,9 @@ public final class CSVService: @unchecked Sendable {
                 try validateCurrency(row: row, mapping: mapping, headerIndex: headerIndex)
                 let signedAmount = try parseAmount(row: row, mapping: mapping, headerIndex: headerIndex)
                 let kind = parseKind(row: row, mapping: mapping, headerIndex: headerIndex, signedAmount: signedAmount)
+                guard rowFilter.includes(kind) else {
+                    continue
+                }
                 guard kind != .transfer else {
                     throw CashRunwayError.validation(L10n.string("Transfer rows are not supported for CSV import."))
                 }

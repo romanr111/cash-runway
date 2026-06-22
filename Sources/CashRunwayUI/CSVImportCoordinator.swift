@@ -35,6 +35,11 @@ final class CSVImportCoordinator: Identifiable {
     var importError: String?
     var isImporting = false
     var isAdvancedMappingExpanded = false
+    var importExpensesOnly = false
+
+    var rowFilter: CSVImportRowFilter {
+        importExpensesOnly ? .expensesOnly : .allTransactions
+    }
 
     init(model: CashRunwayAppModel) {
         self.model = model
@@ -46,6 +51,7 @@ final class CSVImportCoordinator: Identifiable {
         importData = Data()
         importFileName = fileName
         importPreview = CSVImportPreview(headers: [], sampleRows: [], totalRows: 0)
+        importExpensesOnly = false
         importPreset = .generic
         importMapping = defaultMapping(headers: [], preset: .generic)
         importPreparationError = nil
@@ -81,7 +87,12 @@ final class CSVImportCoordinator: Identifiable {
         Task { @MainActor in
             await Task.yield()
             do {
-                importResult = try await model.importCSV(data: importData, fileName: importFileName, mapping: importMapping)
+                importResult = try await model.importCSV(
+                    data: importData,
+                    fileName: importFileName,
+                    mapping: importMapping,
+                    rowFilter: rowFilter
+                )
             } catch {
                 importError = error.localizedDescription
             }
