@@ -44,9 +44,6 @@ test-filter PATTERN:
 lint:
     swiftlint lint --strict
 
-mirror-core *args:
-    Scripts/mirror-core.sh {{args}}
-
 pr-status PR="":
     Scripts/pr-status.sh '{{PR}}'
 

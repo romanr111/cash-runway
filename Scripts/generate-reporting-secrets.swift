@@ -8,8 +8,7 @@ let projectRoot = URL(fileURLWithPath: CommandLine.arguments[0])
 let exampleConfig = projectRoot.appendingPathComponent("AppHost/ReportingConfig.example.xcconfig")
 let localConfig = projectRoot.appendingPathComponent("AppHost/ReportingConfig.local.xcconfig")
 let generatedPaths = [
-    projectRoot.appendingPathComponent("Sources/CashRunwayCore/ReportingSecrets.generated.swift"),
-    projectRoot.appendingPathComponent("Modules/CashRunwayCorePackage/Sources/CashRunwayCore/ReportingSecrets.generated.swift")
+    projectRoot.appendingPathComponent("Sources/CashRunwayCore/ReportingSecrets.generated.swift")
 ]
 
 func parseConfig(_ url: URL) -> [String: String] {

@@ -54,9 +54,8 @@ Classification: implemented after correction. Impact: medium token and
 correctness.
 
 Validation scripts:
-`Scripts/agent-validate.sh` checks mirrored core drift, `git diff --check`,
-Swift tests, coverage when requested, and simulator build. Classification:
-implemented. Impact: high correctness.
+`Scripts/agent-validate.sh` checks `git diff --check`, Swift tests, coverage when
+requested, and simulator build. Classification: implemented. Impact: high correctness.
 
 Simulator smoke:
 `Scripts/smoke-seeded-simulator.sh` builds, launches, captures screenshot/logs,
@@ -85,7 +84,7 @@ Use the repository entry points instead of recreating command lines:
 | --- | --- |
 | `just test <arguments>` | Swift package tests |
 | `just ui-check` | UI-only validation wrapper |
-| `just check` | Mirror diff, `git diff --check`, full Swift tests, simulator build |
+| `just check` | `git diff --check`, full Swift tests, simulator build |
 | `just smoke` | Deterministic simulator launch and log smoke |
 | `just verify` | Full iOS readiness gate |
 

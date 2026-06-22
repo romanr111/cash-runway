@@ -33,7 +33,6 @@ else
 fi
 
 section "Repository Checks"
-run_check mirror-diff diff -rq Sources/CashRunwayCore Modules/CashRunwayCorePackage/Sources/CashRunwayCore || true
 run_check diff-check git diff --check || true
 if [[ -x Scripts/generate-mcc-mapping.py ]]; then
     run_check mcc-mapping Scripts/generate-mcc-mapping.py --check || true

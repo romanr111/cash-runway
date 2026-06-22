@@ -380,10 +380,9 @@
 			name = "Generate Reporting Secrets";
 			outputFileListPaths = (
 			);
-			outputPaths = (
-				"$(SRCROOT)/Sources/CashRunwayCore/ReportingSecrets.generated.swift",
-				"$(SRCROOT)/Modules/CashRunwayCorePackage/Sources/CashRunwayCore/ReportingSecrets.generated.swift",
-			);
+				outputPaths = (
+					"$(SRCROOT)/Sources/CashRunwayCore/ReportingSecrets.generated.swift",
+				);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "set -eu\nunset SDKROOT\n\"${SRCROOT}/Scripts/generate-reporting-secrets.swift\"\n";

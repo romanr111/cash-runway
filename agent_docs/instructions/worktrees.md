@@ -10,11 +10,8 @@ Before meaningful work, run:
 Scripts/pre-flight.sh
 ```
 
-Review the current branch, modified files, untracked files, existing diff, and
-mirrored-core drift. If drift is caused by edits to canonical
-`Sources/CashRunwayCore/`, run `just mirror-core`. If the package mirror has
-local edits, review them before using `just mirror-core --force`. Do not
-overwrite or discard unrelated work.
+Review the current branch, modified files, untracked files, and existing diff.
+Do not overwrite or discard unrelated work.
 
 ## CodeGraph Lifecycle
 

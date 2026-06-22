@@ -1,6 +1,5 @@
 included:
   - AppHost
-  - Modules/CashRunwayCorePackage/Sources
   - Sources
   - Tests
 

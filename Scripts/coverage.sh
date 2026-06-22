@@ -71,9 +71,14 @@ require "json"
 
 report = JSON.parse(File.read("Coverage/coverage.json"))
 minimum_percent = $MINIMUM_PERCENT
-source_root = "/Modules/CashRunwayCorePackage/Sources/CashRunwayCore/"
+source_root = "/Sources/CashRunwayCore/"
 files = report.fetch("data").first.fetch("files").select do |file|
   file.fetch("filename").include?(source_root)
+end
+
+if files.empty?
+  warn "No CashRunwayCore source files found in coverage report"
+  exit 1
 end
 
 total_lines = files.sum { |file| file.dig("summary", "lines", "count").to_i }

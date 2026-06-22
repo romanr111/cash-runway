@@ -3,10 +3,8 @@
 Swift/SwiftUI/GRDB iOS app with a Node/TypeScript reporting API.
 
 ## Always Apply
-- Keep `Sources/CashRunwayCore/` and
-  `Modules/CashRunwayCorePackage/Sources/CashRunwayCore/` identical.
-  After modifying either tree, update the mirror and verify the two trees are
-  identical before finishing.
+- CashRunwayCore has one canonical source tree at `Sources/CashRunwayCore/`.
+  Both Xcode and SwiftPM must compile this tree. Do not create mirrored copies.
 - Store credentials and sensitive values only in Keychain or server-side
   environment variables. Never commit or log secrets or sensitive user data.
 - Do not use `print()` for production diagnostics.
@@ -29,10 +27,8 @@ Swift/SwiftUI/GRDB iOS app with a Node/TypeScript reporting API.
 
 ## Workflow Helpers
 
-- Treat `Sources/CashRunwayCore/` as canonical. After editing it, run
-  `just mirror-core` to sync `Modules/CashRunwayCorePackage/Sources/CashRunwayCore/`.
-  If the package mirror has local edits, review them before using
-  `just mirror-core --force`.
+- Both Xcode and SwiftPM compile the `Sources/CashRunwayCore/` tree
+  directly. Do not create mirrored copies.
 - For Swift validation, prefer `just check-unit-parallel`,
   `just check-integration`, and `just check-perf` before falling back to raw
   `just test` arguments.
