@@ -1,0 +1,6 @@
+// Release reporting configuration wrapper.
+// Committed and clean-clone safe. Loads placeholder defaults first, then
+// optionally overlays local real values from the git-ignored file.
+
+#include "ReportingConfig.example.xcconfig"
+#include? "ReportingConfig.local.xcconfig"
