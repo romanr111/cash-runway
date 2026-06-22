@@ -59,8 +59,8 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: static-analysis-logs
-        path: swiftlint.log
-        if-no-files-found: ignore
+          path: swiftlint.log
+          if-no-files-found: ignore
 
   app-build:
     name: App Build

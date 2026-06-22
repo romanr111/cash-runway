@@ -106,6 +106,31 @@ struct PrivatBankXLSXImportTests {
         #expect(foreign.categoryName == "Transport")
     }
 
+    @Test func importPrivatBankXLSXTemuUsesShoppingCategory() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let walletID = try #require(try repository.wallets().first?.id)
+        let service = CSVService(repository: repository)
+        let mapping = service.defaultMapping(headers: privatBankXLSXHeaders, format: .privatBankXLSXv1, walletID: walletID)
+        let csvText = """
+        Дата,Категорія,Картка,Опис операції,Сума в валюті картки,Валюта картки,Сума транзакції,Валюта транзакції,Залишок на кінець періоду,Валюта залишку
+        16.06.2026,Житло,1234,Temu,-552.70,UAH,-552.70,UAH,1000.00,UAH
+        """
+
+        let result = try service.importStatement(
+            normalizedData: Data(csvText.utf8),
+            fileName: "temu.xlsx",
+            format: .privatBankXLSXv1,
+            mapping: mapping
+        )
+
+        #expect(result.insertedTransactions == 1)
+        let transaction = try #require(try repository.transactions().first)
+        #expect(transaction.merchant == "Temu")
+        #expect(transaction.categoryName == "Shopping")
+    }
+
     @Test func legacyPrivatBankCSVStillImportsAsExpense() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()

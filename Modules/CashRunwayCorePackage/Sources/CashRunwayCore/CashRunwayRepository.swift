@@ -655,6 +655,14 @@ public final class BankCategoryResolver: @unchecked Sendable {
         }
 
         if allowsBankFallbacks {
+            if let builtInCategoryName = Self.builtInMerchantCategoryName(
+                merchant: merchant,
+                description: description,
+                kind: kind
+            ), let entry = categoriesByNormalizedName[categoryKind]?[Self.normalize(builtInCategoryName)] {
+                return BankCategoryResolutionResult(categoryID: entry.id, categoryName: builtInCategoryName)
+            }
+
             if let rawCategoryName,
                let canonicalName = BankCategoryNameMapping.categoryName(for: rawCategoryName, kind: kind) {
                 let key = BankCategoryResolver.normalize(canonicalName)
@@ -699,6 +707,23 @@ public final class BankCategoryResolver: @unchecked Sendable {
             .components(separatedBy: .whitespacesAndNewlines)
             .filter { !$0.isEmpty }
             .joined(separator: " ")
+    }
+
+    private static func builtInMerchantCategoryName(
+        merchant: String?,
+        description: String?,
+        kind: TransactionDraft.Kind
+    ) -> String? {
+        guard kind == .expense else { return nil }
+
+        let haystack = [merchant, description].compactMap { $0?.lowercased() }
+        guard !haystack.isEmpty else { return nil }
+
+        if haystack.contains(where: { $0.contains("temu") }) {
+            return "Shopping"
+        }
+
+        return nil
     }
 }
 

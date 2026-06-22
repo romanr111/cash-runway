@@ -250,6 +250,25 @@ struct BankCategoryMapperTests {
         #expect(resolved?.categoryID == otherIncomeID)
     }
 
+    @Test func temuMerchantOverridesBankHousingCategory() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+
+        let shoppingID = try categoryID(repository, named: "Shopping")
+
+        let resolved = try BankCategoryMapper(repository: repository).resolve(
+            source: .bankStatement(.privatBank),
+            kind: .expense,
+            merchant: "Temu",
+            description: "Temu",
+            rawCategoryName: "Житло",
+            mcc: nil,
+            originalMcc: nil
+        )
+
+        #expect(resolved?.categoryID == shoppingID)
+    }
+
     private func categoryID(_ repository: CashRunwayRepository, named name: String) throws -> UUID {
         try #require(try repository.categories(kind: .expense).first { $0.name == name }?.id)
     }
