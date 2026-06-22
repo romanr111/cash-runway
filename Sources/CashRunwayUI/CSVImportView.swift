@@ -51,10 +51,10 @@ struct CSVImportView: View {
                             summaryRow("Labels", value: coordinator.importMapping.labelsColumn == nil ? L10n.string("Not imported") : L10n.string("Matched to existing names"))
                         }
 
-                        Section {
-                            walletPicker(title: "Fallback Wallet")
-                        } header: {
-                            Text("Import Settings")
+                    Section {
+                        walletPicker(title: "Fallback Wallet")
+                    } header: {
+                        Text("Import Settings")
                         } footer: {
                             Text("Used when the CSV wallet is empty or does not match an existing wallet.")
                         }
@@ -85,12 +85,25 @@ struct CSVImportView: View {
                 }
             }
 
+                    Section("Import Scope") {
+                        Toggle("Import expenses only", isOn: $coordinator.importExpensesOnly)
+
+                        Text(importScopeMessage)
+                            .font(.footnote)
+                            .foregroundStyle(CashRunwayTheme.textSecondary)
+                    }
+
                     if !reviewRows.isEmpty {
                         Section("Preview") {
                             ForEach(reviewRows) { row in
                                 CSVImportPreviewRowView(row: row)
                                     .padding(.vertical, 4)
                             }
+                        }
+                    } else if coordinator.importExpensesOnly {
+                        Section("Preview") {
+                            Text(L10n.string("No expense rows found in the preview."))
+                                .foregroundStyle(CashRunwayTheme.textSecondary)
                         }
                     }
                 }
@@ -152,6 +165,12 @@ struct CSVImportView: View {
         }
     }
 
+    private var importScopeMessage: String {
+        coordinator.importExpensesOnly
+            ? L10n.string("Income rows will be skipped.")
+            : L10n.string("All supported transactions will be imported.")
+    }
+
     private var boundedPreparationProgress: Double {
         min(max(coordinator.importPreparationProgress, 0.0), 1.0)
     }
@@ -199,8 +218,13 @@ struct CSVImportView: View {
         if let preparedRows = try? coordinator.model.csvService.previewPreparedRows(
             data: coordinator.importData,
             mapping: coordinator.importMapping,
+            rowFilter: coordinator.rowFilter,
             limit: 3
-        ), !preparedRows.isEmpty {
+        ) {
+            guard !preparedRows.isEmpty else {
+                return coordinator.importExpensesOnly ? [] : fallbackPreviewRows
+            }
+
             return preparedRows.enumerated().map { offset, row in
                 let signedAmount = row.draft.kind == .expense ? -row.draft.amountMinor : row.draft.amountMinor
                 let fallbackCategoryName = row.rawCategoryName ?? selectedWalletName
@@ -220,6 +244,10 @@ struct CSVImportView: View {
             }
         }
 
+        return fallbackPreviewRows
+    }
+
+    private var fallbackPreviewRows: [CSVImportReviewRow] {
         let headerIndex = Dictionary(uniqueKeysWithValues: coordinator.importPreview.headers.enumerated().map { ($1, $0) })
         return coordinator.importPreview.sampleRows.prefix(3).enumerated().map { offset, row in
             let signedAmount = previewAmount(row: row, headerIndex: headerIndex)
