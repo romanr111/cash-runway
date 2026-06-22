@@ -362,4 +362,59 @@ struct MonobankCSVImportTests {
         #expect(secondResult.insertedTransactions == 0)
         #expect(secondResult.duplicateRows == 1)
     }
+
+    @Test func importMonobankExpensesOnlySkipsIncomeRows() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let walletID = try #require(try repository.wallets().first?.id)
+        let service = CSVService(repository: repository)
+        let text = """
+        Дата і час операції,Деталі операції,MCC,Сума в валюті картки (UAH),Сума в валюті операції,Валюта,Курс,Сума комісій (UAH),Сума кешбеку (UAH),Залишок після операції
+        16.06.2026 14:15:08,Рукавичка,5411,-420.0,-420.0,UAH,—,—,—,10000.00
+        16.06.2026 14:20:08,Від: Тестовий Відправник,4829,1000.0,1000.0,UAH,—,—,—,11000.00
+        """
+        let mapping = service.defaultMapping(headers: monobankHeaders, preset: .monobank, walletID: walletID)
+
+        let result = try service.importCSV(
+            data: Data(text.utf8),
+            fileName: "mono.csv",
+            mapping: mapping,
+            rowFilter: .expensesOnly
+        )
+
+        #expect(result.insertedTransactions == 1)
+        #expect(result.invalidRows == 0)
+        let transactions = try repository.transactions()
+        #expect(transactions.count == 1)
+        #expect(transactions.first?.kind == .expense)
+        #expect(transactions.first?.merchant == "Рукавичка")
+        #expect(transactions.first?.categoryName == "Groceries")
+    }
+
+    @Test func previewMonobankExpensesOnlySkipsIncomeRows() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let walletID = try #require(try repository.wallets().first?.id)
+        let service = CSVService(repository: repository)
+        let text = """
+        Дата і час операції,Деталі операції,MCC,Сума в валюті картки (UAH),Сума в валюті операції,Валюта,Курс,Сума комісій (UAH),Сума кешбеку (UAH),Залишок після операції
+        16.06.2026 14:15:08,Від: Тестовий Відправник,4829,1000.0,1000.0,UAH,—,—,—,11000.00
+        16.06.2026 14:20:08,Рукавичка,5411,-420.0,-420.0,UAH,—,—,—,10000.00
+        """
+        let mapping = service.defaultMapping(headers: monobankHeaders, preset: .monobank, walletID: walletID)
+
+        let rows = try service.previewPreparedRows(
+            data: Data(text.utf8),
+            mapping: mapping,
+            rowFilter: .expensesOnly,
+            limit: 3
+        )
+
+        #expect(rows.count == 1)
+        #expect(rows.first?.draft.kind == .expense)
+        #expect(rows.first?.draft.merchant == "Рукавичка")
+        #expect(rows.first?.rawCategoryName == "Groceries")
+    }
 }

@@ -498,20 +498,22 @@ public final class CashRunwayAppModel {
         }
     }
 
-    @discardableResult
-    public func importStatement(
-        normalizedData: Data,
-        fileName: String,
-        format: BankStatementFormat,
-        mapping: CSVImportMapping
-    ) async throws -> CSVImportResult {
-        do {
-            let result = try csvService.importStatement(
-                normalizedData: normalizedData,
-                fileName: fileName,
-                format: format,
-                mapping: mapping
-            )
+@discardableResult
+public func importStatement(
+    normalizedData: Data,
+    fileName: String,
+    format: BankStatementFormat,
+    mapping: CSVImportMapping,
+    rowFilter: CSVImportRowFilter = .allTransactions
+) async throws -> CSVImportResult {
+    do {
+        let result = try csvService.importStatement(
+            normalizedData: normalizedData,
+            fileName: fileName,
+            format: format,
+            mapping: mapping,
+            rowFilter: rowFilter
+        )
             await reloadAll()
             errorMessage = nil
             return result

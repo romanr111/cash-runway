@@ -9,6 +9,20 @@ public enum CSVPreset: String, CaseIterable, Sendable {
     case generic = "Generic CSV"
 }
 
+public enum CSVImportRowFilter: Equatable, Sendable {
+    case allTransactions
+    case expensesOnly
+
+    fileprivate func includes(_ kind: TransactionDraft.Kind) -> Bool {
+        switch self {
+        case .allTransactions:
+            true
+        case .expensesOnly:
+            kind == .expense
+        }
+    }
+}
+
 public enum CSVCategoryMappingDisplayMode: Equatable, Sendable {
     case autoBankRules
     case sourceColumn(String?)
@@ -370,18 +384,19 @@ public final class CSVService: @unchecked Sendable {
         return winners.count == 1 ? winners[0].definition.format : fallback
     }
 
-    public func previewPreparedRows(data: Data, mapping: CSVImportMapping, limit: Int = 3) throws -> [PreparedImportRow] {
+    public func previewPreparedRows(data: Data, mapping: CSVImportMapping, rowFilter: CSVImportRowFilter = .allTransactions, limit: Int = 3) throws -> [PreparedImportRow] {
         let text = try decode(data: data)
         let rows = parseRows(text)
         guard let headers = rows.first else { throw CashRunwayError.validation(L10n.string("CSV file is empty.")) }
         let format = detectFormat(headers: headers)
-        return try previewPreparedRows(data: data, format: format, mapping: mapping, limit: limit)
+        return try previewPreparedRows(data: data, format: format, mapping: mapping, rowFilter: rowFilter, limit: limit)
     }
 
     public func previewPreparedRows(
         data: Data,
         format: BankStatementFormat,
         mapping: CSVImportMapping,
+        rowFilter: CSVImportRowFilter = .allTransactions,
         limit: Int = 3
     ) throws -> [PreparedImportRow] {
         guard limit > 0 else { return [] }
@@ -402,17 +417,24 @@ public final class CSVService: @unchecked Sendable {
             guard preparedRows.count < limit else { break }
 
             do {
-                let date = try parseDate(from: cell(row, mapping.dateColumn, headerIndex))
-                try validateCurrency(row: row, mapping: mapping, headerIndex: headerIndex)
-                let parsedAmount = try parseAmount(row: row, mapping: mapping, headerIndex: headerIndex)
-                let signedAmount = parsedAmount.signedMinor
-                let kind = parseKind(
-                    row: row,
-                    mapping: mapping,
-                    headerIndex: headerIndex,
-                    signedAmount: signedAmount,
-                    inferredKind: parsedAmount.inferredKind
-                )
+                if let explicitKind = explicitKind(row: row, mapping: mapping, headerIndex: headerIndex),
+   !rowFilter.includes(explicitKind) {
+    continue
+}
+let date = try parseDate(from: cell(row, mapping.dateColumn, headerIndex))
+try validateCurrency(row: row, mapping: mapping, headerIndex: headerIndex)
+let parsedAmount = try parseAmount(row: row, mapping: mapping, headerIndex: headerIndex)
+let signedAmount = parsedAmount.signedMinor
+let kind = parseKind(
+    row: row,
+    mapping: mapping,
+    headerIndex: headerIndex,
+    signedAmount: signedAmount,
+    inferredKind: parsedAmount.inferredKind
+)
+guard rowFilter.includes(kind) else {
+    continue
+}
                 guard kind != .transfer else {
                     throw CashRunwayError.validation(L10n.string("Transfer rows are not supported for CSV import."))
                 }
@@ -487,19 +509,25 @@ public final class CSVService: @unchecked Sendable {
         return preparedRows
     }
 
-    public func importCSV(data: Data, fileName: String, mapping: CSVImportMapping) throws -> CSVImportResult {
+    public func importCSV(
+        data: Data,
+        fileName: String,
+        mapping: CSVImportMapping,
+        rowFilter: CSVImportRowFilter = .allTransactions
+    ) throws -> CSVImportResult {
         let text = try decode(data: data)
         let rows = parseRows(text)
         guard let headers = rows.first else { throw CashRunwayError.validation(L10n.string("CSV file is empty.")) }
         let format = detectFormat(headers: headers)
-        return try importStatement(normalizedData: data, fileName: fileName, format: format, mapping: mapping)
+        return try importStatement(normalizedData: data, fileName: fileName, format: format, mapping: mapping, rowFilter: rowFilter)
     }
 
     public func importStatement(
         normalizedData: Data,
         fileName: String,
         format: BankStatementFormat,
-        mapping: CSVImportMapping
+        mapping: CSVImportMapping,
+        rowFilter: CSVImportRowFilter = .allTransactions
     ) throws -> CSVImportResult {
         let text = try decode(data: normalizedData)
         let rows = parseRows(text)
@@ -516,18 +544,25 @@ public final class CSVService: @unchecked Sendable {
         var preparedRows: [PreparedImportRow] = []
 
         for (offset, row) in rows.dropFirst().enumerated() {
-            do {
-                let date = try parseDate(from: cell(row, mapping.dateColumn, headerIndex))
-                try validateCurrency(row: row, mapping: mapping, headerIndex: headerIndex)
-                let parsedAmount = try parseAmount(row: row, mapping: mapping, headerIndex: headerIndex)
-                let signedAmount = parsedAmount.signedMinor
-                let kind = parseKind(
-                    row: row,
-                    mapping: mapping,
-                    headerIndex: headerIndex,
-                    signedAmount: signedAmount,
-                    inferredKind: parsedAmount.inferredKind
-                )
+do {
+    if let explicitKind = explicitKind(row: row, mapping: mapping, headerIndex: headerIndex),
+       !rowFilter.includes(explicitKind) {
+        continue
+    }
+    let date = try parseDate(from: cell(row, mapping.dateColumn, headerIndex))
+    try validateCurrency(row: row, mapping: mapping, headerIndex: headerIndex)
+    let parsedAmount = try parseAmount(row: row, mapping: mapping, headerIndex: headerIndex)
+    let signedAmount = parsedAmount.signedMinor
+    let kind = parseKind(
+        row: row,
+        mapping: mapping,
+        headerIndex: headerIndex,
+        signedAmount: signedAmount,
+        inferredKind: parsedAmount.inferredKind
+    )
+    guard rowFilter.includes(kind) else {
+        continue
+    }
                 guard kind != .transfer else {
                     throw CashRunwayError.validation(L10n.string("Transfer rows are not supported for CSV import."))
                 }
@@ -852,6 +887,14 @@ public final class CSVService: @unchecked Sendable {
         throw CashRunwayError.validation(L10n.string("Could not parse amount."))
     }
 
+    private func explicitKind(row: [String], mapping: CSVImportMapping, headerIndex: [String: Int]) -> TransactionDraft.Kind? {
+        let raw = cell(row, mapping.typeColumn, headerIndex).lowercased()
+        if raw == "income" || raw == "inflow" || raw == "credit" { return .income }
+        if raw == "expense" || raw == "outflow" || raw == "debit" { return .expense }
+        if raw == "transfer" { return .transfer }
+        return nil
+    }
+
     private func parseKind(
         row: [String],
         mapping: CSVImportMapping,
@@ -859,15 +902,8 @@ public final class CSVService: @unchecked Sendable {
         signedAmount: Int64,
         inferredKind: TransactionDraft.Kind?
     ) -> TransactionDraft.Kind {
-        let raw = cell(row, mapping.typeColumn, headerIndex).lowercased()
-        if raw == "income" || raw == "inflow" || raw == "credit" {
-            return .income
-        }
-        if raw == "expense" || raw == "outflow" || raw == "debit" {
-            return .expense
-        }
-        if raw == "transfer" {
-            return .transfer
+        if let explicit = explicitKind(row: row, mapping: mapping, headerIndex: headerIndex) {
+            return explicit
         }
         if let inferredKind {
             return inferredKind
@@ -875,7 +911,7 @@ public final class CSVService: @unchecked Sendable {
         if signedAmount < 0 {
             return .expense
         }
-        if signedAmount > 0, mapping.typeColumn != nil {
+        if signedAmount > 0, mapping.typeColumn != nil || (mapping.amountColumn == nil && (mapping.debitColumn != nil || mapping.creditColumn != nil)) {
             return .income
         }
         return mapping.defaultKind
