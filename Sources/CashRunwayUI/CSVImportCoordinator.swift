@@ -1,8 +1,6 @@
 import Foundation
 import SwiftUI
-#if canImport(CashRunwayCore)
 import CashRunwayCore
-#endif
 
 @MainActor
 @Observable

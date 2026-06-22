@@ -1,12 +1,10 @@
 import Foundation
 import Observation
 import SwiftUI
-#if canImport(CashRunwayCore)
 import CashRunwayCore
-#endif
 
-public typealias CashRunwayCategory = Category
-public typealias CashRunwayLabel = Label
+public typealias CashRunwayCategory = CashRunwayCore.Category
+public typealias CashRunwayLabel = CashRunwayCore.Label
 
 @MainActor
 @Observable

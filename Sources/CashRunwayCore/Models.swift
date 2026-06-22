@@ -1577,6 +1577,12 @@ public struct CSVImportPreview: Sendable {
     public var headers: [String]
     public var sampleRows: [[String]]
     public var totalRows: Int
+
+    public init(headers: [String], sampleRows: [[String]], totalRows: Int) {
+        self.headers = headers
+        self.sampleRows = sampleRows
+        self.totalRows = totalRows
+    }
 }
 
 public struct CSVImportMapping: Sendable {

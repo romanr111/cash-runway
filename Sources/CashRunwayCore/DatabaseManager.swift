@@ -285,7 +285,7 @@ public final class DatabaseManager: @unchecked Sendable {
         )
     }
 
-    init(
+    public init(
         locationProvider: DatabaseLocationProvider = .init(),
         allowsDestructiveRecovery: Bool = false,
         keychain: any KeychainStoring

@@ -9,6 +9,12 @@ let package = Package(
         .iOS(.v18),
         .macOS(.v15),
     ],
+    products: [
+        .library(
+            name: "CashRunwayCore",
+            targets: ["CashRunwayCore"]
+        ),
+    ],
     dependencies: [
         .package(path: "Vendor/GRDB.swift"),
         .package(url: "https://github.com/CoreOffice/CoreXLSX.git", from: "0.14.2"),

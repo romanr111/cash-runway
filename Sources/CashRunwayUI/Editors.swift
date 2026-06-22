@@ -1,8 +1,6 @@
 import Foundation
 import SwiftUI
-#if canImport(CashRunwayCore)
 import CashRunwayCore
-#endif
 
 struct TransactionEditorView: View {
     @Environment(\.dismiss) private var dismiss
@@ -901,7 +899,19 @@ struct CategoryManagementView: View {
     @State private var items: [CategoryManagementItem] = []
     @State private var showsEditor = false
     @State private var showsMergeSheet = false
-    @State private var categoryDraft = CashRunwayCategory(id: UUID(), name: "", kind: .expense, iconName: CategoryAppearanceCatalog.defaultIcon, colorHex: CategoryAppearanceCatalog.defaultColor, parentID: nil, isSystem: false, isArchived: false, sortOrder: 0, createdAt: .now, updatedAt: .now)
+        @State private var categoryDraft = CashRunwayCategory(
+            id: UUID(),
+            name: "",
+            kind: .expense,
+            iconName: CategoryAppearanceCatalog.defaultIcon,
+            colorHex: CategoryAppearanceCatalog.defaultColor,
+            parentID: nil,
+            isSystem: false,
+            isArchived: false,
+            sortOrder: 0,
+            createdAt: Date.now,
+            updatedAt: Date.now
+        )
 
     init(model: CashRunwayAppModel, initialKind: CategoryKind) {
         self.model = model

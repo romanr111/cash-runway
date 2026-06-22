@@ -1,9 +1,7 @@
 import Charts
 import Foundation
 import SwiftUI
-#if canImport(CashRunwayCore)
 import CashRunwayCore
-#endif
 
 struct DashboardView: View {
     @Bindable var model: CashRunwayAppModel
