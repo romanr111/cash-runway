@@ -154,6 +154,11 @@ private struct ImportFingerprintInput {
     let currency: String?
 }
 
+private struct ParsedAmount {
+    let signedMinor: Int64
+    let inferredKind: TransactionDraft.Kind?
+}
+
 private func importFingerprint(_ input: ImportFingerprintInput) -> String {
     let normalizedMerchant = (input.merchant ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     let normalizedNote = (input.note ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -221,10 +226,10 @@ public final class CSVService: @unchecked Sendable {
             format: .monobankCSVv1,
             preset: .monobank,
             requiredHeaderGroups: [
-                ["Дата і час операції", "Дата i час операції", "Date and time", "Date"],
+                ["Дата і час операції", "Дата i час операції", "Date and time"],
                 ["Деталі операції", "Description"],
                 ["MCC"],
-                ["Сума (UAH)", "Сума в валюті картки (UAH)", "Сума в валюті картки", "Card currency amount, (UAH)", "Card currency amount", "Amount"],
+                ["Сума (UAH)", "Сума в валюті картки (UAH)", "Сума в валюті картки", "Card currency amount, (UAH)", "Card currency amount"],
             ],
             minimumConfidence: 4,
             defaultMapping: BankStatementDefaultMapping(
@@ -246,9 +251,9 @@ public final class CSVService: @unchecked Sendable {
             format: .privatBankCSVv1,
             preset: .privatBank,
             requiredHeaderGroups: [
-                ["Дата операції", "Дата", "Date"],
-                ["Опис операції", "Призначення", "Description", "Details"],
-                ["Сума в грн", "Сума в валюті картки", "Amount"],
+                ["Дата операції", "Дата"],
+                ["Опис операції", "Призначення"],
+                ["Сума в грн", "Сума в валюті картки"],
             ],
             minimumConfidence: 3,
             defaultMapping: BankStatementDefaultMapping(
@@ -264,7 +269,7 @@ public final class CSVService: @unchecked Sendable {
                 currencyColumns: ["Currency", "currency", "Валюта", "Валюта картки"],
                 authorColumns: ["Author", "author"],
                 mccColumns: ["MCC", "mcc"],
-                defaultKind: .income,
+                defaultKind: .expense,
                 omitCurrencyForSignedAmount: true
             )
         ),
@@ -272,9 +277,9 @@ public final class CSVService: @unchecked Sendable {
             format: .privatBankXLSXv1,
             preset: .privatBank,
             requiredHeaderGroups: [
-                ["Дата операції", "Дата", "Date"],
-                ["Опис операції", "Призначення", "Description", "Details"],
-                ["Сума в грн", "Сума в валюті картки", "Amount"],
+                ["Дата операції", "Дата"],
+                ["Опис операції", "Призначення"],
+                ["Сума в грн", "Сума в валюті картки"],
             ],
             minimumConfidence: 3,
             defaultMapping: BankStatementDefaultMapping(
@@ -386,6 +391,7 @@ public final class CSVService: @unchecked Sendable {
         guard let headers = rows.first else { throw CashRunwayError.validation(L10n.string("CSV file is empty.")) }
         let headerIndex = Dictionary(uniqueKeysWithValues: headers.enumerated().map { ($1, $0) })
         let sourceName = format.displayName
+        let fingerprintSourceName = fingerprintNamespace(for: format)
         let resolutionSource = categoryResolutionSource(for: format)
         let wallets = try repository.wallets()
         let resolver = try BankCategoryMapper(repository: repository)
@@ -398,8 +404,15 @@ public final class CSVService: @unchecked Sendable {
             do {
                 let date = try parseDate(from: cell(row, mapping.dateColumn, headerIndex))
                 try validateCurrency(row: row, mapping: mapping, headerIndex: headerIndex)
-                let signedAmount = try parseAmount(row: row, mapping: mapping, headerIndex: headerIndex)
-                let kind = parseKind(row: row, mapping: mapping, headerIndex: headerIndex, signedAmount: signedAmount)
+                let parsedAmount = try parseAmount(row: row, mapping: mapping, headerIndex: headerIndex)
+                let signedAmount = parsedAmount.signedMinor
+                let kind = parseKind(
+                    row: row,
+                    mapping: mapping,
+                    headerIndex: headerIndex,
+                    signedAmount: signedAmount,
+                    inferredKind: parsedAmount.inferredKind
+                )
                 guard kind != .transfer else {
                     throw CashRunwayError.validation(L10n.string("Transfer rows are not supported for CSV import."))
                 }
@@ -431,9 +444,9 @@ public final class CSVService: @unchecked Sendable {
                 let appearance = resolvedCategoryName.flatMap { importedCategoryAppearance(for: $0, kind: kind) }
 
                 let fingerprint = importFingerprint(
-                    .init(
-                        sourceName: sourceName,
-                        walletID: walletID,
+                        .init(
+                            sourceName: fingerprintSourceName,
+                            walletID: walletID,
                         kind: kind,
                         occurredAt: date,
                         amountMinor: abs(signedAmount),
@@ -493,6 +506,7 @@ public final class CSVService: @unchecked Sendable {
         guard let headers = rows.first else { throw CashRunwayError.validation(L10n.string("CSV file is empty.")) }
         let headerIndex = Dictionary(uniqueKeysWithValues: headers.enumerated().map { ($1, $0) })
         let sourceName = format.displayName
+        let fingerprintSourceName = fingerprintNamespace(for: format)
         let resolutionSource = categoryResolutionSource(for: format)
         var invalidRows = 0
         var rowErrors: [CSVRowError] = []
@@ -505,8 +519,15 @@ public final class CSVService: @unchecked Sendable {
             do {
                 let date = try parseDate(from: cell(row, mapping.dateColumn, headerIndex))
                 try validateCurrency(row: row, mapping: mapping, headerIndex: headerIndex)
-                let signedAmount = try parseAmount(row: row, mapping: mapping, headerIndex: headerIndex)
-                let kind = parseKind(row: row, mapping: mapping, headerIndex: headerIndex, signedAmount: signedAmount)
+                let parsedAmount = try parseAmount(row: row, mapping: mapping, headerIndex: headerIndex)
+                let signedAmount = parsedAmount.signedMinor
+                let kind = parseKind(
+                    row: row,
+                    mapping: mapping,
+                    headerIndex: headerIndex,
+                    signedAmount: signedAmount,
+                    inferredKind: parsedAmount.inferredKind
+                )
                 guard kind != .transfer else {
                     throw CashRunwayError.validation(L10n.string("Transfer rows are not supported for CSV import."))
                 }
@@ -538,9 +559,9 @@ public final class CSVService: @unchecked Sendable {
                 let appearance = resolvedCategoryName.flatMap { importedCategoryAppearance(for: $0, kind: kind) }
 
                 let fingerprint = importFingerprint(
-                    .init(
-                        sourceName: sourceName,
-                        walletID: walletID,
+                        .init(
+                            sourceName: fingerprintSourceName,
+                            walletID: walletID,
                         kind: kind,
                         occurredAt: date,
                         amountMinor: abs(signedAmount),
@@ -630,50 +651,7 @@ public final class CSVService: @unchecked Sendable {
     }
 
     public func defaultMapping(headers: [String], preset: CSVPreset, walletID: UUID?) -> CSVImportMapping {
-        let dateColumn = header(
-            named: ["Дата і час операції", "Дата i час операції", "Дата операції", "Дата", "Date and time", "Date", "date"],
-            in: headers
-        ) ?? headers.first ?? ""
-        let amountColumn = header(named: ["Сума в грн", "Amount", "amount", "sum"], in: headers)
-            ?? header(matchingPrefix: ["Сума в валюті картки", "Card currency amount"], in: headers)
-        let debitColumn = header(named: ["Debit", "debit", "Витрати"], in: headers)
-        let creditColumn = header(named: ["Credit", "credit", "Надходження"], in: headers)
-        let typeColumn = header(named: ["Type", "type"], in: headers)
-        let walletColumn = header(named: ["Wallet", "wallet"], in: headers)
-        let isSignedAmount = amountColumn.map {
-            $0.range(of: "валюті картки", options: [.caseInsensitive, .diacriticInsensitive]) != nil
-                || $0.range(of: "card currency amount", options: [.caseInsensitive, .diacriticInsensitive]) != nil
-        } ?? false
-        let currencyColumn: String? = (preset == .monobank || (preset == .privatBank && isSignedAmount))
-            ? nil
-            : header(named: ["Currency", "currency", "Валюта", "Валюта картки"], in: headers)
-        let merchantColumn = header(
-            named: ["Деталі операції", "Опис операції", "Description", "description", "Merchant", "merchant", "Призначення"],
-            in: headers
-        )
-        let noteColumn = header(named: ["Comment", "comment", "Note", "note"], in: headers)
-        let categoryColumn = header(named: ["Категорія", "Category", "category", "Category name", "category name"], in: headers)
-        let mccColumn = header(named: ["MCC", "mcc"], in: headers)
-        let labelsColumn = header(named: ["Labels", "labels", "Tags"], in: headers)
-        let authorColumn = header(named: ["Author", "author"], in: headers)
-
-        return CSVImportMapping(
-            dateColumn: dateColumn,
-            amountColumn: amountColumn,
-            debitColumn: preset == .generic ? debitColumn : nil,
-            creditColumn: preset == .generic ? creditColumn : nil,
-            merchantColumn: merchantColumn,
-            noteColumn: noteColumn,
-            categoryColumn: categoryColumn,
-            labelsColumn: labelsColumn,
-            walletID: walletID,
-            defaultKind: (preset == .monobank || (preset == .privatBank && isSignedAmount)) ? .income : .expense,
-            typeColumn: typeColumn,
-            walletColumn: walletColumn,
-            currencyColumn: currencyColumn,
-            authorColumn: authorColumn,
-            mccColumn: mccColumn
-        )
+        defaultMapping(headers: headers, format: legacyFormat(for: preset), walletID: walletID)
     }
 
     public func exportCSV(query: TransactionQuery = .init()) throws -> String {
@@ -856,14 +834,21 @@ public final class CSVService: @unchecked Sendable {
         throw CashRunwayError.validation(L10n.string("Unsupported date format."))
     }
 
-    private func parseAmount(row: [String], mapping: CSVImportMapping, headerIndex: [String: Int]) throws -> Int64 {
+    private func parseAmount(row: [String], mapping: CSVImportMapping, headerIndex: [String: Int]) throws -> ParsedAmount {
         if let amountColumn = mapping.amountColumn {
-            return try MoneyFormatter.parseMinorUnits(cell(row, amountColumn, headerIndex))
+            return ParsedAmount(
+                signedMinor: try MoneyFormatter.parseMinorUnits(cell(row, amountColumn, headerIndex)),
+                inferredKind: nil
+            )
         }
         let debit = try? MoneyFormatter.parseMinorUnits(cell(row, mapping.debitColumn, headerIndex))
         let credit = try? MoneyFormatter.parseMinorUnits(cell(row, mapping.creditColumn, headerIndex))
-        if let debit, debit != 0 { return -abs(debit) }
-        if let credit, credit != 0 { return abs(credit) }
+        if let debit, debit != 0 {
+            return ParsedAmount(signedMinor: -abs(debit), inferredKind: .expense)
+        }
+        if let credit, credit != 0 {
+            return ParsedAmount(signedMinor: abs(credit), inferredKind: .income)
+        }
         throw CashRunwayError.validation(L10n.string("Could not parse amount."))
     }
 
@@ -871,7 +856,8 @@ public final class CSVService: @unchecked Sendable {
         row: [String],
         mapping: CSVImportMapping,
         headerIndex: [String: Int],
-        signedAmount: Int64
+        signedAmount: Int64,
+        inferredKind: TransactionDraft.Kind?
     ) -> TransactionDraft.Kind {
         let raw = cell(row, mapping.typeColumn, headerIndex).lowercased()
         if raw == "income" || raw == "inflow" || raw == "credit" {
@@ -882,6 +868,9 @@ public final class CSVService: @unchecked Sendable {
         }
         if raw == "transfer" {
             return .transfer
+        }
+        if let inferredKind {
+            return inferredKind
         }
         if signedAmount < 0 {
             return .expense
@@ -1260,6 +1249,34 @@ public final class CSVService: @unchecked Sendable {
             .genericBankCSV
         case .xlsx:
             .genericBankXLSX
+        }
+    }
+
+    private func legacyFormat(for preset: CSVPreset) -> BankStatementFormat {
+        switch preset {
+        case .cashRunwayWallet:
+            .cashRunwayCSV
+        case .monobank:
+            .monobankCSVv1
+        case .privatBank:
+            .privatBankCSVv1
+        case .generic:
+            .genericBankCSV
+        }
+    }
+
+    private func fingerprintNamespace(for format: BankStatementFormat) -> String {
+        switch format.id {
+        case BankStatementFormat.cashRunwayCSV.id:
+            "Cash Runway Wallet"
+        case BankStatementFormat.monobankCSVv1.id:
+            "Monobank"
+        case BankStatementFormat.privatBankCSVv1.id, BankStatementFormat.privatBankXLSXv1.id:
+            "PrivatBank"
+        case BankStatementFormat.genericBankCSV.id, BankStatementFormat.genericBankXLSX.id:
+            "Generic CSV"
+        default:
+            format.id
         }
     }
 

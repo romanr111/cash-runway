@@ -12,6 +12,7 @@ final class CSVImportCoordinator: Identifiable {
 
     var importData = Data()
     var importFileName = ""
+    var importFormat: BankStatementFormat = .genericBankCSV
     var importPreview = CSVImportPreview(headers: [], sampleRows: [], totalRows: 0)
     var importMapping = CSVImportMapping(
         dateColumn: "",

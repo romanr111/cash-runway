@@ -59,14 +59,64 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: static-analysis-logs
-          path: swiftlint.log
+        path: swiftlint.log
+        if-no-files-found: ignore
+
+  app-build:
+    name: App Build
+    runs-on: macos-26
+    timeout-minutes: 30
+    needs: static-analysis
+
+    steps:
+      - name: Check out PR branch
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - name: Pick iPhone simulator
+        id: simulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          if xcrun simctl list devices available | grep -q 'iPhone 17 ('; then
+            destination='platform=iOS Simulator,name=iPhone 17'
+          else
+            device_name="$(xcrun simctl list devices available | awk -F'[()]' '/iPhone/ && /Shutdown|Booted/ { sub(/^[[:space:]]+/, "", $1); print $1; exit }')"
+            if [[ -z "${device_name}" ]]; then
+              echo 'No available iPhone simulator found'
+              exit 1
+            fi
+            destination="platform=iOS Simulator,name=${device_name}"
+          fi
+          echo "destination=${destination}" >> "${GITHUB_OUTPUT}"
+          echo "Using ${destination}"
+
+      - name: Build app target
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project "${PROJECT}" \
+            -scheme "${SCHEME}" \
+            -sdk iphonesimulator \
+            -destination "${{ steps.simulator.outputs.destination }}" \
+            build 2>&1 | tee app-build.log
+
+      - name: Upload app build logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-build-logs
+          path: app-build.log
           if-no-files-found: ignore
 
   unit-tests:
     name: Unit Tests
     runs-on: macos-26
     timeout-minutes: 30
-    needs: static-analysis
+    needs: [static-analysis, app-build]
 
     steps:
       - name: Check out PR branch

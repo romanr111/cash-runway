@@ -643,17 +643,15 @@ public final class DatabaseManager: @unchecked Sendable {
             try db.execute(sql: "ALTER TABLE import_jobs ADD COLUMN source_format_id TEXT")
             try db.execute(sql: """
                 UPDATE import_jobs
-                SET source_format_id = CASE source_name
-                    WHEN 'Cash Runway Wallet' THEN 'cash-runway.csv.v1'
-                    WHEN 'Cash Runway Wallet CSV' THEN 'cash-runway.csv.v1'
-                    WHEN 'Monobank' THEN 'monobank.csv.v1'
-                    WHEN 'Monobank CSV' THEN 'monobank.csv.v1'
-                    WHEN 'PrivatBank' THEN 'privatbank.csv.v1'
-                    WHEN 'PrivatBank CSV' THEN 'privatbank.csv.v1'
-                    WHEN 'PrivatBank XLSX' THEN 'privatbank.xlsx.v1'
-                    WHEN 'Generic CSV' THEN 'generic-bank.csv.v1'
-                    WHEN 'Generic Bank CSV' THEN 'generic-bank.csv.v1'
-                    WHEN 'Generic Bank XLSX' THEN 'generic-bank.xlsx.v1'
+                SET source_format_id = CASE
+                    WHEN source_name IN ('Cash Runway Wallet', 'Cash Runway Wallet CSV') THEN 'cash-runway.csv.v1'
+                    WHEN source_name IN ('Monobank', 'Monobank CSV') THEN 'monobank.csv.v1'
+                    WHEN source_name = 'PrivatBank XLSX' THEN 'privatbank.xlsx.v1'
+                    WHEN source_name = 'PrivatBank' AND lower(file_name) LIKE '%.xlsx' THEN 'privatbank.xlsx.v1'
+                    WHEN source_name IN ('PrivatBank', 'PrivatBank CSV') THEN 'privatbank.csv.v1'
+                    WHEN source_name = 'Generic Bank XLSX' THEN 'generic-bank.xlsx.v1'
+                    WHEN source_name = 'Generic CSV' AND lower(file_name) LIKE '%.xlsx' THEN 'generic-bank.xlsx.v1'
+                    WHEN source_name IN ('Generic CSV', 'Generic Bank CSV') THEN 'generic-bank.csv.v1'
                     ELSE NULL
                 END
                 WHERE source_format_id IS NULL

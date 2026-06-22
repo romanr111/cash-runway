@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 import Testing
 @testable import CashRunwayCore
 
@@ -517,7 +518,7 @@ struct CSVIdempotencyTests {
             creditColumn: nil,
             merchantColumn: nil,
             noteColumn: "Note",
-            categoryColumn: nil,
+            categoryColumn: "Category",
             labelsColumn: nil,
             walletID: walletID,
             defaultKind: .expense
@@ -639,5 +640,100 @@ struct CSVIdempotencyTests {
         #expect(result.insertedTransactions == 1)
         let transaction = try #require(try repository.transactions().first { $0.merchant == "Shop" })
         #expect(transaction.categoryID == otherExpenseID)
+    }
+
+     @Test func importStatementMatchesHistoricalGenericCSVFingerprint() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let walletID = try #require(try repository.wallets().first?.id)
+        let otherExpenseID = try #require(try repository.categories(kind: .expense).first { $0.name == "Other Expense" }?.id)
+        let occurredAt = try #require(ISO8601DateFormatter().date(from: "2025-01-01T00:00:00Z"))
+        let transactionID = UUID()
+        let merchant = "Cafe Terminal"
+        let note = "Legacy row"
+        let fingerprint = historicalImportFingerprint(
+            sourceName: "Generic CSV",
+            walletID: walletID,
+            kind: .expense,
+            occurredAt: occurredAt,
+            amountMinor: 2450,
+            merchant: merchant,
+            note: note,
+            categoryName: "Other Expense",
+            currency: "UAH"
+        )
+        try repository.saveTransaction(TransactionDraft(
+            id: transactionID,
+            kind: .expense,
+            walletID: walletID,
+            amountMinor: 2450,
+            occurredAt: occurredAt,
+            categoryID: otherExpenseID,
+            merchant: merchant,
+            note: note,
+            source: .importCSV
+        ))
+        try repository.databaseManager.dbQueue.write { db in
+            try db.execute(
+                sql: "UPDATE transactions SET import_fingerprint = ? WHERE id = ?",
+                arguments: [fingerprint, transactionID.uuidString]
+            )
+        }
+        let service = CSVService(repository: repository)
+        let text = """
+        Date,Amount,Merchant,Category,Note,Currency
+        2025-01-01T00:00:00Z,-24.50,Cafe Terminal,Other Expense,Legacy row,UAH
+        """
+        let mapping = CSVImportMapping(
+            dateColumn: "Date",
+            amountColumn: "Amount",
+            debitColumn: nil,
+            creditColumn: nil,
+            merchantColumn: "Merchant",
+            noteColumn: "Note",
+            categoryColumn: nil,
+            labelsColumn: nil,
+            walletID: walletID,
+            defaultKind: .expense,
+            currencyColumn: "Currency"
+        )
+
+        let result = try service.importStatement(
+            normalizedData: Data(text.utf8),
+            fileName: "legacy.csv",
+            format: .genericBankCSV,
+            mapping: mapping
+        )
+
+        #expect(result.insertedTransactions == 0)
+        #expect(result.duplicateRows == 1)
+    }
+
+    private func historicalImportFingerprint(
+        sourceName: String,
+        walletID: UUID,
+        kind: TransactionDraft.Kind,
+        occurredAt: Date,
+        amountMinor: Int64,
+        merchant: String?,
+        note: String?,
+        categoryName: String?,
+        currency: String?
+    ) -> String {
+        let components = [
+            sourceName,
+            walletID.uuidString,
+            kind.rawValue,
+            ISO8601DateFormatter().string(from: occurredAt),
+            String(amountMinor),
+            (merchant ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+            (note ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+            (categoryName ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+            (currency ?? "").trimmingCharacters(in: .whitespacesAndNewlines).uppercased(),
+        ]
+        let input = components.joined(separator: "|")
+        let hash = SHA256.hash(data: Data(input.utf8))
+        return hash.map { byte in String(format: "%02x", byte) }.joined()
     }
 }

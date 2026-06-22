@@ -118,7 +118,7 @@ struct PrivatBankXLSXImportTests {
         """
         let preview = try service.preview(data: Data(text.utf8))
         #expect(service.detectPreset(headers: preview.headers) == .privatBank)
-        let mapping = service.defaultMapping(headers: preview.headers, preset: .privatBank, walletID: walletID)
+        let mapping = service.defaultMapping(headers: preview.headers, format: .privatBankCSVv1, walletID: walletID)
         #expect(mapping.defaultKind == .expense)
         #expect(mapping.currencyColumn == "Валюта")
 

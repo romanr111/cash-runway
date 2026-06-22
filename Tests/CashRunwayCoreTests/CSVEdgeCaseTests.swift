@@ -7,7 +7,8 @@ struct CSVEdgeCaseTests {
     @Test(arguments: [
         (["Дата операції", "Опис операції", "Сума в ГРН"], CSVPreset.privatBank),
         (["Дата операції", "Сума в ГРН"], CSVPreset.generic),
-        (["Date", "Description", "MCC", "Amount"], CSVPreset.monobank),
+        (["Date and time", "Description", "MCC", "Card currency amount, (UAH)"], CSVPreset.monobank),
+        (["Date", "Description", "MCC", "Amount"], CSVPreset.generic),
         (["description", "mcc", "amount"], CSVPreset.generic),
         (["foo", "bar"], CSVPreset.generic),
     ])
@@ -69,6 +70,8 @@ struct CSVEdgeCaseTests {
         )
         let result = try service.importCSV(data: Data(text.utf8), fileName: "test.csv", mapping: mapping)
         #expect(result.insertedTransactions == 2)
+        let transactions = try repository.transactions().sorted { $0.occurredAt < $1.occurredAt }
+        #expect(transactions.map(\.kind) == [.expense, .income])
     }
 
     @Test func importWithExplicitTypeColumn() throws {
@@ -253,7 +256,7 @@ struct CSVEdgeCaseTests {
         #expect(try repository.categories(kind: .expense).contains { $0.name == "Restaurants" } == false)
     }
 
-     func weakMonobankHeadersFallBackToGenericBankCSV() throws {
+     @Test func weakMonobankHeadersFallBackToGenericBankCSV() throws {
         let repository = try TestSupport.makeRepository()
         let service = CSVService(repository: repository)
 
@@ -263,7 +266,7 @@ struct CSVEdgeCaseTests {
         #expect(service.detectPreset(headers: ["Description", "MCC"]) == .generic)
     }
 
-     func unknownXLSXHeadersFallBackToGenericBankXLSX() throws {
+     @Test func unknownXLSXHeadersFallBackToGenericBankXLSX() throws {
         let repository = try TestSupport.makeRepository()
         let service = CSVService(repository: repository)
 
@@ -272,7 +275,7 @@ struct CSVEdgeCaseTests {
         #expect(format == .genericBankXLSX)
     }
 
-     func cashRunwayBOMHeaderDetectsWalletExport() throws {
+     @Test func cashRunwayBOMHeaderDetectsWalletExport() throws {
         let repository = try TestSupport.makeRepository()
         let service = CSVService(repository: repository)
         let headers = ["\u{feff}Date", "Wallet", "Type", "Category name", "Amount", "Currency", "Note", "Labels", "Author"]
@@ -281,7 +284,7 @@ struct CSVEdgeCaseTests {
         #expect(service.detectPreset(headers: headers) == .cashRunwayWallet)
     }
 
-     func genericXLSXImportRecordsGenericXLSXSourceFormat() throws {
+     @Test func genericXLSXImportRecordsGenericXLSXSourceFormat() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
         try TestSupport.seedFixtureWallets(into: repository)
