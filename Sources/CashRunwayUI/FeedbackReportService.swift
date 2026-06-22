@@ -23,6 +23,10 @@ struct ConfiguredFeedbackReportService: FeedbackReportSubmitting {
                     env[ReportingKeychainSecretProvider.environmentSecretKey] = plist
                 }
                 return env
+            },
+            bundledSecret: {
+                guard !AppReportingSecrets.isPlaceholder else { return nil }
+                return AppReportingSecrets.clientSecret()
             }
         ),
         diagnosticsProvider: SafeDiagnosticsProvider = SafeDiagnosticsProvider()

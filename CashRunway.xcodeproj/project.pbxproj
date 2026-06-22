@@ -21,7 +21,7 @@
 		A00100010001000100010027 /* Sources/CashRunwayCore/L10n.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010027 /* Sources/CashRunwayCore/L10n.swift */; };
 		A00100010001000100010028 /* Sources/CashRunwayCore/FeedbackReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010028 /* Sources/CashRunwayCore/FeedbackReport.swift */; };
 		A00100010001000100010050 /* Sources/CashRunwayCore/ReportingSecrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010050 /* Sources/CashRunwayCore/ReportingSecrets.swift */; };
-		A00100010001000100010051 /* Sources/CashRunwayCore/ReportingSecrets.generated.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010051 /* Sources/CashRunwayCore/ReportingSecrets.generated.swift */; };
+		A00100010001000100010051 /* AppHost/AppReportingSecrets.generated.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010051 /* AppHost/AppReportingSecrets.generated.swift */; };
 		A00200010001000100010027 /* Sources/CashRunwayCore/L10n.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayCore/L10n.swift; sourceTree = "<group>"; };
 		A0010001000100010001000C /* Sources/CashRunwayCore/Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0020001000100010001000F /* Sources/CashRunwayCore/Models.swift */; };
 		A0010001000100010001000D /* Sources/CashRunwayCore/DatabaseManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010010 /* Sources/CashRunwayCore/DatabaseManager.swift */; };
@@ -110,7 +110,7 @@
 		A0020001000100010001002E /* AppHost/uk.lproj/InfoPlist.strings */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = InfoPlist.strings; path = AppHost/uk.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		A00200010001000100010028 /* Sources/CashRunwayCore/FeedbackReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayCore/FeedbackReport.swift; sourceTree = "<group>"; };
 		A00200010001000100010050 /* Sources/CashRunwayCore/ReportingSecrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayCore/ReportingSecrets.swift; sourceTree = "<group>"; };
-		A00200010001000100010051 /* Sources/CashRunwayCore/ReportingSecrets.generated.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayCore/ReportingSecrets.generated.swift; sourceTree = "<group>"; };
+		A00200010001000100010051 /* AppHost/AppReportingSecrets.generated.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppHost/AppReportingSecrets.generated.swift; sourceTree = "<group>"; };
 		A00200010001000100010029 /* Sources/CashRunwayUI/FeedbackReportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayUI/FeedbackReportService.swift; sourceTree = "<group>"; };
 		A0020001000100010001002A /* Sources/CashRunwayUI/FeedbackReportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayUI/FeedbackReportView.swift; sourceTree = "<group>"; };
 		A0020001000100010001002C /* Sources/CashRunwayUI/FeedbackReportScreenshotPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayUI/FeedbackReportScreenshotPicker.swift; sourceTree = "<group>"; };
@@ -381,7 +381,7 @@
 			outputFileListPaths = (
 			);
 				outputPaths = (
-					"$(SRCROOT)/Sources/CashRunwayCore/ReportingSecrets.generated.swift",
+					"$(SRCROOT)/AppHost/AppReportingSecrets.generated.swift",
 				);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -408,7 +408,7 @@
 					A00100010001000100010027 /* Sources/CashRunwayCore/L10n.swift in Sources */,
 					A00100010001000100010028 /* Sources/CashRunwayCore/FeedbackReport.swift in Sources */,
 					A00100010001000100010050 /* Sources/CashRunwayCore/ReportingSecrets.swift in Sources */,
-					A00100010001000100010051 /* Sources/CashRunwayCore/ReportingSecrets.generated.swift in Sources */,
+					A00100010001000100010051 /* AppHost/AppReportingSecrets.generated.swift in Sources */,
 					A0010001000100010001000C /* Sources/CashRunwayCore/Models.swift in Sources */,
 				A0010001000100010001000D /* Sources/CashRunwayCore/DatabaseManager.swift in Sources */,
 				A0010001000100010001000E /* Sources/CashRunwayCore/CashRunwayRepository.swift in Sources */,

@@ -155,16 +155,6 @@ struct ReportIssueTests {
         #expect(firstHash.hasPrefix("sha256:"))
     }
 
-    @Test func reportingKeychainSecretProviderReadsStoredSecret() throws {
-        let keychain = TestKeychainStore()
-        let generatedSecret = ReportingSecrets.clientSecret()
-        try keychain.write(Data(generatedSecret.utf8), account: ReportingKeychainSecretProvider.keychainAccount)
-
-        let provider = ReportingKeychainSecretProvider(keychain: keychain, isPlaceholder: false)
-
-        #expect(provider.clientSecret() == generatedSecret)
-    }
-
     #if DEBUG
     @Test func reportingKeychainSecretProviderStoresDebugEnvironmentSecret() throws {
         let keychain = TestKeychainStore()
@@ -195,6 +185,99 @@ struct ReportIssueTests {
         #expect(String(data: stored, encoding: .utf8) == "fresh-debug-secret")
     }
     #endif
+
+    @Test func reportingKeychainSecretProviderStoresBundledSecret() throws {
+        let keychain = TestKeychainStore()
+        let provider = ReportingKeychainSecretProvider(
+            keychain: keychain,
+            bundledSecret: { "bundled-secret" }
+        )
+
+        #expect(provider.clientSecret() == "bundled-secret")
+        let stored = try #require(try keychain.read(account: ReportingKeychainSecretProvider.keychainAccount))
+        #expect(String(data: stored, encoding: .utf8) == "bundled-secret")
+    }
+
+    @Test func reportingKeychainSecretProviderReusesMatchingKeychainValue() throws {
+        let keychain = TestKeychainStore()
+        try keychain.write(Data("bundled-secret".utf8), account: ReportingKeychainSecretProvider.keychainAccount)
+
+        let provider = ReportingKeychainSecretProvider(
+            keychain: keychain,
+            bundledSecret: { "bundled-secret" }
+        )
+
+        #expect(provider.clientSecret() == "bundled-secret")
+    }
+
+    @Test func reportingKeychainSecretProviderRotatesStaleKeychainValue() throws {
+        let keychain = TestKeychainStore()
+        try keychain.write(Data("stale-secret".utf8), account: ReportingKeychainSecretProvider.keychainAccount)
+
+        let provider = ReportingKeychainSecretProvider(
+            keychain: keychain,
+            bundledSecret: { "fresh-secret" }
+        )
+
+        #expect(provider.clientSecret() == "fresh-secret")
+        let stored = try #require(try keychain.read(account: ReportingKeychainSecretProvider.keychainAccount))
+        #expect(String(data: stored, encoding: .utf8) == "fresh-secret")
+    }
+
+    @Test func reportingKeychainSecretProviderClearsStaleSecretWhenBundledIsNil() throws {
+        let keychain = TestKeychainStore()
+        try keychain.write(Data("stale-secret".utf8), account: ReportingKeychainSecretProvider.keychainAccount)
+
+        let provider = ReportingKeychainSecretProvider(
+            keychain: keychain,
+            bundledSecret: { nil }
+        )
+
+        #expect(provider.clientSecret() == nil)
+        #expect(try keychain.read(account: ReportingKeychainSecretProvider.keychainAccount) == nil)
+    }
+
+    @Test func reportingKeychainSecretProviderClearsStaleSecretWhenBundledIsEmpty() throws {
+        let keychain = TestKeychainStore()
+        try keychain.write(Data("stale-secret".utf8), account: ReportingKeychainSecretProvider.keychainAccount)
+
+        let provider = ReportingKeychainSecretProvider(
+            keychain: keychain,
+            bundledSecret: { "" }
+        )
+
+        #expect(provider.clientSecret() == nil)
+        #expect(try keychain.read(account: ReportingKeychainSecretProvider.keychainAccount) == nil)
+    }
+
+    @Test func reportingKeychainSecretProviderReturnsNilWithMissingBundledSecret() {
+        let keychain = TestKeychainStore()
+        let provider = ReportingKeychainSecretProvider(
+            keychain: keychain,
+            bundledSecret: { nil }
+        )
+
+        #expect(provider.clientSecret() == nil)
+    }
+
+    @Test func reportingKeychainSecretProviderReturnsNilWithEmptyBundledSecret() {
+        let keychain = TestKeychainStore()
+        let provider = ReportingKeychainSecretProvider(
+            keychain: keychain,
+            bundledSecret: { "" }
+        )
+
+        #expect(provider.clientSecret() == nil)
+    }
+
+    @Test func reportingKeychainSecretProviderReturnsNilWithoutSideEffectsWhenUnconfigured() {
+        let keychain = TestKeychainStore()
+        let provider = ReportingKeychainSecretProvider(keychain: keychain)
+
+        #expect(provider.clientSecret() == nil)
+        let data = try? keychain.read(account: ReportingKeychainSecretProvider.keychainAccount)
+        #expect(data == nil)
+    }
 
     @Test func serviceHandlesCreatedResponse() async throws {
         let service = ReportIssueService(
