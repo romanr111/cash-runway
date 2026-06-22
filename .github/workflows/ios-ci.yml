@@ -75,24 +75,6 @@ jobs:
           repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
-      - name: Pick iPhone simulator
-        id: simulator
-        shell: bash
-        run: |
-          set -euo pipefail
-          if xcrun simctl list devices available | grep -q 'iPhone 17 ('; then
-            destination='platform=iOS Simulator,name=iPhone 17'
-          else
-            device_name="$(xcrun simctl list devices available | awk -F'[()]' '/iPhone/ && /Shutdown|Booted/ { sub(/^[[:space:]]+/, "", $1); print $1; exit }')"
-            if [[ -z "${device_name}" ]]; then
-              echo 'No available iPhone simulator found'
-              exit 1
-            fi
-            destination="platform=iOS Simulator,name=${device_name}"
-          fi
-          echo "destination=${destination}" >> "${GITHUB_OUTPUT}"
-          echo "Using ${destination}"
-
       - name: Build app target
         shell: bash
         run: |
@@ -101,7 +83,7 @@ jobs:
             -project "${PROJECT}" \
             -scheme "${SCHEME}" \
             -sdk iphonesimulator \
-            -destination "${{ steps.simulator.outputs.destination }}" \
+            -destination 'platform=iOS Simulator,name=iPhone 17' \
             build 2>&1 | tee app-build.log
 
       - name: Upload app build logs
