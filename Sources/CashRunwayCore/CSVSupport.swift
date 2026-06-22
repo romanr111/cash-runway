@@ -608,7 +608,7 @@ public final class CSVService: @unchecked Sendable {
         if signedAmount < 0 {
             return .expense
         }
-        if signedAmount > 0, mapping.typeColumn != nil {
+        if signedAmount > 0, mapping.typeColumn != nil || (mapping.amountColumn == nil && (mapping.debitColumn != nil || mapping.creditColumn != nil)) {
             return .income
         }
         return mapping.defaultKind
