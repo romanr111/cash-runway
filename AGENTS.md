@@ -19,6 +19,10 @@ Swift/SwiftUI/GRDB iOS app with a Node/TypeScript reporting API.
 - Keep repo validation, runtime smoke tests, backend/API reachability, and
   release readiness as separate status buckets. Green checks do not imply the
   app launched, integrations worked, or release gates are complete.
+- Tests that reference `ReportingSecrets`, `ProcessInfo.processInfo.environment`,
+  `#if DEBUG`, or any generated/compiled-time state must inject those
+  dependencies explicitly (e.g., `isPlaceholder:` parameter). Tests must not
+  silently depend on environment state that differs between dev and CI.
 - For SideStore or release work, keep the physical-device rehearsal as an
   explicit manual gate. Do not describe release readiness as complete until that
   rehearsal has actually passed.
@@ -32,6 +36,10 @@ Swift/SwiftUI/GRDB iOS app with a Node/TypeScript reporting API.
 - For Swift validation, prefer `just check-unit-parallel`,
   `just check-integration`, and `just check-perf` before falling back to raw
   `just test` arguments.
+  **Exception**: before pushing changes that touch `ReportingSecrets*`,
+  `ReportingConfig*`, `generate-reporting-secrets*`, or any pipeline/deploy
+  workflow, run `just check` (the full CI gate, not just unit tests) to catch
+  environment-dependent failures early.
 - If SwiftPM appears blocked by stale build state or lock contention, retry once
   with `just test-isolated` or `just check-isolated`.
 - For PR handoff, use `just pr-status <PR>` for the status snapshot and

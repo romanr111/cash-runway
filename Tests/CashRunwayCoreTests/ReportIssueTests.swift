@@ -157,11 +157,12 @@ struct ReportIssueTests {
 
     @Test func reportingKeychainSecretProviderReadsStoredSecret() throws {
         let keychain = TestKeychainStore()
-        try keychain.write(Data("stored-secret".utf8), account: ReportingKeychainSecretProvider.keychainAccount)
+        let generatedSecret = ReportingSecrets.clientSecret()
+        try keychain.write(Data(generatedSecret.utf8), account: ReportingKeychainSecretProvider.keychainAccount)
 
-        let provider = ReportingKeychainSecretProvider(keychain: keychain)
+        let provider = ReportingKeychainSecretProvider(keychain: keychain, isPlaceholder: false)
 
-        #expect(provider.clientSecret() == "stored-secret")
+        #expect(provider.clientSecret() == generatedSecret)
     }
 
     #if DEBUG

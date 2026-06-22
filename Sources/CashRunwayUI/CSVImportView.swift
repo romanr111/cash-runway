@@ -209,7 +209,7 @@ struct CSVImportView: View {
         switch coordinator.importMapping.categoryMappingDisplayMode(for: coordinator.importFormat) {
         case .autoBankRules:
             summaryRow("Category", value: L10n.string("Auto: MCC / bank rules"))
-        case .sourceColumn(_):
+        case .sourceColumn:
             optionalPicker("Category", selection: $coordinator.importMapping.categoryColumn)
         }
     }
