@@ -499,9 +499,14 @@ public final class CashRunwayAppModel {
     }
 
     @discardableResult
-    public func importCSV(data: Data, fileName: String, mapping: CSVImportMapping) async throws -> CSVImportResult {
+    public func importCSV(
+        data: Data,
+        fileName: String,
+        mapping: CSVImportMapping,
+        rowFilter: CSVImportRowFilter = .allTransactions
+    ) async throws -> CSVImportResult {
         do {
-            let result = try csvService.importCSV(data: data, fileName: fileName, mapping: mapping)
+            let result = try csvService.importCSV(data: data, fileName: fileName, mapping: mapping, rowFilter: rowFilter)
             await reloadAll()
             errorMessage = nil
             return result
