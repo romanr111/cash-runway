@@ -379,4 +379,66 @@ struct CSVEdgeCaseTests {
         #expect(importedDraft.categoryID == groceriesID)
         #expect(try repository.categories(kind: .expense).contains { $0.name == "Restaurants" } == false)
     }
+
+    @Test func importExpensesOnlySkipsMalformedIncomeRow() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let walletID = try #require(try repository.wallets().first?.id)
+        let service = CSVService(repository: repository)
+        let text = "Date,Type,Amount\n,Income,100\n2025-01-02,Expense,50"
+        let mapping = CSVImportMapping(
+            dateColumn: "Date",
+            amountColumn: "Amount",
+            debitColumn: nil,
+            creditColumn: nil,
+            merchantColumn: nil,
+            noteColumn: nil,
+            categoryColumn: nil,
+            labelsColumn: nil,
+            walletID: walletID,
+            defaultKind: .expense,
+            typeColumn: "Type"
+        )
+        let result = try service.importCSV(
+            data: Data(text.utf8),
+            fileName: "test.csv",
+            mapping: mapping,
+            rowFilter: .expensesOnly
+        )
+        #expect(result.insertedTransactions == 1)
+        #expect(result.invalidRows == 0)
+        #expect(result.rowErrors.isEmpty)
+    }
+
+    @Test func importAllTransactionsFlagsMalformedIncomeRow() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let walletID = try #require(try repository.wallets().first?.id)
+        let service = CSVService(repository: repository)
+        let text = "Date,Type,Amount\n,Income,100\n2025-01-02,Expense,50"
+        let mapping = CSVImportMapping(
+            dateColumn: "Date",
+            amountColumn: "Amount",
+            debitColumn: nil,
+            creditColumn: nil,
+            merchantColumn: nil,
+            noteColumn: nil,
+            categoryColumn: nil,
+            labelsColumn: nil,
+            walletID: walletID,
+            defaultKind: .expense,
+            typeColumn: "Type"
+        )
+        let result = try service.importCSV(
+            data: Data(text.utf8),
+            fileName: "test.csv",
+            mapping: mapping,
+            rowFilter: .allTransactions
+        )
+        #expect(result.insertedTransactions == 1)
+        #expect(result.invalidRows == 1)
+        #expect(result.rowErrors.count == 1)
+    }
 }

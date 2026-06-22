@@ -152,6 +152,10 @@ public final class CSVService: @unchecked Sendable {
             guard preparedRows.count < limit else { break }
 
             do {
+                if let explicitKind = explicitKind(row: row, mapping: mapping, headerIndex: headerIndex),
+                   !rowFilter.includes(explicitKind) {
+                    continue
+                }
                 let date = try parseDate(from: cell(row, mapping.dateColumn, headerIndex))
                 try validateCurrency(row: row, mapping: mapping, headerIndex: headerIndex)
                 let signedAmount = try parseAmount(row: row, mapping: mapping, headerIndex: headerIndex)
@@ -258,6 +262,10 @@ public final class CSVService: @unchecked Sendable {
 
         for (offset, row) in rows.dropFirst().enumerated() {
             do {
+                if let explicitKind = explicitKind(row: row, mapping: mapping, headerIndex: headerIndex),
+                   !rowFilter.includes(explicitKind) {
+                    continue
+                }
                 let date = try parseDate(from: cell(row, mapping.dateColumn, headerIndex))
                 try validateCurrency(row: row, mapping: mapping, headerIndex: headerIndex)
                 let signedAmount = try parseAmount(row: row, mapping: mapping, headerIndex: headerIndex)
@@ -589,21 +597,22 @@ public final class CSVService: @unchecked Sendable {
         throw CashRunwayError.validation(L10n.string("Could not parse amount."))
     }
 
+    private func explicitKind(row: [String], mapping: CSVImportMapping, headerIndex: [String: Int]) -> TransactionDraft.Kind? {
+        let raw = cell(row, mapping.typeColumn, headerIndex).lowercased()
+        if raw == "income" || raw == "inflow" || raw == "credit" { return .income }
+        if raw == "expense" || raw == "outflow" || raw == "debit" { return .expense }
+        if raw == "transfer" { return .transfer }
+        return nil
+    }
+
     private func parseKind(
         row: [String],
         mapping: CSVImportMapping,
         headerIndex: [String: Int],
         signedAmount: Int64
     ) -> TransactionDraft.Kind {
-        let raw = cell(row, mapping.typeColumn, headerIndex).lowercased()
-        if raw == "income" || raw == "inflow" || raw == "credit" {
-            return .income
-        }
-        if raw == "expense" || raw == "outflow" || raw == "debit" {
-            return .expense
-        }
-        if raw == "transfer" {
-            return .transfer
+        if let explicit = explicitKind(row: row, mapping: mapping, headerIndex: headerIndex) {
+            return explicit
         }
         if signedAmount < 0 {
             return .expense
