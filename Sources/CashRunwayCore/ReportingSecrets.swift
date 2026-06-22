@@ -24,22 +24,25 @@ public struct ReportingKeychainSecretProvider: Sendable {
         }
         #endif
 
+        if ReportingSecrets.isPlaceholder {
+            clearSecret()
+            return nil
+        }
+
+        let generatedSecret = ReportingSecrets.clientSecret()
+        guard !generatedSecret.isEmpty else {
+            return nil
+        }
+
         if let existing = try? keychain.read(account: Self.keychainAccount),
            let secret = String(data: existing, encoding: .utf8),
-           !secret.isEmpty {
+           !secret.isEmpty,
+           secret == generatedSecret {
             return secret
         }
 
-        guard !ReportingSecrets.isPlaceholder else {
-            return nil
-        }
-
-        let secret = ReportingSecrets.clientSecret()
-        guard !secret.isEmpty else {
-            return nil
-        }
-        try? keychain.write(Data(secret.utf8), account: Self.keychainAccount)
-        return secret
+        try? keychain.write(Data(generatedSecret.utf8), account: Self.keychainAccount)
+        return generatedSecret
     }
 
     #if DEBUG
