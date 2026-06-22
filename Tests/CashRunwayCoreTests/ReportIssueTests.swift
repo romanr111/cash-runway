@@ -159,7 +159,7 @@ struct ReportIssueTests {
         let keychain = TestKeychainStore()
         try keychain.write(Data("stored-secret".utf8), account: ReportingKeychainSecretProvider.keychainAccount)
 
-        let provider = ReportingKeychainSecretProvider(keychain: keychain)
+        let provider = ReportingKeychainSecretProvider(keychain: keychain, isPlaceholder: true)
 
         #expect(provider.clientSecret() == "stored-secret")
     }

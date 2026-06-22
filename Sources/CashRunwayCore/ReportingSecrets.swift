@@ -7,13 +7,16 @@ public struct ReportingKeychainSecretProvider: Sendable {
 
     private let keychain: any KeychainStoring
     private let environment: @Sendable () -> [String: String]
+    private let isPlaceholder: Bool
 
     public init(
         keychain: any KeychainStoring = KeychainStore(service: keychainService),
-        environment: @escaping @Sendable () -> [String: String] = { ProcessInfo.processInfo.environment }
+        environment: @escaping @Sendable () -> [String: String] = { ProcessInfo.processInfo.environment },
+        isPlaceholder: Bool = ReportingSecrets.isPlaceholder
     ) {
         self.keychain = keychain
         self.environment = environment
+        self.isPlaceholder = isPlaceholder
     }
 
     public func clientSecret() -> String? {
@@ -24,7 +27,7 @@ public struct ReportingKeychainSecretProvider: Sendable {
         }
         #endif
 
-        if ReportingSecrets.isPlaceholder {
+        if isPlaceholder {
             clearSecret()
             return nil
         }
