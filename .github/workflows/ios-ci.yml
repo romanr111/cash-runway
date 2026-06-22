@@ -39,19 +39,9 @@ jobs:
           repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
-      - name: Verify Xcode target membership for CashRunwayCore
+      - name: Verify CashRunwayCore module wiring
         shell: bash
-        run: |
-          set -euo pipefail
-          find Sources/CashRunwayCore -name "*.swift" | sort > /tmp/canonical.txt
-          grep -oE 'Sources/CashRunwayCore/[^[:space:];"]+\.swift' CashRunway.xcodeproj/project.pbxproj | sort -u > /tmp/xcode.txt
-          missing=$(comm -23 /tmp/canonical.txt /tmp/xcode.txt || true)
-          if [[ -n "$missing" ]]; then
-            echo "::error::The following CashRunwayCore source files are missing from the Xcode app target build phase:"
-            echo "$missing"
-            exit 1
-          fi
-          echo "OK: All CashRunwayCore source files have Xcode target membership."
+        run: Scripts/check-core-module-wiring.sh
 
   static-analysis:
     name: Static Analysis

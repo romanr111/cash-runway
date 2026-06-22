@@ -1,35 +1,39 @@
-Goal: Deduplicate and Modularize CashRunwayCore — Phase 1
+Goal: Deduplicate and Modularize CashRunwayCore — Phase 2B (in progress)
 
-Branch: `codex/dedup-core-module`
+Branch: `codex/core-reporting-config-extraction`
 Worktree: `/Users/roman/.codex/worktrees/cash-runway-dedup-core`
 
-Structural changes:
-- Root `Package.swift` defines `CashRunwayCore` target directly with GRDB + CoreXLSX dependencies.
-- Nested `Modules/CashRunwayCorePackage/` deleted.
-- `Scripts/mirror-core.sh` deleted.
-- `Scripts/generate-reporting-secrets.swift` writes only to canonical tree.
-- Xcode build phase updated to single output path.
-- Coverage configs (`agent-validate.sh`, `coverage.sh`, `ios-nightly.yml`) use `/Sources/CashRunwayCore/` path with zero-files guard.
-- `justfile` updated (mirror-core removed).
-- `AGENTS.md`, `ios.md`, `validation.md`, `worktrees.md` updated with canonical tree rule.
-- `.swiftlint.yml` updated.
-- Pre-flight script now validates Xcode target membership for all CashRunwayCore files.
+PR 2A (extract reporting configuration) — completed and pushed:
+- `ReportingKeychainSecretProvider` now accepts injected `bundledSecret`.
+- Generated file moved from `Sources/CashRunwayCore/` to `AppHost/`.
+- Enum renamed `ReportingSecrets` -> `AppReportingSecrets`.
+- Xcode build phase, `.swiftlint.yml`, and `reporting-api/README.md` updated.
+- 5 new tests covering precedence, persistence, and nil/empty handling.
+- 385 Swift tests pass; Xcode build passes.
+- Draft PR #69 created targeting PR #66 branch.
 
-CI / dependency locking:
-- `.gitignore` no longer ignores `Package.resolved`.
-- Root `Package.resolved` and Xcode workspace `Package.resolved` committed.
-- Added `source-membership-check` and `app-build` jobs to `.github/workflows/ios-ci.yml`.
-- Unit tests, integration tests, and app build now run in parallel after static analysis.
+PR 2B (consume CashRunwayCore package product) — in progress:
+- `Package.swift` now exposes `CashRunwayCore` library product.
+- Xcode app target:
+  - Removed all direct `Sources/CashRunwayCore/*.swift` entries from Sources build phase.
+  - Removed direct CoreXLSX dependency from app target.
+  - Kept GRDB directly linked (AppHost debug recovery code uses GRDB symbols).
+  - Added `CashRunwayCore` local package product dependency to Frameworks.
+- Removed `#if canImport(CashRunwayCore)` guards; normalized to explicit imports.
+- Made narrow access-control fixes for module boundary:
+  - `DatabaseManager.init(keychain:)` → `public`
+  - `ReportIssueResponse` gained explicit `public init`
+  - `CSVImportPreview` gained explicit `public init`
+- Fixed type-ambiguity (`CashRunwayCore.Category`/`Label`, `Date.now`, `CategoryKind.expense`).
+- Xcode Debug simulator build **BUILD SUCCEEDED**.
+- `Scripts/pre-flight.sh` and `.github/workflows/ios-ci.yml` updated to validate
+  the Phase 2B invariants (no direct Core compilation + CashRunwayCore linked).
+- Added `Scripts/verify-pbxproj.sh` for fast pbxproj corruption detection.
+- `AGENTS.md` updated with Xcode Project Safety section.
 
-Validation receipts (after rebase onto origin/main):
-- `swift build --target CashRunwayCore` — BUILD SUCCEEDED
-- `just build` (Xcode simulator) — BUILD SUCCEEDED
-- `just lint` — 1 pre-existing `empty_enum_arguments` in `CSVImportView.swift` (out of scope)
-- `swift test --enable-code-coverage` — 380 tests, 35 suites passed
-- `Scripts/coverage.sh` — 88.78% (7781 / 8764 lines), threshold 85% met; Core files found successfully.
-- Source membership check — all 14 canonical files present in Xcode app target.
-- Rebase preserved newest canonical `CSVSupport.swift` and tests from `main`.
-
-Known follow-ups:
-- Root SPM and Xcode workspace `Package.resolved` currently pin different SQLCipher versions (4.15.0 vs 4.14.0). This pre-existing divergence on `main` remains; a follow-up should reconcile them.
-- `empty_enum_arguments` lint warning in `CSVImportView.swift` is pre-existing.
+Still to complete:
+- Reconcile root SPM `Package.resolved` (SQLCipher 4.15.0) with Xcode workspace
+  `Package.resolved` (SQLCipher 4.14.0).
+- Run `swift test` and `just lint` validation.
+- Run Release configuration Xcode build.
+- Commit remaining changes and create/update draft PR.
