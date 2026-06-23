@@ -113,8 +113,8 @@ private struct BankStatementDefaultMapping: Sendable {
     var dateColumns: [String] = []
     var amountColumns: [String] = []
     var amountPrefixes: [String] = []
-    var debitColumns: [String] = ["Debit", "debit"]
-    var creditColumns: [String] = ["Credit", "credit"]
+    var debitColumns: [String] = ["Debit", "debit", "Витрати"]
+    var creditColumns: [String] = ["Credit", "credit", "Надходження"]
     var merchantColumns: [String] = []
     var noteColumns: [String] = []
     var categoryColumns: [String] = []
@@ -309,7 +309,7 @@ public final class CSVService: @unchecked Sendable {
                 currencyColumns: ["Currency", "currency", "Валюта", "Валюта картки"],
                 authorColumns: ["Author", "author"],
                 mccColumns: ["MCC", "mcc"],
-                defaultKind: .income,
+                defaultKind: .expense,
                 omitCurrencyForSignedAmount: true
             )
         ),
@@ -608,7 +608,7 @@ do {
                 )
                 let legacyFingerprint: String?
                 switch format.role {
-                case .genericBankStatement where mapping.categoryColumn == nil:
+                case .genericBankStatement where rawCategoryName == nil:
                     legacyFingerprint = importFingerprint(
                         .init(
                             sourceName: fingerprintSourceName,
@@ -691,8 +691,8 @@ do {
             ? nil
             : header(named: defaults.currencyColumns, in: headers)
         let effectiveDefaultKind: TransactionDraft.Kind
-        let isPrivatBankSignedCard = format.role == .bankStatement(.privatBank) && format.id == "privatbank.csv.v1" && format.fileKind == .csv && isSignedAmount
-        if isPrivatBankSignedCard {
+        let isPrivatBankSignedAmount = format.role == .bankStatement(.privatBank) && isSignedAmount
+        if isPrivatBankSignedAmount {
             effectiveDefaultKind = .income
         } else {
             effectiveDefaultKind = defaults.defaultKind

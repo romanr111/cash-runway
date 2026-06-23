@@ -227,4 +227,24 @@ struct PrivatBankXLSXImportTests {
         let transaction = try #require(try repository.transactions().first)
         #expect(transaction.kind == .expense)
     }
+
+    @Test func privatBankXLSXUnsignedGryvnaPositiveDefaultsToExpense() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let walletID = try #require(try repository.wallets().first?.id)
+        let service = CSVService(repository: repository)
+        let text = """
+        Дата,Категорія,Картка,Опис операції,Сума в грн,Валюта картки,Сума транзакції,Валюта транзакції,Залишок на кінець періоду,Валюта залишку
+        16.06.2026,Дохід,1234,Test Income,500.00,UAH,500.00,UAH,10000.00,UAH
+        """
+        let mapping = service.defaultMapping(headers: privatBankXLSXHeaders, format: .privatBankXLSXv1, walletID: walletID)
+        #expect(mapping.defaultKind == .expense, "Unsigned Сума в грн should default to expense")
+
+        let result = try service.importCSV(data: Data(text.utf8), fileName: "xlsx-gryvna.csv", mapping: mapping)
+
+        #expect(result.insertedTransactions == 1)
+        let transaction = try #require(try repository.transactions().first)
+        #expect(transaction.kind == .expense)
+    }
 }

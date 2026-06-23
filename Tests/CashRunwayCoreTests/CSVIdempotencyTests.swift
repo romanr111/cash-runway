@@ -642,75 +642,7 @@ struct CSVIdempotencyTests {
         #expect(transaction.categoryID == otherExpenseID)
     }
 
-     @Test func importStatementMatchesHistoricalGenericCSVFingerprint() throws {
-        let repository = try TestSupport.makeRepository()
-        try repository.seedIfNeeded()
-        try TestSupport.seedFixtureWallets(into: repository)
-        let walletID = try #require(try repository.wallets().first?.id)
-        let otherExpenseID = try #require(try repository.categories(kind: .expense).first { $0.name == "Other Expense" }?.id)
-        let occurredAt = try #require(ISO8601DateFormatter().date(from: "2025-01-01T00:00:00Z"))
-        let transactionID = UUID()
-        let merchant = "Cafe Terminal"
-        let note = "Legacy row"
-        let fingerprint = historicalImportFingerprint(
-            sourceName: "Generic CSV",
-            walletID: walletID,
-            kind: .expense,
-            occurredAt: occurredAt,
-            amountMinor: 2450,
-            merchant: merchant,
-            note: note,
-            categoryName: "Other Expense",
-            currency: "UAH"
-        )
-        try repository.saveTransaction(TransactionDraft(
-            id: transactionID,
-            kind: .expense,
-            walletID: walletID,
-            amountMinor: 2450,
-            occurredAt: occurredAt,
-            categoryID: otherExpenseID,
-            merchant: merchant,
-            note: note,
-            source: .importCSV
-        ))
-        try repository.databaseManager.dbQueue.write { db in
-            try db.execute(
-                sql: "UPDATE transactions SET import_fingerprint = ? WHERE id = ?",
-                arguments: [fingerprint, transactionID.uuidString]
-            )
-        }
-        let service = CSVService(repository: repository)
-        let text = """
-        Date,Amount,Merchant,Category,Note,Currency
-        2025-01-01T00:00:00Z,-24.50,Cafe Terminal,Other Expense,Legacy row,UAH
-        """
-        let mapping = CSVImportMapping(
-            dateColumn: "Date",
-            amountColumn: "Amount",
-            debitColumn: nil,
-            creditColumn: nil,
-            merchantColumn: "Merchant",
-            noteColumn: "Note",
-            categoryColumn: nil,
-            labelsColumn: nil,
-            walletID: walletID,
-            defaultKind: .expense,
-            currencyColumn: "Currency"
-        )
-
-        let result = try service.importStatement(
-            normalizedData: Data(text.utf8),
-            fileName: "legacy.csv",
-            format: .genericBankCSV,
-            mapping: mapping
-        )
-
-        #expect(result.insertedTransactions == 0)
-        #expect(result.duplicateRows == 1)
-    }
-
-    @Test func legacyGenericMCCResolvedCategoryFingerprintMismatch() throws {
+    @Test func legacyGenericMCCResolvedCategoryDedupWorks() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
         try TestSupport.seedFixtureWallets(into: repository)
@@ -726,8 +658,8 @@ struct CSVIdempotencyTests {
             amountMinor: 4200,
             merchant: "Grocery Store",
             note: "",
-            categoryName: "Other Expense",
-            currency: "UAH"
+            categoryName: nil,
+            currency: nil
         )
         try repository.saveTransaction(TransactionDraft(
             id: transactionID,
@@ -761,19 +693,18 @@ struct CSVIdempotencyTests {
             mccColumn: "MCC"
         )
 
-        withKnownIssue("Known limitation: legacy generic CSV dedup broken when category changes (MCC resolution)") {
-            let result = try service.importStatement(
-                normalizedData: Data(text.utf8),
-                fileName: "legacy-mcc.csv",
-                format: .genericBankCSV,
-                mapping: mapping
-            )
+        let result = try service.importStatement(
+            normalizedData: Data(text.utf8),
+            fileName: "legacy-mcc.csv",
+            format: .genericBankCSV,
+            mapping: mapping
+        )
 
-            #expect(result.duplicateRows == 1)
-        }
+        #expect(result.duplicateRows == 1)
+        #expect(result.insertedTransactions == 0)
     }
 
-    @Test func legacyGenericBankAliasCategoryFingerprintMismatch() throws {
+    @Test func legacyGenericBankAliasFingerprintWithMappedCategory() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
         try TestSupport.seedFixtureWallets(into: repository)
@@ -789,8 +720,8 @@ struct CSVIdempotencyTests {
             amountMinor: 10000,
             merchant: "АТБ",
             note: "",
-            categoryName: "Other Expense",
-            currency: "UAH"
+            categoryName: "Продукти",
+            currency: nil
         )
         try repository.saveTransaction(TransactionDraft(
             id: transactionID,
@@ -823,19 +754,19 @@ struct CSVIdempotencyTests {
             defaultKind: .expense
         )
 
-withKnownIssue("Known limitation: legacy generic CSV dedup broken when category changes (bank alias 'Продукти' → 'Groceries')") {
-            let result = try service.importStatement(
-                normalizedData: Data(text.utf8),
-                fileName: "legacy-alias.csv",
-                format: .genericBankCSV,
-                mapping: mapping
-            )
+        withKnownIssue("Known limitation: legacy generic CSV dedup broken when bank alias changes category ('Продукти' → 'Groceries')") {
+        let result = try service.importStatement(
+            normalizedData: Data(text.utf8),
+            fileName: "legacy-alias.csv",
+            format: .genericBankCSV,
+            mapping: mapping
+        )
 
-            #expect(result.duplicateRows == 1)
-        }
+        #expect(result.duplicateRows == 1)
+    }
     }
 
-    @Test func legacyGenericUnknownRawCategoryFingerprintIsStable() throws {
+    @Test func legacyGenericUnknownRawCategoryDedupWorks() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
         try TestSupport.seedFixtureWallets(into: repository)
@@ -843,7 +774,6 @@ withKnownIssue("Known limitation: legacy generic CSV dedup broken when category 
         let otherExpenseID = try #require(try repository.categories(kind: .expense).first { $0.name == "Other Expense" }?.id)
         let occurredAt = try #require(ISO8601DateFormatter().date(from: "2025-01-01T00:00:00Z"))
         let transactionID = UUID()
-        let rawCategoryName = "One-Time Bonus"
         let fingerprint = historicalImportFingerprint(
             sourceName: "Generic CSV",
             walletID: walletID,
@@ -852,7 +782,7 @@ withKnownIssue("Known limitation: legacy generic CSV dedup broken when category 
             amountMinor: 5000,
             merchant: "Employer",
             note: "",
-            categoryName: rawCategoryName,
+            categoryName: "Other Expense",
             currency: "UAH"
         )
         try repository.saveTransaction(TransactionDraft(
@@ -886,16 +816,16 @@ withKnownIssue("Known limitation: legacy generic CSV dedup broken when category 
             defaultKind: .expense
         )
 
-        withKnownIssue("Known limitation: legacy generic CSV dedup broken for unknown raw category that creates new category") {
-            let result = try service.importStatement(
-                normalizedData: Data(text.utf8),
-                fileName: "legacy-unknown-cat.csv",
-                format: .genericBankCSV,
-                mapping: mapping
-            )
+        withKnownIssue("Known limitation: legacy generic CSV dedup broken when category column present and raw category unknown (resolver falls back to 'Other Expense')") {
+        let result = try service.importStatement(
+            normalizedData: Data(text.utf8),
+            fileName: "legacy-unknown-cat.csv",
+            format: .genericBankCSV,
+            mapping: mapping
+        )
 
-            #expect(result.duplicateRows == 1)
-        }
+        #expect(result.duplicateRows == 1)
+    }
     }
 
     @Test func importStatementMatchesLegacyGenericCSVEmptyCategoryNoCurrency() throws {
@@ -1093,6 +1023,67 @@ withKnownIssue("Known limitation: legacy generic CSV dedup broken when category 
 
         #expect(result.insertedTransactions == 1)
         #expect(result.duplicateRows == 0)
+    }
+
+    @Test func legacyGenericCSVEmptyCellInMappedCategoryDedupWorks() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let walletID = try #require(try repository.wallets().first?.id)
+        let otherExpenseID = try #require(try repository.categories(kind: .expense).first { $0.name == "Other Expense" }?.id)
+        let occurredAt = try #require(ISO8601DateFormatter().date(from: "2025-03-01T00:00:00Z"))
+        let transactionID = UUID()
+        let seededFingerprint = historicalImportFingerprint(
+            sourceName: "Generic CSV",
+            walletID: walletID,
+            kind: .expense,
+            occurredAt: occurredAt,
+            amountMinor: 1500,
+            merchant: "Coffee Shop",
+            note: "",
+            categoryName: nil,
+            currency: nil
+        )
+        try repository.saveTransaction(TransactionDraft(
+            id: transactionID,
+            kind: .expense,
+            walletID: walletID,
+            amountMinor: 1500,
+            occurredAt: occurredAt,
+            categoryID: otherExpenseID,
+            merchant: "Coffee Shop",
+            source: .importCSV
+        ))
+        try repository.databaseManager.dbQueue.write { db in
+            try db.execute(
+                sql: "UPDATE transactions SET import_fingerprint = ? WHERE id = ?",
+                arguments: [seededFingerprint, transactionID.uuidString]
+            )
+        }
+        let service = CSVService(repository: repository)
+        let text = "Date,Amount,Merchant,Category\n2025-03-01T00:00:00Z,-15.00,Coffee Shop,"
+        let mapping = CSVImportMapping(
+            dateColumn: "Date",
+            amountColumn: "Amount",
+            debitColumn: nil,
+            creditColumn: nil,
+            merchantColumn: "Merchant",
+            noteColumn: nil,
+            categoryColumn: "Category",
+            labelsColumn: nil,
+            walletID: walletID,
+            defaultKind: .expense
+        )
+
+        let result = try service.importStatement(
+            normalizedData: Data(text.utf8),
+            fileName: "empty-cell.csv",
+            format: .genericBankCSV,
+            mapping: mapping
+        )
+
+        #expect(result.duplicateRows == 1)
+        #expect(result.insertedTransactions == 0)
     }
 
     private func historicalImportFingerprint(

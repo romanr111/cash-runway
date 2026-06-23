@@ -1,15 +1,29 @@
-Goal: Keep local XcodeBuildMCP session files out of Cash Runway git status.
+# Continuity Ledger - Generic CSV Source Semantics
 
-State:
-- Branch: `main`; category import mapping display fix was committed and pushed
-  as `b5c3520`.
-- `.xcodebuildmcp/` is local tool configuration for XcodeBuildMCP session
-  defaults and should not ship with the app.
+## Final state
+- PR #63 ready for review. All findings addressed.
+- All CI checks green on head `8abaa94`.
+- PR is no longer draft.
 
-Implemented:
-- Added `.xcodebuildmcp/` to `.gitignore`.
+## Checklist status
+| Item | Status |
+|------|--------|
+| `importFormat` in coordinator | ✅ |
+| App target build in CI | ✅ (new job) |
+| CSV/XLSX migration | ✅ (extension-aware) |
+| Provider detection tightened | ✅ |
+| Missing `@Test` added | ✅ |
+| Debit/Credit income inference | ✅ |
+| Legacy preset → format adapter | ✅ |
+| Legacy fingerprint namespace | ✅ |
+| Integration with main (#64/#65) | ✅ (merge + rowFilter) |
+| Localizable.xcstrings restored | ✅ (from main) |
+| Legacy generic dedup documented | ✅ (known-issue tests) |
+| CI green | ✅ (run 27972568835) |
+| Draft → Ready | ✅ |
+| PR description updated | ✅ |
 
-Validation receipts:
-- `git status --short` shows only tracked `.gitignore` and `CONTINUITY.md`
-  changes before commit.
-- `git check-ignore -v .xcodebuildmcp/config.yaml` confirms the ignore rule.
+## Known accepted limitations (deferred)
+1. `previewPreparedRows` / `importStatement` duplicated loops — shared extraction deferred
+2. Legacy generic CSV dedup broken for MCC/alias/unknown-category paths — dual-fingerprint compatibility deferred (pre-alpha limitation, documented as known issue in tests)
+3. Temu override uses `contains("temu")` substring — safe for current data
