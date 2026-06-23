@@ -1,5 +1,5 @@
 {
-  "originHash" : "eb0f76aa975f9a4f135a3f146c58b27cdba8e46c321551327baa51787331aefb",
+  "originHash" : "70b94a6b6444b2340c8f45467b68e4cc7682103b7931ac7392b166fb371bebf1",
   "pins" : [
     {
       "identity" : "corexlsx",
@@ -15,8 +15,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/sqlcipher/SQLCipher.swift.git",
       "state" : {
-        "revision" : "180be9a4dd130d838765a156b709e02f3bc3e7cd",
-        "version" : "4.14.0"
+        "revision" : "967b937db0b24508d5674c46ddd4d064a888a304",
+        "version" : "4.15.0"
       }
     },
     {

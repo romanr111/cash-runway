@@ -6,7 +6,7 @@ included:
 excluded:
   - Vendor
   - .build
-  - "**/ReportingSecrets.generated.swift"
+  - "**/AppReportingSecrets.generated.swift"
 
 disabled_rules:
   - identifier_name

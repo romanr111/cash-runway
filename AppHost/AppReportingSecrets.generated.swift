@@ -5,7 +5,7 @@
 
 import Foundation
 
-enum ReportingSecrets {
+enum AppReportingSecrets {
     static let isPlaceholder: Bool = true
 
     static func clientSecret() -> String {
