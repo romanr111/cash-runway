@@ -238,7 +238,8 @@ struct PrivatBankXLSXImportTests {
         Дата,Категорія,Картка,Опис операції,Сума в грн,Валюта картки,Сума транзакції,Валюта транзакції,Залишок на кінець періоду,Валюта залишку
         16.06.2026,Дохід,1234,Test Income,500.00,UAH,500.00,UAH,10000.00,UAH
         """
-        let mapping = service.defaultMapping(headers: privatBankXLSXHeaders, format: .privatBankXLSXv1, walletID: walletID)
+        let csvHeaders = text.split(separator: "\n")[0].split(separator: ",").map(String.init)
+        let mapping = service.defaultMapping(headers: csvHeaders, format: .privatBankXLSXv1, walletID: walletID)
 
         let result = try service.importCSV(data: Data(text.utf8), fileName: "xlsx-gryvna.csv", mapping: mapping)
 
