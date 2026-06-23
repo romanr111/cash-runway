@@ -608,7 +608,7 @@ do {
                 )
                 let legacyFingerprint: String?
                 switch format.role {
-                case .genericBankStatement:
+                case .genericBankStatement where mapping.categoryColumn == nil:
                     legacyFingerprint = importFingerprint(
                         .init(
                             sourceName: fingerprintSourceName,
