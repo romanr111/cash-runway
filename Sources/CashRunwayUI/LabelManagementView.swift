@@ -1,14 +1,12 @@
 import Foundation
 import SwiftUI
-#if canImport(CashRunwayCore)
 import CashRunwayCore
-#endif
 
 struct LabelManagementView: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var model: CashRunwayAppModel
     @State private var isEditorPresented = false
-    @State private var labelDraft = CashRunwayLabel(id: UUID(), name: "", colorHex: "#60788A", createdAt: .now, updatedAt: .now)
+    @State private var labelDraft = CashRunwayLabel(id: UUID(), name: "", colorHex: "#60788A", createdAt: Date.now, updatedAt: Date.now)
 
     var body: some View {
         NavigationStack {

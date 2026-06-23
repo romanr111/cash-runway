@@ -1,8 +1,6 @@
 import Foundation
 import SwiftUI
-#if canImport(CashRunwayCore)
 import CashRunwayCore
-#endif
 
 struct BackupView: View {
     @Environment(\.dismiss) private var dismiss

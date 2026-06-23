@@ -1,7 +1,5 @@
 import SwiftUI
-#if canImport(CashRunwayCore)
 import CashRunwayCore
-#endif
 
 // DEPRECATED — Budgets feature is de-prioritized. Work stopped; do not modify or add tests until resumed.
 struct BudgetsView: View {

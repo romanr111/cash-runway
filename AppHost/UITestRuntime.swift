@@ -1,4 +1,5 @@
 import Foundation
+import CashRunwayCore
 
 @MainActor
 struct CashRunwayAppRuntime {

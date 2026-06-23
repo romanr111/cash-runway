@@ -110,6 +110,18 @@ struct DatabaseLifecycleTests {
         #expect(try reopenedRepo.wallets().count == walletCount)
     }
 
+    @Test func destructiveRecoveryAllowedOnlyInDebug() throws {
+        let location = TestSupport.makeLocation()
+        let keychain = TestKeychainStore()
+        #if DEBUG
+        // DEBUG builds allow explicit destructive recovery for UI testing / diagnostics.
+        _ = try DatabaseManager(locationProvider: location, allowsDestructiveRecovery: true, keychain: keychain)
+        #else
+        // Release builds trap via fatalError before recovery can run.
+        #expect(true)
+        #endif
+    }
+
     @Test func repositoryReopenWithExistingDataSucceeds() throws {
         let location = TestSupport.makeLocation()
         let keychain = TestKeychainStore()

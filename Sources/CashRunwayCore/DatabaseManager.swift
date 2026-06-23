@@ -285,11 +285,16 @@ public final class DatabaseManager: @unchecked Sendable {
         )
     }
 
-    init(
+    public init(
         locationProvider: DatabaseLocationProvider = .init(),
         allowsDestructiveRecovery: Bool = false,
         keychain: any KeychainStoring
     ) throws {
+        #if !DEBUG
+        if allowsDestructiveRecovery {
+            fatalError("Destructive recovery is not allowed in release builds.")
+        }
+        #endif
         self.keychain = keychain
         let databaseURL = try locationProvider.databaseURL()
         self.dbQueue = try Self.openDatabase(

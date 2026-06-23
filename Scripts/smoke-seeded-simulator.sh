@@ -14,6 +14,9 @@ set -euo pipefail
 # Known benign log patterns (excluded from error scan):
 #   BackgroundTask, BoardServices, RunningBoardServices, XPCErrors,
 #   BKSProcessAssertion, app_launch_measurement, CA Event
+#   FontServices/XPC noise is scoped to the com.apple.FontServices and
+#   com.apple.xpc:connection system subsystems, so a genuine app-level
+#   XPC/FontServices error (subsystem dev.roman.cashrunway) is never masked.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -169,7 +172,7 @@ xcrun simctl spawn "$DEVICE_UDID" log show --predicate 'process == "CashRunway"'
 log "Scanning logs for errors/warnings/crashes ..."
 COMBINED_LOGS="$LOG_DIR/app-runtime.log $LOG_DIR/os.log $LOG_DIR/launch.log"
 
-if grep -iE "error|warning|fatal|assert|crash|exception" $COMBINED_LOGS 2>/dev/null | grep -viE "UITEST|UI TEST|xcodebuild|simctl|BUILD SUCCEEDED|os_log|subsystem|category|BackgroundTask|BoardServices|RunningBoardServices|XPCErrors|assertion.*reference|BKSProcessAssertion|_UIBackgroundTaskInfo|Persistent SceneSession|Launch Background Task|Coalescing|Invalid device|app_launch_measurement|CA Event" | grep -v "^\s*$" > "$LOG_DIR/errors-found.log" 2>/dev/null; then
+if grep -iE "error|warning|fatal|assert|crash|exception" $COMBINED_LOGS 2>/dev/null | grep -viE "UITEST|UI TEST|xcodebuild|simctl|BUILD SUCCEEDED|os_log|subsystem|category|BackgroundTask|BoardServices|RunningBoardServices|XPCErrors|assertion.*reference|BKSProcessAssertion|_UIBackgroundTaskInfo|Persistent SceneSession|Launch Background Task|Coalescing|Invalid device|app_launch_measurement|CA Event|com\.apple\.FontServices|com\.apple\.xpc:connection" | grep -v "^\s*$" > "$LOG_DIR/errors-found.log" 2>/dev/null; then
     ERROR_COUNT=$(wc -l < "$LOG_DIR/errors-found.log" | tr -d ' ')
     if [[ "$ERROR_COUNT" -gt 0 ]]; then
         # Filter out known benign patterns
