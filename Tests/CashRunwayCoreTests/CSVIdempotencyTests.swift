@@ -961,8 +961,7 @@ withKnownIssue("Known limitation: legacy generic CSV dedup broken when category 
             defaultKind: .expense
         )
 
-        withKnownIssue("Known limitation: legacy generic CSV dedup broken for empty-category fingerprint") {
-            let result = try service.importStatement(
+        let result = try service.importStatement(
                 normalizedData: Data(text.utf8),
                 fileName: "legacy-basic.csv",
                 format: .genericBankCSV,
@@ -970,7 +969,7 @@ withKnownIssue("Known limitation: legacy generic CSV dedup broken when category 
             )
 
             #expect(result.duplicateRows == 1)
-        }
+            #expect(result.insertedTransactions == 0)
     }
 
     @Test func importStatementMatchesLegacyGenericCSVWithCurrency() throws {
@@ -1024,8 +1023,7 @@ withKnownIssue("Known limitation: legacy generic CSV dedup broken when category 
             currencyColumn: "Currency"
         )
 
-        withKnownIssue("Known limitation: legacy generic CSV dedup broken for empty-category with currency") {
-            let result = try service.importStatement(
+        let result = try service.importStatement(
                 normalizedData: Data(text.utf8),
                 fileName: "legacy-currency.csv",
                 format: .genericBankCSV,
@@ -1033,7 +1031,7 @@ withKnownIssue("Known limitation: legacy generic CSV dedup broken when category 
             )
 
             #expect(result.duplicateRows == 1)
-        }
+            #expect(result.insertedTransactions == 0)
     }
 
     private func historicalImportFingerprint(
