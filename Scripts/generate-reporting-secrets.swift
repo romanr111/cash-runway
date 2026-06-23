@@ -8,8 +8,7 @@ let projectRoot = URL(fileURLWithPath: CommandLine.arguments[0])
 let exampleConfig = projectRoot.appendingPathComponent("AppHost/ReportingConfig.example.xcconfig")
 let localConfig = projectRoot.appendingPathComponent("AppHost/ReportingConfig.local.xcconfig")
 let generatedPaths = [
-    projectRoot.appendingPathComponent("Sources/CashRunwayCore/ReportingSecrets.generated.swift"),
-    projectRoot.appendingPathComponent("Modules/CashRunwayCorePackage/Sources/CashRunwayCore/ReportingSecrets.generated.swift")
+    projectRoot.appendingPathComponent("AppHost/AppReportingSecrets.generated.swift")
 ]
 
 func parseConfig(_ url: URL) -> [String: String] {
@@ -50,7 +49,7 @@ let swiftSource = """
 
 import Foundation
 
-enum ReportingSecrets {
+enum AppReportingSecrets {
     static let isPlaceholder: Bool = \(isPlaceholder)
 
     static func clientSecret() -> String {
@@ -73,4 +72,4 @@ for path in generatedPaths {
     try swiftSource.write(to: path, atomically: true, encoding: .utf8)
 }
 
-print("Generated ReportingSecrets.generated.swift (placeholder: \(isPlaceholder))")
+print("Generated AppReportingSecrets.generated.swift (placeholder: \(isPlaceholder))")

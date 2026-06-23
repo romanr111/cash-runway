@@ -3,9 +3,9 @@
 build/
 DerivedData/
 Packages/
+Coverage/
 xcuserdata/
 *.xcuserstate
-Package.resolved
 reporting-api/node_modules/
 .vercel/
 reporting-api/.vercel/

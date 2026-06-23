@@ -16,7 +16,5 @@ echo "=== Untracked / new files ==="
 git ls-files --others --exclude-standard
 
 echo ""
-echo "=== Core mirror diff ==="
-if diff -rq Sources/CashRunwayCore Modules/CashRunwayCorePackage/Sources/CashRunwayCore; then
-    echo "Core sources are in sync."
-fi
+echo "=== CashRunwayCore module-wiring check ==="
+Scripts/check-core-module-wiring.sh

@@ -1,13 +1,12 @@
 included:
   - AppHost
-  - Modules/CashRunwayCorePackage/Sources
   - Sources
   - Tests
 
 excluded:
   - Vendor
   - .build
-  - "**/ReportingSecrets.generated.swift"
+  - "**/AppReportingSecrets.generated.swift"
 
 disabled_rules:
   - identifier_name

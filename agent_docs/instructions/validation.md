@@ -43,9 +43,8 @@ just check-integration -> non-performance integration/package tests
 just check-perf -> performance timing gates with stale perf-temp cleanup
 just test-isolated <arguments> -> Swift package tests with isolated scratch path
 just check-isolated -> full Swift package tests with isolated scratch path
-just mirror-core -> sync canonical CashRunwayCore sources to package mirror
 just ui-check -> UI-only validation
-just check -> mirror diff, git diff check, full package tests, simulator build
+just check -> git diff check, full Swift tests, simulator build
 just smoke -> deterministic simulator launch and log smoke
 just verify -> complete iOS readiness gate
 just pr-status <PR> -> local/PR readiness summary without running long gates
@@ -63,9 +62,6 @@ The scripts and `justfile` are the executable source of truth.
   package coverage, and run `just check-perf` when performance-sensitive code
   changed or before final PR signoff. `just check-perf` removes stale
   Cash Runway perf-test temp data before running.
-- Apply mirrored core edits to canonical `Sources/CashRunwayCore/`, then run
-  `just mirror-core`. If the package mirror has local edits, review them before
-  using `just mirror-core --force`.
 - Persistence or Keychain changes: run focused repository tests and `just check`.
 - If SwiftPM failures look like stale build state or lock contention, retry once
   with `just test-isolated` or `just check-isolated`.

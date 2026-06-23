@@ -1,8 +1,6 @@
 import Foundation
 import SwiftUI
-#if canImport(CashRunwayCore)
 import CashRunwayCore
-#endif
 
 struct CSVImportView: View {
     @Environment(\.dismiss) private var dismiss

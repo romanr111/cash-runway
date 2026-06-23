@@ -4,9 +4,7 @@ import UniformTypeIdentifiers
 #if canImport(UIKit)
 import UIKit
 #endif
-#if canImport(CashRunwayCore)
 import CashRunwayCore
-#endif
 
 struct SettingsView: View {
     @Bindable var model: CashRunwayAppModel

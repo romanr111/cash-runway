@@ -27,10 +27,10 @@ env:
   SCHEME: CashRunway
 
 jobs:
-  source-consistency:
-    name: Source Consistency & App Build
+  source-membership-check:
+    name: Source Membership Check
     runs-on: macos-26
-    timeout-minutes: 45
+    timeout-minutes: 5
 
     steps:
       - name: Check out PR branch
@@ -39,70 +39,14 @@ jobs:
           repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
-      - name: Verify core source-tree mirror equality
+      - name: Verify CashRunwayCore module wiring
         shell: bash
-        run: |
-          set -euo pipefail
-          if ! diff -rq \
-            Sources/CashRunwayCore \
-            Modules/CashRunwayCorePackage/Sources/CashRunwayCore; then
-            echo "::error::Core source trees are out of sync. Run 'just mirror-core' and commit."
-            exit 1
-          fi
-          echo "Core source trees are identical."
-
-      - name: Cache SwiftPM packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.swiftpm/cache
-          key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
-          restore-keys: |
-            ${{ runner.os }}-spm-
-
-      - name: Pick iPhone simulator
-        id: simulator
-        shell: bash
-        run: |
-          set -euo pipefail
-          if xcrun simctl list devices available | grep -q 'iPhone 17 ('; then
-            destination='platform=iOS Simulator,name=iPhone 17'
-          else
-            device_name="$(xcrun simctl list devices available | awk -F'[()]' '/iPhone/ && /Shutdown|Booted/ { sub(/^[[:space:]]+/, "", $1); print $1; exit }')"
-            if [[ -z "${device_name}" ]]; then
-              echo 'No available iPhone simulator found' >&2
-              exit 1
-            fi
-            destination="platform=iOS Simulator,name=${device_name}"
-          fi
-          echo "destination=${destination}" >> "${GITHUB_OUTPUT}"
-          echo "Using ${destination}"
-
-      - name: Build Xcode application target
-        shell: bash
-        run: |
-          set -euo pipefail
-          xcodebuild \
-            -project "${{ env.PROJECT }}" \
-            -scheme "${{ env.SCHEME }}" \
-            -sdk iphonesimulator \
-            -destination "${{ steps.simulator.outputs.destination }}" \
-            CODE_SIGNING_ALLOWED=NO \
-            build \
-            2>&1 | tee xcode-build.log
-
-      - name: Upload build logs
-        if: failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: xcode-build-logs
-          path: xcode-build.log
-          if-no-files-found: ignore
+        run: Scripts/check-core-module-wiring.sh
 
   static-analysis:
     name: Static Analysis
     runs-on: macos-26
     timeout-minutes: 30
-    needs: source-consistency
 
     steps:
       - name: Check out PR branch
@@ -134,43 +78,11 @@ jobs:
           path: swiftlint.log
           if-no-files-found: ignore
 
-  app-build:
-    name: App Build
-    runs-on: macos-26
-    timeout-minutes: 30
-    needs: static-analysis
-
-    steps:
-      - name: Check out PR branch
-        uses: actions/checkout@v5
-        with:
-          repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-
-      - name: Build app target
-        shell: bash
-        run: |
-          set -euo pipefail
-          xcodebuild \
-            -project "${PROJECT}" \
-            -scheme "${SCHEME}" \
-            -sdk iphonesimulator \
-            -destination 'platform=iOS Simulator,name=iPhone 17' \
-            build 2>&1 | tee app-build.log
-
-      - name: Upload app build logs
-        if: failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: app-build-logs
-          path: app-build.log
-          if-no-files-found: ignore
-
   unit-tests:
     name: Unit Tests
     runs-on: macos-26
     timeout-minutes: 30
-    needs: [static-analysis, app-build]
+    needs: static-analysis
 
     steps:
       - name: Check out PR branch
@@ -207,7 +119,7 @@ jobs:
     name: Integration Tests
     runs-on: macos-26
     timeout-minutes: 90
-    needs: unit-tests
+    needs: static-analysis
 
     steps:
       - name: Check out PR branch
@@ -238,6 +150,66 @@ jobs:
         with:
           name: integration-test-logs
           path: swift-integration-test.log
+          if-no-files-found: ignore
+
+  app-build:
+    name: Xcode App Build
+    runs-on: macos-26
+    timeout-minutes: 30
+    needs: static-analysis
+
+    steps:
+      - name: Check out PR branch
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - name: Cache SwiftPM packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.swiftpm/cache
+          key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-
+
+      - name: Pick iPhone simulator
+        id: simulator
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if xcrun simctl list devices available | grep -q 'iPhone 17 ('; then
+            destination='platform=iOS Simulator,name=iPhone 17'
+          else
+            device_name="$(xcrun simctl list devices available | awk -F'[()]' '/iPhone/ && /Shutdown|Booted/ { sub(/^[[:space:]]+/, "", $1); print $1; exit }')"
+            if [[ -z "${device_name}" ]]; then
+              echo 'No available iPhone simulator found' >&2
+              exit 1
+            fi
+            destination="platform=iOS Simulator,name=${device_name}"
+          fi
+
+          echo "destination=${destination}" >> "${GITHUB_OUTPUT}"
+          echo "Using ${destination}"
+
+      - name: Build app for simulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild build \
+            -project "${{ env.PROJECT }}" \
+            -scheme "${{ env.SCHEME }}" \
+            -sdk iphonesimulator \
+            -destination "${{ steps.simulator.outputs.destination }}" \
+            2>&1 | tee app-build.log
+
+      - name: Upload app build logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-build-logs
+          path: app-build.log
           if-no-files-found: ignore
 
   ui-e2e-tests:

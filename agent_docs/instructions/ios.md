@@ -33,17 +33,10 @@ This repo contains both `Package.swift` and `CashRunway.xcodeproj`.
 - Commit `Package.resolved` when package dependencies change.
 - Do not vendor dependency source unless explicitly requested.
 
-## Mirrored Core Sources
+## Canonical Core Sources
 
-Core source files exist in both:
-
-- `Sources/CashRunwayCore/`
-- `Modules/CashRunwayCorePackage/Sources/CashRunwayCore/`
-
-Treat `Sources/CashRunwayCore/` as canonical. Apply core edits there, then use
-`just mirror-core` to sync the package mirror. If the package mirror has local
-edits, review them before using `just mirror-core --force`.
-`Scripts/agent-validate.sh` checks for drift.
+CashRunwayCore has one canonical source tree at `Sources/CashRunwayCore/`.
+Both Xcode and SwiftPM must compile this tree. Do not create mirrored copies.
 
 ## Swift Testing
 

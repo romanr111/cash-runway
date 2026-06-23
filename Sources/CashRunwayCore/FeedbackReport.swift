@@ -323,6 +323,11 @@ public struct SafeDiagnosticsProvider: Sendable {
 public struct ReportIssueResponse: Codable, Equatable, Sendable {
     public let status: String
     public let issueNumber: Int
+
+    public init(status: String, issueNumber: Int) {
+        self.status = status
+        self.issueNumber = issueNumber
+    }
 }
 
 public protocol ReportIssueTransport: Sendable {

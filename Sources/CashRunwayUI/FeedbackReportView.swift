@@ -1,3 +1,4 @@
+import CashRunwayCore
 import SwiftUI
 
 struct FeedbackReportView: View {

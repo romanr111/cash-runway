@@ -5,6 +5,7 @@ import GRDB
 import OSLog
 import SwiftUI
 import UIKit
+import CashRunwayCore
 
 @main
 struct CashRunwayApp: App {

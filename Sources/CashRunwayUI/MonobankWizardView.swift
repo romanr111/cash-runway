@@ -3,9 +3,7 @@ import SwiftUI
 #if canImport(UIKit)
 import UIKit
 #endif
-#if canImport(CashRunwayCore)
 import CashRunwayCore
-#endif
 
 struct MonobankWizardView: View {
     @Environment(\.dismiss) private var dismiss

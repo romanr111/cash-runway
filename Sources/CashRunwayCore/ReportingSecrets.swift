@@ -7,25 +7,18 @@ public struct ReportingKeychainSecretProvider: Sendable {
 
     private let keychain: any KeychainStoring
     private let environment: @Sendable () -> [String: String]
-    private let isPlaceholder: Bool
+    private let bundledSecret: @Sendable () -> String?
 
     public init(
         keychain: any KeychainStoring = KeychainStore(service: keychainService),
-        environment: @escaping @Sendable () -> [String: String] = { ProcessInfo.processInfo.environment },
-        isPlaceholder: Bool
+        environment: @escaping @Sendable () -> [String: String] = {
+            ProcessInfo.processInfo.environment
+        },
+        bundledSecret: @escaping @Sendable () -> String? = { nil }
     ) {
         self.keychain = keychain
         self.environment = environment
-        self.isPlaceholder = isPlaceholder
-    }
-
-    public init(
-        keychain: any KeychainStoring = KeychainStore(service: keychainService),
-        environment: @escaping @Sendable () -> [String: String] = { ProcessInfo.processInfo.environment }
-    ) {
-        self.isPlaceholder = ReportingSecrets.isPlaceholder
-        self.keychain = keychain
-        self.environment = environment
+        self.bundledSecret = bundledSecret
     }
 
     public func clientSecret() -> String? {
@@ -36,25 +29,24 @@ public struct ReportingKeychainSecretProvider: Sendable {
         }
         #endif
 
-        if isPlaceholder {
+        guard let secret = bundledSecretValue() else {
             clearSecret()
             return nil
         }
 
-        let generatedSecret = ReportingSecrets.clientSecret()
-        guard !generatedSecret.isEmpty else {
-            return nil
+        if let existingData = try? keychain.read(account: Self.keychainAccount),
+           let existing = String(data: existingData, encoding: .utf8),
+           !existing.isEmpty,
+           existing == secret {
+            return existing
         }
 
-        if let existing = try? keychain.read(account: Self.keychainAccount),
-           let secret = String(data: existing, encoding: .utf8),
-           !secret.isEmpty,
-           secret == generatedSecret {
-            return secret
-        }
+        try? keychain.write(Data(secret.utf8), account: Self.keychainAccount)
+        return secret
+    }
 
-        try? keychain.write(Data(generatedSecret.utf8), account: Self.keychainAccount)
-        return generatedSecret
+    public func clearSecret() {
+        keychain.delete(account: Self.keychainAccount)
     }
 
     #if DEBUG
@@ -67,7 +59,11 @@ public struct ReportingKeychainSecretProvider: Sendable {
     }
     #endif
 
-    public func clearSecret() {
-        keychain.delete(account: Self.keychainAccount)
+    private func bundledSecretValue() -> String? {
+        guard let secret = bundledSecret()?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !secret.isEmpty else {
+            return nil
+        }
+        return secret
     }
 }

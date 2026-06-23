@@ -85,14 +85,6 @@ pass() {
 
 cd "$PROJECT_DIR"
 
-# --- Core mirror diff ---
-if ! diff -rq Sources/CashRunwayCore Modules/CashRunwayCorePackage/Sources/CashRunwayCore > "$LOG_DIR/mirror-diff.log" 2>&1; then
-    fail "Core mirror diff mismatch"
-    cat "$LOG_DIR/mirror-diff.log" >> "$LOG_DIR/validation.log"
-else
-    pass "Core mirror diff"
-fi
-
 # --- git diff --check ---
 if ! git diff --check > "$LOG_DIR/git-diff-check.log" 2>&1; then
     fail "git diff --check found issues"
@@ -139,9 +131,13 @@ if [[ "$RUN_COVERAGE" == true && (-n "$FOCUSED_FILTER" || "$RUN_FULL_TESTS" == t
             require "json"
             report = JSON.parse(File.read("${COVERAGE_DIR}/coverage.json"))
             minimum_percent = 85.0
-            source_root = "/Modules/CashRunwayCorePackage/Sources/CashRunwayCore/"
+            source_root = "/Sources/CashRunwayCore/"
             files = report.fetch("data").first.fetch("files").select do |file|
               file.fetch("filename").include?(source_root)
+            end
+            if files.empty?
+              warn "No CashRunwayCore source files found in coverage report"
+              exit 1
             end
             total_lines = files.sum { |file| file.dig("summary", "lines", "count").to_i }
             covered_lines = files.sum { |file| file.dig("summary", "lines", "covered").to_i }

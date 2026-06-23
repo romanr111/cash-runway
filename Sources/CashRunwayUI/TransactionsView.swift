@@ -1,7 +1,5 @@
 import SwiftUI
-#if canImport(CashRunwayCore)
 import CashRunwayCore
-#endif
 
 struct TransactionsView: View {
     @Bindable var model: CashRunwayAppModel

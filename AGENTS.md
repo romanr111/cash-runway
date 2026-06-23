@@ -3,10 +3,8 @@
 Swift/SwiftUI/GRDB iOS app with a Node/TypeScript reporting API.
 
 ## Always Apply
-- Keep `Sources/CashRunwayCore/` and
-  `Modules/CashRunwayCorePackage/Sources/CashRunwayCore/` identical.
-  After modifying either tree, update the mirror and verify the two trees are
-  identical before finishing.
+- CashRunwayCore has one canonical source tree at `Sources/CashRunwayCore/`.
+  Both Xcode and SwiftPM must compile this tree. Do not create mirrored copies.
 - Store credentials and sensitive values only in Keychain or server-side
   environment variables. Never commit or log secrets or sensitive user data.
 - Do not use `print()` for production diagnostics.
@@ -29,10 +27,8 @@ Swift/SwiftUI/GRDB iOS app with a Node/TypeScript reporting API.
 
 ## Workflow Helpers
 
-- Treat `Sources/CashRunwayCore/` as canonical. After editing it, run
-  `just mirror-core` to sync `Modules/CashRunwayCorePackage/Sources/CashRunwayCore/`.
-  If the package mirror has local edits, review them before using
-  `just mirror-core --force`.
+- Both Xcode and SwiftPM compile the `Sources/CashRunwayCore/` tree
+  directly. Do not create mirrored copies.
 - For Swift validation, prefer `just check-unit-parallel`,
   `just check-integration`, and `just check-perf` before falling back to raw
   `just test` arguments.
@@ -44,6 +40,25 @@ Swift/SwiftUI/GRDB iOS app with a Node/TypeScript reporting API.
   with `just test-isolated` or `just check-isolated`.
 - For PR handoff, use `just pr-status <PR>` for the status snapshot and
   `just pr-comment <PR> <markdown-file>` for multiline comments.
+
+## Xcode Project Safety
+- Do not hand-edit `CashRunway.xcodeproj/project.pbxproj` unless the task
+  explicitly requires it. When editing is unavoidable:
+  1. Always back up first: `cp CashRunway.xcodeproj/project.pbxproj{,.bak}`.
+  2. Make the smallest possible change (remove or add a single block).
+  3. Verify immediately: `Scripts/verify-pbxproj.sh` (or `xcodebuild -list -project CashRunway.xcodeproj`).
+  4. If verification fails, restore from backup and retry.
+- When CashRunwayCore is compiled as a SwiftPM package (Phase 2B+), the Xcode
+  app target must NOT include `Sources/CashRunwayCore/*.swift` in its Sources
+  build phase. `Scripts/pre-flight.sh` validates this invariant.
+- Before debugging Xcode access-level errors (`internal` protection level),
+  run `swift build --target CashRunwayCore` first. It surfaces module-boundary
+  issues in seconds, avoids minutes-long Xcode rebuilds, and gives clearer
+  diagnostics.
+- After removing `#if canImport(CashRunwayCore)` guards from UI/AppHost
+  files, do not assume only files that had the guard need the import. Use
+  `grep` to find any remaining references to Core symbols in files that do not
+  yet `import CashRunwayCore`, and add the import to all of them.
 
 ## Token Efficiency
 - Use Headroom by default for bulky command output, logs, code search, and
