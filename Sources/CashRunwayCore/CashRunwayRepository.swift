@@ -3270,10 +3270,14 @@ extension CashRunwayRepository {
         }
     }
 
-    public static func generatedDates(for template: RecurringTemplate, start: Date, end: Date) -> [Date] {
+    public static func generatedDates(
+        for template: RecurringTemplate,
+        start: Date,
+        end: Date,
+        calendar: Calendar = DateKeys.calendar
+    ) -> [Date] {
         var dates: [Date] = []
         var cursor = max(start, template.startDate)
-        let calendar = DateKeys.calendar
         while cursor <= end {
             if let endDate = template.endDate, cursor > endDate { break }
             let match: Bool

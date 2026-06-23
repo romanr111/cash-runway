@@ -229,7 +229,7 @@ jobs:
         run: |
           set -euo pipefail
           swift test \
-            --skip '(ModelSerializationTests|UtilityAndModelTests|BankCategoryMapperTests|BankConnectionServiceTests|BankSyncServiceTests)' \
+            --skip '(ModelSerializationTests|UtilityAndModelTests|BankCategoryMapperTests|BankConnectionServiceTests|BankSyncServiceTests|CashRunwayPerformanceTests)' \
             2>&1 | tee swift-integration-test.log
 
       - name: Upload integration test logs

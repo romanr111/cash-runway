@@ -27,6 +27,7 @@ struct DatabaseKeyStartupMatrixTests {
         manager = nil
 
         let preHash = sha256OfFile(at: dbURL)
+        let preWalHash = sha256OfFile(at: URL(fileURLWithPath: dbURL.path + "-wal"))
 
         let emptyKeychain = TestKeychainStore(items: [:])
         var thrownError: Error?
@@ -37,7 +38,13 @@ struct DatabaseKeyStartupMatrixTests {
         }
         #expect(thrownError != nil)
 
+        #expect(try emptyKeychain.read(account: "database-key") == nil)
+        #expect(emptyKeychain.writeCount == 0)
         #expect(sha256OfFile(at: dbURL) == preHash)
+        let walURL = URL(fileURLWithPath: dbURL.path + "-wal")
+        if FileManager.default.fileExists(atPath: walURL.path) {
+            #expect(sha256OfFile(at: walURL) == preWalHash)
+        }
         let recoveryDir = dbURL.deletingLastPathComponent().appendingPathComponent("Recovery", isDirectory: true)
         #expect(!FileManager.default.fileExists(atPath: recoveryDir.path))
 
@@ -130,7 +137,7 @@ struct DatabaseKeyStartupMatrixTests {
     @Test func correctKeyRestoredAfterFailureReopensSuccessfully() throws {
         let correctKey = "dddd1111cccc2222bbbb3333aaaa4444ffff5555eeee6666dddd7777cccc8888"
         let location = TestSupport.makeLocation()
-        let dbURL = try location.databaseURL()
+        _ = try location.databaseURL()
 
         let createKeychain = TestKeychainStore(items: ["database-key": Data(correctKey.utf8)])
         var manager: DatabaseManager? = try DatabaseManager(locationProvider: location, keychain: createKeychain)

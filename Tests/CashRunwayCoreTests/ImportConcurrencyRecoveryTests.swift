@@ -84,7 +84,7 @@ struct ImportConcurrencyRecoveryTests {
         #expect(walletAfter.currentBalanceMinor == initialBalance - expectedTotal)
     }
 
-    @Test func retryAfterInterruptedImportProducesSameResult() throws {
+    @Test func sequentialRetryOfAllItemsProducesSameResult() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
         try TestSupport.seedFixtureWallets(into: repository)
@@ -171,6 +171,72 @@ struct ImportConcurrencyRecoveryTests {
 
         let walletAfter = try #require(try repository.wallets().first { $0.id == wallet.id })
         #expect(walletAfter.currentBalanceMinor == initialBalance - 2_000)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func simultaneousImportsOfSameProviderItemCommitOnce() async throws {
+        let location = TestSupport.makeLocation()
+        _ = try location.databaseURL()
+        let itemID = "concurrent-001"
+
+        let seedKeychain = TestKeychainStore(items: [:])
+        var seedManager: DatabaseManager? = try DatabaseManager(locationProvider: location, keychain: seedKeychain)
+        let seedRepo = CashRunwayRepository(databaseManager: try #require(seedManager))
+        try seedRepo.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: seedRepo)
+        let wallet = try #require(try seedRepo.wallets().first)
+        let initialBalance = wallet.currentBalanceMinor
+        let seedSetup = try makeBankSetup(repository: seedRepo)
+        let dbKey = try #require(try seedKeychain.read(account: "database-key"))
+        seedManager = nil
+
+        let keychain = TestKeychainStore(items: ["database-key": dbKey])
+        let repo1 = CashRunwayRepository(databaseManager: try DatabaseManager(locationProvider: location, keychain: keychain))
+        let repo2 = CashRunwayRepository(databaseManager: try DatabaseManager(locationProvider: location, keychain: keychain))
+
+        let item = MonobankStatementItem(
+            id: itemID,
+            time: Int(seedSetup.syncStartAt.addingTimeInterval(60).timeIntervalSince1970),
+            description: "ConcurrentShop", mcc: 5411, originalMcc: 5411,
+            amount: -20_000, operationAmount: nil, currencyCode: 980,
+            commissionRate: nil, cashbackAmount: nil, balance: nil, hold: nil,
+            receiptId: nil, comment: nil, counterEdrpou: nil, counterIban: nil,
+            counterName: "ConcurrentShop"
+        )
+
+        async let firstImport = repo1.importMonobankExpenseItems([item], account: seedSetup.account, integration: seedSetup.integration)
+        async let secondImport = repo2.importMonobankExpenseItems([item], account: seedSetup.account, integration: seedSetup.integration)
+        let (result1, result2) = try await (firstImport, secondImport)
+        let totalImported = result1.importedCount + result2.importedCount
+        #expect(totalImported == 1)
+        let totalSkipped = result1.skippedCount + result2.skippedCount
+        #expect(totalSkipped == 1)
+
+        let importRows = try await repo1.databaseManager.dbQueue.read { db in
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM bank_transaction_imports WHERE provider_statement_item_id = ?", arguments: [itemID]) ?? 0
+        }
+        #expect(importRows == 1)
+
+        let txCount = try await repo1.databaseManager.dbQueue.read { db in
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM transactions WHERE source = ?", arguments: [TransactionSource.bankSync.rawValue]) ?? 0
+        }
+        #expect(txCount == 1)
+
+        let coinWalletAfter = try #require(try repo1.wallets().first { $0.id == wallet.id })
+        #expect(coinWalletAfter.currentBalanceMinor == initialBalance - 20_000)
+
+        let reopenKeychain = TestKeychainStore(items: ["database-key": dbKey])
+        let reopenedRepo = CashRunwayRepository(databaseManager: try DatabaseManager(locationProvider: location, keychain: reopenKeychain))
+        let reopenImportRows = try await reopenedRepo.databaseManager.dbQueue.read { db in
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM bank_transaction_imports WHERE provider_statement_item_id = ?", arguments: [itemID]) ?? 0
+        }
+        #expect(reopenImportRows == 1)
+        let reopenTxCount = try await reopenedRepo.databaseManager.dbQueue.read { db in
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM transactions WHERE source = ?", arguments: [TransactionSource.bankSync.rawValue]) ?? 0
+        }
+        #expect(reopenTxCount == 1)
+        let reopenWallet = try #require(try reopenedRepo.wallets().first { $0.id == wallet.id })
+        #expect(reopenWallet.currentBalanceMinor == initialBalance - 20_000)
     }
 
     private func makeBankSetup(repository: CashRunwayRepository) throws -> (integration: BankIntegration, account: BankAccount, syncStartAt: Date) {

@@ -15,6 +15,7 @@ struct RecurringCalendarBoundaryTests {
         let catID = try #require(cats.first?.id)
 
         var kyivCalendar = Calendar(identifier: .gregorian)
+        kyivCalendar.locale = Locale(identifier: "uk_UA")
         kyivCalendar.timeZone = TimeZone(identifier: "Europe/Kyiv")!
 
         let startDate = kyivCalendar.date(from: DateComponents(year: 2025, month: 1, day: 1))!
@@ -29,7 +30,7 @@ struct RecurringCalendarBoundaryTests {
         try repository.saveRecurringTemplate(template)
 
         let endOf2025 = kyivCalendar.date(from: DateComponents(year: 2025, month: 12, day: 31))!
-        let generatedDates = CashRunwayRepository.generatedDates(for: template, start: startDate, end: endOf2025)
+        let generatedDates = CashRunwayRepository.generatedDates(for: template, start: startDate, end: endOf2025, calendar: kyivCalendar)
         let monthsWith31 = [1, 3, 5, 7, 8, 10, 12]
         #expect(generatedDates.count == monthsWith31.count)
         for date in generatedDates {
@@ -49,6 +50,7 @@ struct RecurringCalendarBoundaryTests {
         let catID = try #require(cats.first?.id)
 
         var kyivCalendar = Calendar(identifier: .gregorian)
+        kyivCalendar.locale = Locale(identifier: "uk_UA")
         kyivCalendar.timeZone = TimeZone(identifier: "Europe/Kyiv")!
 
         let startDate = kyivCalendar.date(from: DateComponents(year: 2025, month: 1, day: 1))!
@@ -64,7 +66,7 @@ struct RecurringCalendarBoundaryTests {
         )
         try repository.saveRecurringTemplate(template)
 
-        let generatedDates = CashRunwayRepository.generatedDates(for: template, start: startDate, end: febEnd)
+        let generatedDates = CashRunwayRepository.generatedDates(for: template, start: startDate, end: febEnd, calendar: kyivCalendar)
         let febDates = generatedDates.filter { kyivCalendar.component(.month, from: $0) == 2 }
         #expect(febDates.count <= 1)
         if let febDate = febDates.first {
@@ -83,6 +85,7 @@ struct RecurringCalendarBoundaryTests {
         let catID = try #require(cats.first?.id)
 
         var kyivCalendar = Calendar(identifier: .gregorian)
+        kyivCalendar.locale = Locale(identifier: "uk_UA")
         kyivCalendar.timeZone = TimeZone(identifier: "Europe/Kyiv")!
 
         let startDate = kyivCalendar.date(from: DateComponents(year: 2024, month: 1, day: 1))!
@@ -98,7 +101,7 @@ struct RecurringCalendarBoundaryTests {
         )
         try repository.saveRecurringTemplate(template)
 
-        let generatedDates = CashRunwayRepository.generatedDates(for: template, start: startDate, end: end)
+        let generatedDates = CashRunwayRepository.generatedDates(for: template, start: startDate, end: end, calendar: kyivCalendar)
         let febDates = generatedDates.filter { kyivCalendar.component(.month, from: $0) == 2 }
         #expect(febDates.count == 1)
         if let febDate = febDates.first {
@@ -159,6 +162,7 @@ struct RecurringCalendarBoundaryTests {
         let catID = try #require(cats.first?.id)
 
         var kyivCalendar = Calendar(identifier: .gregorian)
+        kyivCalendar.locale = Locale(identifier: "uk_UA")
         kyivCalendar.timeZone = TimeZone(identifier: "Europe/Kyiv")!
 
         let startDate = kyivCalendar.date(from: DateComponents(year: 2025, month: 2, day: 1))!
@@ -174,7 +178,7 @@ struct RecurringCalendarBoundaryTests {
         )
         try repository.saveRecurringTemplate(template)
 
-        let generatedDates = CashRunwayRepository.generatedDates(for: template, start: startDate, end: endDate)
+        let generatedDates = CashRunwayRepository.generatedDates(for: template, start: startDate, end: endDate, calendar: kyivCalendar)
         #expect(generatedDates.count == 3)
 
         let months = generatedDates.map { kyivCalendar.component(.month, from: $0) }

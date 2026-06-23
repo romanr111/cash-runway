@@ -247,7 +247,22 @@ struct CashRunwayCoreTests {
         #expect(try TestSupport.fileSize(at: dbURL) == originalSize)
     }
 
+    private func makeKyivCalendar() -> Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.locale = Locale(identifier: "uk_UA")
+        calendar.timeZone = TimeZone(identifier: "Europe/Kyiv")!
+        return calendar
+    }
+
+    private func dayKeyComponents(for date: Date, calendar: Calendar) -> Int {
+        let components = calendar.dateComponents([.year, .month, .day], from: date)
+        return (components.year ?? 0) * 10_000 + (components.month ?? 0) * 100 + (components.day ?? 0)
+    }
+
     @Test func recurringGenerationIsDeterministic() {
+        let calendar = makeKyivCalendar()
+        let startDate = calendar.date(from: DateComponents(year: 2026, month: 1, day: 1))!
+        let endDate = calendar.date(from: DateComponents(year: 2026, month: 3, day: 1))!
         let template = RecurringTemplate(
             id: UUID(),
             kind: .expense,
@@ -261,7 +276,7 @@ struct CashRunwayCoreTests {
             ruleInterval: 1,
             dayOfMonth: 15,
             weekday: nil,
-            startDate: DateKeys.startOfMonth(for: 202601),
+            startDate: startDate,
             endDate: nil,
             isActive: true,
             createdAt: .now,
@@ -269,15 +284,19 @@ struct CashRunwayCoreTests {
         )
         let dates = CashRunwayRepository.generatedDates(
             for: template,
-            start: DateKeys.startOfMonth(for: 202601),
-            end: DateKeys.startOfMonth(for: 202603)
+            start: startDate,
+            end: endDate,
+            calendar: calendar
         )
         #expect(dates.count == 2)
-        #expect(DateKeys.dayKey(for: dates[0]) == 20260115)
-        #expect(DateKeys.dayKey(for: dates[1]) == 20260215)
+        #expect(dayKeyComponents(for: dates[0], calendar: calendar) == 20260115)
+        #expect(dayKeyComponents(for: dates[1], calendar: calendar) == 20260215)
     }
 
     @Test func recurringGenerationRespectsMonthlyInterval() {
+        let calendar = makeKyivCalendar()
+        let startDate = calendar.date(from: DateComponents(year: 2026, month: 1, day: 1))!
+        let endDate = calendar.date(from: DateComponents(year: 2026, month: 11, day: 1))!
         let template = RecurringTemplate(
             id: UUID(),
             kind: .expense,
@@ -291,7 +310,7 @@ struct CashRunwayCoreTests {
             ruleInterval: 3,
             dayOfMonth: 15,
             weekday: nil,
-            startDate: DateKeys.startOfMonth(for: 202601),
+            startDate: startDate,
             endDate: nil,
             isActive: true,
             createdAt: .now,
@@ -299,17 +318,21 @@ struct CashRunwayCoreTests {
         )
         let dates = CashRunwayRepository.generatedDates(
             for: template,
-            start: DateKeys.startOfMonth(for: 202601),
-            end: DateKeys.startOfMonth(for: 202611)
+            start: startDate,
+            end: endDate,
+            calendar: calendar
         )
         #expect(dates.count == 4)
-        #expect(DateKeys.dayKey(for: dates[0]) == 20260115)
-        #expect(DateKeys.dayKey(for: dates[1]) == 20260415)
-        #expect(DateKeys.dayKey(for: dates[2]) == 20260715)
-        #expect(DateKeys.dayKey(for: dates[3]) == 20261015)
+        #expect(dayKeyComponents(for: dates[0], calendar: calendar) == 20260115)
+        #expect(dayKeyComponents(for: dates[1], calendar: calendar) == 20260415)
+        #expect(dayKeyComponents(for: dates[2], calendar: calendar) == 20260715)
+        #expect(dayKeyComponents(for: dates[3], calendar: calendar) == 20261015)
     }
 
     @Test func recurringGenerationRespectsYearlyInterval() {
+        let calendar = makeKyivCalendar()
+        let startDate = calendar.date(from: DateComponents(year: 2026, month: 1, day: 1))!
+        let endDate = calendar.date(from: DateComponents(year: 2028, month: 2, day: 1))!
         let template = RecurringTemplate(
             id: UUID(),
             kind: .expense,
@@ -323,7 +346,7 @@ struct CashRunwayCoreTests {
             ruleInterval: 2,
             dayOfMonth: 15,
             weekday: nil,
-            startDate: DateKeys.startOfMonth(for: 202601),
+            startDate: startDate,
             endDate: nil,
             isActive: true,
             createdAt: .now,
@@ -331,12 +354,13 @@ struct CashRunwayCoreTests {
         )
         let dates = CashRunwayRepository.generatedDates(
             for: template,
-            start: DateKeys.startOfMonth(for: 202601),
-            end: DateKeys.startOfMonth(for: 202802)
+            start: startDate,
+            end: endDate,
+            calendar: calendar
         )
         #expect(dates.count == 2)
-        #expect(DateKeys.dayKey(for: dates[0]) == 20260115)
-        #expect(DateKeys.dayKey(for: dates[1]) == 20280115)
+        #expect(dayKeyComponents(for: dates[0], calendar: calendar) == 20260115)
+        #expect(dayKeyComponents(for: dates[1], calendar: calendar) == 20280115)
     }
 
     @Test func transactionMutationsKeepAggregatesCorrect() throws {

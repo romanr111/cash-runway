@@ -316,19 +316,19 @@ public final class DatabaseManager: @unchecked Sendable {
         )
     }
 
-    private static func databaseKey(using keychain: any KeychainStoring) throws -> String {
+    private static func databaseKey(using keychain: any KeychainStoring) throws -> (key: String, hadExistingKey: Bool) {
         let account = "database-key"
         if let data = try keychain.read(account: account) {
             guard let key = String(data: data, encoding: .utf8), !key.isEmpty else {
                 throw KeychainStoreError.invalidStoredData(account)
             }
             stampDatabaseKeyAccessibility(data, using: keychain)
-            return key
+            return (key, true)
         }
 
         let key = UUID().uuidString.replacingOccurrences(of: "-", with: "") + UUID().uuidString.replacingOccurrences(of: "-", with: "")
         try keychain.write(Data(key.utf8), account: account)
-        return key
+        return (key, false)
     }
 
     private static func stampDatabaseKeyAccessibility(_ data: Data, using keychain: any KeychainStoring) {
@@ -340,6 +340,15 @@ public final class DatabaseManager: @unchecked Sendable {
     }
 
     private static func openDatabase(at url: URL, keychain: any KeychainStoring, migrator: DatabaseMigrator, allowsDestructiveRecovery: Bool) throws -> DatabaseQueue {
+        let databaseExists = FileManager.default.fileExists(atPath: url.path)
+
+        if databaseExists {
+            let hadKey = (try? keychain.read(account: "database-key")) != nil
+            if !hadKey && !allowsDestructiveRecovery {
+                throw CashRunwayStartupFailure(message: "Database exists but no encryption key was found in Keychain. The database was not modified.")
+            }
+        }
+
         do {
             let dbQueue = try DatabaseQueue(path: url.path, configuration: makeConfiguration(keychain: keychain))
             try migrator.migrate(dbQueue)
@@ -348,7 +357,7 @@ public final class DatabaseManager: @unchecked Sendable {
             guard allowsDestructiveRecovery, shouldRecover(from: error) else {
                 throw error
             }
-            try quarantineDatabase(at: url)
+            try quarantineDatabases(at: url)
             keychain.delete(account: "database-key")
             let recoveredQueue = try DatabaseQueue(path: url.path, configuration: makeConfiguration(keychain: keychain))
             try migrator.migrate(recoveredQueue)
@@ -360,7 +369,7 @@ public final class DatabaseManager: @unchecked Sendable {
         var configuration = Configuration()
         configuration.journalMode = .wal
         configuration.prepareDatabase { db in
-            try db.usePassphrase(try databaseKey(using: keychain))
+            try db.usePassphrase(try databaseKey(using: keychain).key)
         }
         return configuration
     }
@@ -379,7 +388,7 @@ public final class DatabaseManager: @unchecked Sendable {
             || message.contains("sqlcipher")
     }
 
-    private static func quarantineDatabase(at url: URL) throws {
+    static func quarantineDatabases(at url: URL) throws {
         let fileManager = FileManager.default
         let recoveryDirectory = url.deletingLastPathComponent().appendingPathComponent("Recovery", isDirectory: true)
         try fileManager.createDirectory(at: recoveryDirectory, withIntermediateDirectories: true)
