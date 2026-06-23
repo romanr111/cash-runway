@@ -606,6 +606,25 @@ do {
                         currency: currency
                     )
                 )
+                let legacyFingerprint: String?
+                switch format.role {
+                case .genericBankStatement:
+                    legacyFingerprint = importFingerprint(
+                        .init(
+                            sourceName: fingerprintSourceName,
+                            walletID: walletID,
+                            kind: kind,
+                            occurredAt: date,
+                            amountMinor: abs(signedAmount),
+                            merchant: merchant,
+                            note: note,
+                            categoryName: nil,
+                            currency: mapping.currencyColumn != nil ? currency : nil
+                        )
+                    )
+                default:
+                    legacyFingerprint = nil
+                }
                 let draft = TransactionDraft(
                     kind: kind,
                     walletID: walletID,
@@ -620,6 +639,7 @@ do {
                         rowNumber: offset + 2,
                         draft: draft,
                         fingerprint: fingerprint,
+                        legacyFingerprint: legacyFingerprint,
                         sourceName: sourceName,
                         rawCategoryName: resolvedCategoryName,
                         rawLabelNames: rawLabels,
@@ -663,9 +683,20 @@ do {
             normalizedCSVHeader($0).contains(normalizedCSVHeader("Сума в валюті картки"))
                 || normalizedCSVHeader($0).contains(normalizedCSVHeader("Card currency amount"))
         } ?? false
-        let currencyColumn: String? = defaults.omitCurrencyForSignedAmount && isSignedAmount
+        let isUAHNormalized = amountColumn.map {
+            normalizedCSVHeader($0).contains(normalizedCSVHeader("сума uah"))
+                || normalizedCSVHeader($0).contains(normalizedCSVHeader("сума (uah)"))
+        } ?? false
+        let currencyColumn: String? = defaults.omitCurrencyForSignedAmount && (isSignedAmount || isUAHNormalized)
             ? nil
             : header(named: defaults.currencyColumns, in: headers)
+        let effectiveDefaultKind: TransactionDraft.Kind
+        let isPrivatBankSignedCard = format.role == .bankStatement(.privatBank) && format.id == "privatbank.csv.v1" && format.fileKind == .csv && isSignedAmount
+        if isPrivatBankSignedCard {
+            effectiveDefaultKind = .income
+        } else {
+            effectiveDefaultKind = defaults.defaultKind
+        }
         return CSVImportMapping(
             dateColumn: dateColumn,
             amountColumn: amountColumn,
@@ -676,7 +707,7 @@ do {
             categoryColumn: header(named: defaults.categoryColumns, in: headers),
             labelsColumn: header(named: defaults.labelsColumns, in: headers),
             walletID: walletID,
-            defaultKind: defaults.defaultKind,
+            defaultKind: effectiveDefaultKind,
             typeColumn: header(named: defaults.typeColumns, in: headers),
             walletColumn: header(named: defaults.walletColumns, in: headers),
             currencyColumn: currencyColumn,

@@ -154,4 +154,77 @@ struct PrivatBankXLSXImportTests {
         #expect(transaction.merchant == "Test Merchant")
         #expect(transaction.kind == .expense)
     }
+
+    @Test func privatBankCSVSignedCardAmountPositiveImportsAsIncome() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let walletID = try #require(try repository.wallets().first?.id)
+        let service = CSVService(repository: repository)
+        let headers = ["Дата операції", "Опис операції", "Сума в валюті картки"]
+        let format = BankStatementFormat.privatBankCSVv1
+        #expect(format.id == "privatbank.csv.v1", "Format ID check")
+        #expect(format == BankStatementFormat.privatBankCSVv1, "Format == check")
+        let privDef = BankStatementFormat.privatBankCSVv1
+        #expect(format.id == privDef.id && format.displayName == privDef.displayName && format.fileKind == privDef.fileKind && format.role == privDef.role, "Manual property check")
+        #expect(format.role == .bankStatement(.privatBank) && format.id == "privatbank.csv.v1" && format.fileKind == .csv, "Format properties: role=\(format.role) id=\(format.id) kind=\(format.fileKind)")
+        let mapping = service.defaultMapping(headers: headers, format: format, walletID: walletID)
+        #expect(mapping.amountColumn == "Сума в валюті картки", "Amount column: \(mapping.amountColumn ?? "nil")")
+        #expect(mapping.currencyColumn == nil, "Signed amount should omit currency, got: \(mapping.currencyColumn ?? "nil")")
+        #expect(mapping.defaultKind == .income, "defaultKind: got \(mapping.defaultKind)")
+
+        let text = """
+        Дата операції,Опис операції,Сума в валюті картки
+        15.06.2026,Переказ від друга,1000.00
+        """
+        let result = try service.importCSV(data: Data(text.utf8), fileName: "signed-income.csv", mapping: mapping)
+
+        #expect(result.insertedTransactions == 1)
+        let transaction = try #require(try repository.transactions().first)
+        #expect(transaction.merchant == "Переказ від друга")
+        #expect(transaction.kind == .income)
+        #expect(transaction.amountMinor == 100_000)
+    }
+
+    @Test func privatBankCSVSignedCardAmountNegativeImportsAsExpense() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let walletID = try #require(try repository.wallets().first?.id)
+        let service = CSVService(repository: repository)
+        let text = """
+        Дата операції,Опис операції,Сума в валюті картки
+        15.06.2026,Test Merchant,-500.00
+        """
+        let preview = try service.preview(data: Data(text.utf8))
+        let mapping = service.defaultMapping(headers: preview.headers, format: .privatBankCSVv1, walletID: walletID)
+        #expect(mapping.defaultKind == .income, "Signed amount column sets defaultKind, but negative value should still be expense")
+
+        let result = try service.importCSV(data: Data(text.utf8), fileName: "signed-expense.csv", mapping: mapping)
+
+        #expect(result.insertedTransactions == 1)
+        let transaction = try #require(try repository.transactions().first)
+        #expect(transaction.merchant == "Test Merchant")
+        #expect(transaction.kind == .expense)
+    }
+
+    @Test func privatBankCSVGryvnaAmountPositiveStillDefaultsToExpense() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let walletID = try #require(try repository.wallets().first?.id)
+        let service = CSVService(repository: repository)
+        let text = """
+        Дата операції,Призначення,Сума в грн
+        15.06.2026,Test Income,500.00
+        """
+        let preview = try service.preview(data: Data(text.utf8))
+        let mapping = service.defaultMapping(headers: preview.headers, format: .privatBankCSVv1, walletID: walletID)
+        #expect(mapping.defaultKind == .expense, "Сума в грн is unsigned; positive values remain expense by default")
+
+        let result = try service.importCSV(data: Data(text.utf8), fileName: "gryvna.csv", mapping: mapping)
+        #expect(result.insertedTransactions == 1)
+        let transaction = try #require(try repository.transactions().first)
+        #expect(transaction.kind == .expense)
+    }
 }

@@ -417,4 +417,30 @@ struct MonobankCSVImportTests {
         #expect(rows.first?.draft.merchant == "Рукавичка")
         #expect(rows.first?.rawCategoryName == "Groceries")
     }
+
+    @Test func monobankSumeUAHWithForeignCurrencyColumnImportsSuccessfully() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let walletID = try #require(try repository.wallets().first?.id)
+        let service = CSVService(repository: repository)
+        let text = """
+        Дата і час операції,Деталі операції,MCC,Сума (UAH),Валюта
+        16.06.2026 14:15:08,OpenAI,5734,-99.00,USD
+        """
+        let mapping = service.defaultMapping(
+            headers: ["Дата і час операції", "Деталі операції", "MCC", "Сума (UAH)", "Валюта"],
+            format: .monobankCSVv1,
+            walletID: walletID
+        )
+        #expect(mapping.currencyColumn == nil,
+            "Сума (UAH) is already normalized to UAH; currency column should not be mapped")
+
+        let result = try service.importCSV(data: Data(text.utf8), fileName: "suma-uah.csv", mapping: mapping)
+
+        #expect(result.insertedTransactions == 1)
+        let transaction = try #require(try repository.transactions().first)
+        #expect(transaction.merchant == "OpenAI")
+        #expect(transaction.kind == .expense)
+    }
 }

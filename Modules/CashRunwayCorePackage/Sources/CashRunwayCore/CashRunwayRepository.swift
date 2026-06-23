@@ -2364,7 +2364,7 @@ extension CashRunwayRepository {
             var affectedMonths = Set<Int>()
 
             for row in preparedRows {
-                if seenFingerprints.contains(row.fingerprint) {
+                if seenFingerprints.contains(row.fingerprint) || row.legacyFingerprint.map { seenFingerprints.contains($0) } ?? false {
                     duplicateRows += 1
                     continue
                 }
