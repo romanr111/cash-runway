@@ -300,8 +300,7 @@
 			packageReferences = (
 				A00900010001000100010002 /* XCLocalSwiftPackageReference "Vendor/GRDB.swift" */,
 				A01300010001000100010001 /* XCLocalSwiftPackageReference "." */,
-				A01000010001000100010005 /* XCRemoteSwiftPackageReference "CoreXLSX" */,
-			);
+				);
 			productRefGroup = A00400010001000100010004 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -611,27 +610,13 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		A01000010001000100010005 /* XCRemoteSwiftPackageReference "CoreXLSX" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/CoreOffice/CoreXLSX.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 0.14.2;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
+
 
 /* Begin XCSwiftPackageProductDependency section */
 		A00A00010001000100010002 /* GRDB */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = A00900010001000100010002 /* XCLocalSwiftPackageReference "Vendor/GRDB.swift" */;
 			productName = GRDB;
-		};
-		A01000010001000100010004 /* CoreXLSX */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = A01000010001000100010005 /* XCRemoteSwiftPackageReference "CoreXLSX" */;
-			productName = CoreXLSX;
 		};
 		A01300010001000100010002 /* CashRunwayCore */ = {
 			isa = XCSwiftPackageProductDependency;
