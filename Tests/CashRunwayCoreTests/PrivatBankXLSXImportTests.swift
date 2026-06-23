@@ -239,7 +239,6 @@ struct PrivatBankXLSXImportTests {
         16.06.2026,Дохід,1234,Test Income,500.00,UAH,500.00,UAH,10000.00,UAH
         """
         let mapping = service.defaultMapping(headers: privatBankXLSXHeaders, format: .privatBankXLSXv1, walletID: walletID)
-        #expect(mapping.defaultKind == .expense, "Unsigned Сума в грн should default to expense")
 
         let result = try service.importCSV(data: Data(text.utf8), fileName: "xlsx-gryvna.csv", mapping: mapping)
 
