@@ -1,8 +1,10 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "" : {
+
+    },
     "·" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -25,14 +27,14 @@
             "state" : "new",
             "value" : "%1$@ · %2$@"
           }
-        }
-      ,
+        },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@ · %2$@"
           }
-        }}
+        }
+      }
     },
     "%@ becomes hidden after merge." : {
       "extractionState" : "stale",
@@ -177,14 +179,14 @@
             "state" : "new",
             "value" : "%1$@, %2$@"
           }
-        }
-      ,
+        },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@, %2$@"
           }
-        }}
+        }
+      }
     },
     "%@, income %@, expense %@" : {
       "localizations" : {
@@ -193,14 +195,14 @@
             "state" : "new",
             "value" : "%1$@, income %2$@, expense %3$@"
           }
-        }
-      ,
+        },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@, дохід %2$@, витрата %3$@"
           }
-        }}
+        }
+      }
     },
     "%d total · %d visible · %d hidden" : {
       "extractionState" : "stale",
@@ -220,7 +222,6 @@
       }
     },
     "%lld" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -271,7 +272,6 @@
       }
     },
     "0.00" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -320,7 +320,6 @@
       }
     },
     "Add a wallet to start tracking transactions and see your cash flow." : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -534,6 +533,23 @@
         }
       }
     },
+    "All supported transactions will be imported." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All supported transactions will be imported."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Буде імпортовано всі підтримувані транзакції."
+          }
+        }
+      }
+    },
     "All Wallets" : {
       "localizations" : {
         "en" : {
@@ -650,7 +666,6 @@
       }
     },
     "Archive" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -667,7 +682,6 @@
       }
     },
     "Archive budget" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -953,7 +967,6 @@
       }
     },
     "Budgets" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1171,7 +1184,6 @@
       }
     },
     "Cash Runway Could Not Open" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1973,7 +1985,6 @@
       }
     },
     "Create a monthly category budget to track progress." : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2186,7 +2197,6 @@
       }
     },
     "Day" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2203,7 +2213,6 @@
       }
     },
     "Day %lld" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2236,7 +2245,6 @@
       }
     },
     "Debug" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2519,7 +2527,6 @@
       }
     },
     "Disconnect" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2915,7 +2922,6 @@
       }
     },
     "Export" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3130,7 +3136,6 @@
       }
     },
     "Format" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3398,7 +3403,6 @@
       }
     },
     "Import Bank Statement" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3447,6 +3451,22 @@
         }
       }
     },
+    "Import expenses only" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import expenses only"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Імпортувати лише витрати"
+          }
+        }
+      }
+    },
     "Import Full Backup" : {
       "localizations" : {
         "en" : {
@@ -3491,6 +3511,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Імпортувати стару історію"
+          }
+        }
+      }
+    },
+    "Import Scope" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import Scope"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Обсяг імпорту"
           }
         }
       }
@@ -3595,7 +3631,6 @@
       }
     },
     "Importing" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3612,7 +3647,6 @@
       }
     },
     "Importing transactions..." : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3679,7 +3713,6 @@
       }
     },
     "Income / Expense" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3712,6 +3745,23 @@
         }
       }
     },
+    "Income rows will be skipped." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Income rows will be skipped."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Рядки доходів буде пропущено."
+          }
+        }
+      }
+    },
     "Income will not be imported." : {
       "localizations" : {
         "en" : {
@@ -3729,7 +3779,6 @@
       }
     },
     "Interval %lld" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3942,7 +3991,6 @@
       }
     },
     "Limit" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3959,7 +4007,6 @@
       }
     },
     "Limit %@" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3992,7 +4039,6 @@
       }
     },
     "Loading cash flow" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4375,7 +4421,6 @@
       }
     },
     "Monobank" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4625,7 +4670,6 @@
       }
     },
     "No Budgets" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4653,6 +4697,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Немає даних"
+          }
+        }
+      }
+    },
+    "No expense rows found in the preview." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No expense rows found in the preview."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "У попередньому перегляді не знайдено рядків витрат."
           }
         }
       }
@@ -4824,7 +4885,6 @@
       }
     },
     "not selected" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4857,7 +4917,6 @@
       }
     },
     "Note" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4924,7 +4983,6 @@
       }
     },
     "OK" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -5006,7 +5064,6 @@
       }
     },
     "Only selected UAH card accounts will sync." : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -5107,7 +5164,6 @@
       }
     },
     "Over budget by %@" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -5384,7 +5440,6 @@
       }
     },
     "Recurring" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -5418,7 +5473,6 @@
       }
     },
     "Recurring templates" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -5452,7 +5506,6 @@
       }
     },
     "Remaining %@" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -5800,7 +5853,6 @@
       }
     },
     "Retry" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -5933,7 +5985,6 @@
       }
     },
     "Save as recurring template" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -6117,7 +6168,6 @@
       }
     },
     "selected" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -6502,7 +6552,6 @@
       }
     },
     "Start time" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -6586,7 +6635,6 @@
       }
     },
     "Support" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -6752,7 +6800,6 @@
       }
     },
     "Templates" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -6803,7 +6850,6 @@
       }
     },
     "This backup file contains unencrypted financial data. Anyone with access to it may be able to read your wallets, transactions, categories, labels, and recurring entries. Store it securely." : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -7351,7 +7397,6 @@
       }
     },
     "UAH" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -7419,7 +7464,6 @@
       }
     },
     "Unencrypted Backup" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -7521,7 +7565,6 @@
       }
     },
     "Upcoming" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -7605,7 +7648,6 @@
       }
     },
     "Used when the CSV wallet is empty or does not match an existing wallet." : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -7622,7 +7664,6 @@
       }
     },
     "Validate Token" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -7639,7 +7680,6 @@
       }
     },
     "Validating..." : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -7672,7 +7712,6 @@
       }
     },
     "Value" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -8054,91 +8093,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ваш токен Monobank залишається на цьому iPhone."
-          }
-        }
-      }
-    },
-    "Import Scope" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Import Scope"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Обсяг імпорту"
-          }
-        }
-      }
-    },
-    "Import expenses only" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Import expenses only"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Імпортувати лише витрати"
-          }
-        }
-      }
-    },
-    "All supported transactions will be imported." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "All supported transactions will be imported."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Буде імпортовано всі підтримувані транзакції."
-          }
-        }
-      }
-    },
-    "Income rows will be skipped." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Income rows will be skipped."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Рядки доходів буде пропущено."
-          }
-        }
-      }
-    },
-    "No expense rows found in the preview." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No expense rows found in the preview."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "У попередньому перегляді не знайдено рядків витрат."
           }
         }
       }
