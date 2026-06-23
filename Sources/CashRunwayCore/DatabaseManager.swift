@@ -639,6 +639,25 @@ public final class DatabaseManager: @unchecked Sendable {
             try db.execute(sql: "CREATE UNIQUE INDEX idx_transactions_import_fingerprint ON transactions(import_fingerprint) WHERE import_fingerprint IS NOT NULL")
         }
 
+        migrator.registerMigration("v4_import_job_source_format_id") { db in
+            try db.execute(sql: "ALTER TABLE import_jobs ADD COLUMN source_format_id TEXT")
+            try db.execute(sql: """
+                UPDATE import_jobs
+                SET source_format_id = CASE
+                    WHEN source_name IN ('Cash Runway Wallet', 'Cash Runway Wallet CSV') THEN 'cash-runway.csv.v1'
+                    WHEN source_name IN ('Monobank', 'Monobank CSV') THEN 'monobank.csv.v1'
+                    WHEN source_name = 'PrivatBank XLSX' THEN 'privatbank.xlsx.v1'
+                    WHEN source_name = 'PrivatBank' AND lower(file_name) LIKE '%.xlsx' THEN 'privatbank.xlsx.v1'
+                    WHEN source_name IN ('PrivatBank', 'PrivatBank CSV') THEN 'privatbank.csv.v1'
+                    WHEN source_name = 'Generic Bank XLSX' THEN 'generic-bank.xlsx.v1'
+                    WHEN source_name = 'Generic CSV' AND lower(file_name) LIKE '%.xlsx' THEN 'generic-bank.xlsx.v1'
+                    WHEN source_name IN ('Generic CSV', 'Generic Bank CSV') THEN 'generic-bank.csv.v1'
+                    ELSE NULL
+                END
+                WHERE source_format_id IS NULL
+                """)
+        }
+
         migrator.registerMigration("v3_bank_sync") { db in
             try db.create(table: "bank_integrations") { table in
                 table.column("id", .text).primaryKey()

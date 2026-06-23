@@ -5,8 +5,11 @@ import Testing
 @Suite(.serialized)
 struct CSVEdgeCaseTests {
     @Test(arguments: [
-        (["Дата операції", "Сума в ГРН"], CSVPreset.privatBank),
-        (["description", "mcc", "amount"], CSVPreset.monobank),
+        (["Дата операції", "Опис операції", "Сума в ГРН"], CSVPreset.privatBank),
+        (["Дата операції", "Сума в ГРН"], CSVPreset.generic),
+        (["Date and time", "Description", "MCC", "Card currency amount, (UAH)"], CSVPreset.monobank),
+        (["Date", "Description", "MCC", "Amount"], CSVPreset.generic),
+        (["description", "mcc", "amount"], CSVPreset.generic),
         (["foo", "bar"], CSVPreset.generic),
     ])
     func detectPreset(headers: [String], expected: CSVPreset) throws {
@@ -67,6 +70,8 @@ struct CSVEdgeCaseTests {
         )
         let result = try service.importCSV(data: Data(text.utf8), fileName: "test.csv", mapping: mapping)
         #expect(result.insertedTransactions == 2)
+        let transactions = try repository.transactions().sorted { $0.occurredAt < $1.occurredAt }
+        #expect(transactions.map(\.kind) == [.expense, .income])
     }
 
     @Test func importDebitCreditColumnsClassifiesKindsCorrectly() throws {
@@ -379,66 +384,129 @@ struct CSVEdgeCaseTests {
         #expect(importedDraft.categoryID == groceriesID)
         #expect(try repository.categories(kind: .expense).contains { $0.name == "Restaurants" } == false)
     }
+@Test func weakMonobankHeadersFallBackToGenericBankCSV() throws {
+    let repository = try TestSupport.makeRepository()
+    let service = CSVService(repository: repository)
 
-    @Test func importExpensesOnlySkipsMalformedIncomeRow() throws {
-        let repository = try TestSupport.makeRepository()
-        try repository.seedIfNeeded()
-        try TestSupport.seedFixtureWallets(into: repository)
-        let walletID = try #require(try repository.wallets().first?.id)
-        let service = CSVService(repository: repository)
-        let text = "Date,Type,Amount\n,Income,100\n2025-01-02,Expense,50"
-        let mapping = CSVImportMapping(
-            dateColumn: "Date",
-            amountColumn: "Amount",
-            debitColumn: nil,
-            creditColumn: nil,
-            merchantColumn: nil,
-            noteColumn: nil,
-            categoryColumn: nil,
-            labelsColumn: nil,
-            walletID: walletID,
-            defaultKind: .expense,
-            typeColumn: "Type"
-        )
-        let result = try service.importCSV(
-            data: Data(text.utf8),
-            fileName: "test.csv",
-            mapping: mapping,
-            rowFilter: .expensesOnly
-        )
-        #expect(result.insertedTransactions == 1)
-        #expect(result.invalidRows == 0)
-        #expect(result.rowErrors.isEmpty)
-    }
+    let format = service.detectFormat(headers: ["Description", "MCC"])
 
-    @Test func importAllTransactionsFlagsMalformedIncomeRow() throws {
-        let repository = try TestSupport.makeRepository()
-        try repository.seedIfNeeded()
-        try TestSupport.seedFixtureWallets(into: repository)
-        let walletID = try #require(try repository.wallets().first?.id)
-        let service = CSVService(repository: repository)
-        let text = "Date,Type,Amount\n,Income,100\n2025-01-02,Expense,50"
-        let mapping = CSVImportMapping(
-            dateColumn: "Date",
-            amountColumn: "Amount",
-            debitColumn: nil,
-            creditColumn: nil,
-            merchantColumn: nil,
-            noteColumn: nil,
-            categoryColumn: nil,
-            labelsColumn: nil,
-            walletID: walletID,
-            defaultKind: .expense,
-            typeColumn: "Type"
-        )
-        let result = try service.importCSV(
-            data: Data(text.utf8),
-            fileName: "test.csv",
-            mapping: mapping,
-            rowFilter: .allTransactions
-        )
-        #expect(result.insertedTransactions == 1)
-        #expect(result.invalidRows == 1)
-        #expect(result.rowErrors.count == 1)
-    }
+    #expect(format == .genericBankCSV)
+    #expect(service.detectPreset(headers: ["Description", "MCC"]) == .generic)
 }
+
+@Test func unknownXLSXHeadersFallBackToGenericBankXLSX() throws {
+    let repository = try TestSupport.makeRepository()
+    let service = CSVService(repository: repository)
+
+    let format = service.detectFormat(headers: ["Posted", "Value", "Details"], fileKind: .xlsx)
+
+    #expect(format == .genericBankXLSX)
+}
+
+@Test func cashRunwayBOMHeaderDetectsWalletExport() throws {
+    let repository = try TestSupport.makeRepository()
+    let service = CSVService(repository: repository)
+    let headers = ["\u{feff}Date", "Wallet", "Type", "Category name", "Amount", "Currency", "Note", "Labels", "Author"]
+
+    #expect(service.detectFormat(headers: headers) == .cashRunwayCSV)
+    #expect(service.detectPreset(headers: headers) == .cashRunwayWallet)
+}
+
+@Test func genericXLSXImportRecordsGenericXLSXSourceFormat() throws {
+    let repository = try TestSupport.makeRepository()
+    try repository.seedIfNeeded()
+    try TestSupport.seedFixtureWallets(into: repository)
+    let walletID = try #require(try repository.wallets().first?.id)
+    let service = CSVService(repository: repository)
+    let text = """
+    Posted,Value,Details
+    2026-05-01,-24.50,Cafe Terminal
+    """
+    let mapping = CSVImportMapping(
+        dateColumn: "Posted",
+        amountColumn: "Value",
+        debitColumn: nil,
+        creditColumn: nil,
+        merchantColumn: "Details",
+        noteColumn: nil,
+        categoryColumn: nil,
+        labelsColumn: nil,
+        walletID: walletID,
+        defaultKind: .expense
+    )
+
+    let result = try service.importStatement(
+        normalizedData: Data(text.utf8),
+        fileName: "unknown.xlsx",
+        format: .genericBankXLSX,
+        mapping: mapping
+    )
+
+    #expect(result.job.sourceFormatID == BankStatementFormat.genericBankXLSX.id)
+}
+
+@Test func importExpensesOnlySkipsMalformedIncomeRow() throws {
+    let repository = try TestSupport.makeRepository()
+    try repository.seedIfNeeded()
+    try TestSupport.seedFixtureWallets(into: repository)
+    let walletID = try #require(try repository.wallets().first?.id)
+    let service = CSVService(repository: repository)
+    let text = "Date,Type,Amount\n,Income,100\n2025-01-02,Expense,50"
+    let mapping = CSVImportMapping(
+        dateColumn: "Date",
+        amountColumn: "Amount",
+        debitColumn: nil,
+        creditColumn: nil,
+        merchantColumn: nil,
+        noteColumn: nil,
+        categoryColumn: nil,
+        labelsColumn: nil,
+        walletID: walletID,
+        defaultKind: .expense,
+        typeColumn: "Type"
+    )
+    let result = try service.importStatement(
+        normalizedData: Data(text.utf8),
+        fileName: "test.csv",
+        format: .genericBankCSV,
+        mapping: mapping,
+        rowFilter: .expensesOnly
+    )
+    #expect(result.insertedTransactions == 1)
+    #expect(result.invalidRows == 0)
+    #expect(result.rowErrors.isEmpty)
+}
+
+@Test func importAllTransactionsFlagsMalformedIncomeRow() throws {
+    let repository = try TestSupport.makeRepository()
+    try repository.seedIfNeeded()
+    try TestSupport.seedFixtureWallets(into: repository)
+    let walletID = try #require(try repository.wallets().first?.id)
+    let service = CSVService(repository: repository)
+    let text = "Date,Type,Amount\n,Income,100\n2025-01-02,Expense,50"
+    let mapping = CSVImportMapping(
+        dateColumn: "Date",
+        amountColumn: "Amount",
+        debitColumn: nil,
+        creditColumn: nil,
+        merchantColumn: nil,
+        noteColumn: nil,
+        categoryColumn: nil,
+        labelsColumn: nil,
+        walletID: walletID,
+        defaultKind: .expense,
+        typeColumn: "Type"
+    )
+    let result = try service.importStatement(
+        normalizedData: Data(text.utf8),
+        fileName: "test.csv",
+        format: .genericBankCSV,
+        mapping: mapping,
+        rowFilter: .allTransactions
+    )
+    #expect(result.insertedTransactions == 1)
+    #expect(result.invalidRows == 1)
+    #expect(result.rowErrors.count == 1)
+}
+}
+

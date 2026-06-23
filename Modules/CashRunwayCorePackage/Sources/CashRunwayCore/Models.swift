@@ -764,6 +764,7 @@ public struct RecurringInstance: Identifiable, Codable, Hashable, Sendable {
 public struct ImportJob: Identifiable, Codable, Hashable, Sendable {
     public var id: UUID
     public var sourceName: String
+    public var sourceFormatID: String? = nil
     public var fileName: String
     public var status: ImportJobStatus
     public var totalRows: Int
@@ -907,6 +908,7 @@ public struct BackupRecurringInstance: Identifiable, Codable, Hashable, Sendable
 public struct BackupImportJob: Identifiable, Codable, Hashable, Sendable {
     public var id: UUID
     public var sourceName: String
+    public var sourceFormatID: String? = nil
     public var fileName: String
     public var status: ImportJobStatus
     public var totalRows: Int
@@ -1644,6 +1646,7 @@ public struct PreparedImportRow: Sendable {
     public var rowNumber: Int
     public var draft: TransactionDraft
     public var fingerprint: String
+    public var legacyFingerprint: String?
     public var sourceName: String
     public var rawCategoryName: String?
     public var rawLabelNames: [String]
@@ -1656,6 +1659,7 @@ public struct PreparedImportRow: Sendable {
         rowNumber: Int,
         draft: TransactionDraft,
         fingerprint: String,
+        legacyFingerprint: String? = nil,
         sourceName: String,
         rawCategoryName: String? = nil,
         rawLabelNames: [String] = [],
@@ -1667,6 +1671,7 @@ public struct PreparedImportRow: Sendable {
         self.rowNumber = rowNumber
         self.draft = draft
         self.fingerprint = fingerprint
+        self.legacyFingerprint = legacyFingerprint
         self.sourceName = sourceName
         self.rawCategoryName = rawCategoryName
         self.rawLabelNames = rawLabelNames

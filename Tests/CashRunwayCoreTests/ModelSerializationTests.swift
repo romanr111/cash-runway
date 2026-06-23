@@ -134,6 +134,7 @@ struct ModelSerializationTests {
         let original = ImportJob(
             id: UUID(),
             sourceName: "csv",
+            sourceFormatID: BankStatementFormat.genericBankCSV.id,
             fileName: "test.csv",
             status: .committed,
             totalRows: 102,

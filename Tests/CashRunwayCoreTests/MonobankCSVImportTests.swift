@@ -41,7 +41,7 @@ struct MonobankCSVImportTests {
         let repository = try TestSupport.makeRepository()
         let service = CSVService(repository: repository)
 
-        let mapping = service.defaultMapping(headers: monobankHeaders, preset: .monobank, walletID: nil)
+        let mapping = service.defaultMapping(headers: monobankHeaders, format: .monobankCSVv1, walletID: nil)
 
         #expect(mapping.dateColumn == "Дата і час операції")
         #expect(mapping.amountColumn == "Сума в валюті картки (UAH)")
@@ -62,7 +62,7 @@ struct MonobankCSVImportTests {
         let repository = try TestSupport.makeRepository()
         let service = CSVService(repository: repository)
 
-        let mapping = service.defaultMapping(headers: englishMonobankHeaders, preset: .monobank, walletID: nil)
+        let mapping = service.defaultMapping(headers: englishMonobankHeaders, format: .monobankCSVv1, walletID: nil)
 
         #expect(mapping.dateColumn == "Date and time")
         #expect(mapping.amountColumn == "Card currency amount, (UAH)")
@@ -121,7 +121,7 @@ struct MonobankCSVImportTests {
         15.06.2026 13:11:03,Від: Тестовий Відправник,4829,250.0,250.0,UAH,—,—,—,10250.00
         12.06.2026 11:57:44,OpenAI,5734,-99.0,-2.0,USD,49.5,—,—,9950.00
         """
-        let mapping = service.defaultMapping(headers: monobankHeaders, preset: .monobank, walletID: walletID)
+        let mapping = service.defaultMapping(headers: monobankHeaders, format: .monobankCSVv1, walletID: walletID)
 
         let result = try service.importCSV(data: Data(text.utf8), fileName: "mono.csv", mapping: mapping)
 
@@ -158,7 +158,7 @@ struct MonobankCSVImportTests {
         15.06.2026 13:11:03,From: Test Sender,4829,250.0,250.0,UAH,—,—,—,10250.00
         12.06.2026 11:57:44,OpenAI,5734,-99.0,-2.0,USD,49.5,—,—,9950.00
         """
-        let mapping = service.defaultMapping(headers: englishMonobankHeaders, preset: .monobank, walletID: walletID)
+        let mapping = service.defaultMapping(headers: englishMonobankHeaders, format: .monobankCSVv1, walletID: walletID)
 
         let result = try service.importCSV(data: Data(text.utf8), fileName: "mono-en.csv", mapping: mapping)
 
@@ -195,7 +195,7 @@ struct MonobankCSVImportTests {
         18.06.2026 18:52:23,Рукавичка,5499,-1659.49
         17.06.2026 12:09:02,ОККО,5541,-243.0
         """
-        let mapping = service.defaultMapping(headers: monobankHeaders, preset: .monobank, walletID: walletID)
+        let mapping = service.defaultMapping(headers: monobankHeaders, format: .monobankCSVv1, walletID: walletID)
 
         let result = try service.importCSV(data: Data(text.utf8), fileName: "mono.csv", mapping: mapping)
 
@@ -226,7 +226,7 @@ struct MonobankCSVImportTests {
         Дата і час операції,Деталі операції,MCC,Сума в валюті картки (UAH)
         18.06.2026 18:52:23,Рукавичка,5499,-1659.49
         """
-        let mapping = service.defaultMapping(headers: monobankHeaders, preset: .monobank, walletID: walletID)
+        let mapping = service.defaultMapping(headers: monobankHeaders, format: .monobankCSVv1, walletID: walletID)
 
         let rows = try service.previewPreparedRows(data: Data(text.utf8), mapping: mapping, limit: 3)
 
@@ -241,7 +241,7 @@ struct MonobankCSVImportTests {
     @Test func bankStatementCategoryMappingDisplaysAutoSourceWhenNoCategoryColumn() throws {
         let repository = try TestSupport.makeRepository()
         let service = CSVService(repository: repository)
-        let monobankMapping = service.defaultMapping(headers: monobankHeaders, preset: .monobank, walletID: nil)
+        let monobankMapping = service.defaultMapping(headers: monobankHeaders, format: .monobankCSVv1, walletID: nil)
         let genericMapping = service.defaultMapping(headers: ["Date", "Amount"], preset: .generic, walletID: nil)
         let walletMapping = service.defaultMapping(
             headers: ["Date", "Wallet", "Type", "Category name", "Amount", "Currency", "Note", "Labels", "Author"],
@@ -266,7 +266,7 @@ struct MonobankCSVImportTests {
         18.06.2026 18:52:23,Padded MCC, 5499 ,-1659.49
         17.06.2026 12:09:02,No MCC,,-243.0
         """
-        let mapping = service.defaultMapping(headers: monobankHeaders, preset: .monobank, walletID: walletID)
+        let mapping = service.defaultMapping(headers: monobankHeaders, format: .monobankCSVv1, walletID: walletID)
 
         let result = try service.importCSV(data: Data(text.utf8), fileName: "mono.csv", mapping: mapping)
 
@@ -314,7 +314,7 @@ struct MonobankCSVImportTests {
         """
         let mapping = service.defaultMapping(
             headers: headers,
-            preset: .monobank,
+            format: .monobankCSVv1,
             walletID: walletID
         )
 
@@ -416,5 +416,31 @@ struct MonobankCSVImportTests {
         #expect(rows.first?.draft.kind == .expense)
         #expect(rows.first?.draft.merchant == "Рукавичка")
         #expect(rows.first?.rawCategoryName == "Groceries")
+    }
+
+    @Test func monobankSumeUAHWithForeignCurrencyColumnImportsSuccessfully() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let walletID = try #require(try repository.wallets().first?.id)
+        let service = CSVService(repository: repository)
+        let text = """
+        Дата і час операції,Деталі операції,MCC,Сума (UAH),Валюта
+        16.06.2026 14:15:08,OpenAI,5734,-99.00,USD
+        """
+        let mapping = service.defaultMapping(
+            headers: ["Дата і час операції", "Деталі операції", "MCC", "Сума (UAH)", "Валюта"],
+            format: .monobankCSVv1,
+            walletID: walletID
+        )
+        #expect(mapping.currencyColumn == nil,
+            "Сума (UAH) is already normalized to UAH; currency column should not be mapped")
+
+        let result = try service.importCSV(data: Data(text.utf8), fileName: "suma-uah.csv", mapping: mapping)
+
+        #expect(result.insertedTransactions == 1)
+        let transaction = try #require(try repository.transactions().first)
+        #expect(transaction.merchant == "OpenAI")
+        #expect(transaction.kind == .expense)
     }
 }

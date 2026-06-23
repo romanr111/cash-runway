@@ -498,15 +498,22 @@ public final class CashRunwayAppModel {
         }
     }
 
-    @discardableResult
-    public func importCSV(
-        data: Data,
-        fileName: String,
-        mapping: CSVImportMapping,
-        rowFilter: CSVImportRowFilter = .allTransactions
-    ) async throws -> CSVImportResult {
-        do {
-            let result = try csvService.importCSV(data: data, fileName: fileName, mapping: mapping, rowFilter: rowFilter)
+@discardableResult
+public func importStatement(
+    normalizedData: Data,
+    fileName: String,
+    format: BankStatementFormat,
+    mapping: CSVImportMapping,
+    rowFilter: CSVImportRowFilter = .allTransactions
+) async throws -> CSVImportResult {
+    do {
+        let result = try csvService.importStatement(
+            normalizedData: normalizedData,
+            fileName: fileName,
+            format: format,
+            mapping: mapping,
+            rowFilter: rowFilter
+        )
             await reloadAll()
             errorMessage = nil
             return result
@@ -920,16 +927,19 @@ private actor BackgroundWork {
 
     func prepareCSVImport(from url: URL) throws -> CSVImportPreparation {
         let data = try CSVImportFileReader.readData(from: url)
+        let fileKind: StatementFileKind
         let csvData: Data
         if url.pathExtension.lowercased() == "xlsx" {
+            fileKind = .xlsx
             let csvText = try XLSXConverter.convertToCSV(data: data)
             csvData = Data(csvText.utf8)
         } else {
+            fileKind = .csv
             csvData = data
         }
         let preview = try csvService.preview(data: csvData)
-        let preset = csvService.detectPreset(headers: preview.headers)
-        return CSVImportPreparation(data: csvData, preview: preview, preset: preset)
+        let format = csvService.detectFormat(headers: preview.headers, fileKind: fileKind)
+        return CSVImportPreparation(data: csvData, preview: preview, format: format)
     }
 
     func prepareBackupImport(from url: URL) throws -> BackupImportPreparation {
@@ -967,7 +977,7 @@ fileprivate struct MutableSnapshots: Sendable {
 struct CSVImportPreparation: Sendable {
     let data: Data
     let preview: CSVImportPreview
-    let preset: CSVPreset
+    let format: BankStatementFormat
 }
 
 struct BackupImportPreparation: Sendable {
