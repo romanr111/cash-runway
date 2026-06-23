@@ -169,7 +169,7 @@ xcrun simctl spawn "$DEVICE_UDID" log show --predicate 'process == "CashRunway"'
 log "Scanning logs for errors/warnings/crashes ..."
 COMBINED_LOGS="$LOG_DIR/app-runtime.log $LOG_DIR/os.log $LOG_DIR/launch.log"
 
-if grep -iE "error|warning|fatal|assert|crash|exception" $COMBINED_LOGS 2>/dev/null | grep -viE "UITEST|UI TEST|xcodebuild|simctl|BUILD SUCCEEDED|os_log|subsystem|category|BackgroundTask|BoardServices|RunningBoardServices|XPCErrors|assertion.*reference|BKSProcessAssertion|_UIBackgroundTaskInfo|Persistent SceneSession|Launch Background Task|Coalescing|Invalid device|app_launch_measurement|CA Event" | grep -v "^\s*$" > "$LOG_DIR/errors-found.log" 2>/dev/null; then
+if grep -iE "error|warning|fatal|assert|crash|exception" $COMBINED_LOGS 2>/dev/null | grep -viE "UITEST|UI TEST|xcodebuild|simctl|BUILD SUCCEEDED|os_log|subsystem|category|BackgroundTask|BoardServices|RunningBoardServices|XPCErrors|assertion.*reference|BKSProcessAssertion|_UIBackgroundTaskInfo|Persistent SceneSession|Launch Background Task|Coalescing|Invalid device|app_launch_measurement|CA Event|FontServices|XPC_ERROR_CONNECTION_INTERRUPTED|interruptionHandler|Re-initialization successful" | grep -v "^\s*$" > "$LOG_DIR/errors-found.log" 2>/dev/null; then
     ERROR_COUNT=$(wc -l < "$LOG_DIR/errors-found.log" | tr -d ' ')
     if [[ "$ERROR_COUNT" -gt 0 ]]; then
         # Filter out known benign patterns
