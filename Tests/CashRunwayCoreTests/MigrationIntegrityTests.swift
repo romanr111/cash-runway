@@ -65,8 +65,9 @@ struct MigrationIntegrityTests {
             .with(amountMinor: 75_000).with(occurredAt: month2).with(merchant: "Internal Transfer")
             .with(source: .manual).build())
 
+        let templateID = UUID()
         let template = RecurringTemplate(
-            id: UUID(), kind: .expense, walletID: walletA.id,
+            id: templateID, kind: .expense, walletID: walletA.id,
             counterpartyWalletID: nil, amountMinor: 25_000,
             categoryID: expenseCategoryID, merchant: "Subscription", note: nil,
             ruleType: .monthly, ruleInterval: 1, dayOfMonth: 1,
@@ -77,6 +78,8 @@ struct MigrationIntegrityTests {
         try fixtureRepo.refreshRecurringInstances()
         let instances = try fixtureRepo.recurringInstances()
         #expect(instances.count > 0)
+        let fixtureInstanceIDs = Set(instances.map { $0.id })
+        let fixtureTemplateIDs = Set(instances.map { $0.templateID })
 
         let importJob = ImportJob(
             id: UUID(), sourceName: "CSV", fileName: "test.csv",
@@ -130,14 +133,56 @@ struct MigrationIntegrityTests {
         let transferInCount = try repo.databaseManager.dbQueue.read { db in
             try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM transactions WHERE type = 'transfer_in'") ?? 0
         }
-        #expect(transferOutCount == transferInCount)
+        #expect(transferOutCount == 1)
+        #expect(transferInCount == 1)
 
-        let labels = try repo.labels()
-        #expect(labels.contains(where: { $0.name == "Groceries" }))
-        #expect(labels.contains(where: { $0.name == "Utilities" }))
+        let transferPair = try repo.databaseManager.dbQueue.read { db in
+            try Row.fetchOne(db, sql: """
+                SELECT t_out.id AS out_id, t_out.linked_transfer_id AS out_linked,
+                       t_in.id AS in_id, t_in.linked_transfer_id AS in_linked
+                FROM transactions t_out
+                JOIN transactions t_in ON t_in.id = t_out.linked_transfer_id
+                WHERE t_out.type = 'transfer_out'
+            """)
+        }
+        #expect(transferPair != nil)
+        let outLinked = transferPair?["out_linked"] as String?
+        let inId = transferPair?["in_id"] as String?
+        let inLinked = transferPair?["in_linked"] as String?
+        let outId = transferPair?["out_id"] as String?
+        #expect(outLinked == inId)
+        #expect(inLinked == outId)
+
+        let labelLinkCount = try repo.databaseManager.dbQueue.read { db in
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM transaction_labels") ?? 0
+        }
+        #expect(labelLinkCount == 2)
+
+        let labelsAfter = try repo.labels()
+        #expect(labelsAfter.contains(where: { $0.name == "Groceries" }))
+        #expect(labelsAfter.contains(where: { $0.name == "Utilities" }))
 
         let instancesAfter = try repo.recurringInstances()
         #expect(instancesAfter.count == instances.count)
+        let postInstanceIDs = Set(instancesAfter.map { $0.id })
+        let postTemplateIDs = Set(instancesAfter.map { $0.templateID })
+        #expect(postInstanceIDs == fixtureInstanceIDs)
+        #expect(postTemplateIDs == fixtureTemplateIDs)
+        #expect(postTemplateIDs == [templateID])
+
+        let importJobCount = try repo.databaseManager.dbQueue.read { db in
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM import_jobs") ?? 0
+        }
+        #expect(importJobCount == 1)
+
+        let importTxnRow = try repo.databaseManager.dbQueue.read { db in
+            try Row.fetchOne(db, sql: """
+                SELECT import_job_id, import_fingerprint FROM transactions
+                WHERE import_fingerprint IS NOT NULL
+            """)
+        }
+        #expect((importTxnRow?["import_job_id"] as String?) == importJob.id.uuidString)
+        #expect((importTxnRow?["import_fingerprint"] as String?) == "fp-import-001")
 
         let ftsMatches = try repo.transactions(query: .init(searchText: "Import"))
         #expect(ftsMatches.count > 0)
