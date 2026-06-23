@@ -482,9 +482,10 @@ public final class BankSyncCoordinator: BankSyncPerforming, @unchecked Sendable 
     }
 }
 
-public enum BankCategoryResolutionSource {
+public enum BankCategoryResolutionSource: Sendable {
     case cashRunwayWallet
     case bankStatement(BankProvider)
+    case genericBankStatement
 }
 
 public struct BankCategoryResolutionResult: Sendable {
@@ -618,6 +619,12 @@ public final class BankCategoryResolver: @unchecked Sendable {
         guard kind != .transfer else { return nil }
         let categoryKind: CategoryKind = kind == .income ? .income : .expense
         let fallbackName = kind == .income ? "Other Income" : "Other Expense"
+        let allowsBankFallbacks = switch source {
+        case .bankStatement, .genericBankStatement:
+            true
+        case .cashRunwayWallet:
+            false
+        }
 
         if case .bankStatement(let provider) = source {
             let haystack = [merchant, description]
@@ -647,7 +654,15 @@ public final class BankCategoryResolver: @unchecked Sendable {
             }
         }
 
-        if case .bankStatement = source {
+        if allowsBankFallbacks {
+            if let builtInCategoryName = Self.builtInMerchantCategoryName(
+                merchant: merchant,
+                description: description,
+                kind: kind
+            ), let entry = categoriesByNormalizedName[categoryKind]?[Self.normalize(builtInCategoryName)] {
+                return BankCategoryResolutionResult(categoryID: entry.id, categoryName: builtInCategoryName)
+            }
+
             if let rawCategoryName,
                let canonicalName = BankCategoryNameMapping.categoryName(for: rawCategoryName, kind: kind) {
                 let key = BankCategoryResolver.normalize(canonicalName)
@@ -664,7 +679,7 @@ public final class BankCategoryResolver: @unchecked Sendable {
             }
         }
 
-        if case .bankStatement = source,
+        if allowsBankFallbacks,
            let entry = categoriesByNormalizedName[categoryKind]?[BankCategoryResolver.normalize(fallbackName)] {
             return BankCategoryResolutionResult(categoryID: entry.id, categoryName: fallbackName)
         }
@@ -692,6 +707,23 @@ public final class BankCategoryResolver: @unchecked Sendable {
             .components(separatedBy: .whitespacesAndNewlines)
             .filter { !$0.isEmpty }
             .joined(separator: " ")
+    }
+
+    private static func builtInMerchantCategoryName(
+        merchant: String?,
+        description: String?,
+        kind: TransactionDraft.Kind
+    ) -> String? {
+        guard kind == .expense else { return nil }
+
+        let haystack = [merchant, description].compactMap { $0?.lowercased() }
+        guard !haystack.isEmpty else { return nil }
+
+        if haystack.contains(where: { $0.contains("temu") }) {
+            return "Shopping"
+        }
+
+        return nil
     }
 }
 
@@ -2304,6 +2336,7 @@ extension CashRunwayRepository {
     public func commitCSVImport(
         fileName: String,
         sourceName: String,
+        sourceFormatID: String? = nil,
         preparedRows: [PreparedImportRow],
         rowErrors: [CSVRowError],
         invalidRows: Int? = nil
@@ -2316,11 +2349,11 @@ extension CashRunwayRepository {
         return try databaseManager.dbQueue.write { db in
             try db.execute(
                 sql: """
-                INSERT INTO import_jobs (id, source_name, file_name, status, total_rows, valid_rows, invalid_rows, duplicate_rows, started_at, finished_at, error_summary)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO import_jobs (id, source_name, source_format_id, file_name, status, total_rows, valid_rows, invalid_rows, duplicate_rows, started_at, finished_at, error_summary)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 arguments: [
-                    jobID.uuidString, sourceName, fileName, ImportJobStatus.validated.rawValue, totalRows,
+                        jobID.uuidString, sourceName, sourceFormatID, fileName, ImportJobStatus.validated.rawValue, totalRows,
                     preparedRows.count, resolvedInvalidRows, 0, now, nil, resolvedInvalidRows > 0 ? "\(resolvedInvalidRows) rows failed validation." : nil,
                 ]
             )
@@ -2331,7 +2364,7 @@ extension CashRunwayRepository {
             var affectedMonths = Set<Int>()
 
             for row in preparedRows {
-                if seenFingerprints.contains(row.fingerprint) {
+                if seenFingerprints.contains(row.fingerprint) || row.legacyFingerprint.map { seenFingerprints.contains($0) } ?? false {
                     duplicateRows += 1
                     continue
                 }
@@ -2385,10 +2418,11 @@ extension CashRunwayRepository {
                 ]
             )
 
-            let job = ImportJob(
-                id: jobID,
-                sourceName: sourceName,
-                fileName: fileName,
+        let job = ImportJob(
+            id: jobID,
+            sourceName: sourceName,
+            sourceFormatID: sourceFormatID,
+            fileName: fileName,
                 status: .committed,
                 totalRows: totalRows,
                 validRows: insertedRows,
@@ -2506,6 +2540,10 @@ extension CashRunwayRepository {
                 throw CashRunwayError.notFound
             }
             let instance = try Self.recurringInstance(row)
+
+            guard instance.status != .posted else {
+                return
+            }
             guard let templateRow = try Row.fetchOne(db, sql: "SELECT * FROM recurring_templates WHERE id = ?", arguments: [instance.templateID.uuidString]) else {
                 throw CashRunwayError.notFound
             }
@@ -3232,10 +3270,14 @@ extension CashRunwayRepository {
         }
     }
 
-    public static func generatedDates(for template: RecurringTemplate, start: Date, end: Date) -> [Date] {
+    public static func generatedDates(
+        for template: RecurringTemplate,
+        start: Date,
+        end: Date,
+        calendar: Calendar = DateKeys.calendar
+    ) -> [Date] {
         var dates: [Date] = []
         var cursor = max(start, template.startDate)
-        let calendar = DateKeys.calendar
         while cursor <= end {
             if let endDate = template.endDate, cursor > endDate { break }
             let match: Bool
@@ -3344,11 +3386,11 @@ extension CashRunwayRepository {
         for importJob in backup.importJobs {
             try db.execute(
                 sql: """
-                INSERT INTO import_jobs (id, source_name, file_name, status, total_rows, valid_rows, invalid_rows, started_at, finished_at, error_summary)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO import_jobs (id, source_name, source_format_id, file_name, status, total_rows, valid_rows, invalid_rows, started_at, finished_at, error_summary)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 arguments: [
-                    importJob.id.uuidString, importJob.sourceName, importJob.fileName, importJob.status.rawValue,
+                    importJob.id.uuidString, importJob.sourceName, importJob.sourceFormatID, importJob.fileName, importJob.status.rawValue,
                     importJob.totalRows, importJob.validRows, importJob.invalidRows, importJob.startedAt,
                     importJob.finishedAt, importJob.errorSummary,
                 ]
@@ -3817,6 +3859,7 @@ extension CashRunwayRepository {
         BackupImportJob(
             id: UUID(uuidString: row["id"])!,
             sourceName: row["source_name"],
+            sourceFormatID: row["source_format_id"],
             fileName: row["file_name"],
             status: ImportJobStatus(rawValue: row["status"]) ?? .created,
             totalRows: row["total_rows"],

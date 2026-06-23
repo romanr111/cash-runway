@@ -150,4 +150,69 @@ struct DatabaseLifecycleTests {
         #expect(try reopenedRepo.wallets().count >= 2)
         #expect(try reopenedRepo.transactions().count == txCountBefore)
     }
+
+     @Test func sourceFormatIDMigrationInfersLegacyXLSXByFileExtension() throws {
+        let location = TestSupport.makeLocation()
+        let keychain = TestKeychainStore(items: ["database-key": Data("test-database-key".utf8)])
+        let dbURL = try location.databaseURL()
+        try FileManager.default.createDirectory(
+            at: dbURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        var config = Configuration()
+        config.prepareDatabase { db in
+            try db.usePassphrase("test-database-key")
+        }
+        let queue = try DatabaseQueue(path: dbURL.path, configuration: config)
+        try queue.write { db in
+            try db.execute(sql: "CREATE TABLE grdb_migrations (identifier TEXT NOT NULL PRIMARY KEY)")
+            for migrationID in ["v1_schema", "v2_transaction_search_category_name", "v3_import_idempotency", "v3_bank_sync"] {
+                try db.execute(sql: "INSERT INTO grdb_migrations (identifier) VALUES (?)", arguments: [migrationID])
+            }
+            try db.execute(sql: """
+                CREATE TABLE import_jobs (
+                    id TEXT PRIMARY KEY,
+                    source_name TEXT NOT NULL,
+                    file_name TEXT,
+                    status TEXT NOT NULL,
+                    total_rows INTEGER NOT NULL DEFAULT 0,
+                    valid_rows INTEGER NOT NULL DEFAULT 0,
+                    invalid_rows INTEGER NOT NULL DEFAULT 0,
+                    duplicate_rows INTEGER NOT NULL DEFAULT 0,
+                    started_at DATETIME NOT NULL,
+                    finished_at DATETIME,
+                    error_summary TEXT
+                )
+                """)
+            let now = Date()
+            let rows: [(String, String, String)] = [
+                ("privat-xlsx", "PrivatBank", "statement.xlsx"),
+                ("privat-csv", "PrivatBank", "statement.csv"),
+                ("generic-xlsx", "Generic CSV", "unknown.xlsx"),
+                ("generic-csv", "Generic CSV", "unknown.csv"),
+            ]
+            for row in rows {
+                try db.execute(
+                    sql: """
+                    INSERT INTO import_jobs (id, source_name, file_name, status, started_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    arguments: [row.0, row.1, row.2, ImportJobStatus.committed.rawValue, now]
+                )
+            }
+        }
+
+        let manager = try DatabaseManager(locationProvider: location, keychain: keychain)
+
+        let mapped = try manager.dbQueue.read { db in
+            try Row.fetchAll(db, sql: "SELECT id, source_format_id FROM import_jobs ORDER BY id")
+        }
+        let values = Dictionary(uniqueKeysWithValues: mapped.map { row in
+            (row["id"] as String, row["source_format_id"] as String?)
+        })
+        #expect(values["privat-xlsx"] == BankStatementFormat.privatBankXLSXv1.id)
+        #expect(values["privat-csv"] == BankStatementFormat.privatBankCSVv1.id)
+        #expect(values["generic-xlsx"] == BankStatementFormat.genericBankXLSX.id)
+        #expect(values["generic-csv"] == BankStatementFormat.genericBankCSV.id)
+    }
 }

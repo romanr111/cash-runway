@@ -41,7 +41,7 @@ struct CSVImportView: View {
                         }
                     }
 
-                    if coordinator.importPreset == .cashRunwayWallet {
+        if coordinator.importFormat == .cashRunwayCSV {
                         Section("Detected") {
                             summaryRow("Income / Expense", value: typeSummary)
                             summaryRow("Wallet", value: walletSummary)
@@ -124,7 +124,7 @@ struct CSVImportView: View {
     }
 
     private var presetDisplayName: String {
-        coordinator.importPreset == .cashRunwayWallet ? L10n.string("Cash Runway Wallet CSV") : coordinator.importPreset.rawValue
+        coordinator.importFormat.displayName
     }
 
     private var hasRequiredMapping: Bool {
@@ -204,7 +204,7 @@ struct CSVImportView: View {
 
     @ViewBuilder
     private var categoryMappingRow: some View {
-        switch coordinator.importMapping.categoryMappingDisplayMode(for: coordinator.importPreset) {
+        switch coordinator.importMapping.categoryMappingDisplayMode(for: coordinator.importFormat) {
         case .autoBankRules:
             summaryRow("Category", value: L10n.string("Auto: MCC / bank rules"))
         case .sourceColumn:
@@ -215,6 +215,7 @@ struct CSVImportView: View {
     private var reviewRows: [CSVImportReviewRow] {
         if let preparedRows = try? coordinator.model.csvService.previewPreparedRows(
             data: coordinator.importData,
+                format: coordinator.importFormat,
             mapping: coordinator.importMapping,
             rowFilter: coordinator.rowFilter,
             limit: 3
