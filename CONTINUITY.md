@@ -1,21 +1,34 @@
-Goal: Fix the CSV import scope work and keep the core source/package trees identical.
+# Continuity Ledger
 
-State:
-- Working in the root checkout on `main`.
-- `just mirror-core` required `--force` because the package mirror already had local edits; the sync completed and `Sources/CashRunwayCore` now matches `Modules/CashRunwayCorePackage/Sources/CashRunwayCore`.
-- The two test files that were suspected of syntax breakage parse cleanly with `swiftc -parse`.
+## Session: Testing roadmap — persistence and idempotency regression tests
 
-Implemented / verified:
-- `CSVImportRowFilter` is threaded through `CSVService`, `CashRunwayAppModel`, `CSVImportCoordinator`, and `CSVImportView`.
-- `CSVEdgeCaseTests` and `MonobankCSVImportTests` cover the expenses-only path.
-- `git diff --check` passes.
-- `diff -rq Sources/CashRunwayCore Modules/CashRunwayCorePackage/Sources/CashRunwayCore` is clean.
+Branch: `testing-roadmap-priority-tests`
+Worktree: `~/.codex/worktrees/cash-runway-testing-roadmap-priority-tests`
+PR: https://github.com/romanr111/cash-runway/pull/71
 
-Validation:
-- `swiftc -parse Tests/CashRunwayCoreTests/MonobankCSVImportTests.swift` passed.
-- `swiftc -parse Tests/CashRunwayCoreTests/DatabaseLifecycleTests.swift` passed.
-- `just build` failed in `xcodebuild` while resolving package dependencies because SwiftPM diagnostic `.dia` files could not be written under `~/Library/Caches/org.swift.swiftpm/...` in this environment.
-- `just test-filter DatabaseLifecycleTests` failed earlier with a SwiftPM manifest/toolchain error before compilation: `Invalid manifest "-target", "x86_64-apple-macosx14.0"`.
+## Changed files (9)
 
-Open questions:
-- Whether the build/test environment needs an isolated scratch path or different Xcode/SwiftPM cache permissions for a full compile/test pass.
+### Production (canonical + mirror)
+- `Sources/CashRunwayCore/DatabaseManager.swift` — migration refactor + test-only init
+- `Modules/.../DatabaseManager.swift` — mirror
+- `Sources/CashRunwayCore/CashRunwayRepository.swift` — recurring post idempotency guard
+- `Modules/.../CashRunwayRepository.swift` — mirror
+
+### Tests
+- `Tests/CashRunwayCoreTests/MigrationIntegrityTests.swift` — generated encrypted previous-schema migration test
+- `Tests/CashRunwayCoreTests/DatabaseKeyMismatchTests.swift` — wrong-key non-destructive failure test
+- `Tests/CashRunwayCoreTests/RecurringIdempotencyTests.swift` — sequential double-post idempotency test
+- `Tests/CashRunwayCoreTests/MonobankImportRollbackTests.swift` — batch rollback + corrected retry + idempotency test
+
+### CI
+- `.github/workflows/ios-ci.yml` — source-consistency + app-build preflight job
+
+### Docs
+- `CONTINUITY.md`
+
+## Validation
+- 384 tests (removed RunwayForecastTests which tested a non-production RunwayCalculator; merged correctedImport into monobank rollback test)
+- swift test: 384 tests, 0 failures
+- just check-perf: 14 tests, 0 failures
+- just build: BUILD SUCCEEDED
+- diff -rq: core trees identical

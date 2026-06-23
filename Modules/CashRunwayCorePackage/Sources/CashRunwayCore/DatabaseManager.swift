@@ -288,6 +288,22 @@ public final class DatabaseManager: @unchecked Sendable {
     init(
         locationProvider: DatabaseLocationProvider = .init(),
         allowsDestructiveRecovery: Bool = false,
+        keychain: any KeychainStoring,
+        migrator: DatabaseMigrator
+    ) throws {
+        self.keychain = keychain
+        let databaseURL = try locationProvider.databaseURL()
+        self.dbQueue = try Self.openDatabase(
+            at: databaseURL,
+            keychain: keychain,
+            migrator: migrator,
+            allowsDestructiveRecovery: allowsDestructiveRecovery
+        )
+    }
+
+    init(
+        locationProvider: DatabaseLocationProvider = .init(),
+        allowsDestructiveRecovery: Bool = false,
         keychain: any KeychainStoring
     ) throws {
         self.keychain = keychain
@@ -300,19 +316,19 @@ public final class DatabaseManager: @unchecked Sendable {
         )
     }
 
-    private static func databaseKey(using keychain: any KeychainStoring) throws -> String {
+    private static func databaseKey(using keychain: any KeychainStoring) throws -> (key: String, hadExistingKey: Bool) {
         let account = "database-key"
         if let data = try keychain.read(account: account) {
             guard let key = String(data: data, encoding: .utf8), !key.isEmpty else {
                 throw KeychainStoreError.invalidStoredData(account)
             }
             stampDatabaseKeyAccessibility(data, using: keychain)
-            return key
+            return (key, true)
         }
 
         let key = UUID().uuidString.replacingOccurrences(of: "-", with: "") + UUID().uuidString.replacingOccurrences(of: "-", with: "")
         try keychain.write(Data(key.utf8), account: account)
-        return key
+        return (key, false)
     }
 
     private static func stampDatabaseKeyAccessibility(_ data: Data, using keychain: any KeychainStoring) {
@@ -324,6 +340,15 @@ public final class DatabaseManager: @unchecked Sendable {
     }
 
     private static func openDatabase(at url: URL, keychain: any KeychainStoring, migrator: DatabaseMigrator, allowsDestructiveRecovery: Bool) throws -> DatabaseQueue {
+        let databaseExists = FileManager.default.fileExists(atPath: url.path)
+
+        if databaseExists {
+            let hadKey = (try? keychain.read(account: "database-key")) != nil
+            if !hadKey && !allowsDestructiveRecovery {
+                throw CashRunwayStartupFailure(message: "Database exists but no encryption key was found in Keychain. The database was not modified.")
+            }
+        }
+
         do {
             let dbQueue = try DatabaseQueue(path: url.path, configuration: makeConfiguration(keychain: keychain))
             try migrator.migrate(dbQueue)
@@ -332,7 +357,7 @@ public final class DatabaseManager: @unchecked Sendable {
             guard allowsDestructiveRecovery, shouldRecover(from: error) else {
                 throw error
             }
-            try quarantineDatabase(at: url)
+            try quarantineDatabases(at: url)
             keychain.delete(account: "database-key")
             let recoveredQueue = try DatabaseQueue(path: url.path, configuration: makeConfiguration(keychain: keychain))
             try migrator.migrate(recoveredQueue)
@@ -344,7 +369,7 @@ public final class DatabaseManager: @unchecked Sendable {
         var configuration = Configuration()
         configuration.journalMode = .wal
         configuration.prepareDatabase { db in
-            try db.usePassphrase(try databaseKey(using: keychain))
+            try db.usePassphrase(try databaseKey(using: keychain).key)
         }
         return configuration
     }
@@ -363,7 +388,7 @@ public final class DatabaseManager: @unchecked Sendable {
             || message.contains("sqlcipher")
     }
 
-    private static func quarantineDatabase(at url: URL) throws {
+    static func quarantineDatabases(at url: URL) throws {
         let fileManager = FileManager.default
         let recoveryDirectory = url.deletingLastPathComponent().appendingPathComponent("Recovery", isDirectory: true)
         try fileManager.createDirectory(at: recoveryDirectory, withIntermediateDirectories: true)
@@ -380,364 +405,381 @@ public final class DatabaseManager: @unchecked Sendable {
         }
     }
 
-    // swiftlint:disable:next function_body_length
+    static func allMigrations() -> [(String, @Sendable (Database) throws -> Void)] {
+        [
+            ("v1_schema", { db in
+                try db.create(table: "wallets") { table in
+                    table.column("id", .text).primaryKey()
+                    table.column("name", .text).notNull()
+                    table.column("kind", .text).notNull()
+                    table.column("color_hex", .text)
+                    table.column("icon_name", .text)
+                    table.column("starting_balance_minor", .integer).notNull()
+                    table.column("current_balance_minor", .integer).notNull()
+                    table.column("is_archived", .boolean).notNull().defaults(to: false)
+                    table.column("sort_order", .integer).notNull().defaults(to: 0)
+                    table.column("created_at", .datetime).notNull()
+                    table.column("updated_at", .datetime).notNull()
+                }
+
+                try db.create(table: "categories") { table in
+                    table.column("id", .text).primaryKey()
+                    table.column("name", .text).notNull()
+                    table.column("kind", .text).notNull()
+                    table.column("icon_name", .text)
+                    table.column("color_hex", .text)
+                    table.column("parent_id", .text)
+                    table.column("is_system", .boolean).notNull().defaults(to: false)
+                    table.column("is_archived", .boolean).notNull().defaults(to: false)
+                    table.column("sort_order", .integer).notNull().defaults(to: 0)
+                    table.column("created_at", .datetime).notNull()
+                    table.column("updated_at", .datetime).notNull()
+                }
+
+                try db.create(table: "labels") { table in
+                    table.column("id", .text).primaryKey()
+                    table.column("name", .text).notNull()
+                    table.column("color_hex", .text)
+                    table.column("created_at", .datetime).notNull()
+                    table.column("updated_at", .datetime).notNull()
+                }
+
+                try db.create(table: "transactions") { table in
+                    table.column("id", .text).primaryKey()
+                    table.column("wallet_id", .text).notNull().indexed()
+                    table.column("type", .text).notNull()
+                    table.column("linked_transfer_id", .text)
+                    table.column("amount_minor", .integer).notNull()
+                    table.column("occurred_at", .datetime).notNull()
+                    table.column("local_day_key", .integer).notNull()
+                    table.column("local_month_key", .integer).notNull()
+                    table.column("category_id", .text)
+                    table.column("merchant", .text)
+                    table.column("note", .text)
+                    table.column("is_deleted", .boolean).notNull().defaults(to: false)
+                    table.column("source", .text).notNull()
+                    table.column("recurring_template_id", .text)
+                    table.column("recurring_instance_id", .text)
+                    table.column("created_at", .datetime).notNull()
+                    table.column("updated_at", .datetime).notNull()
+                }
+
+                try db.create(table: "transaction_labels", options: [.withoutRowID]) { table in
+                    table.column("transaction_id", .text).notNull()
+                    table.column("label_id", .text).notNull()
+                    table.primaryKey(["transaction_id", "label_id"])
+                }
+
+                try db.create(table: "budgets") { table in
+                    table.column("id", .text).primaryKey()
+                    table.column("category_id", .text).notNull()
+                    table.column("month_key", .integer).notNull()
+                    table.column("limit_minor", .integer).notNull()
+                    table.column("is_archived", .boolean).notNull().defaults(to: false)
+                    table.column("created_at", .datetime).notNull()
+                    table.column("updated_at", .datetime).notNull()
+                    table.uniqueKey(["category_id", "month_key"])
+                }
+
+                try db.create(table: "recurring_templates") { table in
+                    table.column("id", .text).primaryKey()
+                    table.column("kind", .text).notNull()
+                    table.column("wallet_id", .text).notNull()
+                    table.column("counterparty_wallet_id", .text)
+                    table.column("amount_minor", .integer).notNull()
+                    table.column("category_id", .text)
+                    table.column("merchant", .text)
+                    table.column("note", .text)
+                    table.column("rule_type", .text).notNull()
+                    table.column("rule_interval", .integer).notNull()
+                    table.column("day_of_month", .integer)
+                    table.column("weekday", .integer)
+                    table.column("start_date", .datetime).notNull()
+                    table.column("end_date", .datetime)
+                    table.column("is_active", .boolean).notNull().defaults(to: true)
+                    table.column("created_at", .datetime).notNull()
+                    table.column("updated_at", .datetime).notNull()
+                }
+
+                try db.create(table: "recurring_instances") { table in
+                    table.column("id", .text).primaryKey()
+                    table.column("template_id", .text).notNull()
+                    table.column("due_date", .datetime).notNull()
+                    table.column("day_key", .integer).notNull()
+                    table.column("status", .text).notNull()
+                    table.column("linked_transaction_id", .text)
+                    table.column("override_amount_minor", .integer)
+                    table.column("override_category_id", .text)
+                    table.column("override_note", .text)
+                    table.column("override_merchant", .text)
+                    table.column("created_at", .datetime).notNull()
+                    table.column("updated_at", .datetime).notNull()
+                    table.uniqueKey(["template_id", "day_key"])
+                }
+
+                try db.create(table: "category_remaps") { table in
+                    table.column("id", .text).primaryKey()
+                    table.column("old_category_id", .text).notNull()
+                    table.column("new_category_id", .text).notNull()
+                    table.column("remapped_at", .datetime).notNull()
+                }
+
+                try db.create(table: "audit_entries") { table in
+                    table.column("id", .text).primaryKey()
+                    table.column("entity_type", .text).notNull()
+                    table.column("entity_id", .text).notNull()
+                    table.column("operation", .text).notNull()
+                    table.column("diff_json", .text).notNull()
+                    table.column("created_at", .datetime).notNull()
+                }
+
+                try db.create(table: "import_jobs") { table in
+                    table.column("id", .text).primaryKey()
+                    table.column("source_name", .text).notNull()
+                    table.column("file_name", .text).notNull()
+                    table.column("status", .text).notNull()
+                    table.column("total_rows", .integer).notNull()
+                    table.column("valid_rows", .integer).notNull()
+                    table.column("invalid_rows", .integer).notNull()
+                    table.column("started_at", .datetime).notNull()
+                    table.column("finished_at", .datetime)
+                    table.column("error_summary", .text)
+                }
+
+                try db.create(table: "monthly_wallet_cashflow") { table in
+                    table.column("wallet_id", .text).notNull()
+                    table.column("month_key", .integer).notNull()
+                    table.column("income_minor", .integer).notNull().defaults(to: 0)
+                    table.column("expense_minor", .integer).notNull().defaults(to: 0)
+                    table.column("transfer_in_minor", .integer).notNull().defaults(to: 0)
+                    table.column("transfer_out_minor", .integer).notNull().defaults(to: 0)
+                    table.column("txn_count", .integer).notNull().defaults(to: 0)
+                    table.column("updated_at", .datetime).notNull()
+                    table.uniqueKey(["wallet_id", "month_key"])
+                }
+
+                try db.create(table: "monthly_category_spend") { table in
+                    table.column("category_id", .text).notNull()
+                    table.column("month_key", .integer).notNull()
+                    table.column("expense_minor", .integer).notNull().defaults(to: 0)
+                    table.column("txn_count", .integer).notNull().defaults(to: 0)
+                    table.column("updated_at", .datetime).notNull()
+                    table.uniqueKey(["category_id", "month_key"])
+                }
+
+                try db.create(table: "daily_wallet_balance_delta") { table in
+                    table.column("wallet_id", .text).notNull()
+                    table.column("day_key", .integer).notNull()
+                    table.column("net_delta_minor", .integer).notNull().defaults(to: 0)
+                    table.column("updated_at", .datetime).notNull()
+                    table.uniqueKey(["wallet_id", "day_key"])
+                }
+
+                try db.create(table: "budget_progress_snapshot") { table in
+                    table.column("budget_id", .text).notNull()
+                    table.column("month_key", .integer).notNull()
+                    table.column("spent_minor", .integer).notNull().defaults(to: 0)
+                    table.column("remaining_minor", .integer).notNull().defaults(to: 0)
+                    table.column("percent_used_bp", .integer).notNull().defaults(to: 0)
+                    table.column("updated_at", .datetime).notNull()
+                    table.uniqueKey(["budget_id", "month_key"])
+                }
+
+                try db.create(table: "aggregate_dirty_ranges") { table in
+                    table.column("id", .text).primaryKey()
+                    table.column("kind", .text).notNull()
+                    table.column("wallet_id", .text)
+                    table.column("category_id", .text)
+                    table.column("budget_id", .text)
+                    table.column("month_key", .integer)
+                    table.column("status", .text).notNull()
+                    table.column("created_at", .datetime).notNull()
+                    table.column("updated_at", .datetime).notNull()
+                }
+
+                try db.create(virtualTable: "transaction_search", using: FTS5()) { table in
+                    table.column("transaction_id").notIndexed()
+                    table.column("merchant")
+                    table.column("note")
+                    table.column("wallet_name")
+                    table.column("category_name")
+                    table.column("labels")
+                    table.tokenizer = .unicode61()
+                }
+
+                try db.create(index: "idx_transactions_wallet_occurred", on: "transactions", columns: ["wallet_id", "occurred_at"])
+                try db.create(index: "idx_transactions_day", on: "transactions", columns: ["local_day_key", "id"])
+                try db.create(index: "idx_transactions_month_wallet", on: "transactions", columns: ["local_month_key", "wallet_id"])
+                try db.create(index: "idx_transactions_category_month", on: "transactions", columns: ["category_id", "local_month_key"])
+                try db.create(index: "idx_transactions_recurring_template", on: "transactions", columns: ["recurring_template_id"])
+                try db.create(index: "idx_transactions_source", on: "transactions", columns: ["source"])
+                try db.create(index: "idx_transaction_labels_label_transaction", on: "transaction_labels", columns: ["label_id", "transaction_id"])
+                try db.create(index: "idx_budgets_month_category", on: "budgets", columns: ["month_key", "category_id"])
+                try db.create(index: "idx_monthly_wallet_cashflow_month_wallet", on: "monthly_wallet_cashflow", columns: ["month_key", "wallet_id"])
+                try db.create(index: "idx_monthly_category_spend_month_category", on: "monthly_category_spend", columns: ["month_key", "category_id"])
+                try db.create(index: "idx_daily_wallet_balance_delta_day_wallet", on: "daily_wallet_balance_delta", columns: ["day_key", "wallet_id"])
+                try db.create(index: "idx_recurring_instances_template_day", on: "recurring_instances", columns: ["template_id", "day_key"])
+            }),
+
+            ("v2_transaction_search_category_name", { db in
+                try db.drop(table: "transaction_search")
+                try db.create(virtualTable: "transaction_search", using: FTS5()) { table in
+                    table.column("transaction_id").notIndexed()
+                    table.column("merchant")
+                    table.column("note")
+                    table.column("wallet_name")
+                    table.column("category_name")
+                    table.column("labels")
+                    table.tokenizer = .unicode61()
+                }
+
+                try db.execute(
+                    sql: """
+                    INSERT INTO transaction_search (transaction_id, merchant, note, wallet_name, category_name, labels)
+                    SELECT
+                        t.id,
+                        COALESCE(t.merchant, ''),
+                        COALESCE(t.note, ''),
+                        COALESCE(w.name, ''),
+                        COALESCE(c.name, ''),
+                        COALESCE((
+                            SELECT group_concat(l.name, ' ')
+                            FROM transaction_labels tl
+                            JOIN labels l ON l.id = tl.label_id
+                            WHERE tl.transaction_id = t.id
+                        ), '')
+                    FROM transactions t
+                    JOIN wallets w ON w.id = t.wallet_id
+                    LEFT JOIN categories c ON c.id = t.category_id
+                    WHERE t.is_deleted = 0
+                    """
+                )
+            }),
+
+            ("v3_import_idempotency", { db in
+                try db.execute(sql: "ALTER TABLE import_jobs ADD COLUMN duplicate_rows INTEGER NOT NULL DEFAULT 0")
+                try db.execute(sql: "ALTER TABLE transactions ADD COLUMN import_job_id TEXT")
+                try db.execute(sql: "ALTER TABLE transactions ADD COLUMN import_fingerprint TEXT")
+                try db.execute(sql: "CREATE UNIQUE INDEX idx_transactions_import_fingerprint ON transactions(import_fingerprint) WHERE import_fingerprint IS NOT NULL")
+            }),
+
+            ("v4_import_job_source_format_id", { db in
+                try db.execute(sql: "ALTER TABLE import_jobs ADD COLUMN source_format_id TEXT")
+                try db.execute(sql: """
+                    UPDATE import_jobs
+                    SET source_format_id = CASE
+                        WHEN source_name IN ('Cash Runway Wallet', 'Cash Runway Wallet CSV') THEN 'cash-runway.csv.v1'
+                        WHEN source_name IN ('Monobank', 'Monobank CSV') THEN 'monobank.csv.v1'
+                        WHEN source_name = 'PrivatBank XLSX' THEN 'privatbank.xlsx.v1'
+                        WHEN source_name = 'PrivatBank' AND lower(file_name) LIKE '%.xlsx' THEN 'privatbank.xlsx.v1'
+                        WHEN source_name IN ('PrivatBank', 'PrivatBank CSV') THEN 'privatbank.csv.v1'
+                        WHEN source_name = 'Generic Bank XLSX' THEN 'generic-bank.xlsx.v1'
+                        WHEN source_name = 'Generic CSV' AND lower(file_name) LIKE '%.xlsx' THEN 'generic-bank.xlsx.v1'
+                        WHEN source_name IN ('Generic CSV', 'Generic Bank CSV') THEN 'generic-bank.csv.v1'
+                        ELSE NULL
+                    END
+                    WHERE source_format_id IS NULL
+                    """)
+            }),
+
+            ("v3_bank_sync", { db in
+                try db.create(table: "bank_integrations") { table in
+                    table.column("id", .text).primaryKey()
+                    table.column("provider", .text).notNull()
+                    table.column("display_name", .text).notNull()
+                    table.column("status", .text).notNull()
+                    table.column("sync_start_at", .datetime).notNull()
+                    table.column("token_keychain_account", .text).notNull()
+                    table.column("last_client_info_sync_at", .datetime)
+                    table.column("last_successful_sync_at", .datetime)
+                    table.column("last_sync_error", .text)
+                    table.column("created_at", .datetime).notNull()
+                    table.column("updated_at", .datetime).notNull()
+                }
+
+                try db.create(table: "bank_accounts") { table in
+                    table.column("id", .text).primaryKey()
+                    table.column("integration_id", .text).notNull()
+                    table.column("provider", .text).notNull()
+                    table.column("provider_account_id", .text).notNull()
+                    table.column("wallet_id", .text).notNull()
+                    table.column("display_name", .text).notNull()
+                    table.column("account_type", .text)
+                    table.column("currency_code", .integer).notNull()
+                    table.column("masked_pan", .text)
+                    table.column("iban", .text)
+                    table.column("is_enabled", .boolean).notNull().defaults(to: true)
+                    table.column("sync_start_at", .datetime).notNull()
+                    table.column("last_successful_sync_at", .datetime)
+                    table.column("last_statement_item_time", .integer)
+                    table.column("created_at", .datetime).notNull()
+                    table.column("updated_at", .datetime).notNull()
+                    table.uniqueKey(["integration_id", "provider_account_id"])
+                }
+
+                try db.create(table: "bank_transaction_imports") { table in
+                    table.column("id", .text).primaryKey()
+                    table.column("provider", .text).notNull()
+                    table.column("integration_id", .text).notNull()
+                    table.column("bank_account_id", .text).notNull()
+                    table.column("provider_account_id", .text).notNull()
+                    table.column("provider_statement_item_id", .text).notNull()
+                    table.column("statement_time", .integer).notNull()
+                    table.column("amount_minor_signed", .integer).notNull()
+                    table.column("operation_amount_minor_signed", .integer)
+                    table.column("currency_code", .integer).notNull()
+                    table.column("mcc", .integer)
+                    table.column("original_mcc", .integer)
+                    table.column("description", .text)
+                    table.column("comment", .text)
+                    table.column("counter_name", .text)
+                    table.column("counter_iban", .text)
+                    table.column("receipt_id", .text)
+                    table.column("hold", .boolean)
+                    table.column("raw_json", .text).notNull()
+                    table.column("cash_runway_transaction_id", .text)
+                    table.column("import_status", .text).notNull()
+                    table.column("created_at", .datetime).notNull()
+                    table.column("updated_at", .datetime).notNull()
+                    table.uniqueKey(["provider", "provider_account_id", "provider_statement_item_id"])
+                }
+
+                try db.create(table: "bank_category_rules") { table in
+                    table.column("id", .text).primaryKey()
+                    table.column("provider", .text).notNull()
+                    table.column("rule_type", .text).notNull()
+                    table.column("merchant_pattern", .text)
+                    table.column("mcc", .integer)
+                    table.column("category_id", .text).notNull()
+                    table.column("confidence", .integer).notNull().defaults(to: 100)
+                    table.column("created_at", .datetime).notNull()
+                    table.column("updated_at", .datetime).notNull()
+                }
+
+                try db.create(index: "idx_bank_accounts_integration", on: "bank_accounts", columns: ["integration_id"])
+                try db.create(index: "idx_bank_imports_account_time", on: "bank_transaction_imports", columns: ["bank_account_id", "statement_time"])
+                try db.create(index: "idx_bank_imports_cash_transaction", on: "bank_transaction_imports", columns: ["cash_runway_transaction_id"])
+                try db.create(index: "idx_bank_category_rules_provider_type", on: "bank_category_rules", columns: ["provider", "rule_type"])
+            }),
+        ]
+    }
+
     private static func makeMigrator() -> DatabaseMigrator {
+        let all = allMigrations()
         var migrator = DatabaseMigrator()
-        migrator.registerMigration("v1_schema") { db in
-            try db.create(table: "wallets") { table in
-                table.column("id", .text).primaryKey()
-                table.column("name", .text).notNull()
-                table.column("kind", .text).notNull()
-                table.column("color_hex", .text)
-                table.column("icon_name", .text)
-                table.column("starting_balance_minor", .integer).notNull()
-                table.column("current_balance_minor", .integer).notNull()
-                table.column("is_archived", .boolean).notNull().defaults(to: false)
-                table.column("sort_order", .integer).notNull().defaults(to: 0)
-                table.column("created_at", .datetime).notNull()
-                table.column("updated_at", .datetime).notNull()
-            }
-
-            try db.create(table: "categories") { table in
-                table.column("id", .text).primaryKey()
-                table.column("name", .text).notNull()
-                table.column("kind", .text).notNull()
-                table.column("icon_name", .text)
-                table.column("color_hex", .text)
-                table.column("parent_id", .text)
-                table.column("is_system", .boolean).notNull().defaults(to: false)
-                table.column("is_archived", .boolean).notNull().defaults(to: false)
-                table.column("sort_order", .integer).notNull().defaults(to: 0)
-                table.column("created_at", .datetime).notNull()
-                table.column("updated_at", .datetime).notNull()
-            }
-
-            try db.create(table: "labels") { table in
-                table.column("id", .text).primaryKey()
-                table.column("name", .text).notNull()
-                table.column("color_hex", .text)
-                table.column("created_at", .datetime).notNull()
-                table.column("updated_at", .datetime).notNull()
-            }
-
-            try db.create(table: "transactions") { table in
-                table.column("id", .text).primaryKey()
-                table.column("wallet_id", .text).notNull().indexed()
-                table.column("type", .text).notNull()
-                table.column("linked_transfer_id", .text)
-                table.column("amount_minor", .integer).notNull()
-                table.column("occurred_at", .datetime).notNull()
-                table.column("local_day_key", .integer).notNull()
-                table.column("local_month_key", .integer).notNull()
-                table.column("category_id", .text)
-                table.column("merchant", .text)
-                table.column("note", .text)
-                table.column("is_deleted", .boolean).notNull().defaults(to: false)
-                table.column("source", .text).notNull()
-                table.column("recurring_template_id", .text)
-                table.column("recurring_instance_id", .text)
-                table.column("created_at", .datetime).notNull()
-                table.column("updated_at", .datetime).notNull()
-            }
-
-            try db.create(table: "transaction_labels", options: [.withoutRowID]) { table in
-                table.column("transaction_id", .text).notNull()
-                table.column("label_id", .text).notNull()
-                table.primaryKey(["transaction_id", "label_id"])
-            }
-
-            try db.create(table: "budgets") { table in
-                table.column("id", .text).primaryKey()
-                table.column("category_id", .text).notNull()
-                table.column("month_key", .integer).notNull()
-                table.column("limit_minor", .integer).notNull()
-                table.column("is_archived", .boolean).notNull().defaults(to: false)
-                table.column("created_at", .datetime).notNull()
-                table.column("updated_at", .datetime).notNull()
-                table.uniqueKey(["category_id", "month_key"])
-            }
-
-            try db.create(table: "recurring_templates") { table in
-                table.column("id", .text).primaryKey()
-                table.column("kind", .text).notNull()
-                table.column("wallet_id", .text).notNull()
-                table.column("counterparty_wallet_id", .text)
-                table.column("amount_minor", .integer).notNull()
-                table.column("category_id", .text)
-                table.column("merchant", .text)
-                table.column("note", .text)
-                table.column("rule_type", .text).notNull()
-                table.column("rule_interval", .integer).notNull()
-                table.column("day_of_month", .integer)
-                table.column("weekday", .integer)
-                table.column("start_date", .datetime).notNull()
-                table.column("end_date", .datetime)
-                table.column("is_active", .boolean).notNull().defaults(to: true)
-                table.column("created_at", .datetime).notNull()
-                table.column("updated_at", .datetime).notNull()
-            }
-
-            try db.create(table: "recurring_instances") { table in
-                table.column("id", .text).primaryKey()
-                table.column("template_id", .text).notNull()
-                table.column("due_date", .datetime).notNull()
-                table.column("day_key", .integer).notNull()
-                table.column("status", .text).notNull()
-                table.column("linked_transaction_id", .text)
-                table.column("override_amount_minor", .integer)
-                table.column("override_category_id", .text)
-                table.column("override_note", .text)
-                table.column("override_merchant", .text)
-                table.column("created_at", .datetime).notNull()
-                table.column("updated_at", .datetime).notNull()
-                table.uniqueKey(["template_id", "day_key"])
-            }
-
-            try db.create(table: "category_remaps") { table in
-                table.column("id", .text).primaryKey()
-                table.column("old_category_id", .text).notNull()
-                table.column("new_category_id", .text).notNull()
-                table.column("remapped_at", .datetime).notNull()
-            }
-
-            try db.create(table: "audit_entries") { table in
-                table.column("id", .text).primaryKey()
-                table.column("entity_type", .text).notNull()
-                table.column("entity_id", .text).notNull()
-                table.column("operation", .text).notNull()
-                table.column("diff_json", .text).notNull()
-                table.column("created_at", .datetime).notNull()
-            }
-
-            try db.create(table: "import_jobs") { table in
-                table.column("id", .text).primaryKey()
-                table.column("source_name", .text).notNull()
-                table.column("file_name", .text).notNull()
-                table.column("status", .text).notNull()
-                table.column("total_rows", .integer).notNull()
-                table.column("valid_rows", .integer).notNull()
-                table.column("invalid_rows", .integer).notNull()
-                table.column("started_at", .datetime).notNull()
-                table.column("finished_at", .datetime)
-                table.column("error_summary", .text)
-            }
-
-            try db.create(table: "monthly_wallet_cashflow") { table in
-                table.column("wallet_id", .text).notNull()
-                table.column("month_key", .integer).notNull()
-                table.column("income_minor", .integer).notNull().defaults(to: 0)
-                table.column("expense_minor", .integer).notNull().defaults(to: 0)
-                table.column("transfer_in_minor", .integer).notNull().defaults(to: 0)
-                table.column("transfer_out_minor", .integer).notNull().defaults(to: 0)
-                table.column("txn_count", .integer).notNull().defaults(to: 0)
-                table.column("updated_at", .datetime).notNull()
-                table.uniqueKey(["wallet_id", "month_key"])
-            }
-
-            try db.create(table: "monthly_category_spend") { table in
-                table.column("category_id", .text).notNull()
-                table.column("month_key", .integer).notNull()
-                table.column("expense_minor", .integer).notNull().defaults(to: 0)
-                table.column("txn_count", .integer).notNull().defaults(to: 0)
-                table.column("updated_at", .datetime).notNull()
-                table.uniqueKey(["category_id", "month_key"])
-            }
-
-            try db.create(table: "daily_wallet_balance_delta") { table in
-                table.column("wallet_id", .text).notNull()
-                table.column("day_key", .integer).notNull()
-                table.column("net_delta_minor", .integer).notNull().defaults(to: 0)
-                table.column("updated_at", .datetime).notNull()
-                table.uniqueKey(["wallet_id", "day_key"])
-            }
-
-            try db.create(table: "budget_progress_snapshot") { table in
-                table.column("budget_id", .text).notNull()
-                table.column("month_key", .integer).notNull()
-                table.column("spent_minor", .integer).notNull().defaults(to: 0)
-                table.column("remaining_minor", .integer).notNull().defaults(to: 0)
-                table.column("percent_used_bp", .integer).notNull().defaults(to: 0)
-                table.column("updated_at", .datetime).notNull()
-                table.uniqueKey(["budget_id", "month_key"])
-            }
-
-            try db.create(table: "aggregate_dirty_ranges") { table in
-                table.column("id", .text).primaryKey()
-                table.column("kind", .text).notNull()
-                table.column("wallet_id", .text)
-                table.column("category_id", .text)
-                table.column("budget_id", .text)
-                table.column("month_key", .integer)
-                table.column("status", .text).notNull()
-                table.column("created_at", .datetime).notNull()
-                table.column("updated_at", .datetime).notNull()
-            }
-
-            try db.create(virtualTable: "transaction_search", using: FTS5()) { table in
-                table.column("transaction_id").notIndexed()
-                table.column("merchant")
-                table.column("note")
-                table.column("wallet_name")
-                table.column("category_name")
-                table.column("labels")
-                table.tokenizer = .unicode61()
-            }
-
-            try db.create(index: "idx_transactions_wallet_occurred", on: "transactions", columns: ["wallet_id", "occurred_at"])
-            try db.create(index: "idx_transactions_day", on: "transactions", columns: ["local_day_key", "id"])
-            try db.create(index: "idx_transactions_month_wallet", on: "transactions", columns: ["local_month_key", "wallet_id"])
-            try db.create(index: "idx_transactions_category_month", on: "transactions", columns: ["category_id", "local_month_key"])
-            try db.create(index: "idx_transactions_recurring_template", on: "transactions", columns: ["recurring_template_id"])
-            try db.create(index: "idx_transactions_source", on: "transactions", columns: ["source"])
-            try db.create(index: "idx_transaction_labels_label_transaction", on: "transaction_labels", columns: ["label_id", "transaction_id"])
-            try db.create(index: "idx_budgets_month_category", on: "budgets", columns: ["month_key", "category_id"])
-            try db.create(index: "idx_monthly_wallet_cashflow_month_wallet", on: "monthly_wallet_cashflow", columns: ["month_key", "wallet_id"])
-            try db.create(index: "idx_monthly_category_spend_month_category", on: "monthly_category_spend", columns: ["month_key", "category_id"])
-            try db.create(index: "idx_daily_wallet_balance_delta_day_wallet", on: "daily_wallet_balance_delta", columns: ["day_key", "wallet_id"])
-            try db.create(index: "idx_recurring_instances_template_day", on: "recurring_instances", columns: ["template_id", "day_key"])
+        for (name, block) in all {
+            migrator.registerMigration(name, migrate: block)
         }
+        return migrator
+    }
 
-        migrator.registerMigration("v2_transaction_search_category_name") { db in
-            try db.drop(table: "transaction_search")
-            try db.create(virtualTable: "transaction_search", using: FTS5()) { table in
-                table.column("transaction_id").notIndexed()
-                table.column("merchant")
-                table.column("note")
-                table.column("wallet_name")
-                table.column("category_name")
-                table.column("labels")
-                table.tokenizer = .unicode61()
-            }
-
-            try db.execute(
-                sql: """
-                INSERT INTO transaction_search (transaction_id, merchant, note, wallet_name, category_name, labels)
-                SELECT
-                    t.id,
-                    COALESCE(t.merchant, ''),
-                    COALESCE(t.note, ''),
-                    COALESCE(w.name, ''),
-                    COALESCE(c.name, ''),
-                    COALESCE((
-                        SELECT group_concat(l.name, ' ')
-                        FROM transaction_labels tl
-                        JOIN labels l ON l.id = tl.label_id
-                        WHERE tl.transaction_id = t.id
-                    ), '')
-                FROM transactions t
-                JOIN wallets w ON w.id = t.wallet_id
-                LEFT JOIN categories c ON c.id = t.category_id
-                WHERE t.is_deleted = 0
-                """
-            )
-        }
-
-        migrator.registerMigration("v3_import_idempotency") { db in
-            try db.execute(sql: "ALTER TABLE import_jobs ADD COLUMN duplicate_rows INTEGER NOT NULL DEFAULT 0")
-            try db.execute(sql: "ALTER TABLE transactions ADD COLUMN import_job_id TEXT")
-            try db.execute(sql: "ALTER TABLE transactions ADD COLUMN import_fingerprint TEXT")
-            try db.execute(sql: "CREATE UNIQUE INDEX idx_transactions_import_fingerprint ON transactions(import_fingerprint) WHERE import_fingerprint IS NOT NULL")
-        }
-
-        migrator.registerMigration("v4_import_job_source_format_id") { db in
-            try db.execute(sql: "ALTER TABLE import_jobs ADD COLUMN source_format_id TEXT")
-            try db.execute(sql: """
-                UPDATE import_jobs
-                SET source_format_id = CASE
-                    WHEN source_name IN ('Cash Runway Wallet', 'Cash Runway Wallet CSV') THEN 'cash-runway.csv.v1'
-                    WHEN source_name IN ('Monobank', 'Monobank CSV') THEN 'monobank.csv.v1'
-                    WHEN source_name = 'PrivatBank XLSX' THEN 'privatbank.xlsx.v1'
-                    WHEN source_name = 'PrivatBank' AND lower(file_name) LIKE '%.xlsx' THEN 'privatbank.xlsx.v1'
-                    WHEN source_name IN ('PrivatBank', 'PrivatBank CSV') THEN 'privatbank.csv.v1'
-                    WHEN source_name = 'Generic Bank XLSX' THEN 'generic-bank.xlsx.v1'
-                    WHEN source_name = 'Generic CSV' AND lower(file_name) LIKE '%.xlsx' THEN 'generic-bank.xlsx.v1'
-                    WHEN source_name IN ('Generic CSV', 'Generic Bank CSV') THEN 'generic-bank.csv.v1'
-                    ELSE NULL
-                END
-                WHERE source_format_id IS NULL
-                """)
-        }
-
-        migrator.registerMigration("v3_bank_sync") { db in
-            try db.create(table: "bank_integrations") { table in
-                table.column("id", .text).primaryKey()
-                table.column("provider", .text).notNull()
-                table.column("display_name", .text).notNull()
-                table.column("status", .text).notNull()
-                table.column("sync_start_at", .datetime).notNull()
-                table.column("token_keychain_account", .text).notNull()
-                table.column("last_client_info_sync_at", .datetime)
-                table.column("last_successful_sync_at", .datetime)
-                table.column("last_sync_error", .text)
-                table.column("created_at", .datetime).notNull()
-                table.column("updated_at", .datetime).notNull()
-            }
-
-            try db.create(table: "bank_accounts") { table in
-                table.column("id", .text).primaryKey()
-                table.column("integration_id", .text).notNull()
-                table.column("provider", .text).notNull()
-                table.column("provider_account_id", .text).notNull()
-                table.column("wallet_id", .text).notNull()
-                table.column("display_name", .text).notNull()
-                table.column("account_type", .text)
-                table.column("currency_code", .integer).notNull()
-                table.column("masked_pan", .text)
-                table.column("iban", .text)
-                table.column("is_enabled", .boolean).notNull().defaults(to: true)
-                table.column("sync_start_at", .datetime).notNull()
-                table.column("last_successful_sync_at", .datetime)
-                table.column("last_statement_item_time", .integer)
-                table.column("created_at", .datetime).notNull()
-                table.column("updated_at", .datetime).notNull()
-                table.uniqueKey(["integration_id", "provider_account_id"])
-            }
-
-            try db.create(table: "bank_transaction_imports") { table in
-                table.column("id", .text).primaryKey()
-                table.column("provider", .text).notNull()
-                table.column("integration_id", .text).notNull()
-                table.column("bank_account_id", .text).notNull()
-                table.column("provider_account_id", .text).notNull()
-                table.column("provider_statement_item_id", .text).notNull()
-                table.column("statement_time", .integer).notNull()
-                table.column("amount_minor_signed", .integer).notNull()
-                table.column("operation_amount_minor_signed", .integer)
-                table.column("currency_code", .integer).notNull()
-                table.column("mcc", .integer)
-                table.column("original_mcc", .integer)
-                table.column("description", .text)
-                table.column("comment", .text)
-                table.column("counter_name", .text)
-                table.column("counter_iban", .text)
-                table.column("receipt_id", .text)
-                table.column("hold", .boolean)
-                table.column("raw_json", .text).notNull()
-                table.column("cash_runway_transaction_id", .text)
-                table.column("import_status", .text).notNull()
-                table.column("created_at", .datetime).notNull()
-                table.column("updated_at", .datetime).notNull()
-                table.uniqueKey(["provider", "provider_account_id", "provider_statement_item_id"])
-            }
-
-            try db.create(table: "bank_category_rules") { table in
-                table.column("id", .text).primaryKey()
-                table.column("provider", .text).notNull()
-                table.column("rule_type", .text).notNull()
-                table.column("merchant_pattern", .text)
-                table.column("mcc", .integer)
-                table.column("category_id", .text).notNull()
-                table.column("confidence", .integer).notNull().defaults(to: 100)
-                table.column("created_at", .datetime).notNull()
-                table.column("updated_at", .datetime).notNull()
-            }
-
-            try db.create(index: "idx_bank_accounts_integration", on: "bank_accounts", columns: ["integration_id"])
-            try db.create(index: "idx_bank_imports_account_time", on: "bank_transaction_imports", columns: ["bank_account_id", "statement_time"])
-            try db.create(index: "idx_bank_imports_cash_transaction", on: "bank_transaction_imports", columns: ["cash_runway_transaction_id"])
-            try db.create(index: "idx_bank_category_rules_provider_type", on: "bank_category_rules", columns: ["provider", "rule_type"])
-        }
-
+    static func makeMigrator(upTo version: String) -> DatabaseMigrator {
+        let all = allMigrations()
+        var migrator = DatabaseMigrator()
+        for (name, block) in all {
+            migrator.registerMigration(name, migrate: block)
+            if name == version { break }
+}
         return migrator
     }
 }

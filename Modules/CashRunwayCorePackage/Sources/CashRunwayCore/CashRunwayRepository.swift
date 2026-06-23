@@ -2540,6 +2540,10 @@ extension CashRunwayRepository {
                 throw CashRunwayError.notFound
             }
             let instance = try Self.recurringInstance(row)
+
+            guard instance.status != .posted else {
+                return
+            }
             guard let templateRow = try Row.fetchOne(db, sql: "SELECT * FROM recurring_templates WHERE id = ?", arguments: [instance.templateID.uuidString]) else {
                 throw CashRunwayError.notFound
             }
@@ -3266,10 +3270,14 @@ extension CashRunwayRepository {
         }
     }
 
-    public static func generatedDates(for template: RecurringTemplate, start: Date, end: Date) -> [Date] {
+    public static func generatedDates(
+        for template: RecurringTemplate,
+        start: Date,
+        end: Date,
+        calendar: Calendar = DateKeys.calendar
+    ) -> [Date] {
         var dates: [Date] = []
         var cursor = max(start, template.startDate)
-        let calendar = DateKeys.calendar
         while cursor <= end {
             if let endDate = template.endDate, cursor > endDate { break }
             let match: Bool
