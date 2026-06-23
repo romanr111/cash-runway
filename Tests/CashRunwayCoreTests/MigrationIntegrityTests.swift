@@ -1,0 +1,150 @@
+import Foundation
+import GRDB
+import CryptoKit
+import Testing
+@testable import CashRunwayCore
+
+@Suite(.serialized)
+struct MigrationIntegrityTests {
+    @Test func migrationFromPreviousEncryptedSchemaPreservesLedger() throws {
+        let key = "aaaabbbbccccddddeeeeffffgggghhhhiiiijjjjkkkkllllmmmmnnnnoooopppp"
+        let location = TestSupport.makeLocation()
+        let dbURL = try location.databaseURL()
+        let keychain = TestKeychainStore(items: ["database-key": Data(key.utf8)])
+
+        let partialMigrator = DatabaseManager.makeMigrator(upTo: "v3_import_idempotency")
+        let fixtureManager = try DatabaseManager(locationProvider: location, keychain: keychain, migrator: partialMigrator)
+        let fixtureRepo = CashRunwayRepository(databaseManager: fixtureManager)
+        try fixtureRepo.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: fixtureRepo)
+
+        let walletA = try #require(try fixtureRepo.wallets().first)
+        let expenseCategories = try fixtureRepo.categories(kind: .expense)
+        let incomeCategories = try fixtureRepo.categories(kind: .income)
+        let expenseCategoryID = try #require(expenseCategories.first?.id)
+        let incomeCategoryID = try #require(incomeCategories.first?.id)
+
+        let walletB = WalletBuilder()
+            .with(name: "Savings")
+            .with(kind: .account)
+            .with(startingBalanceMinor: 500_000)
+            .with(currentBalanceMinor: 500_000)
+            .build()
+        try fixtureRepo.saveWallet(walletB)
+
+        let labelA = LabelBuilder().with(name: "Groceries").build()
+        let labelB = LabelBuilder().with(name: "Utilities").build()
+        try fixtureRepo.saveLabel(labelA)
+        try fixtureRepo.saveLabel(labelB)
+
+        let calendar = Calendar(identifier: .gregorian)
+        let month1 = calendar.date(from: DateComponents(year: 2025, month: 1, day: 15))!
+        let month2 = calendar.date(from: DateComponents(year: 2025, month: 2, day: 15))!
+        let month3 = calendar.date(from: DateComponents(year: 2025, month: 3, day: 15))!
+
+        try fixtureRepo.saveTransaction(TransactionBuilder()
+            .with(walletID: walletA.id).with(amountMinor: 200_000).with(occurredAt: month1)
+            .with(categoryID: expenseCategoryID).with(merchant: "Rent").with(source: .manual).build())
+
+        try fixtureRepo.saveTransaction(TransactionBuilder()
+            .with(kind: .income).with(walletID: walletB.id).with(amountMinor: 300_000)
+            .with(occurredAt: month1).with(merchant: "Salary").with(categoryID: incomeCategoryID)
+            .with(source: .manual).build())
+
+        try fixtureRepo.saveTransaction(TransactionBuilder()
+            .with(walletID: walletA.id).with(amountMinor: 50_000).with(occurredAt: month2)
+            .with(categoryID: expenseCategoryID).with(merchant: "Utilities").with(source: .manual)
+            .with(labelIDs: [labelA.id, labelB.id]).build())
+
+        try fixtureRepo.saveTransaction(TransactionBuilder()
+            .with(walletID: walletA.id).with(amountMinor: 100_000).with(occurredAt: month3)
+            .with(categoryID: expenseCategoryID).with(merchant: "Transfer Out").with(source: .manual).build())
+
+        try fixtureRepo.saveTransaction(TransactionBuilder()
+            .with(kind: .transfer).with(walletID: walletA.id).with(destinationWalletID: walletB.id)
+            .with(amountMinor: 75_000).with(occurredAt: month2).with(merchant: "Internal Transfer")
+            .with(source: .manual).build())
+
+        let template = RecurringTemplate(
+            id: UUID(), kind: .expense, walletID: walletA.id,
+            counterpartyWalletID: nil, amountMinor: 25_000,
+            categoryID: expenseCategoryID, merchant: "Subscription", note: nil,
+            ruleType: .monthly, ruleInterval: 1, dayOfMonth: 1,
+            weekday: nil, startDate: month3, endDate: nil,
+            isActive: true, createdAt: .now, updatedAt: .now
+        )
+        try fixtureRepo.saveRecurringTemplate(template)
+        try fixtureRepo.refreshRecurringInstances()
+        let instances = try fixtureRepo.recurringInstances()
+        #expect(instances.count > 0)
+
+        let importJob = ImportJob(
+            id: UUID(), sourceName: "CSV", fileName: "test.csv",
+            status: .committed, totalRows: 1, validRows: 1, invalidRows: 0,
+            duplicateRows: 0, startedAt: month1, finishedAt: month1, errorSummary: nil
+        )
+        try fixtureRepo.databaseManager.dbQueue.write { db in
+            try db.execute(
+                sql: "INSERT INTO import_jobs (id, source_name, file_name, status, total_rows, valid_rows, invalid_rows, duplicate_rows, started_at, finished_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                arguments: [importJob.id.uuidString, importJob.sourceName, importJob.fileName, importJob.status.rawValue, importJob.totalRows, importJob.validRows, importJob.invalidRows, importJob.duplicateRows, importJob.startedAt, importJob.finishedAt]
+            )
+        }
+        try fixtureRepo.saveTransaction(TransactionBuilder()
+            .with(walletID: walletA.id).with(amountMinor: 30_000).with(occurredAt: month1)
+            .with(categoryID: expenseCategoryID).with(merchant: "Import Test").with(source: .importCSV)
+            .with(importJobID: importJob.id).with(importFingerprint: "fp-import-001").build())
+
+        let preMigrateTxCount = try fixtureRepo.transactions().count
+        let preMigrateWallets = try fixtureRepo.wallets()
+        let preMigrateWalletAMinor = try #require(preMigrateWallets.first { $0.id == walletA.id }).currentBalanceMinor
+        let preMigrateWalletBMinor = try #require(preMigrateWallets.first { $0.id == walletB.id }).currentBalanceMinor
+        let totalNetWorth = preMigrateWalletAMinor + preMigrateWalletBMinor
+
+        try fixtureManager.checkpointWal()
+
+        let fullManager = try DatabaseManager(locationProvider: location, keychain: keychain)
+        let repo = CashRunwayRepository(databaseManager: fullManager)
+        try repo.seedIfNeeded()
+
+        let recoveryDir = dbURL.deletingLastPathComponent().appendingPathComponent("Recovery", isDirectory: true)
+        #expect(!FileManager.default.fileExists(atPath: recoveryDir.path))
+
+        let appliedVersions = try fullManager.dbQueue.read { db in
+            try String.fetchAll(db, sql: "SELECT identifier FROM grdb_migrations ORDER BY identifier")
+        }
+        #expect(appliedVersions.contains("v3_bank_sync"))
+
+        let postMigrateTxCount = try repo.transactions().count
+        #expect(postMigrateTxCount == preMigrateTxCount)
+
+        let postMigrateWallets = try repo.wallets()
+        let postWalletAMinor = try #require(postMigrateWallets.first { $0.id == walletA.id }).currentBalanceMinor
+        let postWalletBMinor = try #require(postMigrateWallets.first { $0.id == walletB.id }).currentBalanceMinor
+        #expect(postWalletAMinor == preMigrateWalletAMinor)
+        #expect(postWalletBMinor == preMigrateWalletBMinor)
+        #expect(postWalletAMinor + postWalletBMinor == totalNetWorth)
+
+        let transferOutCount = try repo.databaseManager.dbQueue.read { db in
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM transactions WHERE type = 'transfer_out'") ?? 0
+        }
+        let transferInCount = try repo.databaseManager.dbQueue.read { db in
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM transactions WHERE type = 'transfer_in'") ?? 0
+        }
+        #expect(transferOutCount == transferInCount)
+
+        let labels = try repo.labels()
+        #expect(labels.contains(where: { $0.name == "Groceries" }))
+        #expect(labels.contains(where: { $0.name == "Utilities" }))
+
+        let instancesAfter = try repo.recurringInstances()
+        #expect(instancesAfter.count == instances.count)
+
+        let ftsMatches = try repo.transactions(query: .init(searchText: "Import"))
+        #expect(ftsMatches.count > 0)
+
+        let integrityOk = try fullManager.dbQueue.read { db in
+            try String.fetchOne(db, sql: "PRAGMA integrity_check")
+        }
+        #expect(integrityOk == "ok")
+    }
+}
