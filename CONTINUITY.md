@@ -1,29 +1,21 @@
-# Continuity Ledger - Generic CSV Source Semantics
+Goal: Fix the CSV import scope work and keep the core source/package trees identical.
 
-## Final state
-- PR #63 ready for review. All findings addressed.
-- All CI checks green on head `8abaa94`.
-- PR is no longer draft.
+State:
+- Working in the root checkout on `main`.
+- `just mirror-core` required `--force` because the package mirror already had local edits; the sync completed and `Sources/CashRunwayCore` now matches `Modules/CashRunwayCorePackage/Sources/CashRunwayCore`.
+- The two test files that were suspected of syntax breakage parse cleanly with `swiftc -parse`.
 
-## Checklist status
-| Item | Status |
-|------|--------|
-| `importFormat` in coordinator | ✅ |
-| App target build in CI | ✅ (new job) |
-| CSV/XLSX migration | ✅ (extension-aware) |
-| Provider detection tightened | ✅ |
-| Missing `@Test` added | ✅ |
-| Debit/Credit income inference | ✅ |
-| Legacy preset → format adapter | ✅ |
-| Legacy fingerprint namespace | ✅ |
-| Integration with main (#64/#65) | ✅ (merge + rowFilter) |
-| Localizable.xcstrings restored | ✅ (from main) |
-| Legacy generic dedup documented | ✅ (known-issue tests) |
-| CI green | ✅ (run 27972568835) |
-| Draft → Ready | ✅ |
-| PR description updated | ✅ |
+Implemented / verified:
+- `CSVImportRowFilter` is threaded through `CSVService`, `CashRunwayAppModel`, `CSVImportCoordinator`, and `CSVImportView`.
+- `CSVEdgeCaseTests` and `MonobankCSVImportTests` cover the expenses-only path.
+- `git diff --check` passes.
+- `diff -rq Sources/CashRunwayCore Modules/CashRunwayCorePackage/Sources/CashRunwayCore` is clean.
 
-## Known accepted limitations (deferred)
-1. `previewPreparedRows` / `importStatement` duplicated loops — shared extraction deferred
-2. Legacy generic CSV dedup broken for MCC/alias/unknown-category paths — dual-fingerprint compatibility deferred (pre-alpha limitation, documented as known issue in tests)
-3. Temu override uses `contains("temu")` substring — safe for current data
+Validation:
+- `swiftc -parse Tests/CashRunwayCoreTests/MonobankCSVImportTests.swift` passed.
+- `swiftc -parse Tests/CashRunwayCoreTests/DatabaseLifecycleTests.swift` passed.
+- `just build` failed in `xcodebuild` while resolving package dependencies because SwiftPM diagnostic `.dia` files could not be written under `~/Library/Caches/org.swift.swiftpm/...` in this environment.
+- `just test-filter DatabaseLifecycleTests` failed earlier with a SwiftPM manifest/toolchain error before compilation: `Invalid manifest "-target", "x86_64-apple-macosx14.0"`.
+
+Open questions:
+- Whether the build/test environment needs an isolated scratch path or different Xcode/SwiftPM cache permissions for a full compile/test pass.
