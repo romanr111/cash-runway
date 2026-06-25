@@ -38,6 +38,7 @@
 			A00100010001000100010029 /* Sources/CashRunwayUI/FeedbackReportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010029 /* Sources/CashRunwayUI/FeedbackReportService.swift */; };
 			A0010001000100010001002A /* Sources/CashRunwayUI/FeedbackReportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0020001000100010001002A /* Sources/CashRunwayUI/FeedbackReportView.swift */; };
 		A0010001000100010001002C /* Sources/CashRunwayUI/FeedbackReportScreenshotPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0020001000100010001002C /* Sources/CashRunwayUI/FeedbackReportScreenshotPicker.swift */; };
+		A00100010001000100010052 /* Sources/CashRunwayUI/DeleteTransactionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010052 /* Sources/CashRunwayUI/DeleteTransactionsView.swift */; };
 			A00100010001000100010026 /* AppHost/Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010026 /* AppHost/Localizable.xcstrings */; };
 			A0010001000100010001002F /* AppHost/uk.lproj/InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = A0020001000100010001002E /* AppHost/uk.lproj/InfoPlist.strings */; };
 		A01300010001000100010003 /* CashRunwayCore in Frameworks */ = {isa = PBXBuildFile; productRef = A01300010001000100010002 /* CashRunwayCore */; };
@@ -76,6 +77,7 @@
 		A01000010001000100010002 /* Sources/CashRunwayCore/XLSXConverter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayCore/XLSXConverter.swift; sourceTree = "<group>"; };
 		A00200010001000100010014 /* AppHost/UITestRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppHost/UITestRuntime.swift; sourceTree = "<group>"; };
 		A00200010001000100010015 /* Sources/CashRunwayUI/AccessibilityIdentifiers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayUI/AccessibilityIdentifiers.swift; sourceTree = "<group>"; };
+		A00200010001000100010052 /* Sources/CashRunwayUI/DeleteTransactionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayUI/DeleteTransactionsView.swift; sourceTree = "<group>"; };
 		A00200010001000100010016 /* Tests/CashRunwayUITests/CashRunwayUITestCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/CashRunwayUITests/CashRunwayUITestCase.swift; sourceTree = "<group>"; };
 		A00200010001000100010017 /* Tests/CashRunwayUITests/TransactionCRUDUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/CashRunwayUITests/TransactionCRUDUITests.swift; sourceTree = "<group>"; };
 		A00200010001000100010018 /* Tests/CashRunwayUITests/TransactionOverviewUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/CashRunwayUITests/TransactionOverviewUITests.swift; sourceTree = "<group>"; };
@@ -180,7 +182,8 @@
 				A00200010001000100010029 /* Sources/CashRunwayUI/FeedbackReportService.swift */,
 				A0020001000100010001002A /* Sources/CashRunwayUI/FeedbackReportView.swift */,
 				A0020001000100010001002C /* Sources/CashRunwayUI/FeedbackReportScreenshotPicker.swift */,
-				);
+				A00200010001000100010052 /* Sources/CashRunwayUI/DeleteTransactionsView.swift */,
+			);
 			name = UI;
 			sourceTree = "<group>";
 		};
@@ -383,8 +386,9 @@
 					A00100010001000100010025 /* Sources/CashRunwayUI/Localization.swift in Sources */,
 					A00100010001000100010029 /* Sources/CashRunwayUI/FeedbackReportService.swift in Sources */,
 					A0010001000100010001002A /* Sources/CashRunwayUI/FeedbackReportView.swift in Sources */,
-					A0010001000100010001002C /* Sources/CashRunwayUI/FeedbackReportScreenshotPicker.swift in Sources */,
-				);
+				A0010001000100010001002C /* Sources/CashRunwayUI/FeedbackReportScreenshotPicker.swift in Sources */,
+				A00100010001000100010052 /* Sources/CashRunwayUI/DeleteTransactionsView.swift in Sources */,
+			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		A00600010001000100010002 /* Sources */ = {

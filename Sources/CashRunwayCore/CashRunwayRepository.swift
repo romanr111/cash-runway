@@ -2206,6 +2206,67 @@ extension CashRunwayRepository {
         }
     }
 
+    /// Counts transactions that would be removed for `period`, and sums the absolute
+    /// amount magnitude across them. Used to preview impact before a bulk delete.
+    public func transactionDeletionSummary(for period: DeletePeriod, now: Date = Date()) throws -> TransactionDeletionSummary {
+        try databaseManager.dbQueue.read { db in
+            let (sql, arguments) = Self.deletePeriodPredicate(period, now: now)
+            let count = try Int.fetchOne(
+                db,
+                sql: "SELECT COUNT(*) FROM transactions WHERE \(sql)",
+                arguments: arguments
+            ) ?? 0
+            let total = try Int64.fetchOne(
+                db,
+                sql: "SELECT COALESCE(SUM(ABS(amount_minor)), 0) FROM transactions WHERE \(sql)",
+                arguments: arguments
+            ) ?? 0
+            return TransactionDeletionSummary(count: count, totalAmountMinor: total)
+        }
+    }
+
+    /// Hard-deletes every transaction whose date keys fall in `period`. Maintains the
+    /// same aggregate tables as `deleteTransaction(id:)` and cascades to
+    /// `transaction_labels` / `transaction_search`. Only the rows physically inside the
+    /// period are removed; a transfer whose paired half is outside the period is left
+    /// in place. Returns the number of deleted rows.
+    @discardableResult
+    public func deleteTransactions(for period: DeletePeriod, now: Date = Date()) throws -> Int {
+        try databaseManager.dbQueue.write { db in
+            let (sql, arguments) = Self.deletePeriodPredicate(period, now: now)
+            let rows = try Row.fetchAll(
+                db,
+                sql: "SELECT * FROM transactions WHERE \(sql)",
+                arguments: arguments
+            )
+            guard !rows.isEmpty else { return 0 }
+
+            for row in rows {
+                let transaction = try Self.transaction(row)
+                try applyContribution(db, old: contribution(for: transaction), new: nil)
+            }
+
+            let scopedIDs = "SELECT id FROM transactions WHERE \(sql)"
+            try db.execute(sql: "DELETE FROM transaction_labels WHERE transaction_id IN (\(scopedIDs))", arguments: arguments)
+            try db.execute(sql: "DELETE FROM transaction_search WHERE transaction_id IN (\(scopedIDs))", arguments: arguments)
+            try db.execute(sql: "DELETE FROM transactions WHERE \(sql)", arguments: arguments)
+
+            return rows.count
+        }
+    }
+
+    private static func deletePeriodPredicate(_ period: DeletePeriod, now: Date) -> (sql: String, arguments: StatementArguments) {
+        switch period {
+        case .today:
+            return ("local_day_key = ?", StatementArguments([DateKeys.dayKey(for: now)]))
+        case .thisMonth:
+            return ("local_month_key = ?", StatementArguments([DateKeys.monthKey(for: now)]))
+        case .thisYear:
+            let year = DateKeys.yearKey(for: now)
+            return ("local_month_key >= ? AND local_month_key < ?", StatementArguments([year * 100, (year + 1) * 100]))
+        }
+    }
+
     public func mergeCategory(oldCategoryID: UUID, into newCategoryID: UUID) throws {
         try databaseManager.dbQueue.write { db in
             guard oldCategoryID != newCategoryID else {

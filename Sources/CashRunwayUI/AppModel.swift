@@ -398,6 +398,21 @@ public final class CashRunwayAppModel {
         }
     }
 
+    public func transactionDeletionSummary(for period: DeletePeriod) -> TransactionDeletionSummary {
+        do {
+            return try repository.transactionDeletionSummary(for: period)
+        } catch {
+            errorMessage = error.localizedDescription
+            return TransactionDeletionSummary(count: 0, totalAmountMinor: 0)
+        }
+    }
+
+    public func deleteTransactions(for period: DeletePeriod) {
+        runMutation {
+            _ = try repository.deleteTransactions(for: period)
+        }
+    }
+
     public func deleteLabel(id: UUID) {
         runMutation {
             try repository.deleteLabel(id: id)

@@ -24,6 +24,7 @@ struct SettingsView: View {
     @State private var isBackupExporterPresented = false
     @State private var backupExportFileURL: URL?
     @State private var isBackupExporting = false
+    @State private var isDeleteTransactionsPresented = false
     @State private var isFeedbackReportPresented = false
     @State private var isDiagnosticsPresented = false
     @State private var isLanguageSettingsPresented = false
@@ -149,6 +150,11 @@ struct SettingsView: View {
                                 isBackupExportWarningPresented = true
                             }
                             .accessibilityIdentifier(CashRunwayAccessibilityID.settingsExportBackupRow)
+                            rowDivider
+                            moreRow(icon: "trash.fill", tint: "#F35E63", title: "Delete Transactions", subtitle: L10n.string("Remove transactions for a day, month, or year")) {
+                                isDeleteTransactionsPresented = true
+                            }
+                            .accessibilityIdentifier(CashRunwayAccessibilityID.settingsDeleteTransactionsRow)
                         }
                         .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
@@ -259,6 +265,18 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $isFeedbackReportPresented) {
                 FeedbackReportView(service: ConfiguredFeedbackReportService())
+            }
+            .sheet(isPresented: $isDeleteTransactionsPresented) {
+                DeleteTransactionsView(
+                    model: model,
+                    requestBackupExport: {
+                        isDeleteTransactionsPresented = false
+                        isBackupExportWarningPresented = true
+                    },
+                    onDismiss: {
+                        isDeleteTransactionsPresented = false
+                    }
+                )
             }
             .alert("Unencrypted Backup", isPresented: $isBackupExportWarningPresented) {
                 Button("Cancel", role: .cancel) {}
