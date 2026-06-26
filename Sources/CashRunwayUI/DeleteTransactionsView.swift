@@ -10,6 +10,7 @@ struct DeleteTransactionsView: View {
 
     @State private var stage: Stage = .select
     @State private var selectedPeriod: DeletePeriod?
+    @State private var selectedPlan: TransactionDeletionPlan?
     @State private var summaries: [DeletePeriod: TransactionDeletionSummary] = [:]
     @State private var confirmText: String = ""
     @State private var isBackupPromptPresented = false
@@ -122,11 +123,12 @@ struct DeleteTransactionsView: View {
     private var confirmSection: some View {
         VStack(alignment: .leading, spacing: CashRunwayTheme.spaceM) {
             sectionLabel("Confirm deletion")
-            VStack(spacing: CashRunwayTheme.spaceS) {
-                if let period = selectedPeriod, let summary = summaries[period] {
-                    impactCard(period: period, summary: summary)
+            VStack(alignment: .leading, spacing: CashRunwayTheme.spaceS) {
+                if let plan = selectedPlan {
+                    impactCard(plan: plan)
                 }
                 VStack(alignment: .leading, spacing: 8) {
+
                     Text(L10n.string("Type %@ to confirm", confirmWord))
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(CashRunwayTheme.negative)
@@ -144,7 +146,7 @@ struct DeleteTransactionsView: View {
             }
 
             primaryButton(
-                title: selectedPeriod.map { L10n.deleteTransactionsButtonTitle(summaries[$0]?.count ?? 0) } ?? L10n.deleteTransactionsButtonTitle(0),
+                title: selectedPlan.map { L10n.deleteTransactionsButtonTitle($0.count) } ?? L10n.deleteTransactionsButtonTitle(0),
                 enabled: confirmMatches && !isDeleting && hasSelectedTransactions,
                 isLoading: isDeleting
             ) {
@@ -153,27 +155,27 @@ struct DeleteTransactionsView: View {
         }
     }
 
-    private func impactCard(period: DeletePeriod, summary: TransactionDeletionSummary) -> some View {
+    private func impactCard(plan: TransactionDeletionPlan) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: CashRunwayTheme.spaceM) {
-                periodGlyph(period)
+                periodGlyph(plan.period)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(periodTitle(period))
+                    Text(periodTitle(plan.period))
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(CashRunwayTheme.textPrimary)
-                    Text(L10n.string("%@ will be permanently deleted.", L10n.transactionCount(summary.count)))
+                    Text(L10n.string("%@ will be permanently deleted.", L10n.transactionCount(plan.count)))
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(CashRunwayTheme.negative)
                 }
                 Spacer()
             }
-            if summary.expenseMinor > 0 || summary.incomeMinor > 0 {
+            if plan.expenseMinor > 0 || plan.incomeMinor > 0 {
                 HStack(spacing: 10) {
-                    if summary.expenseMinor > 0 {
-                        amountStat(label: "Expenses", value: summary.expenseMinor)
+                    if plan.expenseMinor > 0 {
+                        amountStat(label: "Expenses", value: plan.expenseMinor)
                     }
-                    if summary.incomeMinor > 0 {
-                        amountStat(label: "Income", value: summary.incomeMinor)
+                    if plan.incomeMinor > 0 {
+                        amountStat(label: "Income", value: plan.incomeMinor)
                     }
                 }
             }
@@ -204,6 +206,7 @@ struct DeleteTransactionsView: View {
         let isSelected = selectedPeriod == period
         return Button {
             selectedPeriod = period
+            selectedPlan = model.transactionDeletionPlan(for: period)
         } label: {
             HStack(spacing: 14) {
                 periodGlyph(period)
@@ -275,8 +278,7 @@ struct DeleteTransactionsView: View {
     }
 
     private var hasSelectedTransactions: Bool {
-        guard let period = selectedPeriod else { return false }
-        return (summaries[period]?.count ?? 0) > 0
+        selectedPlan.map { $0.count > 0 } ?? false
     }
 
     private func periodTitle(_ period: DeletePeriod) -> String {
@@ -304,11 +306,11 @@ struct DeleteTransactionsView: View {
     }
 
     private func performDelete() {
-        guard let period = selectedPeriod, confirmMatches, !isDeleting else { return }
+        guard let plan = selectedPlan, confirmMatches, !isDeleting else { return }
         confirmFieldFocused = false
         isDeleting = true
         Task {
-            let success = await model.deleteTransactions(for: period)
+            let success = await model.deleteTransactions(plan: plan)
             isDeleting = false
             if success { onDismiss() }
         }

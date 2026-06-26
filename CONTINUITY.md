@@ -23,39 +23,41 @@ Transfers: only the in-period half is removed.
 - Scope: all sources; recurring instances deleted, templates preserved.
 
 ## Changed files
-- Sources/CashRunwayCore/DeletePeriod.swift (NEW) — enum + TransactionDeletionSummary
-- Sources/CashRunwayCore/CashRunwayRepository.swift — transactionDeletionSummary(for:), deleteTransactions(for:), private deletePeriodPredicate
-- Sources/CashRunwayCore/L10n.swift — deleteTransactionsButtonTitle(_:) plural helper
-- Sources/CashRunwayUI/AppModel.swift — transactionDeletionSummary(for:), deleteTransactions(for:) wrappers
-- Sources/CashRunwayUI/DeleteTransactionsView.swift (NEW) — destructive sheet (4-step flow)
-- Sources/CashRunwayUI/SettingsView.swift — row in Data section + sheet wiring (routes backup→isBackupExportWarningPresented)
-- Sources/CashRunwayUI/AccessibilityIdentifiers.swift — settings.deleteTransactions.row + sheet IDs
-- AppHost/Localizable.xcstrings — 14 new EN/uk keys via Scripts/localize-xcstrings.py
-- CashRunway.xcodeproj/project.pbxproj — registered DeleteTransactionsView.swift (backup at .bak)
-- Tests/CashRunwayCoreTests/BulkDeleteTransactionsTests.swift (NEW) — 17 tests
+- Sources/CashRunwayCore/DeletePeriod.swift (NEW type) — `TransactionDeletionPlan` + `TransactionDeletionError.planStale`
+- Sources/CashRunwayCore/Collection+Chunked.swift (NEW) — chunked delete helper for SQLite variable limit
+- Sources/CashRunwayCore/CashRunwayRepository.swift — `transactionDeletionPlan(for:)` (frozen IDs + summary), `deleteTransactions(_ plan:)` (recomputes IDs, aborts on set change, deletes exact IDs), chunked cascade delete
+- Sources/CashRunwayCore/L10n.swift — no direct changes; new key added via localize script
+- Sources/CashRunwayUI/AppModel.swift — `transactionDeletionPlan(for:)`, `deleteTransactions(plan:)` async wrapper
+- Sources/CashRunwayUI/DeleteTransactionsView.swift — captures plan on period selection; impact card + delete CTA use the plan
+- AppHost/Localizable.xcstrings — new EN/uk key for stale-plan error
+- Tests/CashRunwayCoreTests/BulkDeleteTransactionsTests.swift — 25 tests incl. frozen-scope boundary tests and race-condition staleness tests
 
-## Review-driven fixes (2nd commit)
-- Perf #1: AppModel.deleteTransactions is now async; repo write runs in
-  Task.detached(priority:.userInitiated) so the main thread + spinner stay alive
-  for large year-scoped deletes. Post-mutation cache-clear + reload mirror runMutation.
-- Clarity #2: TransactionDeletionSummary split into count/expenseMinor/incomeMinor
-  (sign-agnostic ABS via CASE). impactCard shows Expenses | Income stats instead of
-  a single misleading SUM(ABS) total. "Expenses"/"Income" already localized.
-- Coverage: expanded from 7 -> 17 tests (boundaries for day/month/year, multi-wallet,
-  transfer non-expansion across period edge, transaction_search cascade, sibling-table
-  isolation incl. recurring template survival, idempotency, mixed-type counts).
+## Review-driven fixes (3rd commit)
+- P1 scope race: preview now creates an immutable `TransactionDeletionPlan` that
+  freezes the reference day/month/year keys and the exact transaction UUIDs.
+  Execution recomputes the matching set from the frozen keys and throws
+  `TransactionDeletionError.planStale` if the ID set changed, requiring the user
+  to review a fresh plan instead of deleting a mutated scope.
+- Delete-by-IDs: the write transaction deletes exactly the planned UUIDs in
+  SQLite-variable-limit chunks, reverses aggregate contributions per row, and
+  cascades to `transaction_labels` / `transaction_search`.
+- Boundary tests: day/month/year preview/execute across calendar boundaries
+  (June 30 → July 1, Dec 31 → Jan 1) now assert the frozen scope is honored.
+- Identity tests: insert/remove/replace (same count/totals, different IDs)
+  all abort with `planStale` and delete nothing.
+- Chunk test: 901-row plan exercises the chunked delete path.
 
 ## Validation
 - swift build (SwiftPM, Core+UI): Build complete
-- just check-integration: EXIT 0, 370 tests passed (2 pre-existing known issues)
-- just test-filter BulkDeleteTransactionsTests: 17/17 passed
+- just check-integration: EXIT 0, 379 tests passed (2 pre-existing known issues in CSVIdempotencyTests)
+- just test-filter BulkDeleteTransactionsTests: 25/25 passed
 - swiftlint --strict (touched files): 0 violations
 - just build (iPhone 17 sim): BUILD SUCCEEDED
-- Launch smoke (simctl install+launch dev.roman.cashrunway): app alive, PID running, no crash
-- llvm-cov: deleteTransactions / transactionDeletionSummary / deletePeriodPredicate
-  all at 100% line + branch coverage (every period branch + empty/non-empty guard hit)
+- Scripts/pre-flight.sh: CashRunwayCore wiring OK; new `Collection+Chunked.swift` is SwiftPM-only
 
 ## Skipped gates (report)
+- llvm-cov: recipe not present in justfile; bulk-delete paths covered by the
+  25 targeted tests including the chunk path.
 - Interactive UI navigation to the new sheet (More→Data→Delete Transactions→
   type DELETE): NOT run. No MCP Xcode tools in session; XCUITest disallowed
   locally by AGENTS; simctl has no tap API. Manual gate for the reviewer.
@@ -69,3 +71,5 @@ Transfers: only the in-period half is removed.
   period (accepted per decision). Future: consider demoting the orphan half.
 - CONTINUITY.md on dev still has a stale merge-conflict marker from a prior
   session (pre-existing, not touched here).
+- Untracked `CashRunway.xcodeproj/project.pbxproj.bak` remains from earlier
+  backup step; not touched by this fix.

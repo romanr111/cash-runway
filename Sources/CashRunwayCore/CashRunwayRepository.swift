@@ -2213,64 +2213,152 @@ extension CashRunwayRepository {
     /// (moving money between own wallets is not money gained or lost).
     public func transactionDeletionSummary(for period: DeletePeriod, now: Date = Date()) throws -> TransactionDeletionSummary {
         try databaseManager.dbQueue.read { db in
-            let (sql, arguments) = Self.deletePeriodPredicate(period, now: now)
-            let row = try Row.fetchOne(
-                db,
-                sql: """
-                SELECT
-                    COUNT(*) AS cnt,
-                    COALESCE(SUM(CASE WHEN type = 'expense' THEN ABS(amount_minor) ELSE 0 END), 0) AS expense,
-                    COALESCE(SUM(CASE WHEN type = 'income' THEN ABS(amount_minor) ELSE 0 END), 0) AS income
-                FROM transactions WHERE \(sql)
-                """,
-                arguments: arguments
-            )
-            return TransactionDeletionSummary(
-                count: row?["cnt"] ?? 0,
-                expenseMinor: row?["expense"] ?? 0,
-                incomeMinor: row?["income"] ?? 0
+            let summary = try Self.deletionImpactRows(db, period: period, now: now)
+            return summary.summary
+        }
+    }
+
+    /// Creates an immutable plan of every transaction row that would be deleted for
+    /// `period` as of `now`. The plan freezes the calendar scope and the exact row IDs
+    /// so that later execution cannot drift to a different day/month/year or a
+    /// different set of transactions.
+    public func transactionDeletionPlan(for period: DeletePeriod, now: Date = Date()) throws -> TransactionDeletionPlan {
+        try databaseManager.dbQueue.read { db in
+            let impact = try Self.deletionImpactRows(db, period: period, now: now)
+            return TransactionDeletionPlan(
+                period: period,
+                referenceDayKey: DateKeys.dayKey(for: now),
+                referenceMonthKey: DateKeys.monthKey(for: now),
+                referenceYear: DateKeys.yearKey(for: now),
+                transactionIDs: impact.ids,
+                summary: impact.summary
             )
         }
     }
 
-    /// Hard-deletes every transaction whose date keys fall in `period`. Maintains the
-    /// same aggregate tables as `deleteTransaction(id:)` and cascades to
-    /// `transaction_labels` / `transaction_search`. Only the rows physically inside the
-    /// period are removed; a transfer whose paired half is outside the period is left
-    /// in place. Returns the number of deleted rows.
+    /// Executes a frozen deletion plan. Recomputes the matching rows from the plan's
+    /// reference date keys; if the set of IDs has changed since preview, the operation
+    /// aborts with `CashRunwayError.invalidState` so the user must review again.
+    /// Otherwise deletes exactly the planned IDs, maintaining aggregates and cascading to
+    /// `transaction_labels` / `transaction_search`. Returns the number of deleted rows.
     @discardableResult
-    public func deleteTransactions(for period: DeletePeriod, now: Date = Date()) throws -> Int {
-        try databaseManager.dbQueue.write { db in
-            let (sql, arguments) = Self.deletePeriodPredicate(period, now: now)
-            let rows = try Row.fetchAll(
-                db,
-                sql: "SELECT * FROM transactions WHERE \(sql)",
-                arguments: arguments
-            )
-            guard !rows.isEmpty else { return 0 }
+    public func deleteTransactions(_ plan: TransactionDeletionPlan) throws -> Int {
+        guard !plan.transactionIDs.isEmpty else { return 0 }
 
-            for row in rows {
+        return try databaseManager.dbQueue.write { db in
+            // Recompute the current matching set from the frozen reference keys.
+            let (predicate, arguments) = Self.deletePeriodPredicate(
+                plan.period,
+                dayKey: plan.referenceDayKey,
+                monthKey: plan.referenceMonthKey,
+                year: plan.referenceYear
+            )
+            let currentIDs = try Set(
+                Row.fetchAll(db, sql: "SELECT id FROM transactions WHERE \(predicate)", arguments: arguments)
+                    .compactMap { UUID(uuidString: $0["id"]) }
+            )
+            let plannedIDs = Set(plan.transactionIDs)
+            guard currentIDs == plannedIDs else {
+                throw TransactionDeletionError.planStale
+            }
+
+            // Apply aggregate reversals before deleting so dashboard/category totals
+            // remain consistent even when the row disappears.
+            for id in plan.transactionIDs {
+                guard let row = try Row.fetchOne(db, sql: "SELECT * FROM transactions WHERE id = ?", arguments: [id.uuidString]) else {
+                    continue
+                }
                 let transaction = try Self.transaction(row)
                 try applyContribution(db, old: contribution(for: transaction), new: nil)
             }
 
-            let scopedIDs = "SELECT id FROM transactions WHERE \(sql)"
-            try db.execute(sql: "DELETE FROM transaction_labels WHERE transaction_id IN (\(scopedIDs))", arguments: arguments)
-            try db.execute(sql: "DELETE FROM transaction_search WHERE transaction_id IN (\(scopedIDs))", arguments: arguments)
-            try db.execute(sql: "DELETE FROM transactions WHERE \(sql)", arguments: arguments)
+            // SQLite has a default 999-variable limit per statement; chunk deletes.
+            let chunkSize = 900
+            let idStrings = plan.transactionIDs.map { $0.uuidString }
+            for chunk in idStrings.chunked(into: chunkSize) {
+                let placeholders = Array(repeating: "?", count: chunk.count).joined(separator: ",")
+                let args: StatementArguments = StatementArguments(chunk)
+                try db.execute(
+                    sql: "DELETE FROM transaction_labels WHERE transaction_id IN (\(placeholders))",
+                    arguments: args
+                )
+                try db.execute(
+                    sql: "DELETE FROM transaction_search WHERE transaction_id IN (\(placeholders))",
+                    arguments: args
+                )
+                try db.execute(
+                    sql: "DELETE FROM transactions WHERE id IN (\(placeholders))",
+                    arguments: args
+                )
+            }
 
-            return rows.count
+            return plan.transactionIDs.count
         }
     }
 
+    private struct DeletionImpact: Sendable {
+        let ids: [UUID]
+        let summary: TransactionDeletionSummary
+    }
+
+    private static func deletionImpactRows(_ db: Database, period: DeletePeriod, now: Date) throws -> DeletionImpact {
+        let (sql, arguments) = Self.deletePeriodPredicate(period, now: now)
+        let rows = try Row.fetchAll(
+            db,
+            sql: """
+            SELECT id, type, amount_minor
+            FROM transactions
+            WHERE \(sql)
+            ORDER BY id
+            """,
+            arguments: arguments
+        )
+        var expenseMinor: Int64 = 0
+        var incomeMinor: Int64 = 0
+        var ids: [UUID] = []
+        ids.reserveCapacity(rows.count)
+        for row in rows {
+            if let id = UUID(uuidString: row["id"]) {
+                ids.append(id)
+            }
+            let type: String = row["type"]
+            let amount: Int64 = row["amount_minor"]
+            switch type {
+            case "expense":
+                expenseMinor += abs(amount)
+            case "income":
+                incomeMinor += abs(amount)
+            default:
+                break
+            }
+        }
+        return DeletionImpact(
+            ids: ids,
+            summary: TransactionDeletionSummary(count: ids.count, expenseMinor: expenseMinor, incomeMinor: incomeMinor)
+        )
+    }
+
     private static func deletePeriodPredicate(_ period: DeletePeriod, now: Date) -> (sql: String, arguments: StatementArguments) {
+        deletePeriodPredicate(
+            period,
+            dayKey: DateKeys.dayKey(for: now),
+            monthKey: DateKeys.monthKey(for: now),
+            year: DateKeys.yearKey(for: now)
+        )
+    }
+
+    private static func deletePeriodPredicate(
+        _ period: DeletePeriod,
+        dayKey: Int,
+        monthKey: Int,
+        year: Int
+    ) -> (sql: String, arguments: StatementArguments) {
         switch period {
         case .today:
-            return ("local_day_key = ?", StatementArguments([DateKeys.dayKey(for: now)]))
+            return ("local_day_key = ?", StatementArguments([dayKey]))
         case .thisMonth:
-            return ("local_month_key = ?", StatementArguments([DateKeys.monthKey(for: now)]))
+            return ("local_month_key = ?", StatementArguments([monthKey]))
         case .thisYear:
-            let year = DateKeys.yearKey(for: now)
             return ("local_month_key >= ? AND local_month_key < ?", StatementArguments([year * 100, (year + 1) * 100]))
         }
     }

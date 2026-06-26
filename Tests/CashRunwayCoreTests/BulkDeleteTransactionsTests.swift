@@ -117,7 +117,20 @@ struct BulkDeleteTransactionsTests {
         return id
     }
 
-    // MARK: - Summary
+    private func setTransactionDate(repository: CashRunwayRepository, id: UUID, date: Date) throws {
+        try repository.databaseManager.dbQueue.write { db in
+            try db.execute(
+                sql: """
+                UPDATE transactions
+                SET occurred_at = ?, local_day_key = ?, local_month_key = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                arguments: [date, DateKeys.dayKey(for: date), DateKeys.monthKey(for: date), Date(), id.uuidString]
+            )
+        }
+    }
+
+    // MARK: - Summary / plan
 
     @Test func summaryCountsAndSplitsAmountsByKind() throws {
         let repository = try makeRepository()
@@ -136,9 +149,9 @@ struct BulkDeleteTransactionsTests {
         // Last year (excluded everywhere).
         try saveTransaction(repository: repository, kind: .expense, walletID: wallet.id, categoryID: expense.id, amountMinor: 16_000, at: Self.date(2025, 12, 15))
 
-        let today = try repository.transactionDeletionSummary(for: .today, now: now)
-        let month = try repository.transactionDeletionSummary(for: .thisMonth, now: now)
-        let year = try repository.transactionDeletionSummary(for: .thisYear, now: now)
+        let today = try repository.transactionDeletionPlan(for: .today, now: now).summary
+        let month = try repository.transactionDeletionPlan(for: .thisMonth, now: now).summary
+        let year = try repository.transactionDeletionPlan(for: .thisYear, now: now).summary
 
         #expect(today.count == 3)
         #expect(today.expenseMinor == 3_000)
@@ -148,6 +161,16 @@ struct BulkDeleteTransactionsTests {
         #expect(month.incomeMinor == 5_000)
         #expect(year.count == 5)
         #expect(year.expenseMinor == 15_000)
+    }
+
+    @Test func planFreezesReferenceDateKeys() throws {
+        let repository = try makeRepository()
+
+        let plan = try repository.transactionDeletionPlan(for: .thisMonth, now: now)
+        #expect(plan.period == .thisMonth)
+        #expect(plan.referenceDayKey == 20260615)
+        #expect(plan.referenceMonthKey == 202606)
+        #expect(plan.referenceYear == 2026)
     }
 
     // MARK: - Day
@@ -160,11 +183,12 @@ struct BulkDeleteTransactionsTests {
         try saveTransaction(repository: repository, kind: .expense, walletID: wallet.id, categoryID: expense.id, amountMinor: 1_000, at: Self.date(2026, 6, 15))
         try saveTransaction(repository: repository, kind: .expense, walletID: wallet.id, categoryID: expense.id, amountMinor: 2_000, at: Self.date(2026, 6, 1))
 
-        let deleted = try repository.deleteTransactions(for: .today, now: now)
+        let plan = try repository.transactionDeletionPlan(for: .today, now: now)
+        let deleted = try repository.deleteTransactions(plan)
 
         #expect(deleted == 1)
-        #expect(try repository.transactionDeletionSummary(for: .today, now: now).count == 0)
-        #expect(try repository.transactionDeletionSummary(for: .thisMonth, now: now).count == 1)
+        #expect(try repository.transactionDeletionPlan(for: .today, now: now).summary.count == 0)
+        #expect(try repository.transactionDeletionPlan(for: .thisMonth, now: now).summary.count == 1)
     }
 
     @Test func todayDeleteBoundaryExcludesAdjacentDays() throws {
@@ -176,10 +200,11 @@ struct BulkDeleteTransactionsTests {
         try saveTransaction(repository: repository, kind: .expense, walletID: wallet.id, categoryID: expense.id, amountMinor: 2_000, at: Self.date(2026, 6, 15)) // today
         try saveTransaction(repository: repository, kind: .expense, walletID: wallet.id, categoryID: expense.id, amountMinor: 3_000, at: Self.date(2026, 6, 16)) // tomorrow
 
-        _ = try repository.deleteTransactions(for: .today, now: now)
+        let plan = try repository.transactionDeletionPlan(for: .today, now: now)
+        _ = try repository.deleteTransactions(plan)
 
-        #expect(try repository.transactionDeletionSummary(for: .today, now: now).count == 0)
-        let monthSummary = try repository.transactionDeletionSummary(for: .thisMonth, now: now)
+        #expect(try repository.transactionDeletionPlan(for: .today, now: now).summary.count == 0)
+        let monthSummary = try repository.transactionDeletionPlan(for: .thisMonth, now: now).summary
         #expect(monthSummary.count == 2)
         #expect(monthSummary.expenseMinor == 4_000) // yesterday + tomorrow survive
     }
@@ -197,7 +222,8 @@ struct BulkDeleteTransactionsTests {
         let before = try repository.dashboard(monthKey: thisMonthKey, walletID: wallet.id)
         #expect(before.monthExpenseMinor == 10_000)
 
-        let deleted = try repository.deleteTransactions(for: .thisMonth, now: now)
+        let plan = try repository.transactionDeletionPlan(for: .thisMonth, now: now)
+        let deleted = try repository.deleteTransactions(plan)
 
         #expect(deleted == 2)
         let after = try repository.dashboard(monthKey: thisMonthKey, walletID: wallet.id)
@@ -213,12 +239,13 @@ struct BulkDeleteTransactionsTests {
         try saveTransaction(repository: repository, kind: .expense, walletID: wallet.id, categoryID: expense.id, amountMinor: 2_000, at: Self.date(2026, 6, 1))  // this month first day
         try saveTransaction(repository: repository, kind: .expense, walletID: wallet.id, categoryID: expense.id, amountMinor: 3_000, at: Self.date(2026, 7, 1))  // next month first day
 
-        _ = try repository.deleteTransactions(for: .thisMonth, now: now)
+        let plan = try repository.transactionDeletionPlan(for: .thisMonth, now: now)
+        _ = try repository.deleteTransactions(plan)
 
         // Adjacent-month transactions survive.
-        #expect(try repository.transactionDeletionSummary(for: .today, now: Self.date(2026, 5, 31)).count == 1)
-        #expect(try repository.transactionDeletionSummary(for: .today, now: Self.date(2026, 7, 1)).count == 1)
-        #expect(try repository.transactionDeletionSummary(for: .thisYear, now: now).count == 2)
+        #expect(try repository.transactionDeletionPlan(for: .today, now: Self.date(2026, 5, 31)).summary.count == 1)
+        #expect(try repository.transactionDeletionPlan(for: .today, now: Self.date(2026, 7, 1)).summary.count == 1)
+        #expect(try repository.transactionDeletionPlan(for: .thisYear, now: now).summary.count == 2)
     }
 
     // MARK: - Year
@@ -232,11 +259,12 @@ struct BulkDeleteTransactionsTests {
         try saveTransaction(repository: repository, kind: .expense, walletID: wallet.id, categoryID: expense.id, amountMinor: 1_000, at: Self.date(2026, 12, 31))
         try saveTransaction(repository: repository, kind: .expense, walletID: wallet.id, categoryID: expense.id, amountMinor: 1_000, at: Self.date(2025, 12, 31))
 
-        let deleted = try repository.deleteTransactions(for: .thisYear, now: now)
+        let plan = try repository.transactionDeletionPlan(for: .thisYear, now: now)
+        let deleted = try repository.deleteTransactions(plan)
 
         #expect(deleted == 2)
-        #expect(try repository.transactionDeletionSummary(for: .thisYear, now: now).count == 0)
-        #expect(try repository.transactionDeletionSummary(for: .today, now: Self.date(2025, 12, 31)).count == 1)
+        #expect(try repository.transactionDeletionPlan(for: .thisYear, now: now).summary.count == 0)
+        #expect(try repository.transactionDeletionPlan(for: .today, now: Self.date(2025, 12, 31)).summary.count == 1)
     }
 
     @Test func yearDeleteBoundaryExcludesAdjacentYears() throws {
@@ -249,11 +277,12 @@ struct BulkDeleteTransactionsTests {
         try saveTransaction(repository: repository, kind: .expense, walletID: wallet.id, categoryID: expense.id, amountMinor: 3_000, at: Self.date(2026, 12, 31)) // this year last day
         try saveTransaction(repository: repository, kind: .expense, walletID: wallet.id, categoryID: expense.id, amountMinor: 4_000, at: Self.date(2027, 1, 1))   // next year
 
-        let deleted = try repository.deleteTransactions(for: .thisYear, now: now)
+        let plan = try repository.transactionDeletionPlan(for: .thisYear, now: now)
+        let deleted = try repository.deleteTransactions(plan)
 
         #expect(deleted == 2)
-        #expect(try repository.transactionDeletionSummary(for: .today, now: Self.date(2025, 12, 31)).count == 1)
-        #expect(try repository.transactionDeletionSummary(for: .today, now: Self.date(2027, 1, 1)).count == 1)
+        #expect(try repository.transactionDeletionPlan(for: .today, now: Self.date(2025, 12, 31)).summary.count == 1)
+        #expect(try repository.transactionDeletionPlan(for: .today, now: Self.date(2027, 1, 1)).summary.count == 1)
     }
 
     // MARK: - Multi-wallet
@@ -270,11 +299,12 @@ struct BulkDeleteTransactionsTests {
         try saveTransaction(repository: repository, kind: .expense, walletID: b.id, categoryID: expense.id, amountMinor: 1_000, at: Self.date(2026, 6, 15))
         try saveTransaction(repository: repository, kind: .expense, walletID: b.id, categoryID: expense.id, amountMinor: 1_000, at: Self.date(2025, 12, 15))
 
-        let deleted = try repository.deleteTransactions(for: .thisMonth, now: now)
+        let plan = try repository.transactionDeletionPlan(for: .thisMonth, now: now)
+        let deleted = try repository.deleteTransactions(plan)
 
         #expect(deleted == 2) // one in-period txn per wallet
         // Both wallets' out-of-period transactions survive.
-        #expect(try repository.transactionDeletionSummary(for: .thisYear, now: Self.date(2025, 12, 15)).count == 2)
+        #expect(try repository.transactionDeletionPlan(for: .thisYear, now: Self.date(2025, 12, 15)).summary.count == 2)
     }
 
     // MARK: - Mixed types
@@ -290,13 +320,13 @@ struct BulkDeleteTransactionsTests {
         try saveTransaction(repository: repository, kind: .income, walletID: source.id, categoryID: income.id, amountMinor: 2_000, at: Self.date(2026, 6, 15))
         try saveTransaction(repository: repository, kind: .transfer, walletID: source.id, categoryID: nil, amountMinor: 500, at: Self.date(2026, 6, 15), destinationWalletID: destination.id)
 
-        let summary = try repository.transactionDeletionSummary(for: .thisMonth, now: now)
+        let plan = try repository.transactionDeletionPlan(for: .thisMonth, now: now)
         // Expense + income + both transfer halves = 4 rows.
-        #expect(summary.count == 4)
-        #expect(summary.expenseMinor == 1_000)
-        #expect(summary.incomeMinor == 2_000)
+        #expect(plan.count == 4)
+        #expect(plan.expenseMinor == 1_000)
+        #expect(plan.incomeMinor == 2_000)
 
-        let deleted = try repository.deleteTransactions(for: .thisMonth, now: now)
+        let deleted = try repository.deleteTransactions(plan)
         #expect(deleted == 4)
     }
 
@@ -315,7 +345,8 @@ struct BulkDeleteTransactionsTests {
         #expect(try countRows(repository: repository, table: "transaction_labels", transactionID: inPeriodID) == 1)
         #expect(try countRows(repository: repository, table: "transaction_labels", transactionID: outPeriodID) == 1)
 
-        _ = try repository.deleteTransactions(for: .thisMonth, now: now)
+        let plan = try repository.transactionDeletionPlan(for: .thisMonth, now: now)
+        _ = try repository.deleteTransactions(plan)
 
         #expect(try countRows(repository: repository, table: "transaction_labels", transactionID: inPeriodID) == 0)
         #expect(try countRows(repository: repository, table: "transaction_labels", transactionID: outPeriodID) == 1)
@@ -334,7 +365,8 @@ struct BulkDeleteTransactionsTests {
         let searchBefore = try countTable(repository: repository, "transaction_search")
         #expect(searchBefore == 3)
 
-        _ = try repository.deleteTransactions(for: .thisMonth, now: now)
+        let plan = try repository.transactionDeletionPlan(for: .thisMonth, now: now)
+        _ = try repository.deleteTransactions(plan)
 
         // Only the out-of-period search row survives.
         let searchAfter = try countTable(repository: repository, "transaction_search")
@@ -351,13 +383,13 @@ struct BulkDeleteTransactionsTests {
 
         try saveTransaction(repository: repository, kind: .transfer, walletID: source.id, categoryID: expense.id, amountMinor: 2_500, at: Self.date(2026, 6, 15), destinationWalletID: destination.id)
 
-        let before = try repository.transactionDeletionSummary(for: .thisMonth, now: now)
+        let before = try repository.transactionDeletionPlan(for: .thisMonth, now: now)
         #expect(before.count == 2)
 
-        let deleted = try repository.deleteTransactions(for: .thisMonth, now: now)
+        let deleted = try repository.deleteTransactions(before)
 
         #expect(deleted == 2)
-        #expect(try repository.transactionDeletionSummary(for: .thisMonth, now: now).count == 0)
+        #expect(try repository.transactionDeletionPlan(for: .thisMonth, now: now).summary.count == 0)
     }
 
     @Test func deleteDoesNotExpandToLinkedTransferOutsidePeriod() throws {
@@ -372,7 +404,10 @@ struct BulkDeleteTransactionsTests {
         try insertRawTransaction(repository: repository, id: inPeriodID, walletID: wallet.id, type: "transfer_out", linkedTransferID: outPeriodID, amountMinor: 2_500, occurredAt: Self.date(2026, 6, 15))
         try insertRawTransaction(repository: repository, id: outPeriodID, walletID: wallet.id, type: "transfer_in", linkedTransferID: inPeriodID, amountMinor: 2_500, occurredAt: Self.date(2026, 5, 20))
 
-        let deleted = try repository.deleteTransactions(for: .thisMonth, now: now)
+        let plan = try repository.transactionDeletionPlan(for: .thisMonth, now: now)
+        #expect(plan.transactionIDs == [inPeriodID])
+
+        let deleted = try repository.deleteTransactions(plan)
 
         #expect(deleted == 1)
         #expect(try transactionExists(repository: repository, id: inPeriodID) == 0)
@@ -405,7 +440,8 @@ struct BulkDeleteTransactionsTests {
         let labelsBefore = try countTable(repository: repository, "labels")
         let templatesBefore = try repository.recurringTemplates().count
 
-        _ = try repository.deleteTransactions(for: .thisMonth, now: now)
+        let plan = try repository.transactionDeletionPlan(for: .thisMonth, now: now)
+        _ = try repository.deleteTransactions(plan)
 
         #expect(try countTable(repository: repository, "wallets") == walletsBefore)
         #expect(try countTable(repository: repository, "categories") == categoriesBefore)
@@ -415,7 +451,7 @@ struct BulkDeleteTransactionsTests {
         #expect(try repository.recurringTemplates().contains { $0.id == template.id })
         // Label definition itself survives (only the transaction_labels join rows go).
         #expect(try repository.labels().contains { $0.id == label.id })
-        #expect(try repository.transactionDeletionSummary(for: .thisMonth, now: now).count == 0)
+        #expect(try repository.transactionDeletionPlan(for: .thisMonth, now: now).summary.count == 0)
     }
 
     // MARK: - Idempotency
@@ -426,20 +462,194 @@ struct BulkDeleteTransactionsTests {
         let expense = try makeExpenseCategory(repository: repository)
         try saveTransaction(repository: repository, kind: .expense, walletID: wallet.id, categoryID: expense.id, amountMinor: 1_000, at: Self.date(2026, 6, 15))
 
-        let first = try repository.deleteTransactions(for: .thisMonth, now: now)
-        let second = try repository.deleteTransactions(for: .thisMonth, now: now)
+        let first = try repository.transactionDeletionPlan(for: .thisMonth, now: now)
+        #expect(try repository.deleteTransactions(first) == 1)
 
-        #expect(first == 1)
-        #expect(second == 0)
+        let second = try repository.transactionDeletionPlan(for: .thisMonth, now: now)
+        #expect(try repository.deleteTransactions(second) == 0)
     }
 
     @Test func deleteEmptyPeriodReturnsZero() throws {
         let repository = try makeRepository()
         _ = try makeWallet(repository: repository, name: "Cash", balanceMinor: 1_000_000)
 
-        let deleted = try repository.deleteTransactions(for: .thisMonth, now: now)
+        let plan = try repository.transactionDeletionPlan(for: .thisMonth, now: now)
+        #expect(plan.transactionIDs.isEmpty)
+
+        let deleted = try repository.deleteTransactions(plan)
         #expect(deleted == 0)
-        #expect(try repository.transactionDeletionSummary(for: .thisMonth, now: now).count == 0)
+        #expect(try repository.transactionDeletionPlan(for: .thisMonth, now: now).summary.count == 0)
+    }
+
+    // MARK: - Frozen scope: date boundaries between preview and execution
+
+    @Test func planForTodaySurvivesMidnightBoundary() throws {
+        let repository = try makeRepository()
+        let wallet = try makeWallet(repository: repository, name: "Cash", balanceMinor: 1_000_000)
+        let expense = try makeExpenseCategory(repository: repository)
+
+        let june30 = Self.date(2026, 6, 30)
+        let july1 = Self.date(2026, 7, 1)
+        let juneID = try saveTransaction(repository: repository, kind: .expense, walletID: wallet.id, categoryID: expense.id, amountMinor: 1_000, at: june30)
+        let julyID = try saveTransaction(repository: repository, kind: .expense, walletID: wallet.id, categoryID: expense.id, amountMinor: 2_000, at: july1)
+
+        let plan = try repository.transactionDeletionPlan(for: .today, now: june30)
+        #expect(plan.referenceDayKey == 20260630)
+        #expect(plan.transactionIDs == [juneID])
+
+        let deleted = try repository.deleteTransactions(plan)
+
+        #expect(deleted == 1)
+        #expect(try transactionExists(repository: repository, id: juneID) == 0)
+        #expect(try transactionExists(repository: repository, id: julyID) == 1)
+    }
+
+    @Test func planForMonthSurvivesMonthBoundary() throws {
+        let repository = try makeRepository()
+        let wallet = try makeWallet(repository: repository, name: "Cash", balanceMinor: 1_000_000)
+        let expense = try makeExpenseCategory(repository: repository)
+
+        let june30 = Self.date(2026, 6, 30)
+        let july1 = Self.date(2026, 7, 1)
+        let juneID = try saveTransaction(repository: repository, kind: .expense, walletID: wallet.id, categoryID: expense.id, amountMinor: 1_000, at: june30)
+        let julyID = try saveTransaction(repository: repository, kind: .expense, walletID: wallet.id, categoryID: expense.id, amountMinor: 2_000, at: july1)
+
+        let plan = try repository.transactionDeletionPlan(for: .thisMonth, now: june30)
+        #expect(plan.referenceMonthKey == 202606)
+        #expect(plan.transactionIDs == [juneID])
+
+        let deleted = try repository.deleteTransactions(plan)
+
+        #expect(deleted == 1)
+        #expect(try transactionExists(repository: repository, id: juneID) == 0)
+        #expect(try transactionExists(repository: repository, id: julyID) == 1)
+    }
+
+    @Test func planForYearSurvivesYearBoundary() throws {
+        let repository = try makeRepository()
+        let wallet = try makeWallet(repository: repository, name: "Cash", balanceMinor: 1_000_000)
+        let expense = try makeExpenseCategory(repository: repository)
+
+        let dec31 = Self.date(2026, 12, 31)
+        let jan1 = Self.date(2027, 1, 1)
+        let decID = try saveTransaction(repository: repository, kind: .expense, walletID: wallet.id, categoryID: expense.id, amountMinor: 1_000, at: dec31)
+        let janID = try saveTransaction(repository: repository, kind: .expense, walletID: wallet.id, categoryID: expense.id, amountMinor: 2_000, at: jan1)
+
+        let plan = try repository.transactionDeletionPlan(for: .thisYear, now: dec31)
+        #expect(plan.referenceYear == 2026)
+        #expect(plan.transactionIDs == [decID])
+
+        let deleted = try repository.deleteTransactions(plan)
+
+        #expect(deleted == 1)
+        #expect(try transactionExists(repository: repository, id: decID) == 0)
+        #expect(try transactionExists(repository: repository, id: janID) == 1)
+    }
+
+    // MARK: - Frozen identity: set changes between preview and execution abort
+
+    @Test func deleteAbortsWhenMatchingTransactionAddedAfterPreview() throws {
+        let repository = try makeRepository()
+        let wallet = try makeWallet(repository: repository, name: "Cash", balanceMinor: 1_000_000)
+        let expense = try makeExpenseCategory(repository: repository)
+
+        let firstID = try saveTransaction(repository: repository, kind: .expense, walletID: wallet.id, categoryID: expense.id, amountMinor: 1_000, at: Self.date(2026, 6, 10))
+        let plan = try repository.transactionDeletionPlan(for: .thisMonth, now: now)
+        #expect(plan.transactionIDs == [firstID])
+
+        let insertedID = try saveTransaction(repository: repository, kind: .expense, walletID: wallet.id, categoryID: expense.id, amountMinor: 2_000, at: Self.date(2026, 6, 20))
+
+        #expect(throws: TransactionDeletionError.planStale) {
+            try repository.deleteTransactions(plan)
+        }
+        // Nothing was deleted.
+        #expect(try transactionExists(repository: repository, id: firstID) == 1)
+        #expect(try transactionExists(repository: repository, id: insertedID) == 1)
+    }
+
+    @Test func deleteAbortsWhenMatchingTransactionRemovedAfterPreview() throws {
+        let repository = try makeRepository()
+        let wallet = try makeWallet(repository: repository, name: "Cash", balanceMinor: 1_000_000)
+        let expense = try makeExpenseCategory(repository: repository)
+
+        let firstID = try saveTransaction(repository: repository, kind: .expense, walletID: wallet.id, categoryID: expense.id, amountMinor: 1_000, at: Self.date(2026, 6, 10))
+        let secondID = try saveTransaction(repository: repository, kind: .expense, walletID: wallet.id, categoryID: expense.id, amountMinor: 2_000, at: Self.date(2026, 6, 20))
+
+        let plan = try repository.transactionDeletionPlan(for: .thisMonth, now: now)
+        #expect(plan.transactionIDs.sorted() == [firstID, secondID].sorted())
+
+        try repository.deleteTransaction(id: firstID)
+
+        #expect(throws: TransactionDeletionError.planStale) {
+            try repository.deleteTransactions(plan)
+        }
+        // The surviving row is untouched.
+        #expect(try transactionExists(repository: repository, id: firstID) == 0)
+        #expect(try transactionExists(repository: repository, id: secondID) == 1)
+    }
+
+    @Test func deleteAbortsWhenTransactionsAreReplacedWithSameTotals() throws {
+        let repository = try makeRepository()
+        let wallet = try makeWallet(repository: repository, name: "Cash", balanceMinor: 1_000_000)
+        let expense = try makeExpenseCategory(repository: repository)
+
+        let aID = try saveTransaction(repository: repository, kind: .expense, walletID: wallet.id, categoryID: expense.id, amountMinor: 1_000, at: Self.date(2026, 6, 10))
+        let bID = try saveTransaction(repository: repository, kind: .expense, walletID: wallet.id, categoryID: expense.id, amountMinor: 1_000, at: Self.date(2026, 6, 20))
+        let cID = try saveTransaction(repository: repository, kind: .expense, walletID: wallet.id, categoryID: expense.id, amountMinor: 1_000, at: Self.date(2026, 5, 10))
+
+        let plan = try repository.transactionDeletionPlan(for: .thisMonth, now: now)
+        #expect(plan.transactionIDs.sorted() == [aID, bID].sorted())
+        #expect(plan.count == 2)
+        #expect(plan.expenseMinor == 2_000)
+
+        // Move A out of June and C into June: count and total stay the same, but the
+        // identity of the rows changed. Execution must reject this.
+        try setTransactionDate(repository: repository, id: aID, date: Self.date(2026, 5, 31))
+        try setTransactionDate(repository: repository, id: cID, date: Self.date(2026, 6, 15))
+
+        #expect(throws: TransactionDeletionError.planStale) {
+            try repository.deleteTransactions(plan)
+        }
+        #expect(try transactionExists(repository: repository, id: aID) == 1)
+        #expect(try transactionExists(repository: repository, id: bID) == 1)
+        #expect(try transactionExists(repository: repository, id: cID) == 1)
+    }
+
+    @Test func deleteChunksLargePlan() throws {
+        let repository = try makeRepository()
+        let wallet = try makeWallet(repository: repository, name: "Cash", balanceMinor: 100_000_000)
+        let expense = try makeExpenseCategory(repository: repository)
+
+        let ids = (0..<901).map { _ in UUID() }
+        let date = Self.date(2026, 6, 15)
+        let dayKey = DateKeys.dayKey(for: date)
+        let monthKey = DateKeys.monthKey(for: date)
+        let now = date
+        try repository.databaseManager.dbQueue.write { db in
+            for id in ids {
+                try db.execute(
+                    sql: """
+                    INSERT INTO transactions
+                    (id, wallet_id, type, linked_transfer_id, amount_minor, occurred_at, local_day_key, local_month_key,
+                     category_id, merchant, note, is_deleted, source, recurring_template_id, recurring_instance_id,
+                     import_job_id, import_fingerprint, created_at, updated_at)
+                    VALUES (?, ?, 'expense', NULL, 1, ?, ?, ?, ?, '', '', 0, 'manual', NULL, NULL, NULL, NULL, ?, ?)
+                    """,
+                    arguments: [
+                        id.uuidString, wallet.id.uuidString, date, dayKey, monthKey, expense.id.uuidString,
+                        Date(), Date()
+                    ]
+                )
+            }
+        }
+
+        let plan = try repository.transactionDeletionPlan(for: .today, now: now)
+        #expect(plan.count == 901)
+
+        let deleted = try repository.deleteTransactions(plan)
+
+        #expect(deleted == 901)
+        #expect(try repository.transactionDeletionPlan(for: .today, now: now).summary.count == 0)
     }
 
     // MARK: - Public surface (identifiable id + button plural title)

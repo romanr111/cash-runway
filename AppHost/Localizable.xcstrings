@@ -1,6 +1,22 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "The transactions to delete changed. Please review the period again.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The transactions to delete changed. Please review the period again."
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Транзакції для видалення змінилися. Будь ласка, перегляньте період ще раз."
+          }
+        }
+      }
+    },
     "%@ will be permanently deleted.": {
       "localizations": {
         "en": {
