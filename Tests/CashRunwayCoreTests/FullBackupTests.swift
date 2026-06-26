@@ -86,7 +86,7 @@ struct FullBackupTests {
         let decoded = try service.decode(data: service.encode(try service.exportFullBackup()))
 
         #expect(decoded.metadata.format == "cash-runway-backup")
-        #expect(decoded.metadata.version == 1)
+        #expect(decoded.metadata.version == 2)
         #expect(decoded.transactions.count == 4)
     }
 

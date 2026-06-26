@@ -21,6 +21,7 @@ struct RepositoryCRUDTests {
         let inserted = try #require(wallets.first { $0.id == wallet.id })
         #expect(inserted.name == "Test Wallet")
         #expect(inserted.kind == .cash)
+        #expect(inserted.categoryID == WalletCategory.builtIn(byKind: .cash).id)
         #expect(inserted.sortOrder == 99)
 
         var updated = inserted
@@ -32,6 +33,7 @@ struct RepositoryCRUDTests {
         let fetched = try #require(wallets.first { $0.id == wallet.id })
         #expect(fetched.name == "Updated Wallet")
         #expect(fetched.currentBalanceMinor == 200_000)
+        #expect(fetched.categoryID == WalletCategory.builtIn(byKind: .cash).id)
     }
 
     @Test func saveCategoryInsertsAndUpdates() throws {
