@@ -88,6 +88,7 @@ struct BulkDeleteTransactionsTests {
 
     /// Inserts a transaction row bypassing the draft/save pipeline, so we can place a
     /// transfer pair on different dates (the normal API forces both halves to one date).
+    /// `isDeleted` allows creating tombstoned rows to verify bulk-delete filtering.
     @discardableResult
     private func insertRawTransaction(
         repository: CashRunwayRepository,
@@ -96,7 +97,8 @@ struct BulkDeleteTransactionsTests {
         type: String,
         linkedTransferID: UUID?,
         amountMinor: Int64,
-        occurredAt: Date
+        occurredAt: Date,
+        isDeleted: Bool = false
     ) throws -> UUID {
         try repository.databaseManager.dbQueue.write { db in
             try db.execute(
@@ -105,12 +107,12 @@ struct BulkDeleteTransactionsTests {
                 (id, wallet_id, type, linked_transfer_id, amount_minor, occurred_at, local_day_key, local_month_key,
                  category_id, merchant, note, is_deleted, source, recurring_template_id, recurring_instance_id,
                  import_job_id, import_fingerprint, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, '', '', 0, 'manual', NULL, NULL, NULL, NULL, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, '', '', ?, 'manual', NULL, NULL, NULL, NULL, ?, ?)
                 """,
                 arguments: [
                     id.uuidString, walletID.uuidString, type, linkedTransferID?.uuidString,
                     amountMinor, occurredAt, DateKeys.dayKey(for: occurredAt), DateKeys.monthKey(for: occurredAt),
-                    Date(), Date()
+                    isDeleted ? 1 : 0, Date(), Date()
                 ]
             )
         }
@@ -650,6 +652,65 @@ struct BulkDeleteTransactionsTests {
 
         #expect(deleted == 901)
         #expect(try repository.transactionDeletionPlan(for: .today, now: now).summary.count == 0)
+    }
+
+    // MARK: - Tombstones
+
+    @Test func deleteExcludesTombstonedTransactionsFromImpactAndAggregateReversal() throws {
+        let repository = try makeRepository()
+        let wallet = try makeWallet(repository: repository, name: "Cash", balanceMinor: 1_000_000)
+        let expense = try makeExpenseCategory(repository: repository)
+
+        let activeID = try saveTransaction(
+            repository: repository,
+            kind: .expense,
+            walletID: wallet.id,
+            categoryID: expense.id,
+            amountMinor: 100_000,
+            at: now
+        )
+        let tombstoneID = UUID()
+        try insertRawTransaction(
+            repository: repository,
+            id: tombstoneID,
+            walletID: wallet.id,
+            type: "expense",
+            linkedTransferID: nil,
+            amountMinor: 100_000,
+            occurredAt: now,
+            isDeleted: true
+        )
+
+        // Preview and plan must see only the active transaction.
+        let summary = try repository.transactionDeletionSummary(for: .today, now: now)
+        #expect(summary.count == 1)
+        #expect(summary.expenseMinor == 100_000)
+
+        let plan = try repository.transactionDeletionPlan(for: .today, now: now)
+        #expect(plan.transactionIDs == [activeID])
+
+        // The active expense reduced the wallet; the tombstoned expense did not.
+        let walletBefore = try repository.wallets().first { $0.id == wallet.id }
+        #expect(walletBefore?.currentBalanceMinor == 900_000)
+
+        _ = try repository.deleteTransactions(plan)
+
+        // Only the active row is removed. The tombstone stays in place, still deleted.
+        #expect(try transactionExists(repository: repository, id: activeID) == 0)
+        #expect(try transactionExists(repository: repository, id: tombstoneID) == 1)
+        let tombstoneFlag = try repository.databaseManager.dbQueue.read { db in
+            try Int.fetchOne(db, sql: "SELECT is_deleted FROM transactions WHERE id = ?", arguments: [tombstoneID.uuidString])
+        }
+        #expect(tombstoneFlag == 1)
+
+        // Wallet balance and monthly aggregates match the state after deleting only the
+        // active row, because the tombstone is excluded from derived state.
+        let walletAfter = try repository.wallets().first { $0.id == wallet.id }
+        #expect(walletAfter?.currentBalanceMinor == 1_000_000)
+
+        let dashboard = try repository.dashboard(monthKey: thisMonthKey, walletID: wallet.id)
+        #expect(dashboard.monthExpenseMinor == 0)
+        #expect(dashboard.monthIncomeMinor == 0)
     }
 
     // MARK: - Public surface (identifiable id + button plural title)

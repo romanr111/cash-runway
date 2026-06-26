@@ -2355,14 +2355,20 @@ extension CashRunwayRepository {
         monthKey: Int,
         year: Int
     ) -> (sql: String, arguments: StatementArguments) {
+        let periodSQL: String
+        let periodArgs: StatementArguments
         switch period {
         case .today:
-            return ("local_day_key = ?", StatementArguments([dayKey]))
+            periodSQL = "local_day_key = ?"
+            periodArgs = StatementArguments([dayKey])
         case .thisMonth:
-            return ("local_month_key = ?", StatementArguments([monthKey]))
+            periodSQL = "local_month_key = ?"
+            periodArgs = StatementArguments([monthKey])
         case .thisYear:
-            return ("local_month_key >= ? AND local_month_key < ?", StatementArguments([year * 100, (year + 1) * 100]))
+            periodSQL = "local_month_key >= ? AND local_month_key < ?"
+            periodArgs = StatementArguments([year * 100, (year + 1) * 100])
         }
+        return ("is_deleted = 0 AND \(periodSQL)", periodArgs)
     }
 
     public func mergeCategory(oldCategoryID: UUID, into newCategoryID: UUID) throws {

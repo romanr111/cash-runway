@@ -48,6 +48,7 @@ struct DeleteTransactionsView: View {
         .scrollContentBackground(.hidden)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+        .interactiveDismissDisabled(isDeleting)
         .accessibilityIdentifier(CashRunwayAccessibilityID.deleteTransactionsSheet)
         .task { reloadSummaries() }
         .alert("Back up first?", isPresented: $isBackupPromptPresented) {
