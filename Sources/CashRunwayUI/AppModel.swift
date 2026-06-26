@@ -403,13 +403,32 @@ public final class CashRunwayAppModel {
             return try repository.transactionDeletionSummary(for: period)
         } catch {
             errorMessage = error.localizedDescription
-            return TransactionDeletionSummary(count: 0, totalAmountMinor: 0)
+            return TransactionDeletionSummary(count: 0)
         }
     }
 
-    public func deleteTransactions(for period: DeletePeriod) {
-        runMutation {
-            _ = try repository.deleteTransactions(for: period)
+    /// Bulk-deletes transactions for `period` off the main actor so the UI stays
+    /// responsive (and the loading spinner can animate) even for large year-scoped
+    /// deletes. Returns `true` on success, `false` (with `errorMessage` set) on
+    /// failure. Post-mutation cache invalidation and reload mirror `runMutation`.
+    @discardableResult
+    public func deleteTransactions(for period: DeletePeriod) async -> Bool {
+        let repo = repository
+        foregroundRefreshTask?.cancel()
+        foregroundRefreshTask = nil
+        do {
+            _ = try await Task.detached(priority: .userInitiated) {
+                try repo.deleteTransactions(for: period)
+            }.value
+            overviewSnapshotCache.removeAll()
+            Task { @MainActor in
+                let success = await reloadAll()
+                if success { lastForegroundRefreshAt = Date() }
+            }
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
         }
     }
 

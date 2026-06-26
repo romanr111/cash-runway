@@ -2206,22 +2206,30 @@ extension CashRunwayRepository {
         }
     }
 
-    /// Counts transactions that would be removed for `period`, and sums the absolute
-    /// amount magnitude across them. Used to preview impact before a bulk delete.
+    /// Counts transactions that would be removed for `period`, split by financial
+    /// impact. `expenseMinor` / `incomeMinor` are absolute magnitudes so they render
+    /// correctly regardless of the stored sign. Used to preview impact before a bulk
+    /// delete. Transfers are counted in `count` but excluded from the money split
+    /// (moving money between own wallets is not money gained or lost).
     public func transactionDeletionSummary(for period: DeletePeriod, now: Date = Date()) throws -> TransactionDeletionSummary {
         try databaseManager.dbQueue.read { db in
             let (sql, arguments) = Self.deletePeriodPredicate(period, now: now)
-            let count = try Int.fetchOne(
+            let row = try Row.fetchOne(
                 db,
-                sql: "SELECT COUNT(*) FROM transactions WHERE \(sql)",
+                sql: """
+                SELECT
+                    COUNT(*) AS cnt,
+                    COALESCE(SUM(CASE WHEN type = 'expense' THEN ABS(amount_minor) ELSE 0 END), 0) AS expense,
+                    COALESCE(SUM(CASE WHEN type = 'income' THEN ABS(amount_minor) ELSE 0 END), 0) AS income
+                FROM transactions WHERE \(sql)
+                """,
                 arguments: arguments
-            ) ?? 0
-            let total = try Int64.fetchOne(
-                db,
-                sql: "SELECT COALESCE(SUM(ABS(amount_minor)), 0) FROM transactions WHERE \(sql)",
-                arguments: arguments
-            ) ?? 0
-            return TransactionDeletionSummary(count: count, totalAmountMinor: total)
+            )
+            return TransactionDeletionSummary(
+                count: row?["cnt"] ?? 0,
+                expenseMinor: row?["expense"] ?? 0,
+                incomeMinor: row?["income"] ?? 0
+            )
         }
     }
 

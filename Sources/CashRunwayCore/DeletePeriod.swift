@@ -10,10 +10,12 @@ public enum DeletePeriod: String, CaseIterable, Sendable, Identifiable {
 
 public struct TransactionDeletionSummary: Equatable, Sendable {
     public let count: Int
-    public let totalAmountMinor: Int64
+    public let expenseMinor: Int64
+    public let incomeMinor: Int64
 
-    public init(count: Int, totalAmountMinor: Int64) {
+    public init(count: Int, expenseMinor: Int64 = 0, incomeMinor: Int64 = 0) {
         self.count = count
-        self.totalAmountMinor = totalAmountMinor
+        self.expenseMinor = expenseMinor
+        self.incomeMinor = incomeMinor
     }
 }

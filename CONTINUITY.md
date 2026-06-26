@@ -32,15 +32,28 @@ Transfers: only the in-period half is removed.
 - Sources/CashRunwayUI/AccessibilityIdentifiers.swift — settings.deleteTransactions.row + sheet IDs
 - AppHost/Localizable.xcstrings — 14 new EN/uk keys via Scripts/localize-xcstrings.py
 - CashRunway.xcodeproj/project.pbxproj — registered DeleteTransactionsView.swift (backup at .bak)
-- Tests/CashRunwayCoreTests/BulkDeleteTransactionsTests.swift (NEW) — 7 tests
+- Tests/CashRunwayCoreTests/BulkDeleteTransactionsTests.swift (NEW) — 17 tests
+
+## Review-driven fixes (2nd commit)
+- Perf #1: AppModel.deleteTransactions is now async; repo write runs in
+  Task.detached(priority:.userInitiated) so the main thread + spinner stay alive
+  for large year-scoped deletes. Post-mutation cache-clear + reload mirror runMutation.
+- Clarity #2: TransactionDeletionSummary split into count/expenseMinor/incomeMinor
+  (sign-agnostic ABS via CASE). impactCard shows Expenses | Income stats instead of
+  a single misleading SUM(ABS) total. "Expenses"/"Income" already localized.
+- Coverage: expanded from 7 -> 17 tests (boundaries for day/month/year, multi-wallet,
+  transfer non-expansion across period edge, transaction_search cascade, sibling-table
+  isolation incl. recurring template survival, idempotency, mixed-type counts).
 
 ## Validation
 - swift build (SwiftPM, Core+UI): Build complete
-- just check-unit-parallel: EXIT 0, no failures
-- just test-filter BulkDeleteTransactionsTests: 7/7 passed
+- just check-integration: EXIT 0, 370 tests passed (2 pre-existing known issues)
+- just test-filter BulkDeleteTransactionsTests: 17/17 passed
 - swiftlint --strict (touched files): 0 violations
 - just build (iPhone 17 sim): BUILD SUCCEEDED
 - Launch smoke (simctl install+launch dev.roman.cashrunway): app alive, PID running, no crash
+- llvm-cov: deleteTransactions / transactionDeletionSummary / deletePeriodPredicate
+  all at 100% line + branch coverage (every period branch + empty/non-empty guard hit)
 
 ## Skipped gates (report)
 - Interactive UI navigation to the new sheet (More→Data→Delete Transactions→

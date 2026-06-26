@@ -154,25 +154,49 @@ struct DeleteTransactionsView: View {
     }
 
     private func impactCard(period: DeletePeriod, summary: TransactionDeletionSummary) -> some View {
-        HStack(spacing: CashRunwayTheme.spaceM) {
-            periodGlyph(period)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(periodTitle(period))
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(CashRunwayTheme.textPrimary)
-                Text(L10n.string("%@ will be permanently deleted.", L10n.transactionCount(summary.count)))
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(CashRunwayTheme.negative)
-                Text(MoneyFormatter.string(from: summary.totalAmountMinor))
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(CashRunwayTheme.textSecondary)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: CashRunwayTheme.spaceM) {
+                periodGlyph(period)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(periodTitle(period))
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(CashRunwayTheme.textPrimary)
+                    Text(L10n.string("%@ will be permanently deleted.", L10n.transactionCount(summary.count)))
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(CashRunwayTheme.negative)
+                }
+                Spacer()
             }
-            Spacer()
+            if summary.expenseMinor > 0 || summary.incomeMinor > 0 {
+                HStack(spacing: 10) {
+                    if summary.expenseMinor > 0 {
+                        amountStat(label: "Expenses", value: summary.expenseMinor)
+                    }
+                    if summary.incomeMinor > 0 {
+                        amountStat(label: "Income", value: summary.incomeMinor)
+                    }
+                }
+            }
         }
         .padding(CashRunwayTheme.spaceM)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(CashRunwayTheme.negative.opacity(0.10), in: RoundedRectangle(cornerRadius: CashRunwayTheme.radiusM, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: CashRunwayTheme.radiusM, style: .continuous).stroke(CashRunwayTheme.negative.opacity(0.28), lineWidth: 1))
+    }
+
+    private func amountStat(label: LocalizedStringKey, value: Int64) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(CashRunwayTheme.textMuted)
+                .textCase(.uppercase)
+            Text(MoneyFormatter.string(from: value))
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(CashRunwayTheme.textPrimary)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: CashRunwayTheme.radiusS, style: .continuous))
     }
 
     private func periodRow(_ period: DeletePeriod) -> some View {
@@ -283,8 +307,10 @@ struct DeleteTransactionsView: View {
         guard let period = selectedPeriod, confirmMatches, !isDeleting else { return }
         confirmFieldFocused = false
         isDeleting = true
-        model.deleteTransactions(for: period)
-        isDeleting = false
-        onDismiss()
+        Task {
+            let success = await model.deleteTransactions(for: period)
+            isDeleting = false
+            if success { onDismiss() }
+        }
     }
 }
