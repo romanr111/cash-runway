@@ -14,6 +14,9 @@ Swift/SwiftUI/GRDB iOS app with a Node/TypeScript reporting API.
   requested.
 - Treat every git worktree as a separate CodeGraph project.
 - Report every skipped validation gate and the reason it was skipped.
+  If a command times out or fails, report the gate name, command, timeout/limit,
+  failure reason, fallback used (if any), and whether the fallback is equivalent
+  or a partial substitute.
 - Keep repo validation, runtime smoke tests, backend/API reachability, and
   release readiness as separate status buckets. Green checks do not imply the
   app launched, integrations worked, or release gates are complete.
@@ -24,6 +27,17 @@ Swift/SwiftUI/GRDB iOS app with a Node/TypeScript reporting API.
 - For SideStore or release work, keep the physical-device rehearsal as an
   explicit manual gate. Do not describe release readiness as complete until that
   rehearsal has actually passed.
+
+## Git Safety
+
+- Before merging, pushing, force-pushing, rebasing, deleting a branch, or closing a PR,
+  state the exact operation and branches involved and ask for explicit user confirmation.
+- Do not use `--admin`, `--force`, or `--force-with-lease` without explicit user approval.
+- When resolving merge/rebase conflicts in source files:
+  - Do not use `git checkout --ours` or `git checkout --theirs` on shared `.swift` files.
+  - Read both sides of the conflict markers and manually integrate.
+  - Run targeted tests for the affected area before continuing.
+  - If integration is unsafe, stop and ask.
 
 ## Workflow Helpers
 
@@ -123,6 +137,16 @@ Swift/SwiftUI/GRDB iOS app with a Node/TypeScript reporting API.
   requires it. Use the approved generator or project tool instead.
 - Do not read generated, vendored, artifact, snapshot, coverage, `.build`,
   `DerivedData`, or `.codegraph` files unless the task requires them.
+
+### Pre-task diff inventory
+Before editing files in a worktree:
+1. Run `git status --short` and `git diff --stat`.
+2. Flag generated, secret, or unrelated dirty files and ask the user before proceeding.
+3. Never silently revert files you did not modify.
+
+Cash Runway generated/secrets files to flag:
+- `AppHost/AppReportingSecrets.generated.swift`
+- `DerivedData/`, `.build/`, `.codegraph/`, coverage output
 
 ## Load Only When Relevant
 Before editing matching areas, read:
