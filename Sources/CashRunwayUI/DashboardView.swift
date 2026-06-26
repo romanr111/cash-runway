@@ -1623,6 +1623,12 @@ private struct TimelineSearchSheet: View {
             .navigationTitle("Search")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                    .accessibilityIdentifier(CashRunwayAccessibilityID.timelineSearchCancelButton)
+                }
+                ToolbarItem(placement: .topBarLeading) {
                     Button("Reset") {
                         draftQuery = .init()
                         usesDateRange = false
