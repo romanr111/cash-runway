@@ -4,8 +4,8 @@
 
 Branch: `codex/bulk-delete-transactions`
 Worktree: `~/.codex/worktrees/cash-runway-bulk-delete-transactions`
-Base: `dev` @ 26c4de4
-Status: implemented, merged with current `dev`, local gates green, pushed to remote, awaiting reviewer approval/merge.
+Base: `dev` @ d903f61
+Status: implemented, merged with current `dev`, resolving final conflicts, local gates pending, awaiting reviewer approval/merge.
 
 ## Feature
 Adds "Delete Transactions" to the More/Ще → Data section. User picks a period
@@ -60,10 +60,10 @@ Transfers: only the in-period half is removed.
   card transition, consolidated destructive messaging.
 
 ## Validation
-- `swift build --target CashRunwayCore` — passed
-- `just test-filter BulkDeleteTransactionsTests` — passed, 28/28
-- `just build` (iPhone 17 simulator) — passed, BUILD SUCCEEDED
-- `just lint` — passed, 0 violations
+- `swift build --target CashRunwayCore` — pending after final merge
+- `just test-filter BulkDeleteTransactionsTests` — pending after final merge
+- `just build` (iPhone 17 simulator) — pending after final merge
+- `just lint` — pending after final merge
 
 ## Skipped gates
 - True SwiftUI `.task(id:)` race cannot be unit-tested from SwiftPM because
@@ -76,10 +76,11 @@ Transfers: only the in-period half is removed.
   (accepted per decision). Future: consider demoting the orphan half.
 
 ## Freshness check (verify before next session)
-- [x] `git status --short` is clean.
-- [x] Untracked `CashRunway.xcodeproj/project.pbxproj.bak` was removed from the branch.
-- [x] Validation counts reflect the latest test run (28/28).
+- [ ] `git status --short` is clean.
+- [ ] `CashRunway.xcodeproj/project.pbxproj.bak` is not in the index or worktree.
+- [ ] Validation counts reflect the latest test run.
 
 ## Note
-- The `origin/dev` ledger snapshot for `codex/wallet-selection-transaction-editor`
-  belongs to a separate worktree and is intentionally not duplicated here.
+- The `origin/dev` ledger snapshots for `codex/wallet-selection-transaction-editor`
+  and `codex/custom-wallet-categories` belong to separate worktrees and are
+  intentionally not duplicated here.

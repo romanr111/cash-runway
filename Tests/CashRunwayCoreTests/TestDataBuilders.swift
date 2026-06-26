@@ -97,6 +97,7 @@ struct WalletBuilder {
     private var id: UUID = UUID()
     private var name: String = "Test Wallet"
     private var kind: WalletKind = .card
+    private var categoryID: UUID? = nil
     private var colorHex: String? = "#60788A"
     private var iconName: String? = "wallet.pass.fill"
     private var startingBalanceMinor: Int64 = 0
@@ -116,6 +117,10 @@ struct WalletBuilder {
 
     func with(kind: WalletKind) -> Self {
         var copy = self; copy.kind = kind; return copy
+    }
+
+    func with(categoryID: UUID?) -> Self {
+        var copy = self; copy.categoryID = categoryID; return copy
     }
 
     func with(startingBalanceMinor: Int64) -> Self {
@@ -147,6 +152,7 @@ struct WalletBuilder {
             id: id,
             name: name,
             kind: kind,
+            categoryID: categoryID,
             colorHex: colorHex,
             iconName: iconName,
             startingBalanceMinor: startingBalanceMinor,

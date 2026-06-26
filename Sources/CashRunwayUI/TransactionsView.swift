@@ -6,6 +6,11 @@ struct TransactionsView: View {
     @State private var isWalletEditorPresented = false
     @State private var walletDraft = Wallet(id: UUID(), name: "", kind: .cash, colorHex: "#60788A", iconName: "wallet.pass.fill", startingBalanceMinor: 0, currentBalanceMinor: 0, isArchived: false, sortOrder: 0, createdAt: .now, updatedAt: .now)
 
+    private func walletCategoryDisplayName(for wallet: Wallet) -> String {
+        model.walletCategories.first { $0.id == wallet.categoryID }?.displayName
+            ?? L10n.walletKind(wallet.kind)
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
@@ -39,7 +44,7 @@ struct TransactionsView: View {
                                         Text(wallet.name)
                                             .font(.system(size: 17, weight: .semibold))
                                             .foregroundStyle(CashRunwayTheme.textPrimary)
-                                        Text(L10n.walletKind(wallet.kind))
+                                        Text(walletCategoryDisplayName(for: wallet))
                                             .font(.system(size: 14, weight: .medium))
                                             .foregroundStyle(CashRunwayTheme.textSecondary)
                                     }

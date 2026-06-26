@@ -783,6 +783,7 @@ private func resolvedCategoryID(_ db: Database, kind: CategoryKind, named name: 
 
 public final class CashRunwayRepository: @unchecked Sendable {
     public let databaseManager: DatabaseManager
+    private var walletsHasCategoryIDColumn: Bool?
 
     public init(databaseManager: DatabaseManager) {
         self.databaseManager = databaseManager
@@ -790,6 +791,13 @@ public final class CashRunwayRepository: @unchecked Sendable {
 
     public convenience init(allowsDestructiveRecovery: Bool = false) throws {
         try self.init(databaseManager: DatabaseManager(allowsDestructiveRecovery: allowsDestructiveRecovery))
+    }
+
+    private func walletTableHasCategoryID(_ db: Database) throws -> Bool {
+        if let cached = walletsHasCategoryIDColumn { return cached }
+        let has = try Self.tableHasColumn(db, table: "wallets", column: "category_id")
+        walletsHasCategoryIDColumn = has
+        return has
     }
 }
 
@@ -828,6 +836,29 @@ extension CashRunwayRepository {
     public func wallets() throws -> [Wallet] {
         try databaseManager.dbQueue.read { db in
             try Row.fetchAll(db, sql: "SELECT * FROM wallets WHERE is_archived = 0 ORDER BY sort_order, name").map(Self.wallet)
+        }
+    }
+
+    public func walletCategories() throws -> [WalletCategory] {
+        try databaseManager.dbQueue.read { db in
+            try Row.fetchAll(
+                db,
+                sql: """
+                SELECT * FROM wallet_categories
+                ORDER BY
+                    is_system DESC,
+                    CASE
+                        WHEN is_system = 1 THEN
+                            CASE kind
+                                WHEN 'cash' THEN 0
+                                WHEN 'card' THEN 1
+                                WHEN 'account' THEN 2
+                                ELSE 3
+                            END
+                        ELSE LOWER(name)
+                    END
+                """
+            ).map(Self.walletCategory)
         }
     }
 
@@ -1258,7 +1289,7 @@ extension CashRunwayRepository {
         try databaseManager.dbQueue.read { db in
             let metadata = CashRunwayBackupMetadata(
                 format: "cash-runway-backup",
-                version: 1,
+                version: 2,
                 createdAt: Date(),
                 appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0",
                 currency: "UAH"
@@ -1267,6 +1298,7 @@ extension CashRunwayRepository {
             return CashRunwayBackup(
                 metadata: metadata,
                 wallets: try Row.fetchAll(db, sql: "SELECT * FROM wallets ORDER BY sort_order, name").map(Self.backupWallet),
+                walletCategories: try Row.fetchAll(db, sql: "SELECT * FROM wallet_categories ORDER BY name").map(Self.backupWalletCategory),
                 categories: try Row.fetchAll(db, sql: "SELECT * FROM categories ORDER BY kind, sort_order, name").map(Self.backupCategory),
                 labels: try Row.fetchAll(db, sql: "SELECT * FROM labels ORDER BY name").map(Self.backupLabel),
                 transactions: try Row.fetchAll(db, sql: "SELECT * FROM transactions ORDER BY occurred_at, created_at, id").map(Self.backupTransaction),
@@ -1308,29 +1340,90 @@ extension CashRunwayRepository {
         }
     }
 
-    public func saveWallet(_ wallet: Wallet) throws {
+    public func saveWalletCategory(_ category: WalletCategory) throws {
+        let trimmedName = category.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else {
+            throw CashRunwayError.validation(L10n.string("Category name cannot be empty."))
+        }
+
         try databaseManager.dbQueue.write { db in
+            let existing = try Row.fetchAll(db, sql: "SELECT * FROM wallet_categories").map(Self.walletCategory)
+            let normalizedNew = trimmedName.lowercased()
+            let hasDuplicate = existing.contains {
+                $0.id != category.id &&
+                $0.displayName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == normalizedNew
+            }
+            if hasDuplicate {
+                throw CashRunwayError.validation(L10n.string("A category with this name already exists."))
+            }
+
             try db.execute(
                 sql: """
-                INSERT INTO wallets (id, name, kind, color_hex, icon_name, starting_balance_minor, current_balance_minor, is_archived, sort_order, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO wallet_categories (id, name, kind, is_system, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     name = excluded.name,
                     kind = excluded.kind,
-                    color_hex = excluded.color_hex,
-                    icon_name = excluded.icon_name,
-                    starting_balance_minor = excluded.starting_balance_minor,
-                    current_balance_minor = excluded.current_balance_minor,
-                    is_archived = excluded.is_archived,
-                    sort_order = excluded.sort_order,
+                    is_system = excluded.is_system,
                     updated_at = excluded.updated_at
                 """,
                 arguments: [
-                    wallet.id.uuidString, wallet.name, wallet.kind.rawValue, wallet.colorHex, wallet.iconName,
-                    wallet.startingBalanceMinor, wallet.currentBalanceMinor, wallet.isArchived, wallet.sortOrder,
-                    wallet.createdAt, wallet.updatedAt,
+                    category.id.uuidString, trimmedName, category.kind.rawValue,
+                    category.isSystem, category.createdAt, category.updatedAt,
                 ]
             )
+        }
+    }
+
+    public func saveWallet(_ wallet: Wallet) throws {
+        try databaseManager.dbQueue.write { db in
+            if try walletTableHasCategoryID(db) {
+                try db.execute(
+                    sql: """
+                    INSERT INTO wallets (id, name, kind, category_id, color_hex, icon_name, starting_balance_minor, current_balance_minor, is_archived, sort_order, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(id) DO UPDATE SET
+                        name = excluded.name,
+                        kind = excluded.kind,
+                        category_id = excluded.category_id,
+                        color_hex = excluded.color_hex,
+                        icon_name = excluded.icon_name,
+                        starting_balance_minor = excluded.starting_balance_minor,
+                        current_balance_minor = excluded.current_balance_minor,
+                        is_archived = excluded.is_archived,
+                        sort_order = excluded.sort_order,
+                        updated_at = excluded.updated_at
+                    """,
+                    arguments: [
+                        wallet.id.uuidString, wallet.name, wallet.kind.rawValue, wallet.categoryID.uuidString,
+                        wallet.colorHex, wallet.iconName,
+                        wallet.startingBalanceMinor, wallet.currentBalanceMinor, wallet.isArchived, wallet.sortOrder,
+                        wallet.createdAt, wallet.updatedAt,
+                    ]
+                )
+            } else {
+                try db.execute(
+                    sql: """
+                    INSERT INTO wallets (id, name, kind, color_hex, icon_name, starting_balance_minor, current_balance_minor, is_archived, sort_order, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(id) DO UPDATE SET
+                        name = excluded.name,
+                        kind = excluded.kind,
+                        color_hex = excluded.color_hex,
+                        icon_name = excluded.icon_name,
+                        starting_balance_minor = excluded.starting_balance_minor,
+                        current_balance_minor = excluded.current_balance_minor,
+                        is_archived = excluded.is_archived,
+                        sort_order = excluded.sort_order,
+                        updated_at = excluded.updated_at
+                    """,
+                    arguments: [
+                        wallet.id.uuidString, wallet.name, wallet.kind.rawValue, wallet.colorHex, wallet.iconName,
+                        wallet.startingBalanceMinor, wallet.currentBalanceMinor, wallet.isArchived, wallet.sortOrder,
+                        wallet.createdAt, wallet.updatedAt,
+                    ]
+                )
+            }
         }
     }
 
@@ -3516,6 +3609,7 @@ extension CashRunwayRepository {
         try db.execute(sql: "DELETE FROM labels")
         try db.execute(sql: "DELETE FROM categories")
         try db.execute(sql: "DELETE FROM wallets")
+        try db.execute(sql: "DELETE FROM wallet_categories")
     }
 
     // swiftlint:disable:next function_body_length
@@ -3532,14 +3626,42 @@ extension CashRunwayRepository {
     }
 
     private func insertBackupSourceData(_ backup: CashRunwayBackup, into db: Database) throws {
-        for wallet in backup.wallets {
+        let walletCategories = backup.walletCategories.isEmpty
+            ? WalletCategory.allBuiltIn.map {
+                BackupWalletCategory(
+                    id: $0.id,
+                    name: $0.name,
+                    kind: $0.kind,
+                    isSystem: $0.isSystem,
+                    createdAt: $0.createdAt,
+                    updatedAt: $0.updatedAt
+                )
+            }
+            : backup.walletCategories
+
+        for category in walletCategories {
             try db.execute(
                 sql: """
-                INSERT INTO wallets (id, name, kind, color_hex, icon_name, starting_balance_minor, current_balance_minor, is_archived, sort_order, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO wallet_categories (id, name, kind, is_system, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 arguments: [
-                    wallet.id.uuidString, wallet.name, wallet.kind.rawValue, wallet.colorHex, wallet.iconName,
+                    category.id.uuidString, category.name, category.kind.rawValue,
+                    category.isSystem, category.createdAt, category.updatedAt,
+                ]
+            )
+        }
+
+        for wallet in backup.wallets {
+            let categoryID = wallet.categoryID ?? WalletCategory.builtIn(byKind: wallet.kind).id
+            try db.execute(
+                sql: """
+                INSERT INTO wallets (id, name, kind, category_id, color_hex, icon_name, starting_balance_minor, current_balance_minor, is_archived, sort_order, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                arguments: [
+                    wallet.id.uuidString, wallet.name, wallet.kind.rawValue, categoryID.uuidString,
+                    wallet.colorHex, wallet.iconName,
                     wallet.startingBalanceMinor, wallet.startingBalanceMinor, wallet.isArchived, wallet.sortOrder,
                     wallet.createdAt, wallet.updatedAt,
                 ]
@@ -3648,10 +3770,14 @@ extension CashRunwayRepository {
     }
 
     private static func wallet(_ row: Row) throws -> Wallet {
-        Wallet(
+        let kind: WalletKind = WalletKind(rawValue: row["kind"]) ?? .other
+        let categoryID = (row["category_id"] as String?).flatMap(UUID.init(uuidString:))
+            ?? WalletCategory.builtIn(byKind: kind).id
+        return Wallet(
             id: UUID(uuidString: row["id"])!,
             name: row["name"],
-            kind: WalletKind(rawValue: row["kind"]) ?? .other,
+            kind: kind,
+            categoryID: categoryID,
             colorHex: row["color_hex"],
             iconName: row["icon_name"],
             startingBalanceMinor: row["starting_balance_minor"],
@@ -3663,17 +3789,42 @@ extension CashRunwayRepository {
         )
     }
 
-    private static func backupWallet(_ row: Row) throws -> BackupWallet {
-        BackupWallet(
+    private static func walletCategory(_ row: Row) throws -> WalletCategory {
+        WalletCategory(
             id: UUID(uuidString: row["id"])!,
             name: row["name"],
             kind: WalletKind(rawValue: row["kind"]) ?? .other,
+            isSystem: row["is_system"],
+            createdAt: row["created_at"],
+            updatedAt: row["updated_at"]
+        )
+    }
+
+    private static func backupWallet(_ row: Row) throws -> BackupWallet {
+        let kind: WalletKind = WalletKind(rawValue: row["kind"]) ?? .other
+        let categoryID = (row["category_id"] as String?).flatMap(UUID.init(uuidString:))
+        return BackupWallet(
+            id: UUID(uuidString: row["id"])!,
+            name: row["name"],
+            kind: kind,
+            categoryID: categoryID,
             colorHex: row["color_hex"],
             iconName: row["icon_name"],
             startingBalanceMinor: row["starting_balance_minor"],
             currentBalanceMinor: row["current_balance_minor"],
             isArchived: row["is_archived"],
             sortOrder: row["sort_order"],
+            createdAt: row["created_at"],
+            updatedAt: row["updated_at"]
+        )
+    }
+
+    private static func backupWalletCategory(_ row: Row) throws -> BackupWalletCategory {
+        BackupWalletCategory(
+            id: UUID(uuidString: row["id"])!,
+            name: row["name"],
+            kind: WalletKind(rawValue: row["kind"]) ?? .other,
+            isSystem: row["is_system"],
             createdAt: row["created_at"],
             updatedAt: row["updated_at"]
         )
@@ -3777,6 +3928,11 @@ extension CashRunwayRepository {
             createdAt: row["created_at"],
             updatedAt: row["updated_at"]
         )
+    }
+
+    private static func tableHasColumn(_ db: Database, table: String, column: String) throws -> Bool {
+        let rows = try Row.fetchAll(db, sql: "PRAGMA table_info(\(table))")
+        return rows.contains { ($0["name"] as String?) == column }
     }
 
     private static func bankTransactionImport(_ row: Row) throws -> BankTransactionImport {

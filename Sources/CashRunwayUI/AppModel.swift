@@ -21,6 +21,7 @@ public final class CashRunwayAppModel {
     // public var lockStore: AppLockStore
 
     public var wallets: [Wallet] = []
+    public var walletCategories: [WalletCategory] = []
     public var expenseCategories: [CashRunwayCategory] = []
     public var incomeCategories: [CashRunwayCategory] = []
     public var labels: [CashRunwayLabel] = []
@@ -289,6 +290,7 @@ public final class CashRunwayAppModel {
                   timelineReloadState.canApply(reloadID: reloadID) else { return }
 
             budgets = mutable.budgets
+            walletCategories = mutable.walletCategories
             transactions = mutable.transactions
             dashboardSnapshot = mutable.dashboardSnapshot
             timelineSnapshot = mutable.timelineSnapshot
@@ -468,6 +470,13 @@ public final class CashRunwayAppModel {
     public func saveWallet(_ wallet: Wallet) {
         runMutation {
             try repository.saveWallet(wallet)
+        }
+    }
+
+    @discardableResult
+    public func saveWalletCategory(_ category: WalletCategory) -> Bool {
+        runMutation {
+            try repository.saveWalletCategory(category)
         }
     }
 
@@ -821,6 +830,7 @@ public func importStatement(
         query.walletID = selectedWalletID
         return AppModelSnapshot(
             wallets: try repository.wallets(),
+            walletCategories: try repository.walletCategories(),
             expenseCategories: try repository.categories(kind: .expense),
             incomeCategories: try repository.categories(kind: .income),
             labels: try repository.labels(),
@@ -846,6 +856,7 @@ public func importStatement(
         query.walletID = selectedWalletID
         return MutableSnapshots(
             budgets: try repository.budgets(monthKey: selectedMonthKey),
+            walletCategories: try repository.walletCategories(),
             transactions: try repository.transactions(query: query),
             dashboardSnapshot: try repository.dashboard(monthKey: selectedMonthKey, walletID: selectedWalletID),
             timelineSnapshot: try repository.timelineSnapshot(monthKey: selectedMonthKey, walletID: selectedWalletID, query: query, period: selectedTimelinePeriod),
@@ -860,6 +871,7 @@ public func importStatement(
 
     private func apply(_ snapshot: AppModelSnapshot) {
         wallets = snapshot.wallets
+        walletCategories = snapshot.walletCategories
         expenseCategories = snapshot.expenseCategories
         incomeCategories = snapshot.incomeCategories
         labels = snapshot.labels
@@ -1011,6 +1023,7 @@ private actor BackgroundWork {
 
 fileprivate struct AppModelSnapshot: Sendable {
     var wallets: [Wallet]
+    var walletCategories: [WalletCategory]
     var expenseCategories: [CashRunwayCategory]
     var incomeCategories: [CashRunwayCategory]
     var labels: [CashRunwayLabel]
@@ -1026,6 +1039,7 @@ fileprivate struct AppModelSnapshot: Sendable {
 
 fileprivate struct MutableSnapshots: Sendable {
     var budgets: [BudgetProgress]
+    var walletCategories: [WalletCategory]
     var transactions: [TransactionListItem]
     var dashboardSnapshot: DashboardSnapshot?
     var timelineSnapshot: TimelineSnapshot?
