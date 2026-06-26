@@ -7,6 +7,7 @@ struct DeleteTransactionsView: View {
     var onDismiss: () -> Void
 
     private enum Stage { case select, confirm }
+    private enum ConfirmField: Hashable { case confirm }
 
     @State private var stage: Stage = .select
     @State private var selectedPeriod: DeletePeriod?
@@ -16,7 +17,7 @@ struct DeleteTransactionsView: View {
     @State private var confirmText: String = ""
     @State private var isBackupPromptPresented = false
     @State private var isDeleting = false
-    @FocusState private var confirmFieldFocused: Bool
+    @FocusState private var focusedField: ConfirmField?
 
     private var confirmWord: String {
         L10n.languageCode == "uk" ? "ВИДАЛИТИ" : "DELETE"
@@ -31,18 +32,17 @@ struct DeleteTransactionsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: CashRunwayTheme.spaceL) {
                 header
-                warningCard
-
                 switch stage {
                 case .select:
+                    warningCard
                     periodSection
                 case .confirm:
                     confirmSection
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 8)
-            .padding(.bottom, 40)
+            .padding(.horizontal, CashRunwayTheme.spaceL)
+            .padding(.top, CashRunwayTheme.spaceS)
+            .padding(.bottom, CashRunwayTheme.spaceXL)
         }
         .background(CashRunwayTheme.background)
         .scrollContentBackground(.hidden)
@@ -72,9 +72,9 @@ struct DeleteTransactionsView: View {
             }
             .frame(width: 76, height: 76)
 
-            VStack(spacing: 6) {
+            VStack(spacing: CashRunwayTheme.spaceXS) {
                 Text("Delete Transactions")
-                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
                     .foregroundStyle(CashRunwayTheme.textPrimary)
                 Text("Choose transactions to remove by date")
                     .font(CashRunwayTheme.bodyFont)
@@ -116,7 +116,11 @@ struct DeleteTransactionsView: View {
             .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: CashRunwayTheme.radiusL, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: CashRunwayTheme.radiusL, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
 
-            primaryButton(title: "Continue", enabled: canContinue && !isLoadingPlan) {
+            primaryButton(
+                title: "Continue",
+                identifier: CashRunwayAccessibilityID.deleteTransactionsContinueButton,
+                enabled: canContinue && !isLoadingPlan
+            ) {
                 isBackupPromptPresented = true
             }
         }
@@ -137,9 +141,9 @@ struct DeleteTransactionsView: View {
             VStack(alignment: .leading, spacing: CashRunwayTheme.spaceS) {
                 if let plan = selectedPlan {
                     impactCard(plan: plan)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
-                VStack(alignment: .leading, spacing: 8) {
-
+                VStack(alignment: .leading, spacing: CashRunwayTheme.spaceS) {
                     Text(L10n.string("Type %@ to confirm", confirmWord))
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(CashRunwayTheme.negative)
@@ -151,26 +155,28 @@ struct DeleteTransactionsView: View {
                         .padding(CashRunwayTheme.spaceM)
                         .background(CashRunwayTheme.surfaceMuted, in: RoundedRectangle(cornerRadius: CashRunwayTheme.radiusS, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: CashRunwayTheme.radiusS, style: .continuous).stroke(confirmMatches ? CashRunwayTheme.negative : CashRunwayTheme.line, lineWidth: confirmMatches ? 2 : 1))
-                        .focused($confirmFieldFocused)
+                        .focused($focusedField, equals: .confirm)
                         .accessibilityIdentifier(CashRunwayAccessibilityID.deleteTransactionsConfirmField)
                 }
             }
 
             primaryButton(
                 title: selectedPlan.map { L10n.deleteTransactionsButtonTitle($0.count) } ?? L10n.deleteTransactionsButtonTitle(0),
+                identifier: CashRunwayAccessibilityID.deleteTransactionsConfirmButton,
                 enabled: confirmMatches && !isDeleting && hasSelectedTransactions,
                 isLoading: isDeleting
             ) {
                 performDelete()
             }
         }
+        .animation(.default, value: selectedPlan != nil)
     }
 
     private func impactCard(plan: TransactionDeletionPlan) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: CashRunwayTheme.spaceM) {
             HStack(spacing: CashRunwayTheme.spaceM) {
                 periodGlyph(plan.period)
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: CashRunwayTheme.spaceXS) {
                     Text(periodTitle(plan.period))
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(CashRunwayTheme.textPrimary)
@@ -181,7 +187,7 @@ struct DeleteTransactionsView: View {
                 Spacer()
             }
             if plan.expenseMinor > 0 || plan.incomeMinor > 0 {
-                HStack(spacing: 10) {
+                HStack(spacing: CashRunwayTheme.spaceM) {
                     if plan.expenseMinor > 0 {
                         amountStat(label: "Expenses", value: plan.expenseMinor)
                     }
@@ -198,7 +204,7 @@ struct DeleteTransactionsView: View {
     }
 
     private func amountStat(label: LocalizedStringKey, value: Int64) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: CashRunwayTheme.spaceXS) {
             Text(label)
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(CashRunwayTheme.textMuted)
@@ -207,8 +213,8 @@ struct DeleteTransactionsView: View {
                 .font(.system(size: 15, weight: .bold))
                 .foregroundStyle(CashRunwayTheme.textPrimary)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, CashRunwayTheme.spaceM)
+        .padding(.vertical, CashRunwayTheme.spaceS)
         .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: CashRunwayTheme.radiusS, style: .continuous))
     }
 
@@ -218,9 +224,9 @@ struct DeleteTransactionsView: View {
         return Button {
             selectedPeriod = period
         } label: {
-            HStack(spacing: 14) {
+            HStack(spacing: CashRunwayTheme.spaceM) {
                 periodGlyph(period)
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: CashRunwayTheme.spaceXS) {
                     Text(periodTitle(period))
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(CashRunwayTheme.textPrimary)
@@ -233,12 +239,15 @@ struct DeleteTransactionsView: View {
                     .font(.system(size: 22, weight: .semibold))
                     .foregroundStyle(isSelected ? CashRunwayTheme.negative : CashRunwayTheme.textMuted)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
+            .padding(.horizontal, CashRunwayTheme.spaceM)
+            .padding(.vertical, CashRunwayTheme.spaceM)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityIdentifier(CashRunwayAccessibilityID.deleteTransactionsPeriodRow)
+        .accessibilityIdentifier("\(CashRunwayAccessibilityID.deleteTransactionsPeriodRow).\(period.rawValue)")
+        .accessibilityLabel(periodTitle(period))
+        .accessibilityValue(summary.map { L10n.transactionCount($0.count) } ?? L10n.transactionCount(0))
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 
     private func periodGlyph(_ period: DeletePeriod) -> some View {
@@ -260,9 +269,9 @@ struct DeleteTransactionsView: View {
             .padding(.horizontal, 4)
     }
 
-    private func primaryButton(title: String, enabled: Bool, isLoading: Bool = false, action: @escaping () -> Void) -> some View {
+    private func primaryButton(title: String, identifier: String, enabled: Bool, isLoading: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 10) {
+            HStack(spacing: CashRunwayTheme.spaceM) {
                 if isLoading {
                     ProgressView()
                         .tint(.white)
@@ -271,16 +280,18 @@ struct DeleteTransactionsView: View {
                     .font(.system(size: 17, weight: .bold))
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
+            .padding(.vertical, CashRunwayTheme.spaceM)
             .foregroundStyle(.white)
             .background((enabled ? CashRunwayTheme.negative : CashRunwayTheme.textMuted), in: RoundedRectangle(cornerRadius: CashRunwayTheme.radiusM, style: .continuous))
         }
         .disabled(!enabled)
-        .accessibilityIdentifier(CashRunwayAccessibilityID.deleteTransactionsConfirmButton)
+        .accessibilityIdentifier(identifier)
     }
 
     private var rowDivider: some View {
-        Divider().overlay(CashRunwayTheme.line).padding(.leading, 76)
+        Divider()
+            .overlay(CashRunwayTheme.line)
+            .padding(.leading, CashRunwayTheme.spaceXL + CashRunwayTheme.spaceM)
     }
 
     private var canContinue: Bool {
@@ -317,7 +328,7 @@ struct DeleteTransactionsView: View {
 
     private func performDelete() {
         guard let plan = selectedPlan, confirmMatches, !isDeleting else { return }
-        confirmFieldFocused = false
+        focusedField = nil
         isDeleting = true
         Task {
             let success = await model.deleteTransactions(plan: plan)

@@ -57,6 +57,7 @@ enum CashRunwayAccessibilityID {
     static let settingsDeleteTransactionsRow = "settings.deleteTransactions.row"
     static let deleteTransactionsSheet = "deleteTransactions.sheet"
     static let deleteTransactionsPeriodRow = "deleteTransactions.period.row"
+    static let deleteTransactionsContinueButton = "deleteTransactions.continue.button"
     static let deleteTransactionsConfirmField = "deleteTransactions.confirm.field"
     static let deleteTransactionsConfirmButton = "deleteTransactions.confirm.button"
     static let settingsMonobankRow = "settings.monobank.row"
