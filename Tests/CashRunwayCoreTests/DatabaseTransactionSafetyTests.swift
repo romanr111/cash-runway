@@ -448,6 +448,244 @@ struct DatabaseTransactionSafetyTests {
         #expect(activeCategories.contains { $0.id == hiddenDestination.id } == false)
     }
 
+    @Test func selectingSecondWalletUpdatesDraftWalletID() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let wallets = try repository.wallets()
+        #expect(wallets.count >= 2)
+        let category = try #require(try repository.categories(kind: .expense).first)
+
+        var draft = TransactionDraft(
+            kind: .expense,
+            walletID: wallets[0].id,
+            amountMinor: 1_000,
+            occurredAt: .now,
+            categoryID: category.id
+        )
+        draft.walletID = wallets[1].id
+
+        #expect(draft.walletID == wallets[1].id)
+    }
+
+    @Test func savingNewTransactionPersistsSelectedWalletID() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let wallets = try repository.wallets()
+        #expect(wallets.count >= 2)
+        let category = try #require(try repository.categories(kind: .expense).first)
+
+        let draft = TransactionDraft(
+            kind: .expense,
+            walletID: wallets[1].id,
+            amountMinor: 5_000,
+            occurredAt: .now,
+            categoryID: category.id,
+            merchant: "Coffee",
+            note: "Morning pick-me-up"
+        )
+        try repository.saveTransaction(draft)
+
+        let saved = try #require(try repository.transactions().first)
+        #expect(saved.walletName == wallets[1].name)
+
+        let loaded = try repository.transactionDraft(id: saved.id)
+        #expect(loaded.walletID == wallets[1].id)
+        #expect(loaded.id == saved.id)
+    }
+
+    @Test func savingTransactionAffectsSelectedWalletBalanceOnly() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let wallets = try repository.wallets()
+        #expect(wallets.count >= 2)
+        let firstWallet = wallets[0]
+        let secondWallet = wallets[1]
+        let category = try #require(try repository.categories(kind: .expense).first)
+
+        let firstBalanceBefore = firstWallet.currentBalanceMinor
+        let secondBalanceBefore = secondWallet.currentBalanceMinor
+
+        let draft = TransactionDraft(
+            kind: .expense,
+            walletID: secondWallet.id,
+            amountMinor: 5_000,
+            occurredAt: .now,
+            categoryID: category.id,
+            merchant: "Groceries",
+            note: ""
+        )
+        try repository.saveTransaction(draft)
+
+        let updatedWallets = try Dictionary(uniqueKeysWithValues: repository.wallets().map { ($0.id, $0) })
+        let updatedSecond = try #require(updatedWallets[secondWallet.id])
+        let updatedFirst = try #require(updatedWallets[firstWallet.id])
+
+        #expect(updatedSecond.currentBalanceMinor == secondBalanceBefore - 5_000)
+        #expect(updatedFirst.currentBalanceMinor == firstBalanceBefore)
+        try TestSupport.assertWalletTruth(repository)
+    }
+
+    @Test func editingTransactionCanChangeWallet() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let wallets = try repository.wallets()
+        #expect(wallets.count >= 2)
+        let category = try #require(try repository.categories(kind: .expense).first)
+
+        let originalDraft = TransactionDraft(
+            kind: .expense,
+            walletID: wallets[0].id,
+            amountMinor: 3_000,
+            occurredAt: .now,
+            categoryID: category.id,
+            merchant: "Original",
+            note: ""
+        )
+        try repository.saveTransaction(originalDraft)
+
+        let saved = try #require(try repository.transactions().first)
+        var draft = try repository.transactionDraft(id: saved.id)
+        #expect(draft.walletID == wallets[0].id)
+
+        draft.walletID = wallets[1].id
+        try repository.saveTransaction(draft)
+
+        let updated = try #require(try repository.transactions().first { $0.id == saved.id })
+        #expect(updated.id == saved.id)
+        let updatedDraft = try repository.transactionDraft(id: updated.id)
+        #expect(updatedDraft.walletID == wallets[1].id)
+        try TestSupport.assertWalletTruth(repository)
+    }
+
+    @Test func changingWalletPreservesIdentityAndFields() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let wallets = try repository.wallets()
+        #expect(wallets.count >= 2)
+        let category = try #require(try repository.categories(kind: .expense).first)
+        let note = "Important note"
+        let merchant = "Merchant name"
+        let occurredAt = Calendar.current.date(byAdding: .day, value: -3, to: .now) ?? .now
+
+        let originalDraft = TransactionDraft(
+            kind: .expense,
+            walletID: wallets[0].id,
+            amountMinor: 7_500,
+            occurredAt: occurredAt,
+            categoryID: category.id,
+            merchant: merchant,
+            note: note
+        )
+        try repository.saveTransaction(originalDraft)
+
+        let saved = try #require(try repository.transactions().first)
+        var draft = try repository.transactionDraft(id: saved.id)
+        draft.walletID = wallets[1].id
+        try repository.saveTransaction(draft)
+
+        let loaded = try repository.transactionDraft(id: saved.id)
+        #expect(loaded.id == saved.id)
+        #expect(loaded.kind == .expense)
+        #expect(loaded.amountMinor == 7_500)
+        #expect(loaded.categoryID == category.id)
+        #expect(loaded.walletID == wallets[1].id)
+        #expect(loaded.merchant == merchant)
+        #expect(loaded.note == note)
+        #expect(Calendar.current.isDate(loaded.occurredAt, inSameDayAs: occurredAt))
+        #expect(loaded.labelIDs.isEmpty)
+    }
+
+    @Test func ledgerAndWalletBalancesCorrectAfterReassignment() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let wallets = try repository.wallets()
+        #expect(wallets.count >= 2)
+        let category = try #require(try repository.categories(kind: .expense).first)
+
+        try repository.saveTransaction(
+            TransactionDraft(
+                kind: .expense,
+                walletID: wallets[0].id,
+                amountMinor: 4_000,
+                occurredAt: .now,
+                categoryID: category.id,
+                merchant: "First",
+                note: ""
+            )
+        )
+        try repository.saveTransaction(
+            TransactionDraft(
+                kind: .expense,
+                walletID: wallets[0].id,
+                amountMinor: 2_000,
+                occurredAt: .now,
+                categoryID: category.id,
+                merchant: "Second",
+                note: ""
+            )
+        )
+
+        try TestSupport.assertWalletTruth(repository)
+
+        let firstSaved = try #require(try repository.transactions().first { $0.merchant == "First" })
+        var draft = try repository.transactionDraft(id: firstSaved.id)
+        draft.walletID = wallets[1].id
+        try repository.saveTransaction(draft)
+
+        try TestSupport.assertWalletTruth(repository)
+
+        let updatedWallets = try Dictionary(uniqueKeysWithValues: repository.wallets().map { ($0.id, $0) })
+        #expect(updatedWallets[wallets[1].id]?.currentBalanceMinor == wallets[1].currentBalanceMinor - 4_000)
+    }
+
+    @Test func transferSourceAndDestinationRemainDistinctAfterSourceChange() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let wallets = try repository.wallets()
+        #expect(wallets.count >= 2)
+
+        try repository.saveTransaction(
+            TransactionDraft(
+                kind: .transfer,
+                walletID: wallets[0].id,
+                destinationWalletID: wallets[1].id,
+                amountMinor: 8_000,
+                occurredAt: .now,
+                merchant: "Transfer",
+                note: ""
+            )
+        )
+
+        let saved = try #require(try repository.transactions(query: .init(kinds: [.transfer])).first)
+        var draft = try repository.transactionDraft(id: saved.id)
+        #expect(draft.walletID == wallets[0].id)
+        #expect(draft.destinationWalletID == wallets[1].id)
+
+        draft.walletID = wallets[1].id
+        draft.destinationWalletID = nil
+
+        #expect(throws: CashRunwayError.validation("Transfer requires two different wallets.")) {
+            try repository.saveTransaction(draft)
+        }
+
+        draft.destinationWalletID = wallets[0].id
+        try repository.saveTransaction(draft)
+
+        let reloaded = try repository.transactionDraft(id: saved.id)
+        #expect(reloaded.walletID == wallets[1].id)
+        #expect(reloaded.destinationWalletID == wallets[0].id)
+
+        try TestSupport.assertWalletTruth(repository)
+        try TestSupport.assertNoPartialTransfer(repository)
+    }
+
     private func transactionStats(_ repository: CashRunwayRepository, categoryID: UUID) throws -> (count: Int, amountMinor: Int64) {
         try repository.databaseManager.dbQueue.read { db in
             let row = try Row.fetchOne(

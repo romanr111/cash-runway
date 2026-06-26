@@ -137,6 +137,9 @@ struct TransactionEditorView: View {
                 if draft.walletID == UUID(), let firstWalletID = model.wallets.first?.id {
                     draft.walletID = firstWalletID
                 }
+                if !model.wallets.isEmpty, !model.wallets.contains(where: { $0.id == draft.walletID }), let firstWalletID = model.wallets.first?.id {
+                    draft.walletID = firstWalletID
+                }
                 if draft.id == nil {
                     composerModal = .category
                 }
@@ -245,20 +248,7 @@ struct TransactionEditorView: View {
             ScrollViewReader { _ in
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 0) {
-                        rowButton(title: "Wallet", value: walletName(for: draft.walletID), action: {})
-                            .overlay(alignment: .trailing) {
-                                Menu {
-                                    ForEach(model.wallets) { wallet in
-                                        Button(wallet.name) { draft.walletID = wallet.id }
-                                    }
-                                } label: {
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 14, weight: .bold))
-                                        .foregroundStyle(CashRunwayTheme.textMuted)
-                                }
-                                .padding(.trailing, 2)
-                                .accessibilityIdentifier(CashRunwayAccessibilityID.transactionWalletMenu)
-                            }
+                        walletSelectionRow
 
                         divider
 
@@ -453,6 +443,52 @@ struct TransactionEditorView: View {
                 }
             }
         }
+    }
+
+    private var walletSelectionRow: some View {
+        let canSelect = model.wallets.count > 1
+        return Menu {
+            ForEach(model.wallets) { wallet in
+                Button {
+                    selectWallet(wallet)
+                } label: {
+                    HStack {
+                        Text(wallet.name)
+                            .font(.system(size: 17))
+                            .foregroundStyle(CashRunwayTheme.textPrimary)
+                        Spacer()
+                        if wallet.id == draft.walletID {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(CashRunwayTheme.accentDark)
+                        }
+                    }
+                }
+            }
+        } label: {
+            HStack {
+                Text(L10n.string("Wallet"))
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(CashRunwayTheme.textPrimary)
+                Spacer()
+                Text(walletName(for: draft.walletID))
+                    .font(.system(size: 16))
+                    .foregroundStyle(CashRunwayTheme.textSecondary)
+                if canSelect {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(CashRunwayTheme.textMuted)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 18)
+            .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 30, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 30, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
+        }
+        .disabled(!canSelect)
+        .opacity(canSelect ? 1.0 : 0.6)
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(CashRunwayAccessibilityID.transactionWalletMenu)
     }
 
     private var recurringSheet: some View {
@@ -713,7 +749,14 @@ struct TransactionEditorView: View {
     }
 
     private func walletName(for id: UUID) -> String {
-        model.wallets.first(where: { $0.id == id })?.name ?? "Select wallet"
+        model.wallets.first(where: { $0.id == id })?.name ?? L10n.string("Select wallet")
+    }
+
+    private func selectWallet(_ wallet: Wallet) {
+        draft.walletID = wallet.id
+        if draft.kind == .transfer, draft.destinationWalletID == wallet.id {
+            draft.destinationWalletID = nil
+        }
     }
 
     private func rowButton(title: String, value: String, action: @escaping () -> Void) -> some View {
