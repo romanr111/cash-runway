@@ -11,6 +11,7 @@ struct DeleteTransactionsView: View {
     @State private var stage: Stage = .select
     @State private var selectedPeriod: DeletePeriod?
     @State private var selectedPlan: TransactionDeletionPlan?
+    @State private var isLoadingPlan = false
     @State private var summaries: [DeletePeriod: TransactionDeletionSummary] = [:]
     @State private var confirmText: String = ""
     @State private var isBackupPromptPresented = false
@@ -114,9 +115,18 @@ struct DeleteTransactionsView: View {
             .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: CashRunwayTheme.radiusL, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: CashRunwayTheme.radiusL, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
 
-            primaryButton(title: "Continue", enabled: canContinue) {
+            primaryButton(title: "Continue", enabled: canContinue && !isLoadingPlan) {
                 isBackupPromptPresented = true
             }
+        }
+        .task(id: selectedPeriod) {
+            guard let period = selectedPeriod else {
+                selectedPlan = nil
+                return
+            }
+            isLoadingPlan = true
+            selectedPlan = await model.transactionDeletionPlan(for: period)
+            isLoadingPlan = false
         }
     }
 
@@ -206,7 +216,6 @@ struct DeleteTransactionsView: View {
         let isSelected = selectedPeriod == period
         return Button {
             selectedPeriod = period
-            selectedPlan = model.transactionDeletionPlan(for: period)
         } label: {
             HStack(spacing: 14) {
                 periodGlyph(period)

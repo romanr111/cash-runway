@@ -407,9 +407,14 @@ public final class CashRunwayAppModel {
         }
     }
 
-    public func transactionDeletionPlan(for period: DeletePeriod) -> TransactionDeletionPlan? {
+    /// Builds a frozen deletion plan off the main actor so the period-selection UI
+    /// stays responsive even when previewing a large year-scoped set.
+    public func transactionDeletionPlan(for period: DeletePeriod) async -> TransactionDeletionPlan? {
+        let repo = repository
         do {
-            return try repository.transactionDeletionPlan(for: period)
+            return try await Task.detached(priority: .userInitiated) {
+                try repo.transactionDeletionPlan(for: period)
+            }.value
         } catch {
             errorMessage = error.localizedDescription
             return nil

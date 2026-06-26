@@ -2238,7 +2238,7 @@ extension CashRunwayRepository {
 
     /// Executes a frozen deletion plan. Recomputes the matching rows from the plan's
     /// reference date keys; if the set of IDs has changed since preview, the operation
-    /// aborts with `CashRunwayError.invalidState` so the user must review again.
+    /// aborts with `TransactionDeletionError.planStale` so the user must review again.
     /// Otherwise deletes exactly the planned IDs, maintaining aggregates and cascading to
     /// `transaction_labels` / `transaction_search`. Returns the number of deleted rows.
     @discardableResult
@@ -2263,7 +2263,9 @@ extension CashRunwayRepository {
             }
 
             // Apply aggregate reversals before deleting so dashboard/category totals
-            // remain consistent even when the row disappears.
+            // remain consistent even when the row disappears. The prior guard guarantees
+            // every planned ID still exists, so this fetch is defensive against future
+            // structural changes rather than a normal execution path.
             for id in plan.transactionIDs {
                 guard let row = try Row.fetchOne(db, sql: "SELECT * FROM transactions WHERE id = ?", arguments: [id.uuidString]) else {
                     continue
