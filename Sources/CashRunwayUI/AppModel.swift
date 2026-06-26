@@ -398,9 +398,14 @@ public final class CashRunwayAppModel {
         }
     }
 
-    public func transactionDeletionSummary(for period: DeletePeriod) -> TransactionDeletionSummary {
+    /// Loads a deletion summary off the main actor so the sheet opening stays
+    /// responsive even when loading a large year-scoped count.
+    public func transactionDeletionSummary(for period: DeletePeriod) async -> TransactionDeletionSummary {
+        let repo = repository
         do {
-            return try repository.transactionDeletionSummary(for: period)
+            return try await Task.detached(priority: .userInitiated) {
+                try repo.transactionDeletionSummary(for: period)
+            }.value
         } catch {
             errorMessage = error.localizedDescription
             return TransactionDeletionSummary(count: 0)
@@ -431,27 +436,26 @@ public final class CashRunwayAppModel {
 
     /// Bulk-deletes transactions using a frozen `plan` off the main actor so the UI
     /// stays responsive (and the loading spinner can animate) even for large
-    /// year-scoped deletes. Returns `true` on success, `false` (with `errorMessage`
-    /// set) on failure. Post-mutation cache invalidation and reload mirror
-    /// `runMutation`.
-    @discardableResult
-    public func deleteTransactions(plan: TransactionDeletionPlan) async -> Bool {
+    /// year-scoped deletes. Awaits the post-delete refresh so callers can distinguish
+    /// "delete succeeded, refresh failed" from complete success. Returns a structured
+    /// `TransactionDeletionResult`; sets `errorMessage` on any failure.
+    public func deleteTransactions(plan: TransactionDeletionPlan) async -> TransactionDeletionResult {
         let repo = repository
         foregroundRefreshTask?.cancel()
         foregroundRefreshTask = nil
         do {
-            _ = try await Task.detached(priority: .userInitiated) {
+            let deleted = try await Task.detached(priority: .userInitiated) {
                 try repo.deleteTransactions(plan)
             }.value
             overviewSnapshotCache.removeAll()
-            Task { @MainActor in
-                let success = await reloadAll()
-                if success { lastForegroundRefreshAt = Date() }
+            let refreshSuccess = await reloadAll()
+            if refreshSuccess {
+                lastForegroundRefreshAt = Date()
             }
-            return true
+            return TransactionDeletionResult(deletedCount: deleted, refreshSuccess: refreshSuccess)
         } catch {
             errorMessage = error.localizedDescription
-            return false
+            return TransactionDeletionResult(deletedCount: 0, refreshSuccess: false)
         }
     }
 

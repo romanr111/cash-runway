@@ -2211,10 +2211,29 @@ extension CashRunwayRepository {
     /// correctly regardless of the stored sign. Used to preview impact before a bulk
     /// delete. Transfers are counted in `count` but excluded from the money split
     /// (moving money between own wallets is not money gained or lost).
+    ///
+    /// Uses SQL aggregates rather than loading every matching row, so it stays fast
+    /// for large year-scoped histories.
     public func transactionDeletionSummary(for period: DeletePeriod, now: Date = Date()) throws -> TransactionDeletionSummary {
         try databaseManager.dbQueue.read { db in
-            let summary = try Self.deletionImpactRows(db, period: period, now: now)
-            return summary.summary
+            let (predicate, arguments) = Self.deletePeriodPredicate(period, now: now)
+            let row = try Row.fetchOne(
+                db,
+                sql: """
+                SELECT
+                    COUNT(*) AS count,
+                    COALESCE(SUM(CASE WHEN type = 'expense' THEN ABS(amount_minor) ELSE 0 END), 0) AS expense_minor,
+                    COALESCE(SUM(CASE WHEN type = 'income' THEN ABS(amount_minor) ELSE 0 END), 0) AS income_minor
+                FROM transactions
+                WHERE \(predicate)
+                """,
+                arguments: arguments
+            )!
+            return TransactionDeletionSummary(
+                count: row["count"],
+                expenseMinor: row["expense_minor"],
+                incomeMinor: row["income_minor"]
+            )
         }
     }
 

@@ -14,6 +14,7 @@ struct DeleteTransactionsView: View {
     @State private var selectedPlan: TransactionDeletionPlan?
     @State private var isLoadingPlan = false
     @State private var summaries: [DeletePeriod: TransactionDeletionSummary] = [:]
+    @State private var isLoadingSummaries = false
     @State private var confirmText: String = ""
     @State private var isBackupPromptPresented = false
     @State private var isDeleting = false
@@ -51,7 +52,7 @@ struct DeleteTransactionsView: View {
         .presentationDragIndicator(.visible)
         .interactiveDismissDisabled(isDeleting)
         .accessibilityIdentifier(CashRunwayAccessibilityID.deleteTransactionsSheet)
-        .task { reloadSummaries() }
+        .task { await reloadSummaries() }
         .alert("Back up first?", isPresented: $isBackupPromptPresented) {
             Button("Back up") { requestBackupExport() }
             Button("Skip", role: .cancel) { stage = .confirm }
@@ -120,7 +121,7 @@ struct DeleteTransactionsView: View {
             primaryButton(
                 title: "Continue",
                 identifier: CashRunwayAccessibilityID.deleteTransactionsContinueButton,
-                enabled: canContinue && !isLoadingPlan
+                enabled: canContinue && !isLoadingPlan && !isLoadingSummaries
             ) {
                 isBackupPromptPresented = true
             }
@@ -344,10 +345,12 @@ struct DeleteTransactionsView: View {
         }
     }
 
-    private func reloadSummaries() {
+    private func reloadSummaries() async {
+        isLoadingSummaries = true
+        defer { isLoadingSummaries = false }
         var updated: [DeletePeriod: TransactionDeletionSummary] = [:]
         for period in DeletePeriod.allCases {
-            updated[period] = model.transactionDeletionSummary(for: period)
+            updated[period] = await model.transactionDeletionSummary(for: period)
         }
         summaries = updated
     }
@@ -364,9 +367,13 @@ struct DeleteTransactionsView: View {
         focusedField = nil
         isDeleting = true
         Task {
-            let success = await model.deleteTransactions(plan: plan)
+            let result = await model.deleteTransactions(plan: plan)
             isDeleting = false
-            if success { onDismiss() }
+            if result.refreshSuccess {
+                onDismiss()
+            }
+            // If deletion succeeded but refresh failed, `errorMessage` is set
+            // by `reloadAll()` and the sheet stays open so the user sees it.
         }
     }
 }

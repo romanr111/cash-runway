@@ -31,6 +31,17 @@ public struct TransactionDeletionSummary: Equatable, Sendable {
     }
 }
 
+/// Outcome of executing a bulk-delete plan.
+public struct TransactionDeletionResult: Equatable, Sendable {
+    public let deletedCount: Int
+    public let refreshSuccess: Bool
+
+    public init(deletedCount: Int, refreshSuccess: Bool) {
+        self.deletedCount = deletedCount
+        self.refreshSuccess = refreshSuccess
+    }
+}
+
 /// An immutable snapshot of what a bulk delete will remove.
 ///
 /// Created during preview and passed to execution so the exact row IDs shown to

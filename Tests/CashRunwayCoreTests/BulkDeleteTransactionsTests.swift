@@ -175,6 +175,28 @@ struct BulkDeleteTransactionsTests {
         #expect(plan.referenceYear == 2026)
     }
 
+    @Test func summaryMatchesPlanAndCountsTransfers() throws {
+        let repository = try makeRepository()
+        let source = try makeWallet(repository: repository, name: "Cash", balanceMinor: 1_000_000)
+        let destination = try makeWallet(repository: repository, name: "Savings", balanceMinor: 0)
+        let expense = try makeExpenseCategory(repository: repository)
+        let income = try makeIncomeCategory(repository: repository)
+
+        try saveTransaction(repository: repository, kind: .expense, walletID: source.id, categoryID: expense.id, amountMinor: 1_000, at: Self.date(2026, 6, 15))
+        try saveTransaction(repository: repository, kind: .income, walletID: source.id, categoryID: income.id, amountMinor: 2_000, at: Self.date(2026, 6, 15))
+        try saveTransaction(repository: repository, kind: .transfer, walletID: source.id, categoryID: nil, amountMinor: 500, at: Self.date(2026, 6, 15), destinationWalletID: destination.id)
+
+        let summary = try repository.transactionDeletionSummary(for: .thisMonth, now: now)
+        let plan = try repository.transactionDeletionPlan(for: .thisMonth, now: now)
+
+        // The aggregate summary must match the plan summary exactly.
+        #expect(summary == plan.summary)
+        // Transfers count in `count` but do not contribute to expense/income.
+        #expect(summary.count == 4)
+        #expect(summary.expenseMinor == 1_000)
+        #expect(summary.incomeMinor == 2_000)
+    }
+
     // MARK: - Day
 
     @Test func deleteTodayRemovesOnlyTodayAndPreservesOthers() throws {
