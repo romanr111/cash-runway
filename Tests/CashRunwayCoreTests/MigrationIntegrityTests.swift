@@ -116,6 +116,14 @@ struct MigrationIntegrityTests {
             try String.fetchAll(db, sql: "SELECT identifier FROM grdb_migrations ORDER BY identifier")
         }
         #expect(appliedVersions.contains("v3_bank_sync"))
+        #expect(appliedVersions.contains("v5_custom_wallet_categories"))
+
+        let walletCategories = try repo.walletCategories()
+        #expect(walletCategories.filter(\.isSystem).count == 4)
+
+        for wallet in try repo.wallets() {
+            #expect(wallet.categoryID == WalletCategory.builtIn(byKind: wallet.kind).id)
+        }
 
         let postMigrateTxCount = try repo.transactions().count
         #expect(postMigrateTxCount == preMigrateTxCount)

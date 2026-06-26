@@ -7,6 +7,81 @@ public enum WalletKind: String, CaseIterable, Codable, Sendable {
     case other
 }
 
+public struct WalletCategory: Identifiable, Codable, Hashable, Sendable {
+    public var id: UUID
+    public var name: String
+    public var kind: WalletKind
+    public var isSystem: Bool
+    public var createdAt: Date
+    public var updatedAt: Date
+
+    public init(id: UUID, name: String, kind: WalletKind, isSystem: Bool, createdAt: Date, updatedAt: Date) {
+        self.id = id
+        self.name = name
+        self.kind = kind
+        self.isSystem = isSystem
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+
+    public var displayName: String {
+        if isSystem, let builtIn = WalletCategory.builtIn(byID: id) {
+            return L10n.walletKind(builtIn.kind)
+        }
+        return name
+    }
+
+    public static let cash = WalletCategory(
+        id: UUID(uuidString: "22222222-2222-2222-2222-222222222222")!,
+        name: "walletKind.cash",
+        kind: .cash,
+        isSystem: true,
+        createdAt: Date(timeIntervalSince1970: 0),
+        updatedAt: Date(timeIntervalSince1970: 0)
+    )
+
+    public static let card = WalletCategory(
+        id: UUID(uuidString: "22222222-2222-2222-2222-222222222223")!,
+        name: "walletKind.card",
+        kind: .card,
+        isSystem: true,
+        createdAt: Date(timeIntervalSince1970: 0),
+        updatedAt: Date(timeIntervalSince1970: 0)
+    )
+
+    public static let account = WalletCategory(
+        id: UUID(uuidString: "22222222-2222-2222-2222-222222222224")!,
+        name: "walletKind.account",
+        kind: .account,
+        isSystem: true,
+        createdAt: Date(timeIntervalSince1970: 0),
+        updatedAt: Date(timeIntervalSince1970: 0)
+    )
+
+    public static let other = WalletCategory(
+        id: UUID(uuidString: "22222222-2222-2222-2222-222222222225")!,
+        name: "walletKind.other",
+        kind: .other,
+        isSystem: true,
+        createdAt: Date(timeIntervalSince1970: 0),
+        updatedAt: Date(timeIntervalSince1970: 0)
+    )
+
+    public static var allBuiltIn: [WalletCategory] {
+        [cash, card, account, other]
+    }
+
+    public static func builtIn(byID id: UUID) -> WalletCategory? {
+        allBuiltIn.first { $0.id == id }
+    }
+
+    public static func builtIn(byKind kind: WalletKind) -> WalletCategory {
+        allBuiltIn.first { $0.kind == kind } ?? .other
+    }
+
+    public static let newCategoryActionID = UUID(uuidString: "22222222-2222-2222-2222-222222222221")!
+}
+
 public enum CategoryKind: String, CaseIterable, Codable, Sendable {
     case expense
     case income
@@ -520,6 +595,7 @@ public struct Wallet: Identifiable, Codable, Hashable, Sendable {
     public var id: UUID
     public var name: String
     public var kind: WalletKind
+    public var categoryID: UUID
     public var colorHex: String?
     public var iconName: String?
     public var startingBalanceMinor: Int64
@@ -529,10 +605,24 @@ public struct Wallet: Identifiable, Codable, Hashable, Sendable {
     public var createdAt: Date
     public var updatedAt: Date
 
-    public init(id: UUID, name: String, kind: WalletKind, colorHex: String?, iconName: String?, startingBalanceMinor: Int64, currentBalanceMinor: Int64, isArchived: Bool, sortOrder: Int, createdAt: Date, updatedAt: Date) {
+    public init(
+        id: UUID,
+        name: String,
+        kind: WalletKind,
+        categoryID: UUID? = nil,
+        colorHex: String?,
+        iconName: String?,
+        startingBalanceMinor: Int64,
+        currentBalanceMinor: Int64,
+        isArchived: Bool,
+        sortOrder: Int,
+        createdAt: Date,
+        updatedAt: Date
+    ) {
         self.id = id
         self.name = name
         self.kind = kind
+        self.categoryID = categoryID ?? WalletCategory.builtIn(byKind: kind).id
         self.colorHex = colorHex
         self.iconName = iconName
         self.startingBalanceMinor = startingBalanceMinor
@@ -779,6 +869,7 @@ public struct ImportJob: Identifiable, Codable, Hashable, Sendable {
 public struct CashRunwayBackup: Codable, Sendable {
     public var metadata: CashRunwayBackupMetadata
     public var wallets: [BackupWallet]
+    public var walletCategories: [BackupWalletCategory]
     public var categories: [BackupCategory]
     public var labels: [BackupLabel]
     public var transactions: [BackupTransaction]
@@ -787,6 +878,61 @@ public struct CashRunwayBackup: Codable, Sendable {
     public var recurringTemplates: [BackupRecurringTemplate]
     public var recurringInstances: [BackupRecurringInstance]
     public var importJobs: [BackupImportJob]
+
+    private enum CodingKeys: String, CodingKey {
+        case metadata
+        case wallets
+        case walletCategories
+        case categories
+        case labels
+        case transactions
+        case transactionLabels
+        case budgets
+        case recurringTemplates
+        case recurringInstances
+        case importJobs
+    }
+
+    public init(
+        metadata: CashRunwayBackupMetadata,
+        wallets: [BackupWallet],
+        walletCategories: [BackupWalletCategory] = [],
+        categories: [BackupCategory],
+        labels: [BackupLabel],
+        transactions: [BackupTransaction],
+        transactionLabels: [BackupTransactionLabel],
+        budgets: [BackupBudget],
+        recurringTemplates: [BackupRecurringTemplate],
+        recurringInstances: [BackupRecurringInstance],
+        importJobs: [BackupImportJob]
+    ) {
+        self.metadata = metadata
+        self.wallets = wallets
+        self.walletCategories = walletCategories
+        self.categories = categories
+        self.labels = labels
+        self.transactions = transactions
+        self.transactionLabels = transactionLabels
+        self.budgets = budgets
+        self.recurringTemplates = recurringTemplates
+        self.recurringInstances = recurringInstances
+        self.importJobs = importJobs
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        metadata = try container.decode(CashRunwayBackupMetadata.self, forKey: .metadata)
+        wallets = try container.decode([BackupWallet].self, forKey: .wallets)
+        walletCategories = try container.decodeIfPresent([BackupWalletCategory].self, forKey: .walletCategories) ?? []
+        categories = try container.decode([BackupCategory].self, forKey: .categories)
+        labels = try container.decode([BackupLabel].self, forKey: .labels)
+        transactions = try container.decode([BackupTransaction].self, forKey: .transactions)
+        transactionLabels = try container.decode([BackupTransactionLabel].self, forKey: .transactionLabels)
+        budgets = try container.decode([BackupBudget].self, forKey: .budgets)
+        recurringTemplates = try container.decode([BackupRecurringTemplate].self, forKey: .recurringTemplates)
+        recurringInstances = try container.decode([BackupRecurringInstance].self, forKey: .recurringInstances)
+        importJobs = try container.decode([BackupImportJob].self, forKey: .importJobs)
+    }
 }
 
 public struct CashRunwayBackupMetadata: Codable, Hashable, Sendable {
@@ -801,6 +947,7 @@ public struct BackupWallet: Identifiable, Codable, Hashable, Sendable {
     public var id: UUID
     public var name: String
     public var kind: WalletKind
+    public var categoryID: UUID?
     public var colorHex: String?
     public var iconName: String?
     public var startingBalanceMinor: Int64
@@ -809,6 +956,59 @@ public struct BackupWallet: Identifiable, Codable, Hashable, Sendable {
     public var sortOrder: Int
     public var createdAt: Date
     public var updatedAt: Date
+
+    public init(
+        id: UUID,
+        name: String,
+        kind: WalletKind,
+        categoryID: UUID? = nil,
+        colorHex: String?,
+        iconName: String?,
+        startingBalanceMinor: Int64,
+        currentBalanceMinor: Int64,
+        isArchived: Bool,
+        sortOrder: Int,
+        createdAt: Date,
+        updatedAt: Date
+    ) {
+        self.id = id
+        self.name = name
+        self.kind = kind
+        self.categoryID = categoryID
+        self.colorHex = colorHex
+        self.iconName = iconName
+        self.startingBalanceMinor = startingBalanceMinor
+        self.currentBalanceMinor = currentBalanceMinor
+        self.isArchived = isArchived
+        self.sortOrder = sortOrder
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}
+
+public struct BackupWalletCategory: Identifiable, Codable, Hashable, Sendable {
+    public var id: UUID
+    public var name: String
+    public var kind: WalletKind
+    public var isSystem: Bool
+    public var createdAt: Date
+    public var updatedAt: Date
+
+    public init(
+        id: UUID,
+        name: String,
+        kind: WalletKind,
+        isSystem: Bool,
+        createdAt: Date,
+        updatedAt: Date
+    ) {
+        self.id = id
+        self.name = name
+        self.kind = kind
+        self.isSystem = isSystem
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
 }
 
 public struct BackupCategory: Identifiable, Codable, Hashable, Sendable {
@@ -1060,10 +1260,11 @@ enum BackupValidator {
         guard backup.metadata.format == "cash-runway-backup" else {
             throw BackupError.unsupportedFormat
         }
-        guard backup.metadata.version == 1 else {
+        guard backup.metadata.version == 1 || backup.metadata.version == 2 else {
             throw BackupError.unsupportedVersion(backup.metadata.version)
         }
 
+        let walletCategoryIDs = Set(backup.walletCategories.map(\.id))
         let walletIDs = try uniqueIDs(backup.wallets.map(\.id), entity: "wallet")
         let categoryIDs = try uniqueIDs(backup.categories.map(\.id), entity: "category")
         let labelIDs = try uniqueIDs(backup.labels.map(\.id), entity: "label")
@@ -1073,6 +1274,7 @@ enum BackupValidator {
         let recurringInstanceIDs = try uniqueIDs(backup.recurringInstances.map(\.id), entity: "recurring instance")
         _ = try uniqueIDs(backup.importJobs.map(\.id), entity: "import job")
 
+        try validateWalletCategories(backup.wallets, walletCategoryIDs: walletCategoryIDs, backupVersion: backup.metadata.version)
         try validateCategoryParents(backup.categories, categoryIDs: categoryIDs)
         try validateBudgets(backup.budgets, budgetIDs: budgetIDs, categoryIDs: categoryIDs)
         try validateRecurringTemplates(backup.recurringTemplates, walletIDs: walletIDs, categoryIDs: categoryIDs)
@@ -1098,6 +1300,19 @@ enum BackupValidator {
             throw BackupError.duplicateID(entity)
         }
         return set
+    }
+
+    private static func validateWalletCategories(_ wallets: [BackupWallet], walletCategoryIDs: Set<UUID>, backupVersion: Int) throws {
+        for wallet in wallets {
+            if let categoryID = wallet.categoryID {
+                guard walletCategoryIDs.contains(categoryID) else {
+                    throw BackupError.brokenReference("wallet \(wallet.id) category \(categoryID)")
+                }
+            } else if backupVersion == 2 {
+                // Version 2 backups must include wallet category assignments.
+                throw BackupError.brokenReference("wallet \(wallet.id) missing category")
+            }
+        }
     }
 
     private static func validateCategoryParents(_ categories: [BackupCategory], categoryIDs: Set<UUID>) throws {
