@@ -1,7 +1,6 @@
 {
   "sourceLanguage": "en",
   "strings": {
-    "": {},
     "%@ becomes hidden after merge.": {
       "extractionState": "stale",
       "localizations": {
@@ -8415,5 +8414,6 @@
         }
       }
     }
-  }
+  },
+  "version": "1.0"
 }
