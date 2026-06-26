@@ -412,9 +412,17 @@ public final class CashRunwayAppModel {
     public func transactionDeletionPlan(for period: DeletePeriod) async -> TransactionDeletionPlan? {
         let repo = repository
         do {
-            return try await Task.detached(priority: .userInitiated) {
+            let task = Task.detached(priority: .userInitiated) {
                 try repo.transactionDeletionPlan(for: period)
-            }.value
+            }
+            let plan = try await withTaskCancellationHandler {
+                try await task.value
+            } onCancel: {
+                task.cancel()
+            }
+            return plan
+        } catch is CancellationError {
+            return nil
         } catch {
             errorMessage = error.localizedDescription
             return nil

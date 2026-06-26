@@ -17,6 +17,7 @@ struct DeleteTransactionsView: View {
     @State private var confirmText: String = ""
     @State private var isBackupPromptPresented = false
     @State private var isDeleting = false
+    @State private var planRequestID: UUID?
     @FocusState private var focusedField: ConfirmField?
 
     private var confirmWord: String {
@@ -127,10 +128,32 @@ struct DeleteTransactionsView: View {
         .task(id: selectedPeriod) {
             guard let period = selectedPeriod else {
                 selectedPlan = nil
+                planRequestID = nil
+                isLoadingPlan = false
                 return
             }
+
+            let requestID = UUID()
+            planRequestID = requestID
+            selectedPlan = nil
             isLoadingPlan = true
-            selectedPlan = await model.transactionDeletionPlan(for: period)
+            defer {
+                if planRequestID == requestID {
+                    isLoadingPlan = false
+                }
+            }
+
+            let plan = await model.transactionDeletionPlan(for: period)
+
+            guard !Task.isCancelled,
+                  planRequestID == requestID,
+                  selectedPeriod == period,
+                  plan?.period == period
+            else {
+                return
+            }
+
+            selectedPlan = plan
             isLoadingPlan = false
         }
     }
@@ -299,7 +322,10 @@ struct DeleteTransactionsView: View {
     }
 
     private var hasSelectedTransactions: Bool {
-        selectedPlan.map { $0.count > 0 } ?? false
+        guard let selectedPeriod, let selectedPlan else { return false }
+
+        return selectedPlan.period == selectedPeriod &&
+               selectedPlan.count > 0
     }
 
     private func periodTitle(_ period: DeletePeriod) -> String {
@@ -327,7 +353,14 @@ struct DeleteTransactionsView: View {
     }
 
     private func performDelete() {
-        guard let plan = selectedPlan, confirmMatches, !isDeleting else { return }
+        guard let period = selectedPeriod,
+              let plan = selectedPlan,
+              plan.period == period,
+              confirmMatches,
+              !isDeleting
+        else {
+            return
+        }
         focusedField = nil
         isDeleting = true
         Task {

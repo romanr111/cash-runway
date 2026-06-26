@@ -33,6 +33,7 @@ enum CashRunwayAccessibilityID {
     static let timelineSearchButton = "timeline.searchButton"
     static let timelineSearchField = "timeline.searchField"
     static let timelineSearchApplyButton = "timeline.searchApplyButton"
+    static let timelineSearchCancelButton = "timeline.searchCancelButton"
     static let timelineSearchResetButton = "timeline.searchResetButton"
     static let timelineWalletMenu = "timeline.walletMenu"
     static let timelineCashFlowValue = "timeline.cashFlowValue"

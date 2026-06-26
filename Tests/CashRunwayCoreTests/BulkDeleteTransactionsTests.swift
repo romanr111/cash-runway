@@ -713,6 +713,29 @@ struct BulkDeleteTransactionsTests {
         #expect(dashboard.monthIncomeMinor == 0)
     }
 
+    @Test func planPeriodIdentityPreventsMismatchedSelection() throws {
+        let repository = try makeRepository()
+        let wallet = try makeWallet(repository: repository, name: "Cash", balanceMinor: 1_000_000)
+        let expense = try makeExpenseCategory(repository: repository)
+
+        try saveTransaction(repository: repository, kind: .expense, walletID: wallet.id, categoryID: expense.id, amountMinor: 1_000, at: Self.date(2026, 6, 15))
+        try saveTransaction(repository: repository, kind: .expense, walletID: wallet.id, categoryID: expense.id, amountMinor: 2_000, at: Self.date(2026, 5, 15))
+
+        let monthPlan = try repository.transactionDeletionPlan(for: .thisMonth, now: now)
+        let yearPlan = try repository.transactionDeletionPlan(for: .thisYear, now: now)
+
+        // Each plan carries its own period so the UI can reject a stale result.
+        #expect(monthPlan.period == .thisMonth)
+        #expect(yearPlan.period == .thisYear)
+        #expect(monthPlan != yearPlan)
+
+        // Executing a plan still uses its frozen identity, not the caller's intent.
+        let deleted = try repository.deleteTransactions(monthPlan)
+        #expect(deleted == 1)
+        #expect(try repository.transactionDeletionPlan(for: .thisMonth, now: now).summary.count == 0)
+        #expect(try repository.transactionDeletionPlan(for: .thisYear, now: now).summary.count == 1)
+    }
+
     // MARK: - Public surface (identifiable id + button plural title)
 
     @Test func periodIdentityAndButtonTitleAreStable() {

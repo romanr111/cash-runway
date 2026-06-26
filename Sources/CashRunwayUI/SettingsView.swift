@@ -54,8 +54,9 @@ struct SettingsView: View {
                             }
                             .accessibilityIdentifier(CashRunwayAccessibilityID.settingsFeedbackReportRow)
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
+                        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1).allowsHitTesting(false))
                     }
 
                     VStack(alignment: .leading, spacing: 10) {
@@ -95,8 +96,9 @@ struct SettingsView: View {
                             .accessibilityIdentifier(CashRunwayAccessibilityID.settingsWalletsRow)
                             rowDivider
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
+                        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1).allowsHitTesting(false))
                     }
 
                     VStack(alignment: .leading, spacing: 10) {
@@ -156,8 +158,9 @@ struct SettingsView: View {
                             }
                             .accessibilityIdentifier(CashRunwayAccessibilityID.settingsDeleteTransactionsRow)
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
+                        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1).allowsHitTesting(false))
                     }
 
                     VStack(alignment: .leading, spacing: 10) {
@@ -173,8 +176,9 @@ struct SettingsView: View {
                             }
                             .accessibilityIdentifier(CashRunwayAccessibilityID.settingsMonobankRow)
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
+                        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1).allowsHitTesting(false))
                     }
 
                     #if DEBUG
@@ -190,11 +194,13 @@ struct SettingsView: View {
                                 isDiagnosticsPresented = true
                             }
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
+                        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1).allowsHitTesting(false))
                     }
                     #endif
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 20)
                 .padding(.vertical, 16)
                 .padding(.bottom, 36)
@@ -384,8 +390,11 @@ struct SettingsView: View {
     private func moreRow(icon: String, tint: String, title: LocalizedStringKey, subtitle: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             rowContent(icon: icon, tint: tint, title: title, subtitle: subtitle)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(.interaction, Rectangle())
         }
         .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func staticRow(icon: String, tint: String, title: LocalizedStringKey, value: String) -> some View {
