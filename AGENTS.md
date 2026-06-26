@@ -41,6 +41,33 @@ Swift/SwiftUI/GRDB iOS app with a Node/TypeScript reporting API.
 - For PR handoff, use `just pr-status <PR>` for the status snapshot and
   `just pr-comment <PR> <markdown-file>` for multiline comments.
 
+## Git Safety
+
+- Never use `git add -A` unless the user explicitly asks for it and acknowledges
+  the risk. Stage files individually or in explicitly named groups.
+- Before every commit, run:
+  1. `git status --short`
+  2. `git diff --cached --stat`
+- If any staged file is unexpected, generated, a backup (`.bak`, `.tmp`, `.orig`),
+  a lock file, a secret/config file, or an Xcode project file, stop and ask.
+- After a successful `project.pbxproj` edit, remove the `.bak` backup or keep it
+  untracked; do not commit it.
+
+## Merge Safety
+
+- Before merging any branch (including `origin/dev`) into the active PR branch:
+  1. Run `git merge --no-commit --no-ff <target-branch>`.
+  2. Run `git status --short` and `git diff --cached --stat`.
+  3. If any of these changed, inspect the diff explicitly before committing:
+     - `*Secret*`, `*secret*`, `*Config*`, `*config*`, `*Token*`, `*Key*`,
+       `*Credential*`, `*.p8`, `*.p12`, `*.mobileprovision`
+     - `*.pbxproj`, `Info.plist`, `*.entitlements`, `Podfile.lock`,
+       `Package.resolved`, `*.generated.swift`
+     - `CONTINUITY.md`, `AGENTS.md`, `CLAUDE.md`, `README.md`, `CONTRIBUTING.md`
+  4. Never commit a file with `isPlaceholder: false` in any `*Secrets*.swift`.
+     Revert it to `isPlaceholder: true` or ask the user.
+- Only commit the merge after all high-risk items are resolved or explicitly accepted.
+
 ## Xcode Project Safety
 - Do not hand-edit `CashRunway.xcodeproj/project.pbxproj` unless the task
   explicitly requires it. When editing is unavoidable:
@@ -69,6 +96,10 @@ Swift/SwiftUI/GRDB iOS app with a Node/TypeScript reporting API.
 - Run `Scripts/pre-flight.sh` before meaningful feature or bug-fix work.
 - Use CodeGraph before broad code searches or repeated raw file reads. Run
   `just graph-bootstrap` before CodeGraph operations in each worktree.
+- For SwiftUI concurrency patterns (`.task(id:)`, `Task.detached`, async state
+  driving irreversible actions), verify: cancellation handling, request-token
+  guards against stale results, consumer re-validation of async state, and
+  awaiting downstream refresh/mutation before reporting success.
 - Detailed command references:
   `agent_docs/reference/headroom-commands.md`,
   `agent_docs/reference/codegraph-commands.md`,

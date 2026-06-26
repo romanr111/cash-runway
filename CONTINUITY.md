@@ -74,8 +74,11 @@ Transfers: only the in-period half is removed.
 ## Open / follow-ups
 - Dangling half-transfer when only one half of a transfer is in a deleted period
   (accepted per decision). Future: consider demoting the orphan half.
-- Untracked `CashRunway.xcodeproj/project.pbxproj.bak` remains from an earlier
-  backup step; clean up before final PR merge.
+
+## Freshness check (verify before next session)
+- [x] `git status --short` is clean.
+- [x] Untracked `CashRunway.xcodeproj/project.pbxproj.bak` was removed from the branch.
+- [x] Validation counts reflect the latest test run (28/28).
 
 ## Note
 - The `origin/dev` ledger snapshot for `codex/wallet-selection-transaction-editor`
