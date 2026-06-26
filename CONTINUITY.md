@@ -5,7 +5,7 @@
 Branch: `codex/bulk-delete-transactions`
 Worktree: `~/.codex/worktrees/cash-runway-bulk-delete-transactions`
 Base: `dev` @ 26c4de4
-Status: implemented, merged with current `dev`, local gates green, awaiting reviewer approval/merge.
+Status: implemented, merged with current `dev`, local gates green, pushed to remote, awaiting reviewer approval/merge.
 
 ## Feature
 Adds "Delete Transactions" to the More/Ще → Data section. User picks a period
@@ -74,3 +74,7 @@ Transfers: only the in-period half is removed.
   (accepted per decision). Future: consider demoting the orphan half.
 - Untracked `CashRunway.xcodeproj/project.pbxproj.bak` remains from an earlier
   backup step; clean up before final PR merge.
+
+## Note
+- The `origin/dev` ledger snapshot for `codex/wallet-selection-transaction-editor`
+  belongs to a separate worktree and is intentionally not duplicated here.
