@@ -2666,7 +2666,7 @@ extension CashRunwayRepository {
             )
 
             var seenFingerprints = try existingImportFingerprints(db)
-            var seenSemanticKeys = try existingImportSemanticKeys(db)
+            let existingSemanticKeys = try existingImportSemanticKeys(db)
             var insertedRows = 0
             var duplicateRows = 0
             var affectedMonths = Set<Int>()
@@ -2675,7 +2675,7 @@ extension CashRunwayRepository {
                 let semanticKey = importSemanticKey(for: row.draft)
                 if seenFingerprints.contains(row.fingerprint)
                     || row.legacyFingerprint.map({ seenFingerprints.contains($0) }) ?? false
-                    || seenSemanticKeys.contains(semanticKey) {
+                    || existingSemanticKeys.contains(semanticKey) {
                     duplicateRows += 1
                     continue
                 }
@@ -2708,7 +2708,6 @@ extension CashRunwayRepository {
                 }
 
                 seenFingerprints.insert(row.fingerprint)
-                seenSemanticKeys.insert(semanticKey)
                 insertedRows += 1
                 affectedMonths.insert(DateKeys.monthKey(for: row.draft.occurredAt))
             }
@@ -2768,6 +2767,10 @@ extension CashRunwayRepository {
             SELECT wallet_id, type, local_day_key, amount_minor, merchant, note
             FROM transactions
             WHERE is_deleted = 0
+              AND (
+                import_fingerprint IS NULL
+                OR source IN ('manual', 'bank_sync')
+              )
             """
         )
         return Set(rows.map { row -> String in
