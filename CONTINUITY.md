@@ -1,5 +1,43 @@
 # Continuity Ledger
 
+## Snapshot — Delete All History + success confirmation + UI polish (uncommitted on `dev`)
+
+Branch: `dev` @ `a07f25f` (audit commit). Work in main checkout, no worktree.
+Goal: Add "All History" option (skull icon) to the Delete Transactions sheet, a success confirmation screen after any bulk delete, and UI polish.
+Status: implemented, all gates green, uncommitted.
+
+## Changes
+- `Sources/CashRunwayCore/DeletePeriod.swift` — added `.allHistory` case (last in `allCases`, renders at bottom of period list).
+- `Sources/CashRunwayCore/CashRunwayRepository.swift` — `deletePeriodPredicate` handles `.allHistory` → `1 = 1` (no date scope). Routes through existing plan/summary/delete paths unchanged.
+- `Sources/CashRunwayCore/L10n.swift` — `deletedTransactionsMessage(_:)` plural helper for the success card.
+- `Sources/CashRunwayUI/DeleteTransactionsView.swift` — `Stage.done` (Equatable); `doneSection` (green checkmark.seal.fill + deleted-count + preserved-subtext + Done button, spring entrance via `.transition(.scale.combined(with: .opacity))` + `.animation(.bouncy, value: stage)`); `performDelete` routes success to `.done` instead of `onDismiss()`; `.allHistory` → `skull.fill` icon + "All History" title + DANGER red pill + denser glyph badge (18% fill + stroke ring + 20pt icon); header subtitle softened to "Choose transactions to remove"; section label "Choose a scope".
+- `Sources/CashRunwayUI/AccessibilityIdentifiers.swift` — `deleteTransactionsDoneButton`.
+- `AppHost/Localizable.xcstrings` — new EN/uk: "All History", "Choose transactions to remove", "Wallets, categories, and recurring templates were preserved.", "Choose a scope", "DANGER".
+- `Tests/CashRunwayCoreTests/BulkDeleteTransactionsTests.swift` — 5 new all-history tests (scope, aggregates, recurring preservation, planStale, empty noop); updated `periodIdentityAndButtonTitleAreStable` for new `allCases` order (allHistory last).
+
+## Decisions
+- All-History row placed **last** (below This Year) — least-destructive options first.
+- DANGER red pill on All History row as the screen's signature detail.
+- Aggregate reversal: row-by-row via existing `applyContribution` loop (consistency over a fast-path drop/rebuild). Acceptable for a rare destructive op.
+- Tombstones excluded (`is_deleted = 0` in predicate, unchanged).
+- Recurring **templates** preserved; `recurring_instances.linked_transaction_id` nulled; `bank_transaction_imports.cash_runway_transaction_id` nulled.
+- Success state applies to ALL delete options (Today/Month/Year/All History), not just All History. Refresh-failure path (`deletionCompleted` notice) unchanged.
+- No `Spacer` pin-to-bottom in doneSection (collapses in ScrollView); inline Done button retained.
+
+## Validation
+- `swift build --target CashRunwayCore`: passed
+- `just test-filter BulkDeleteTransactionsTests`: 36/36 passed
+- `swiftlint --strict` (changed files): 0 violations
+- `just build` (iPhone 17 sim): BUILD SUCCEEDED
+
+## Skipped gates
+- Interactive sheet navigation (open → select All History → type DELETE → success card → Done): manual gate, not exercised locally (XCUITest disallowed per AGENTS.md).
+
+## Open / follow-ups
+- Performance: row-by-row aggregate reversal for very large histories. Monitor; optimize to drop/rebuild aggregate tables only if reported slow.
+
+---
+
 ## Snapshot — Bulk delete transactions feature (More → Data)
 
 Branch: `codex/bulk-delete-transactions` (merged via PR #75, squash commit `dd941fe`)

@@ -765,7 +765,7 @@ struct BulkDeleteTransactionsTests {
     // MARK: - Public surface (identifiable id + button plural title)
 
     @Test func periodIdentityAndButtonTitleAreStable() {
-        #expect(DeletePeriod.allCases.map(\.id) == ["today", "thisMonth", "thisYear"])
+        #expect(DeletePeriod.allCases.map(\.id) == ["today", "thisMonth", "thisYear", "allHistory"])
         // Plural helper embeds the count regardless of active language.
         #expect(L10n.deleteTransactionsButtonTitle(1).contains("1"))
         #expect(L10n.deleteTransactionsButtonTitle(3).contains("3"))
@@ -868,5 +868,132 @@ struct BulkDeleteTransactionsTests {
             try String.fetchOne(db, sql: "SELECT linked_transaction_id FROM recurring_instances WHERE id = ?", arguments: [instanceID.uuidString])
         }
         #expect(linkedID == nil)
+    }
+
+    // MARK: - All History
+
+    @Test func deleteAllHistoryRemovesEveryNonDeletedTransaction() throws {
+        let repository = try makeRepository()
+        let wallet = try makeWallet(repository: repository, name: "Cash", balanceMinor: 1_000_000)
+        let expense = try makeExpenseCategory(repository: repository)
+        let income = try makeIncomeCategory(repository: repository)
+
+        // Transactions across many dates and kinds.
+        _ = try saveTransaction(repository: repository, kind: .expense, walletID: wallet.id, categoryID: expense.id, amountMinor: 1_000, at: Self.date(2026, 6, 15))
+        _ = try saveTransaction(repository: repository, kind: .income, walletID: wallet.id, categoryID: income.id, amountMinor: 2_000, at: Self.date(2025, 12, 1))
+        _ = try saveTransaction(repository: repository, kind: .expense, walletID: wallet.id, categoryID: expense.id, amountMinor: 500, at: Self.date(2024, 1, 20))
+        // Tombstone (excluded).
+        let tombstoneID = UUID()
+        try insertRawTransaction(repository: repository, id: tombstoneID, walletID: wallet.id, type: "expense", linkedTransferID: nil, amountMinor: 300, occurredAt: Self.date(2026, 6, 15), isDeleted: true)
+
+        let plan = try repository.transactionDeletionPlan(for: .allHistory, now: now)
+        #expect(plan.summary.count == 3)
+        #expect(plan.transactionIDs.count == 3)
+
+        let deleted = try repository.deleteTransactions(plan)
+        #expect(deleted == 3)
+
+        // Every non-tombstoned row is gone; the tombstone remains.
+        #expect(try transactionExists(repository: repository, id: tombstoneID) == 1)
+        #expect(try countTable(repository: repository, "transactions") == 1)
+    }
+
+    @Test func deleteAllHistoryMaintainsAggregates() throws {
+        let repository = try makeRepository()
+        let wallet = try makeWallet(repository: repository, name: "Cash", balanceMinor: 1_000_000)
+        let expense = try makeExpenseCategory(repository: repository)
+
+        _ = try saveTransaction(repository: repository, kind: .expense, walletID: wallet.id, categoryID: expense.id, amountMinor: 100_000, at: Self.date(2026, 6, 15))
+        _ = try saveTransaction(repository: repository, kind: .expense, walletID: wallet.id, categoryID: expense.id, amountMinor: 200_000, at: Self.date(2025, 12, 1))
+
+        // Wallet balance was reduced by 300_000.
+        let walletBefore = try repository.wallets().first { $0.id == wallet.id }
+        #expect(walletBefore?.currentBalanceMinor == 700_000)
+
+        let plan = try repository.transactionDeletionPlan(for: .allHistory, now: now)
+        _ = try repository.deleteTransactions(plan)
+
+        // Wallet balance restored to starting amount.
+        let walletAfter = try repository.wallets().first { $0.id == wallet.id }
+        #expect(walletAfter?.currentBalanceMinor == 1_000_000)
+
+        // Monthly aggregate table has no rows for this wallet.
+        let aggregateCount = try repository.databaseManager.dbQueue.read { db in
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM monthly_wallet_cashflow WHERE wallet_id = ?", arguments: [wallet.id.uuidString])
+        }
+        #expect(aggregateCount == 0)
+
+        let categorySpendCount = try repository.databaseManager.dbQueue.read { db in
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM monthly_category_spend WHERE category_id = ?", arguments: [expense.id.uuidString])
+        }
+        #expect(categorySpendCount == 0)
+    }
+
+    @Test func deleteAllHistoryPreservesRecurringTemplates() throws {
+        let repository = try makeRepository()
+        let wallet = try makeWallet(repository: repository, name: "Cash", balanceMinor: 1_000_000)
+        let expense = try makeExpenseCategory(repository: repository)
+
+        let template = RecurringTemplate(
+            id: UUID(), kind: .expense, walletID: wallet.id, counterpartyWalletID: nil,
+            amountMinor: 1_000, categoryID: expense.id, merchant: "Sub", note: nil,
+            ruleType: .monthly, ruleInterval: 1, dayOfMonth: 15, weekday: nil,
+            startDate: now, endDate: nil, isActive: true, createdAt: now, updatedAt: now
+        )
+        try repository.saveRecurringTemplate(template)
+
+        // A posted instance linked to a transaction (the instance survives, FK nulled).
+        let txnID = try saveTransaction(repository: repository, kind: .expense, walletID: wallet.id, categoryID: expense.id, amountMinor: 1_000, at: Self.date(2026, 6, 15))
+        let instanceID = UUID()
+        try repository.databaseManager.dbQueue.write { db in
+            try db.execute(
+                sql: """
+                INSERT INTO recurring_instances
+                (id, template_id, due_date, day_key, status, linked_transaction_id, created_at, updated_at)
+                VALUES (?, ?, ?, ?, 'posted', ?, ?, ?)
+                """,
+                arguments: [instanceID.uuidString, template.id.uuidString, now, DateKeys.dayKey(for: now), txnID.uuidString, Date(), Date()]
+            )
+        }
+
+        let plan = try repository.transactionDeletionPlan(for: .allHistory, now: now)
+        _ = try repository.deleteTransactions(plan)
+
+        // Template is untouched; instance survives with nulled FK.
+        let templateCount = try repository.databaseManager.dbQueue.read { db in
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM recurring_templates WHERE id = ?", arguments: [template.id.uuidString])
+        }
+        #expect(templateCount == 1)
+
+        let linkedID = try repository.databaseManager.dbQueue.read { db in
+            try String.fetchOne(db, sql: "SELECT linked_transaction_id FROM recurring_instances WHERE id = ?", arguments: [instanceID.uuidString])
+        }
+        #expect(linkedID == nil)
+    }
+
+    @Test func deleteAllHistoryAbortsWhenTransactionAddedAfterPreview() throws {
+        let repository = try makeRepository()
+        let wallet = try makeWallet(repository: repository, name: "Cash", balanceMinor: 1_000_000)
+        let expense = try makeExpenseCategory(repository: repository)
+
+        let firstID = try saveTransaction(repository: repository, kind: .expense, walletID: wallet.id, categoryID: expense.id, amountMinor: 1_000, at: Self.date(2026, 6, 10))
+        let plan = try repository.transactionDeletionPlan(for: .allHistory, now: now)
+        #expect(plan.transactionIDs == [firstID])
+
+        let insertedID = try saveTransaction(repository: repository, kind: .expense, walletID: wallet.id, categoryID: expense.id, amountMinor: 2_000, at: Self.date(2025, 5, 20))
+
+        #expect(throws: TransactionDeletionError.planStale) {
+            try repository.deleteTransactions(plan)
+        }
+        #expect(try transactionExists(repository: repository, id: firstID) == 1)
+        #expect(try transactionExists(repository: repository, id: insertedID) == 1)
+    }
+
+    @Test func deleteAllHistoryEmptyDbIsNoop() throws {
+        let repository = try makeRepository()
+        // No transactions.
+        let plan = try repository.transactionDeletionPlan(for: .allHistory, now: now)
+        #expect(plan.summary.count == 0)
+        #expect(try repository.deleteTransactions(plan) == 0)
     }
 }

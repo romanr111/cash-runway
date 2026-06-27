@@ -83,6 +83,10 @@ public enum L10n {
         plural(count, englishOne: "Delete %d transaction", englishOther: "Delete %d transactions", ukOne: "Видалити %d транзакцію", ukFew: "Видалити %d транзакції", ukMany: "Видалити %d транзакцій")
     }
 
+    public static func deletedTransactionsMessage(_ count: Int) -> String {
+        plural(count, englishOne: "Deleted %d transaction", englishOther: "Deleted %d transactions", ukOne: "Видалено %d транзакцію", ukFew: "Видалено %d транзакції", ukMany: "Видалено %d транзакцій")
+    }
+
     public static func cardCount(_ count: Int) -> String {
         plural(count, englishOne: "%d card", englishOther: "%d cards", ukOne: "%d картка", ukFew: "%d картки", ukMany: "%d карток")
     }

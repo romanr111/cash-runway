@@ -6,7 +6,7 @@ struct DeleteTransactionsView: View {
     var requestBackupExport: () -> Void
     var onDismiss: () -> Void
 
-    private enum Stage { case select, confirm }
+    private enum Stage: Equatable { case select, confirm, done }
     private enum ConfirmField: Hashable { case confirm }
 
     @State private var stage: Stage = .select
@@ -19,6 +19,7 @@ struct DeleteTransactionsView: View {
     @State private var isBackupPromptPresented = false
     @State private var isDeleting = false
     @State private var deletionCompleted = false
+    @State private var deletedCount = 0
     @State private var planRequestID: UUID?
     @FocusState private var focusedField: ConfirmField?
 
@@ -44,6 +45,8 @@ struct DeleteTransactionsView: View {
                     periodSection
                 case .confirm:
                     confirmSection
+                case .done:
+                    doneSection
                 }
             }
             .padding(.horizontal, CashRunwayTheme.spaceL)
@@ -82,7 +85,7 @@ struct DeleteTransactionsView: View {
                 Text("Delete Transactions")
                     .font(.system(size: 28, weight: .bold, design: .rounded))
                     .foregroundStyle(CashRunwayTheme.textPrimary)
-                Text("Choose transactions to remove by date")
+                Text("Choose transactions to remove")
                     .font(CashRunwayTheme.bodyFont)
                     .foregroundStyle(CashRunwayTheme.textSecondary)
                     .multilineTextAlignment(.center)
@@ -131,7 +134,7 @@ struct DeleteTransactionsView: View {
 
     private var periodSection: some View {
         VStack(alignment: .leading, spacing: CashRunwayTheme.spaceM) {
-            sectionLabel("Select a period")
+            sectionLabel("Choose a scope")
             VStack(spacing: 0) {
                 ForEach(DeletePeriod.allCases) { period in
                     periodRow(period)
@@ -221,6 +224,48 @@ struct DeleteTransactionsView: View {
         .animation(.default, value: selectedPlan != nil)
     }
 
+    private var doneSection: some View {
+        VStack(spacing: CashRunwayTheme.spaceL) {
+            VStack(spacing: CashRunwayTheme.spaceM) {
+                ZStack {
+                    Circle()
+                        .fill(CashRunwayTheme.accentMuted)
+                        .frame(width: 112, height: 112)
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.system(size: 52, weight: .semibold))
+                        .foregroundStyle(CashRunwayTheme.accentDark)
+                }
+                .transition(.scale.combined(with: .opacity))
+
+                VStack(spacing: CashRunwayTheme.spaceS) {
+                    Text(L10n.deletedTransactionsMessage(deletedCount))
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                        .foregroundStyle(CashRunwayTheme.textPrimary)
+                        .multilineTextAlignment(.center)
+                    Text(L10n.string("Wallets, categories, and recurring templates were preserved."))
+                        .font(CashRunwayTheme.bodyFont)
+                        .foregroundStyle(CashRunwayTheme.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            Button {
+                onDismiss()
+            } label: {
+                Text(L10n.string("Done"))
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 54)
+                    .background(CashRunwayTheme.accentDark, in: RoundedRectangle(cornerRadius: CashRunwayTheme.radiusM, style: .continuous))
+            }
+            .accessibilityIdentifier(CashRunwayAccessibilityID.deleteTransactionsDoneButton)
+        }
+        .padding(.top, CashRunwayTheme.spaceL)
+        .frame(maxWidth: .infinity)
+    }
+
     private func impactCard(plan: TransactionDeletionPlan) -> some View {
         VStack(alignment: .leading, spacing: CashRunwayTheme.spaceM) {
             HStack(spacing: CashRunwayTheme.spaceM) {
@@ -276,9 +321,20 @@ struct DeleteTransactionsView: View {
             HStack(spacing: CashRunwayTheme.spaceM) {
                 periodGlyph(period)
                 VStack(alignment: .leading, spacing: CashRunwayTheme.spaceXS) {
-                    Text(periodTitle(period))
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(CashRunwayTheme.textPrimary)
+                    HStack(spacing: CashRunwayTheme.spaceS) {
+                        Text(periodTitle(period))
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(CashRunwayTheme.textPrimary)
+                        if period == .allHistory {
+                            Text(L10n.string("DANGER"))
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(CashRunwayTheme.negative)
+                                .padding(.horizontal, CashRunwayTheme.spaceS)
+                                .padding(.vertical, 2)
+                                .background(CashRunwayTheme.negative.opacity(0.08), in: Capsule())
+                                .overlay(Capsule().stroke(CashRunwayTheme.negative.opacity(0.40), lineWidth: 1))
+                        }
+                    }
                     Text(periodRowDetail(summary))
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(CashRunwayTheme.textSecondary)
@@ -316,9 +372,15 @@ struct DeleteTransactionsView: View {
     private func periodGlyph(_ period: DeletePeriod) -> some View {
         ZStack {
             Circle()
-                .fill(CashRunwayTheme.negative.opacity(0.14))
+                .fill(period == .allHistory
+                      ? CashRunwayTheme.negative.opacity(0.18)
+                      : CashRunwayTheme.negative.opacity(0.14))
+            if period == .allHistory {
+                Circle()
+                    .stroke(CashRunwayTheme.negative.opacity(0.40), lineWidth: 1)
+            }
             Image(systemName: periodIcon(period))
-                .font(.system(size: 18, weight: .semibold))
+                .font(.system(size: period == .allHistory ? 20 : 18, weight: .semibold))
                 .foregroundStyle(CashRunwayTheme.negative)
         }
         .frame(width: 46, height: 46)
@@ -370,6 +432,7 @@ struct DeleteTransactionsView: View {
 
     private func periodTitle(_ period: DeletePeriod) -> String {
         switch period {
+        case .allHistory: L10n.string("All History")
         case .today: L10n.string("This Day")
         case .thisMonth: L10n.string("This Month")
         case .thisYear: L10n.string("This Year")
@@ -378,6 +441,7 @@ struct DeleteTransactionsView: View {
 
     private func periodIcon(_ period: DeletePeriod) -> String {
         switch period {
+        case .allHistory: "skull.fill"
         case .today: "sun.max.fill"
         case .thisMonth: "calendar"
         case .thisYear: "calendar.badge.clock"
@@ -410,7 +474,10 @@ struct DeleteTransactionsView: View {
             let result = await model.deleteTransactions(plan: plan)
             isDeleting = false
             if result.refreshSuccess {
-                onDismiss()
+                deletedCount = result.deletedCount
+                withAnimation(.bouncy) {
+                    stage = .done
+                }
             } else if result.deletedCount > 0 {
                 // Deletion succeeded but refresh failed — prevent re-submission
                 // by clearing the plan and returning to the selection stage.

@@ -1,354 +1,34 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "Close and reopen this screen if the data looks stale.": {
+    "DANGER": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Close and reopen this screen if the data looks stale."
+            "value": "DANGER"
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Закрийте та відкрийте цей екран, якщо дані виглядають застарілими."
+            "value": "НЕБЕЗПЕКА"
           }
         }
       }
     },
-    "Transactions were deleted, but the screen couldn't refresh.": {
+    "Choose a scope": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transactions were deleted, but the screen couldn't refresh."
+            "value": "Choose a scope"
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Транзакції видалено, але не вдалося оновити екран."
-          }
-        }
-      }
-    },
-    "Type %@ to confirm": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Type %@ to confirm"
-          }
-        },
-        "uk": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Введіть %@ для підтвердження"
-          }
-        }
-      }
-    },
-    "This permanently deletes the selected transactions. This cannot be undone.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This permanently deletes the selected transactions. This cannot be undone."
-          }
-        },
-        "uk": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Це назавжди видалить вибрані транзакції. Дію не можна скасувати."
-          }
-        }
-      }
-    },
-    "This Year": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This Year"
-          }
-        },
-        "uk": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Цього року"
-          }
-        }
-      }
-    },
-    "This Month": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This Month"
-          }
-        },
-        "uk": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Цього місяця"
-          }
-        }
-      }
-    },
-    "This Day": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This Day"
-          }
-        },
-        "uk": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Цього дня"
-          }
-        }
-      }
-    },
-    "The transactions to delete changed. Please review the period again.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The transactions to delete changed. Please review the period again."
-          }
-        },
-        "uk": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Транзакції для видалення змінилися. Будь ласка, перегляньте період ще раз."
-          }
-        }
-      }
-    },
-    "Select a period": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Select a period"
-          }
-        },
-        "uk": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Оберіть період"
-          }
-        }
-      }
-    },
-    "Remove transactions for a day, month, or year": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Remove transactions for a day, month, or year"
-          }
-        },
-        "uk": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Видалити транзакції за день, місяць або рік"
-          }
-        }
-      }
-    },
-    "Deleting is permanent. We recommend exporting an unencrypted backup you can restore from later.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Deleting is permanent. We recommend exporting an unencrypted backup you can restore from later."
-          }
-        },
-        "uk": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Видалення незворотне. Рекомендуємо експортувати незашифровану резервну копію, з якої потім можна відновити дані."
-          }
-        }
-      }
-    },
-    "Delete Transactions": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Delete Transactions"
-          }
-        },
-        "uk": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Видалити транзакції"
-          }
-        }
-      }
-    },
-    "Confirm deletion": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Confirm deletion"
-          }
-        },
-        "uk": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Підтвердження видалення"
-          }
-        }
-      }
-    },
-    "Choose transactions to remove by date": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Choose transactions to remove by date"
-          }
-        },
-        "uk": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Оберіть транзакції для видалення за датою"
-          }
-        }
-      }
-    },
-    "Back up first?": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Back up first?"
-          }
-        },
-        "uk": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Спочатку зробити копію?"
-          }
-        }
-      }
-    },
-    "Back up": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Back up"
-          }
-        },
-        "uk": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Зробити копію"
-          }
-        }
-      }
-    },
-    "%@ will be permanently deleted.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ will be permanently deleted."
-          }
-        },
-        "uk": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ буде назавжди видалено."
-          }
-        }
-      }
-    },
-    "Wallet Category": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Wallet Category"
-          }
-        },
-        "uk": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Категорія гаманця"
-          }
-        }
-      }
-    },
-    "Category name cannot be empty.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Category name cannot be empty."
-          }
-        },
-        "uk": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Назва категорії не може бути порожньою."
-          }
-        }
-      }
-    },
-    "A category with this name already exists.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "A category with this name already exists."
-          }
-        },
-        "uk": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Категорія з такою назвою вже існує."
-          }
-        }
-      }
-    },
-    "Category Name": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Category Name"
-          }
-        },
-        "uk": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Назва категорії"
-          }
-        }
-      }
-    },
-    "New Wallet Category": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "New Wallet Category"
-          }
-        },
-        "uk": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Нова категорія гаманця"
+            "value": "Оберіть обсяг"
           }
         }
       }
@@ -524,6 +204,23 @@
         }
       }
     },
+    "%@ will be permanently deleted." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ will be permanently deleted."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ буде назавжди видалено."
+          }
+        }
+      }
+    },
     "%@, %@" : {
       "localizations" : {
         "en" : {
@@ -635,6 +332,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "0.00"
+          }
+        }
+      }
+    },
+    "A category with this name already exists." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A category with this name already exists."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Категорія з такою назвою вже існує."
           }
         }
       }
@@ -831,6 +545,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Усі наявні транзакції збережено. %@ тепер містить об'єднану історію."
+          }
+        }
+      }
+    },
+    "All History" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All History"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вся історія"
           }
         }
       }
@@ -1129,6 +860,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Назад"
+          }
+        }
+      }
+    },
+    "Back up" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Back up"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Зробити копію"
+          }
+        }
+      }
+    },
+    "Back up first?" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Back up first?"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Спочатку зробити копію?"
           }
         }
       }
@@ -1715,6 +1478,40 @@
         }
       }
     },
+    "Category Name" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Category Name"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Назва категорії"
+          }
+        }
+      }
+    },
+    "Category name cannot be empty." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Category name cannot be empty."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Назва категорії не може бути порожньою."
+          }
+        }
+      }
+    },
     "category.bonus" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2086,6 +1883,39 @@
         }
       }
     },
+    "Choose transactions to remove" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose transactions to remove"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Оберіть транзакції для видалення"
+          }
+        }
+      }
+    },
+    "Choose transactions to remove by date" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose transactions to remove by date"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Оберіть транзакції для видалення за датою"
+          }
+        }
+      }
+    },
     "Choose two different categories to merge." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2116,6 +1946,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Скасувати вибір"
+          }
+        }
+      }
+    },
+    "Close and reopen this screen if the data looks stale." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Close and reopen this screen if the data looks stale."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Закрийте та відкрийте цей екран, якщо дані виглядають застарілими."
           }
         }
       }
@@ -2184,6 +2030,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Об'єднати дублікати категорій"
+          }
+        }
+      }
+    },
+    "Confirm deletion" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirm deletion"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Підтвердження видалення"
           }
         }
       }
@@ -2710,6 +2572,22 @@
         }
       }
     },
+    "Delete Transactions" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete Transactions"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Видалити транзакції"
+          }
+        }
+      }
+    },
     "Delete Wallet" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2740,6 +2618,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Видалити гаманець?"
+          }
+        }
+      }
+    },
+    "Deleting is permanent. We recommend exporting an unencrypted backup you can restore from later." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deleting is permanent. We recommend exporting an unencrypted backup you can restore from later."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Видалення незворотне. Рекомендуємо експортувати незашифровану резервну копію, з якої потім можна відновити дані."
           }
         }
       }
@@ -5021,6 +4915,23 @@
         }
       }
     },
+    "New Wallet Category" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New Wallet Category"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нова категорія гаманця"
+          }
+        }
+      }
+    },
     "No Budgets" : {
       "localizations" : {
         "en" : {
@@ -5873,6 +5784,23 @@
         }
       }
     },
+    "Remove transactions for a day, month, or year" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove transactions for a day, month, or year"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Видалити транзакції за день, місяць або рік"
+          }
+        }
+      }
+    },
     "Repairs" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -6481,6 +6409,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Оберіть дату та джерело суми."
+          }
+        }
+      }
+    },
+    "Select a period" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select a period"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Оберіть період"
           }
         }
       }
@@ -7201,6 +7145,23 @@
         }
       }
     },
+    "The transactions to delete changed. Please review the period again." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The transactions to delete changed. Please review the period again."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Транзакції для видалення змінилися. Будь ласка, перегляньте період ще раз."
+          }
+        }
+      }
+    },
     "This backup file contains unencrypted financial data. Anyone with access to it may be able to read your wallets, transactions, categories, labels, and recurring entries. Store it securely." : {
       "localizations" : {
         "en" : {
@@ -7251,6 +7212,56 @@
         }
       }
     },
+    "This Day" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This Day"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Цього дня"
+          }
+        }
+      }
+    },
+    "This Month" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This Month"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Цього місяця"
+          }
+        }
+      }
+    },
+    "This permanently deletes the selected transactions. This cannot be undone." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This permanently deletes the selected transactions. This cannot be undone."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Це назавжди видалить вибрані транзакції. Дію не можна скасувати."
+          }
+        }
+      }
+    },
     "This transaction will be permanently removed." : {
       "localizations" : {
         "en" : {
@@ -7280,6 +7291,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Це назавжди видалить гаманець та всі транзакції."
+          }
+        }
+      }
+    },
+    "This Year" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This Year"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Цього року"
           }
         }
       }
@@ -7515,6 +7543,22 @@
         }
       }
     },
+    "Transactions were deleted, but the screen couldn't refresh." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transactions were deleted, but the screen couldn't refresh."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Транзакції видалено, але не вдалося оновити екран."
+          }
+        }
+      }
+    },
     "Transactions, recurring templates, and bank rules move to the category you keep. The source category is hidden after merge." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -7744,6 +7788,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Тип"
+          }
+        }
+      }
+    },
+    "Type %@ to confirm" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Type %@ to confirm"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Введіть %@ для підтвердження"
           }
         }
       }
@@ -8129,6 +8190,23 @@
         }
       }
     },
+    "Wallet Category" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wallet Category"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Категорія гаманця"
+          }
+        }
+      }
+    },
     "Wallet Details" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -8243,6 +8321,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Гаманці"
+          }
+        }
+      }
+    },
+    "Wallets, categories, and recurring templates were preserved." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wallets, categories, and recurring templates were preserved."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Гаманці, категорії та шаблони регулярних платежів збережено."
           }
         }
       }
