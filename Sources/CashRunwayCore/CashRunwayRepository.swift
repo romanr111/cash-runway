@@ -2500,6 +2500,9 @@ extension CashRunwayRepository {
         let periodSQL: String
         let periodArgs: StatementArguments
         switch period {
+        case .allHistory:
+            periodSQL = "1 = 1"
+            periodArgs = StatementArguments()
         case .today:
             periodSQL = "local_day_key = ?"
             periodArgs = StatementArguments([dayKey])

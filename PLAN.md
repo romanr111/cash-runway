@@ -101,3 +101,9 @@ After implementation:
 7. `just smoke` (if simulator available)
 
 Every skipped gate will be reported with the reason.
+
+---
+
+# Architecture Audit — Phase 1 (cleanup & foundation)
+
+Status: Phase 1 complete on `codex/arch-phase-1-cleanup` (worktree `cash-runway-arch-phase-1`); uncommitted, verified (sim build + 434/434 tests pass). Phases 2 (architecture & performance) and 3 (security & agent access) pending. See `docs/ARCHITECTURE_AUDIT.md`.

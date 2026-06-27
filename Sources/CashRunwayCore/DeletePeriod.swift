@@ -4,6 +4,7 @@ public enum DeletePeriod: String, CaseIterable, Sendable, Identifiable {
     case today
     case thisMonth
     case thisYear
+    case allHistory
 
     public var id: String { rawValue }
 }
