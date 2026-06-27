@@ -1,6 +1,38 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Close and reopen this screen if the data looks stale.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close and reopen this screen if the data looks stale."
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Закрийте та відкрийте цей екран, якщо дані виглядають застарілими."
+          }
+        }
+      }
+    },
+    "Transactions were deleted, but the screen couldn't refresh.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transactions were deleted, but the screen couldn't refresh."
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Транзакції видалено, але не вдалося оновити екран."
+          }
+        }
+      }
+    },
     "Type %@ to confirm": {
       "localizations": {
         "en": {

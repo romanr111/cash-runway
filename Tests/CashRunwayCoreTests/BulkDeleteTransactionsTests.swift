@@ -191,8 +191,9 @@ struct BulkDeleteTransactionsTests {
 
         // The aggregate summary must match the plan summary exactly.
         #expect(summary == plan.summary)
-        // Transfers count in `count` but do not contribute to expense/income.
+        // `count` = physical rows (transfer pair = 2); `displayCount` = user-visible items.
         #expect(summary.count == 4)
+        #expect(summary.displayCount == 3)
         #expect(summary.expenseMinor == 1_000)
         #expect(summary.incomeMinor == 2_000)
     }
@@ -345,8 +346,10 @@ struct BulkDeleteTransactionsTests {
         try saveTransaction(repository: repository, kind: .transfer, walletID: source.id, categoryID: nil, amountMinor: 500, at: Self.date(2026, 6, 15), destinationWalletID: destination.id)
 
         let plan = try repository.transactionDeletionPlan(for: .thisMonth, now: now)
-        // Expense + income + both transfer halves = 4 rows.
+        // Expense + income + both transfer halves = 4 physical rows.
         #expect(plan.count == 4)
+        // User-visible items: expense + income + 1 transfer = 3.
+        #expect(plan.displayCount == 3)
         #expect(plan.expenseMinor == 1_000)
         #expect(plan.incomeMinor == 2_000)
 
@@ -409,6 +412,7 @@ struct BulkDeleteTransactionsTests {
 
         let before = try repository.transactionDeletionPlan(for: .thisMonth, now: now)
         #expect(before.count == 2)
+        #expect(before.displayCount == 1)
 
         let deleted = try repository.deleteTransactions(before)
 
@@ -765,5 +769,104 @@ struct BulkDeleteTransactionsTests {
         // Plural helper embeds the count regardless of active language.
         #expect(L10n.deleteTransactionsButtonTitle(1).contains("1"))
         #expect(L10n.deleteTransactionsButtonTitle(3).contains("3"))
+    }
+
+    // MARK: - Same-ID mutation detection (Finding 3)
+
+    @Test func deleteAbortsWhenSameIDTransactionMutatedAfterPreview() throws {
+        let repository = try makeRepository()
+        let wallet = try makeWallet(repository: repository, name: "Cash", balanceMinor: 1_000_000)
+        let expense = try makeExpenseCategory(repository: repository)
+
+        let txnID = try saveTransaction(repository: repository, kind: .expense, walletID: wallet.id, categoryID: expense.id, amountMinor: 1_000, at: Self.date(2026, 6, 15))
+
+        let plan = try repository.transactionDeletionPlan(for: .thisMonth, now: now)
+        #expect(plan.transactionIDs == [txnID])
+
+        // Mutate the transaction's amount while keeping the same ID and period.
+        try repository.databaseManager.dbQueue.write { db in
+            try db.execute(
+                sql: "UPDATE transactions SET amount_minor = ?, updated_at = ? WHERE id = ?",
+                arguments: [100_000, Date(timeIntervalSinceNow: 100), txnID.uuidString]
+            )
+        }
+
+        // Plan must reject because the updatedAt fingerprint changed.
+        #expect(throws: TransactionDeletionError.planStale) {
+            try repository.deleteTransactions(plan)
+        }
+        #expect(try transactionExists(repository: repository, id: txnID) == 1)
+    }
+
+    // MARK: - Dangling reference cleanup (Finding 4)
+
+    @Test func deleteNullsBankImportTransactionReference() throws {
+        let repository = try makeRepository()
+        let wallet = try makeWallet(repository: repository, name: "Cash", balanceMinor: 1_000_000)
+        let expense = try makeExpenseCategory(repository: repository)
+
+        let txnID = try saveTransaction(repository: repository, kind: .expense, walletID: wallet.id, categoryID: expense.id, amountMinor: 1_000, at: Self.date(2026, 6, 15))
+
+        // Simulate a bank import linked to this transaction.
+        let importID = UUID()
+        try repository.databaseManager.dbQueue.write { db in
+            try db.execute(
+                sql: """
+                INSERT INTO bank_transaction_imports
+                (id, provider, integration_id, bank_account_id, provider_account_id,
+                 provider_statement_item_id, statement_time, amount_minor_signed,
+                 currency_code, raw_json, cash_runway_transaction_id, import_status, created_at, updated_at)
+                VALUES (?, 'monobank', 'int1', 'acc1', 'acc1', 'item1', ?, ?, 980, '{}', ?, 'imported', ?, ?)
+                """,
+                arguments: [importID.uuidString, Int(now.timeIntervalSince1970), -1_000, txnID.uuidString, Date(), Date()]
+            )
+        }
+
+        let plan = try repository.transactionDeletionPlan(for: .thisMonth, now: now)
+        _ = try repository.deleteTransactions(plan)
+
+        // The import row survives (preserves dedup key) but its FK is nulled.
+        let linkedID = try repository.databaseManager.dbQueue.read { db in
+            try String.fetchOne(db, sql: "SELECT cash_runway_transaction_id FROM bank_transaction_imports WHERE id = ?", arguments: [importID.uuidString])
+        }
+        #expect(linkedID == nil)
+    }
+
+    @Test func deleteNullsRecurringInstanceLinkedTransaction() throws {
+        let repository = try makeRepository()
+        let wallet = try makeWallet(repository: repository, name: "Cash", balanceMinor: 1_000_000)
+        let expense = try makeExpenseCategory(repository: repository)
+
+        let txnID = try saveTransaction(repository: repository, kind: .expense, walletID: wallet.id, categoryID: expense.id, amountMinor: 1_000, at: Self.date(2026, 6, 15))
+
+        // Simulate a recurring instance linked to this transaction.
+        let template = RecurringTemplate(
+            id: UUID(), kind: .expense, walletID: wallet.id, counterpartyWalletID: nil,
+            amountMinor: 1_000, categoryID: expense.id, merchant: "Sub", note: nil,
+            ruleType: .monthly, ruleInterval: 1, dayOfMonth: 15, weekday: nil,
+            startDate: now, endDate: nil, isActive: true, createdAt: now, updatedAt: now
+        )
+        try repository.saveRecurringTemplate(template)
+
+        let instanceID = UUID()
+        try repository.databaseManager.dbQueue.write { db in
+            try db.execute(
+                sql: """
+                INSERT INTO recurring_instances
+                (id, template_id, due_date, day_key, status, linked_transaction_id, created_at, updated_at)
+                VALUES (?, ?, ?, ?, 'posted', ?, ?, ?)
+                """,
+                arguments: [instanceID.uuidString, template.id.uuidString, now, DateKeys.dayKey(for: now), txnID.uuidString, Date(), Date()]
+            )
+        }
+
+        let plan = try repository.transactionDeletionPlan(for: .thisMonth, now: now)
+        _ = try repository.deleteTransactions(plan)
+
+        // The instance row survives (prevents repost) but its FK is nulled.
+        let linkedID = try repository.databaseManager.dbQueue.read { db in
+            try String.fetchOne(db, sql: "SELECT linked_transaction_id FROM recurring_instances WHERE id = ?", arguments: [instanceID.uuidString])
+        }
+        #expect(linkedID == nil)
     }
 }

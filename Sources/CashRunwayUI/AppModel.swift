@@ -410,7 +410,7 @@ public final class CashRunwayAppModel {
             }.value
         } catch {
             errorMessage = error.localizedDescription
-            return TransactionDeletionSummary(count: 0)
+            return TransactionDeletionSummary(count: 0, displayCount: 0)
         }
     }
 

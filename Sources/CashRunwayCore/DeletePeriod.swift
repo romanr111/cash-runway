@@ -21,11 +21,13 @@ public enum TransactionDeletionError: Error, Equatable, Sendable, LocalizedError
 
 public struct TransactionDeletionSummary: Equatable, Sendable {
     public let count: Int
+    public let displayCount: Int
     public let expenseMinor: Int64
     public let incomeMinor: Int64
 
-    public init(count: Int, expenseMinor: Int64 = 0, incomeMinor: Int64 = 0) {
+    public init(count: Int, displayCount: Int, expenseMinor: Int64 = 0, incomeMinor: Int64 = 0) {
         self.count = count
+        self.displayCount = displayCount
         self.expenseMinor = expenseMinor
         self.incomeMinor = incomeMinor
     }
@@ -42,23 +44,38 @@ public struct TransactionDeletionResult: Equatable, Sendable {
     }
 }
 
+/// Immutable fingerprint of a single transaction row at preview time.
+/// Execution compares these snapshots to detect same-ID mutations.
+public struct TransactionDeletionItem: Equatable, Sendable, Hashable {
+    public let id: UUID
+    public let updatedAt: String
+
+    public init(id: UUID, updatedAt: String) {
+        self.id = id
+        self.updatedAt = updatedAt
+    }
+}
+
 /// An immutable snapshot of what a bulk delete will remove.
 ///
 /// Created during preview and passed to execution so the exact row IDs shown to
 /// the user are the rows that are deleted. `referenceDayKey`,
 /// `referenceMonthKey`, and `referenceYear` freeze the calendar scope at the
-/// time of preview; execution recomputes the matching IDs from those keys and
-/// aborts if the set has changed.
+/// time of preview; execution recomputes the matching items from those keys and
+/// aborts if the set has changed — including same-ID field mutations detected
+/// via `updatedAt` fingerprints.
 public struct TransactionDeletionPlan: Equatable, Sendable, Identifiable {
     public let id: UUID
     public let period: DeletePeriod
     public let referenceDayKey: Int
     public let referenceMonthKey: Int
     public let referenceYear: Int
-    public let transactionIDs: [UUID]
+    public let items: [TransactionDeletionItem]
     public let summary: TransactionDeletionSummary
 
+    public var transactionIDs: [UUID] { items.map(\.id) }
     public var count: Int { summary.count }
+    public var displayCount: Int { summary.displayCount }
     public var expenseMinor: Int64 { summary.expenseMinor }
     public var incomeMinor: Int64 { summary.incomeMinor }
 
@@ -68,7 +85,7 @@ public struct TransactionDeletionPlan: Equatable, Sendable, Identifiable {
         referenceDayKey: Int,
         referenceMonthKey: Int,
         referenceYear: Int,
-        transactionIDs: [UUID],
+        items: [TransactionDeletionItem],
         summary: TransactionDeletionSummary
     ) {
         self.id = id
@@ -76,7 +93,7 @@ public struct TransactionDeletionPlan: Equatable, Sendable, Identifiable {
         self.referenceDayKey = referenceDayKey
         self.referenceMonthKey = referenceMonthKey
         self.referenceYear = referenceYear
-        self.transactionIDs = transactionIDs
+        self.items = items
         self.summary = summary
     }
 }

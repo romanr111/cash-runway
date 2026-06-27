@@ -18,6 +18,7 @@ struct DeleteTransactionsView: View {
     @State private var confirmText: String = ""
     @State private var isBackupPromptPresented = false
     @State private var isDeleting = false
+    @State private var deletionCompleted = false
     @State private var planRequestID: UUID?
     @FocusState private var focusedField: ConfirmField?
 
@@ -36,6 +37,9 @@ struct DeleteTransactionsView: View {
                 header
                 switch stage {
                 case .select:
+                    if deletionCompleted {
+                        deletionCompletedNotice
+                    }
                     warningCard
                     periodSection
                 case .confirm:
@@ -86,6 +90,27 @@ struct DeleteTransactionsView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.top, CashRunwayTheme.spaceS)
+    }
+
+    private var deletionCompletedNotice: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(CashRunwayTheme.negative)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Transactions were deleted, but the screen couldn't refresh.")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(CashRunwayTheme.textPrimary)
+                Text("Close and reopen this screen if the data looks stale.")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(CashRunwayTheme.textSecondary)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(CashRunwayTheme.spaceM)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(CashRunwayTheme.surfaceMuted, in: RoundedRectangle(cornerRadius: CashRunwayTheme.radiusM, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: CashRunwayTheme.radiusM, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
     }
 
     private var warningCard: some View {
@@ -185,7 +210,7 @@ struct DeleteTransactionsView: View {
             }
 
             primaryButton(
-                title: selectedPlan.map { L10n.deleteTransactionsButtonTitle($0.count) } ?? L10n.deleteTransactionsButtonTitle(0),
+                title: selectedPlan.map { L10n.deleteTransactionsButtonTitle($0.displayCount) } ?? L10n.deleteTransactionsButtonTitle(0),
                 identifier: CashRunwayAccessibilityID.deleteTransactionsConfirmButton,
                 enabled: confirmMatches && !isDeleting && hasSelectedTransactions,
                 isLoading: isDeleting
@@ -204,7 +229,7 @@ struct DeleteTransactionsView: View {
                     Text(periodTitle(plan.period))
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(CashRunwayTheme.textPrimary)
-                    Text(L10n.string("%@ will be permanently deleted.", L10n.transactionCount(plan.count)))
+                    Text(L10n.string("%@ will be permanently deleted.", L10n.transactionCount(plan.displayCount)))
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(CashRunwayTheme.negative)
                 }
@@ -254,7 +279,7 @@ struct DeleteTransactionsView: View {
                     Text(periodTitle(period))
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(CashRunwayTheme.textPrimary)
-                    Text(summary.map { L10n.transactionCount($0.count) } ?? L10n.transactionCount(0))
+                    Text(periodRowDetail(summary))
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(CashRunwayTheme.textSecondary)
                 }
@@ -270,8 +295,22 @@ struct DeleteTransactionsView: View {
         .buttonStyle(.plain)
         .accessibilityIdentifier("\(CashRunwayAccessibilityID.deleteTransactionsPeriodRow).\(period.rawValue)")
         .accessibilityLabel(periodTitle(period))
-        .accessibilityValue(summary.map { L10n.transactionCount($0.count) } ?? L10n.transactionCount(0))
+        .accessibilityValue(periodRowDetail(summary))
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    private func periodRowDetail(_ summary: TransactionDeletionSummary?) -> String {
+        guard let summary, summary.count > 0 else {
+            return L10n.transactionCount(0)
+        }
+        var parts: [String] = [L10n.transactionCount(summary.displayCount)]
+        if summary.expenseMinor > 0 {
+            parts.append("\(L10n.string("Expenses")) \(MoneyFormatter.string(from: summary.expenseMinor))")
+        }
+        if summary.incomeMinor > 0 {
+            parts.append("\(L10n.string("Income")) \(MoneyFormatter.string(from: summary.incomeMinor))")
+        }
+        return parts.joined(separator: " · ")
     }
 
     private func periodGlyph(_ period: DeletePeriod) -> some View {
@@ -360,7 +399,8 @@ struct DeleteTransactionsView: View {
               let plan = selectedPlan,
               plan.period == period,
               confirmMatches,
-              !isDeleting
+              !isDeleting,
+              !deletionCompleted
         else {
             return
         }
@@ -371,9 +411,15 @@ struct DeleteTransactionsView: View {
             isDeleting = false
             if result.refreshSuccess {
                 onDismiss()
+            } else if result.deletedCount > 0 {
+                // Deletion succeeded but refresh failed — prevent re-submission
+                // by clearing the plan and returning to the selection stage.
+                deletionCompleted = true
+                selectedPlan = nil
+                confirmText = ""
+                stage = .select
+                Task { await reloadSummaries() }
             }
-            // If deletion succeeded but refresh failed, `errorMessage` is set
-            // by `reloadAll()` and the sheet stays open so the user sees it.
         }
     }
 }
