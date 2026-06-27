@@ -400,6 +400,67 @@ public final class CashRunwayAppModel {
         }
     }
 
+    /// Loads a deletion summary off the main actor so the sheet opening stays
+    /// responsive even when loading a large year-scoped count.
+    public func transactionDeletionSummary(for period: DeletePeriod) async -> TransactionDeletionSummary {
+        let repo = repository
+        do {
+            return try await Task.detached(priority: .userInitiated) {
+                try repo.transactionDeletionSummary(for: period)
+            }.value
+        } catch {
+            errorMessage = error.localizedDescription
+            return TransactionDeletionSummary(count: 0, displayCount: 0)
+        }
+    }
+
+    /// Builds a frozen deletion plan off the main actor so the period-selection UI
+    /// stays responsive even when previewing a large year-scoped set.
+    public func transactionDeletionPlan(for period: DeletePeriod) async -> TransactionDeletionPlan? {
+        let repo = repository
+        do {
+            let task = Task.detached(priority: .userInitiated) {
+                try repo.transactionDeletionPlan(for: period)
+            }
+            let plan = try await withTaskCancellationHandler {
+                try await task.value
+            } onCancel: {
+                task.cancel()
+            }
+            return plan
+        } catch is CancellationError {
+            return nil
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    /// Bulk-deletes transactions using a frozen `plan` off the main actor so the UI
+    /// stays responsive (and the loading spinner can animate) even for large
+    /// year-scoped deletes. Awaits the post-delete refresh so callers can distinguish
+    /// "delete succeeded, refresh failed" from complete success. Returns a structured
+    /// `TransactionDeletionResult`; sets `errorMessage` on any failure.
+    public func deleteTransactions(plan: TransactionDeletionPlan) async -> TransactionDeletionResult {
+        let repo = repository
+        foregroundRefreshTask?.cancel()
+        foregroundRefreshTask = nil
+        do {
+            let deleted = try await Task.detached(priority: .userInitiated) {
+                try repo.deleteTransactions(plan)
+            }.value
+            overviewSnapshotCache.removeAll()
+            let refreshSuccess = await reloadAll()
+            if refreshSuccess {
+                lastForegroundRefreshAt = Date()
+            }
+            return TransactionDeletionResult(deletedCount: deleted, refreshSuccess: refreshSuccess)
+        } catch {
+            errorMessage = error.localizedDescription
+            return TransactionDeletionResult(deletedCount: 0, refreshSuccess: false)
+        }
+    }
+
     public func deleteLabel(id: UUID) {
         runMutation {
             try repository.deleteLabel(id: id)

@@ -1,41 +1,86 @@
 # Continuity Ledger
 
-## Session: Custom wallet categories
+## Snapshot — Bulk delete transactions feature (More → Data)
 
-Branch: `codex/custom-wallet-categories`
-Worktree: `~/.codex/worktrees/cash-runway-custom-wallet-categories`
-PR: https://github.com/romanr111/cash-runway/pull/79
-Goal: Allow users to create reusable custom wallet categories while preserving built-ins, migrating existing wallets safely, and keeping backup/restore compatibility.
+Branch: `codex/bulk-delete-transactions`
+Worktree: `~/.codex/worktrees/cash-runway-bulk-delete-transactions`
+Base: `dev` @ d903f61
+Status: implemented, merged with current `dev`, resolving final conflicts, local gates pending, awaiting reviewer approval/merge.
 
-## Status
+## Feature
+Adds "Delete Transactions" to the More/Ще → Data section. User picks a period
+(This Day / This Month / This Year), sees live counts + total affected, then a
+4-step destructive flow: open sheet → select period → backup prompt (routes to
+existing Export Full Backup on "Back up") → type DELETE/ВИДАЛИТИ to enable the
+red CTA. Hard-deletes all transaction rows in the period regardless of source
+(manual/Monobank/CSV/recurring instances); recurring TEMPLATES preserved.
+Transfers: only the in-period half is removed.
 
-- Implementation complete.
-- General detailed code review, SwiftUI Expert Skill review, and SwiftUI Design Skill review completed.
-- `AppReportingSecrets.generated.swift` reverted; not part of change set.
-
-## Validation
-- `just check` (full CI gate): passed
-- `just build`: BUILD SUCCEEDED
-- `just lint`: 0 violations
-- `just test-filter WalletCategoryTests`: 14/14 passed
+## Decisions (locked with user)
+- Transfer pairs: delete only in-period half.
+- Confirmation depth: 4 steps incl. type-DELETE; live counters on period rows.
+- Backup: not automatic; mid-flow prompt offers route to Export Full Backup.
+- Scope: all sources; recurring instances deleted, templates preserved.
 
 ## Changed files
-- `Sources/CashRunwayCore/Models.swift` — `WalletCategory`, `Wallet.categoryID`, backup model changes
-- `Sources/CashRunwayCore/DatabaseManager.swift` — `v5_custom_wallet_categories` migration
-- `Sources/CashRunwayCore/CashRunwayRepository.swift` — CRUD, backup round-trip
-- `Sources/CashRunwayUI/AppModel.swift` — `walletCategories` loading, `saveWalletCategory`
-- `Sources/CashRunwayUI/Editors.swift` — category picker + polished `NewWalletCategorySheet`
-- `Sources/CashRunwayUI/TransactionsView.swift` — resolved category display name
-- `AppHost/Localizable.xcstrings` — EN/UK strings
-- `Tests/CashRunwayCoreTests/WalletCategoryTests.swift` — new test suite
-- `Tests/CashRunwayCoreTests/RepositoryCRUDTests.swift`
-- `Tests/CashRunwayCoreTests/MigrationIntegrityTests.swift`
-- `Tests/CashRunwayCoreTests/FullBackupTests.swift`
-- `Tests/CashRunwayCoreTests/TestDataBuilders.swift`
+- Sources/CashRunwayCore/DeletePeriod.swift (NEW) — `DeletePeriod`, `TransactionDeletionPlan`, `TransactionDeletionError.planStale`, `TransactionDeletionResult`
+- Sources/CashRunwayCore/Collection+Chunked.swift (NEW) — chunked delete helper for SQLite variable limit
+- Sources/CashRunwayCore/CashRunwayRepository.swift — `transactionDeletionSummary(for:)` (SQL aggregates), `transactionDeletionPlan(for:)` (frozen IDs), `deleteTransactions(_ plan:)` (recomputes IDs, aborts on set change, deletes exact IDs), chunked cascade delete
+- Sources/CashRunwayCore/L10n.swift — `deleteTransactionsButtonTitle(_:)` plural helper
+- Sources/CashRunwayUI/AppModel.swift — async `transactionDeletionSummary(for:)`, `transactionDeletionPlan(for:)`, `deleteTransactions(plan:)` (awaits refresh, returns `TransactionDeletionResult`)
+- Sources/CashRunwayUI/DeleteTransactionsView.swift — async summary loading, period selection, impact card, confirmation field, delete CTA
+- Sources/CashRunwayUI/AccessibilityIdentifiers.swift — sheet/row/continue/confirm identifiers
+- Sources/CashRunwayUI/SettingsView.swift — "Delete Transactions" row and sheet presentation
+- AppHost/Localizable.xcstrings — new EN/uk strings for delete flow and stale-plan error
+- CashRunway.xcodeproj/project.pbxproj — added `DeleteTransactionsView.swift` to UI group and app target
+- Tests/CashRunwayCoreTests/BulkDeleteTransactionsTests.swift — 28 tests incl. frozen-scope, tombstone, chunking, identity, period-mismatch, and aggregate-summary guards
 
-## Open recommendations (non-blocking)
-- `NewWalletCategorySheet` receives `onSave`/`onCancel` closures from parent. Per SwiftUI sheet best-practice, sheets should own actions internally via `@Environment(\.dismiss)`.
-- Wallet list rows could benefit from `.accessibilityElement(children: .combine)` (pre-existing gap).
+## Review-driven fixes
+- P2 refresh reporting: `deleteTransactions(plan:)` now awaits `reloadAll()` and returns a structured `TransactionDeletionResult` so the UI can distinguish "delete succeeded, refresh failed" from complete success, and the sheet only dismisses after refresh succeeds.
+- P2/P3 summary loading: `transactionDeletionSummary(for:)` uses SQL `COUNT`/`SUM` aggregates (no row materialization) and `DeleteTransactionsView` loads summaries asynchronously with `isLoadingSummaries` gating the Continue button.
+- P1 scope race: preview creates an immutable `TransactionDeletionPlan` that
+  freezes the reference day/month/year keys and the exact transaction UUIDs.
+  Execution recomputes the matching set from the frozen keys and throws
+  `TransactionDeletionError.planStale` if the ID set changed.
+- P1 out-of-order plan loading race: `DeleteTransactionsView` tags each plan
+  request with a `planRequestID`, and accepts a result only when the task is not
+  cancelled, the request ID is still current, `selectedPeriod` is unchanged,
+  and `plan.period == selectedPeriod`. `hasSelectedTransactions` and
+  `performDelete()` independently enforce the period invariant.
+- Cancellation propagation: `CashRunwayAppModel.transactionDeletionPlan(for:)`
+  wraps the detached plan task in `withTaskCancellationHandler` so caller
+  cancellation cancels the detached work, and `CancellationError` is swallowed
+  rather than surfaced as a user-facing error.
+- P2 tombstone corruption: `deletePeriodPredicate` includes `is_deleted = 0` so
+  summary, plan, and execution ignore tombstoned rows; aggregate reversal
+  therefore cannot be skewed by pre-deleted rows.
+- Sheet dismissal: `.interactiveDismissDisabled(isDeleting)` prevents swipe-to-
+  dismiss while deletion runs.
+- UI polish: theme-token spacing, distinct accessibility identifiers, impact
+  card transition, consolidated destructive messaging.
 
-## Previous session
-- `codex/wallet-selection-transaction-editor` (PR #78) merged into `dev` before this branch; its ledger snapshot moved to `dev`.
+## Validation
+- `swift build --target CashRunwayCore` — pending after final merge
+- `just test-filter BulkDeleteTransactionsTests` — pending after final merge
+- `just build` (iPhone 17 simulator) — pending after final merge
+- `just lint` — pending after final merge
+
+## Skipped gates
+- True SwiftUI `.task(id:)` race cannot be unit-tested from SwiftPM because
+  `CashRunwayUI` is an Xcode-only target; XCUITest changes are out of scope per
+  AGENTS.md. The invariant is covered at the plan level and enforced in the view.
+- Interactive UI navigation to the new sheet remains a recommended manual gate.
+
+## Open / follow-ups
+- Dangling half-transfer when only one half of a transfer is in a deleted period
+  (accepted per decision). Future: consider demoting the orphan half.
+
+## Freshness check (verify before next session)
+- [ ] `git status --short` is clean.
+- [ ] `CashRunway.xcodeproj/project.pbxproj.bak` is not in the index or worktree.
+- [ ] Validation counts reflect the latest test run.
+
+## Note
+- The `origin/dev` ledger snapshots for `codex/wallet-selection-transaction-editor`
+  and `codex/custom-wallet-categories` belong to separate worktrees and are
+  intentionally not duplicated here.

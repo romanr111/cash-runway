@@ -1,6 +1,278 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Close and reopen this screen if the data looks stale.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close and reopen this screen if the data looks stale."
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Закрийте та відкрийте цей екран, якщо дані виглядають застарілими."
+          }
+        }
+      }
+    },
+    "Transactions were deleted, but the screen couldn't refresh.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transactions were deleted, but the screen couldn't refresh."
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Транзакції видалено, але не вдалося оновити екран."
+          }
+        }
+      }
+    },
+    "Type %@ to confirm": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Type %@ to confirm"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Введіть %@ для підтвердження"
+          }
+        }
+      }
+    },
+    "This permanently deletes the selected transactions. This cannot be undone.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This permanently deletes the selected transactions. This cannot be undone."
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Це назавжди видалить вибрані транзакції. Дію не можна скасувати."
+          }
+        }
+      }
+    },
+    "This Year": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This Year"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Цього року"
+          }
+        }
+      }
+    },
+    "This Month": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This Month"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Цього місяця"
+          }
+        }
+      }
+    },
+    "This Day": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This Day"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Цього дня"
+          }
+        }
+      }
+    },
+    "The transactions to delete changed. Please review the period again.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The transactions to delete changed. Please review the period again."
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Транзакції для видалення змінилися. Будь ласка, перегляньте період ще раз."
+          }
+        }
+      }
+    },
+    "Select a period": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select a period"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Оберіть період"
+          }
+        }
+      }
+    },
+    "Remove transactions for a day, month, or year": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove transactions for a day, month, or year"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Видалити транзакції за день, місяць або рік"
+          }
+        }
+      }
+    },
+    "Deleting is permanent. We recommend exporting an unencrypted backup you can restore from later.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deleting is permanent. We recommend exporting an unencrypted backup you can restore from later."
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Видалення незворотне. Рекомендуємо експортувати незашифровану резервну копію, з якої потім можна відновити дані."
+          }
+        }
+      }
+    },
+    "Delete Transactions": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete Transactions"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Видалити транзакції"
+          }
+        }
+      }
+    },
+    "Confirm deletion": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confirm deletion"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Підтвердження видалення"
+          }
+        }
+      }
+    },
+    "Choose transactions to remove by date": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose transactions to remove by date"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Оберіть транзакції для видалення за датою"
+          }
+        }
+      }
+    },
+    "Back up first?": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back up first?"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Спочатку зробити копію?"
+          }
+        }
+      }
+    },
+    "Back up": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back up"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Зробити копію"
+          }
+        }
+      }
+    },
+    "%@ will be permanently deleted.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ will be permanently deleted."
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ буде назавжди видалено."
+          }
+        }
+      }
+    },
     "Wallet Category": {
       "localizations": {
         "en": {
