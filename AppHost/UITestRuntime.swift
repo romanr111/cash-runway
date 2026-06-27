@@ -125,7 +125,9 @@ private struct UITestLaunchConfiguration {
             repository: repository,
             bankTokenStore: KeychainBankTokenStore(keychain: keychain),
             bankSyncPerformer: UITestBankSyncPerformer(repository: repository, mode: monobankMode),
-            monobankTokenValidator: UITestMonobankTokenValidator(mode: monobankMode)
+            monobankTokenValidator: UITestMonobankTokenValidator(mode: monobankMode),
+            csvService: CSVService(repository: repository),
+            backupService: BackupService(repository: repository, bankTokenStore: KeychainBankTokenStore(keychain: keychain))
         )
         return CashRunwayAppRuntime(
             model: model,

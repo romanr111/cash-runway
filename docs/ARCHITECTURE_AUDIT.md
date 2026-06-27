@@ -413,7 +413,7 @@ CashRunwayAgentAccess (future, new)
 - Split `Editors.swift` and `DashboardView.swift` into per-view files.
 - Verify: `just check`, `just build`.
 
-## Phase 2: Persistence/domain separation
+## Phase 2: Persistence/domain separation — DONE (PR #82)
 - Keep `CashRunwayRepository` as a compatibility facade; extract in this order (file/type-level, behavior-preserving):
   1. `BankSyncService`, `MonobankConnectionService`, `BankSyncCoordinator`, `BankCategoryResolver` → `Core/BankSync/`
   2. Recurring template/instance generation → `Core/Recurring/`
@@ -423,6 +423,8 @@ CashRunwayAgentAccess (future, new)
 - Introduce `protocol CashRunwayRepositorying`; UI depends on protocol.
 - **Avoid broad model moves** until the repository is smaller and tests cover the extracted services.
 - Verify after each extraction: `just check-integration`, `BankSyncImportTests`, `FullBackupTests`, `RecurringIdempotencyTests`, `RepositoryCRUDTests`, `MigrationIntegrityTests`.
+
+**Phase 2 results:** `CashRunwayRepository.swift` 4204→2263 lines (46% reduction). Protocol `CashRunwayRepositorying` (57 methods, no `databaseManager`). `BackupService`/`CSVService`/`BankCategoryResolver` retain concrete dependency (need internal DB methods). Mock test (`CashRunwayRepositoryingTests`) proves DB-free conformance. Follow-ups: `BackupServicing` protocol, per-feature protocol split, `AppModel.repository` narrowing — Phase 3+.
 
 ## Phase 3: Privacy/security hardening
 - Add `com.apple.developer.default-data-protection` entitlement + `NSFileProtectionComplete`/`completeUnlessOpen` on DB/WAL/SHM, backups, and recovery files via a `FileProtectionService`. Validate on a real device (simulator does not enforce).
