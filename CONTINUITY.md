@@ -2,10 +2,10 @@
 
 ## Snapshot — Bulk delete transactions feature (More → Data)
 
-Branch: `codex/bulk-delete-transactions`
+Branch: `codex/bulk-delete-transactions` (merged via PR #75, squash commit `dd941fe`)
 Worktree: `~/.codex/worktrees/cash-runway-bulk-delete-transactions`
 Base: `dev` @ d903f61
-Status: implemented, merged with current `dev`, resolving final conflicts, local gates pending, awaiting reviewer approval/merge.
+Status: MERGED into `dev`. All local gates passed at merge time (see PR #75 validation section).
 
 ## Feature
 Adds "Delete Transactions" to the More/Ще → Data section. User picks a period
@@ -59,11 +59,13 @@ Transfers: only the in-period half is removed.
 - UI polish: theme-token spacing, distinct accessibility identifiers, impact
   card transition, consolidated destructive messaging.
 
-## Validation
-- `swift build --target CashRunwayCore` — pending after final merge
-- `just test-filter BulkDeleteTransactionsTests` — pending after final merge
-- `just build` (iPhone 17 simulator) — pending after final merge
-- `just lint` — pending after final merge
+## Validation (at PR #75 merge)
+- SwiftPM build (Core + UI): passed
+- `just check-integration`: 380/380 passed (2 pre-existing known issues in `CSVIdempotencyTests`)
+- `just test-filter BulkDeleteTransactionsTests`: 26/26 passed
+- `swiftlint --strict`: 0 violations
+- `just build` (iPhone 17 simulator): BUILD SUCCEEDED
+- `Scripts/pre-flight.sh`: CashRunwayCore wiring OK
 
 ## Skipped gates
 - True SwiftUI `.task(id:)` race cannot be unit-tested from SwiftPM because
@@ -84,3 +86,60 @@ Transfers: only the in-period half is removed.
 - The `origin/dev` ledger snapshots for `codex/wallet-selection-transaction-editor`
   and `codex/custom-wallet-categories` belong to separate worktrees and are
   intentionally not duplicated here.
+
+---
+
+## Previous session: Architecture audit (read-only investigation)
+
+Branch: `dev` @ `fed7859` (no worktree — investigated in main checkout)
+Goal: Deep architecture audit of Cash Runway; produce a modernization plan covering maintainability, security/privacy, performance, and future LLM-agent integration. No code changes.
+
+## Status
+- Complete. Deliverable saved to `docs/ARCHITECTURE_AUDIT.md`.
+- Static review only; no tests run (investigative task per instructions).
+- Self-review performed against a 9-point review checklist; 2 factual errors + several nuances corrected in place.
+
+## Deliverable
+- `docs/ARCHITECTURE_AUDIT.md` — full report (Executive Summary, Current Architecture, Maintainability/Security/Performance findings tables, LLM-Agent Integration Architecture, Proposed Target Architecture, 6-phase Roadmap, Open Questions, Appendix).
+
+## Key findings (top risks)
+1. God repository — `Sources/CashRunwayCore/CashRunwayRepository.swift` (4,029 lines): DAO + bank sync + resolver + backup + recurring + aggregates in one `@unchecked Sendable` class.
+2. Empty `AppHost/CashRunway.entitlements` (`<dict/>`) — no `com.apple.developer.default-data-protection` capability; DB file lacks iOS file-level protection (SQLCipher passphrase only).
+3. `bank_transaction_imports.raw_json` stores full Monobank JSON indefinitely (no TTL/redaction). Not exported in JSON backups, but maximizes local PII surface.
+4. `NSLog` calls in DEBUG-gated UI code (`Editors.swift:624`, `FeedbackReportScreenshotPicker.swift:164`) — not shipping, but violates AGENTS.md logging convention; cleanup item.
+5. God view model — `Sources/CashRunwayUI/AppModel.swift` (1,045 lines) holds `repository`, `csvService`, `backupService`, `bankTokenStore`; direct persistence coupling.
+
+## Notable facts verified
+- The `Modules/CashRunwayCorePackage/` mirror described in the task brief **does not exist** on `dev` or the `codex/dedup-core` worktree. Single source tree at `Sources/CashRunwayCore/` (enforced by `Scripts/check-core-module-wiring.sh`).
+- Migration `v3_bank_sync` is registered AFTER `v4_import_job_source_format_id` (names are identifiers, not sort keys — GRDB runs in registration order). **Must not be renamed** — GRDB tracks by identifier; renaming would break existing DBs.
+- `bank_transaction_imports` is NOT included in `exportFullBackup` (verified in `insertBackupSourceData`).
+- DEBUG recovery paths are correctly `#if DEBUG`-gated; `allowsDestructiveRecovery` is `FatalError` in release.
+
+## Recommendations (prioritized)
+- P0: Split god repository into focused internal services (BankSync → Recurring → Aggregates → Backup → DAOs), file/type-level first; keep `CashRunwayRepository` as a compatibility facade.
+- P0: Add `com.apple.developer.default-data-protection` entitlement + `NSFileProtectionComplete`/`completeUnlessOpen` via a `FileProtectionService`; validate on real device.
+- P0: Redact + TTL-purge `bank_transaction_imports.raw_json`; add `raw_json_expires_at` + purge job in `runMaintenance`.
+- P1: Do not rename migrations; add a `MigrationIntegrityTests` assertion that the identifier set is stable.
+- P1: Clean up DEBUG `NSLog`; add CI grep check preventing ungated `print`/`NSLog`.
+- P1: Split `Editors.swift` (2,266 lines) and `DashboardView.swift` (1,658 lines) into per-view files.
+- P2: Introduce `protocol CashRunwayRepositorying`; UI depends on protocol.
+- P2: Keep `DatabaseQueue` (not `DatabasePool`) unless read contention is measured.
+- Phase 5: LLM-agent access as local-first in-app `AgentAccessService` (consent-gated, read-only by default, redacted DTOs, audit log, short-lived sessions, immediate revocation). Reject direct DB access and localhost HTTP.
+
+## Open questions for product/security
+1. Data Protection class: `complete` (safer, blocks BG tasks when locked) vs `completeUnlessOpen`?
+2. `raw_json` retention: N days for reprocessing, or drop after linking?
+3. Database key rotation: support on user request?
+4. Backup encryption: passphrase-encrypt exports?
+5. Agent LLM host: on-device vs user-approved remote?
+6. Budgets feature: remove frozen code/tables, or keep?
+
+## Areas not inspected
+- `Theme.swift`, `TransactionsView.swift`, `BudgetsView.swift`, coordinator files (listed/grepped only).
+- `reporting-api/` Node backend, `sidestore/`, `DesignReferences/`, `docs/` content.
+- `.swiftlint.yml` rules; `XLSXConverter`, `MCCategoryMapping`, `BankCategoryNameMapping`, `L10n`, `DateKeys`, `Money` internals.
+- `CashRunway.xcodeproj/project.pbxproj` (not hand-edited per AGENTS.md).
+- Nightly/release workflows beyond confirming existence.
+
+## Earlier previous session
+- `codex/custom-wallet-categories` (PR #79) — implementation complete; ledger snapshot moved to `dev`.
