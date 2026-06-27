@@ -4,6 +4,8 @@
 
 Status: Phase 1 complete on `codex/arch-phase-1-cleanup` (worktree `cash-runway-arch-phase-1`), rebased onto `dev` @ `f46f838`; verified (sim build + integration pass, 2 known CSV idempotency issues CI-excluded). Phases 2 (persistence/domain separation), 3 (privacy/security hardening), 4 (performance & benchmarks), and 5 (consent-gated LLM-agent access) pending. See `docs/ARCHITECTURE_AUDIT.md`.
 
+> **Note:** Audit was generated from `dev` @ `fed7859`; rebased onto `dev` @ `dd941fe`. Audit findings reflect the codebase at the earlier baseline (the one intervening commit `dd941fe` added the bulk-delete-transactions feature, which does not materially affect the audit's findings).
+
 ## Deliverable
 - `docs/ARCHITECTURE_AUDIT.md` — full report (Executive Summary, Current Architecture, Maintainability/Security/Performance findings tables, LLM-Agent Integration Architecture, Proposed Target Architecture, 6-phase Roadmap, Open Questions, Appendix).
 

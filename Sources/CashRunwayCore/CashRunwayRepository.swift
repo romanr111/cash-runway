@@ -2595,45 +2595,6 @@ extension CashRunwayRepository {
         }
     }
 
-    // DEPRECATED — CSV import is now atomic via commitCSVImport. Do not use.
-    public func appendImportedTransactions(_ drafts: [TransactionDraft]) throws {
-        guard !drafts.isEmpty else { return }
-        try databaseManager.dbQueue.write { db in
-            for draft in drafts {
-                try validate(draft)
-                if draft.kind == .transfer {
-                    try saveTransfer(db, draft: draft, updateDerivedData: false)
-                } else {
-                    try saveSingleTransaction(db, draft: draft, updateDerivedData: false)
-                }
-            }
-        }
-    }
-
-    // DEPRECATED — CSV import is now atomic via commitCSVImport. Do not use.
-    public func finalizeImport(jobID: UUID, affectedMonths: Set<Int>, validRows: Int, invalidRows: Int, errorSummary: String?) throws {
-        try databaseManager.dbQueue.write { db in
-            try markDirtyRanges(db, monthKeys: affectedMonths)
-            try processPendingAggregateRebuilds(db)
-            try rebuildFTS(db)
-            try db.execute(
-                sql: """
-                UPDATE import_jobs
-                SET status = ?, valid_rows = ?, invalid_rows = ?, finished_at = ?, error_summary = ?
-                WHERE id = ?
-                """,
-                arguments: [
-                    ImportJobStatus.committed.rawValue,
-                    validRows,
-                    invalidRows,
-                    Date(),
-                    errorSummary,
-                    jobID.uuidString,
-                ]
-            )
-        }
-    }
-
     public func failImport(jobID: UUID, errorSummary: String) throws {
         try databaseManager.dbQueue.write { db in
             try db.execute(

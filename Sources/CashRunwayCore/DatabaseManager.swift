@@ -411,6 +411,13 @@ public final class DatabaseManager: @unchecked Sendable {
     }
 
     static func allMigrations() -> [(String, @Sendable (Database) throws -> Void)] {
+        // Migration identifiers are permanent. GRDB tracks applied migrations
+        // by identifier (not by name ordering), so `v3_bank_sync` registered
+        // after `v4_import_job_source_format_id` runs in registration order.
+        // Never rename, reorder, or delete existing entries — existing
+        // databases would treat a renamed migration as new and re-run it.
+        // Use monotonic names (`v6_*`, `v7_*`, …) only for new migrations.
+        // `MigrationIntegrityTests` asserts this identifier set is stable.
         [
             ("v1_schema", { db in
                 try db.create(table: "wallets") { table in

@@ -16,6 +16,14 @@
 		A00100010001000100010007 /* Sources/CashRunwayUI/BudgetsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010007 /* Sources/CashRunwayUI/BudgetsView.swift */; };
 		A00100010001000100010008 /* Sources/CashRunwayUI/SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010008 /* Sources/CashRunwayUI/SettingsView.swift */; };
 		A00100010001000100010009 /* Sources/CashRunwayUI/Editors.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010009 /* Sources/CashRunwayUI/Editors.swift */; };
+		A00100010001000100010052 /* Sources/CashRunwayUI/CategoryManagementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010052 /* Sources/CashRunwayUI/CategoryManagementView.swift */; };
+		A00100010001000100010053 /* Sources/CashRunwayUI/BudgetEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010053 /* Sources/CashRunwayUI/BudgetEditorView.swift */; };
+		A00100010001000100010054 /* Sources/CashRunwayUI/WalletEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010054 /* Sources/CashRunwayUI/WalletEditorView.swift */; };
+		A00100010001000100010055 /* Sources/CashRunwayUI/CategoryEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010055 /* Sources/CashRunwayUI/CategoryEditorView.swift */; };
+		A00100010001000100010056 /* Sources/CashRunwayUI/LabelEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010056 /* Sources/CashRunwayUI/LabelEditorView.swift */; };
+		A00100010001000100010057 /* Sources/CashRunwayUI/RecurringEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010057 /* Sources/CashRunwayUI/RecurringEditorView.swift */; };
+		A00100010001000100010058 /* Sources/CashRunwayUI/TimelineOverviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010058 /* Sources/CashRunwayUI/TimelineOverviewView.swift */; };
+		A00100010001000100010059 /* Sources/CashRunwayUI/TimelineSearchSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010059 /* Sources/CashRunwayUI/TimelineSearchSheet.swift */; };
 		A00100010001000100010051 /* AppHost/AppReportingSecrets.generated.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010051 /* AppHost/AppReportingSecrets.generated.swift */; };
 		A00100010001000100010011 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = A00A00010001000100010002 /* GRDB */; };
 		A00100010001000100010012 /* AppHost/UITestRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010014 /* AppHost/UITestRuntime.swift */; };
@@ -38,7 +46,7 @@
 			A00100010001000100010029 /* Sources/CashRunwayUI/FeedbackReportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010029 /* Sources/CashRunwayUI/FeedbackReportService.swift */; };
 			A0010001000100010001002A /* Sources/CashRunwayUI/FeedbackReportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0020001000100010001002A /* Sources/CashRunwayUI/FeedbackReportView.swift */; };
 		A0010001000100010001002C /* Sources/CashRunwayUI/FeedbackReportScreenshotPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0020001000100010001002C /* Sources/CashRunwayUI/FeedbackReportScreenshotPicker.swift */; };
-		A00100010001000100010052 /* Sources/CashRunwayUI/DeleteTransactionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010052 /* Sources/CashRunwayUI/DeleteTransactionsView.swift */; };
+		A00100010001000100010060 /* Sources/CashRunwayUI/DeleteTransactionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010060 /* Sources/CashRunwayUI/DeleteTransactionsView.swift */; };
 			A00100010001000100010026 /* AppHost/Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010026 /* AppHost/Localizable.xcstrings */; };
 			A0010001000100010001002F /* AppHost/uk.lproj/InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = A0020001000100010001002E /* AppHost/uk.lproj/InfoPlist.strings */; };
 		A01300010001000100010003 /* CashRunwayCore in Frameworks */ = {isa = PBXBuildFile; productRef = A01300010001000100010002 /* CashRunwayCore */; };
@@ -64,6 +72,14 @@
 		A00200010001000100010007 /* Sources/CashRunwayUI/BudgetsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayUI/BudgetsView.swift; sourceTree = "<group>"; };
 		A00200010001000100010008 /* Sources/CashRunwayUI/SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayUI/SettingsView.swift; sourceTree = "<group>"; };
 		A00200010001000100010009 /* Sources/CashRunwayUI/Editors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayUI/Editors.swift; sourceTree = "<group>"; };
+		A00200010001000100010052 /* Sources/CashRunwayUI/CategoryManagementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayUI/CategoryManagementView.swift; sourceTree = "<group>"; };
+		A00200010001000100010053 /* Sources/CashRunwayUI/BudgetEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayUI/BudgetEditorView.swift; sourceTree = "<group>"; };
+		A00200010001000100010054 /* Sources/CashRunwayUI/WalletEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayUI/WalletEditorView.swift; sourceTree = "<group>"; };
+		A00200010001000100010055 /* Sources/CashRunwayUI/CategoryEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayUI/CategoryEditorView.swift; sourceTree = "<group>"; };
+		A00200010001000100010056 /* Sources/CashRunwayUI/LabelEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayUI/LabelEditorView.swift; sourceTree = "<group>"; };
+		A00200010001000100010057 /* Sources/CashRunwayUI/RecurringEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayUI/RecurringEditorView.swift; sourceTree = "<group>"; };
+		A00200010001000100010058 /* Sources/CashRunwayUI/TimelineOverviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayUI/TimelineOverviewView.swift; sourceTree = "<group>"; };
+		A00200010001000100010059 /* Sources/CashRunwayUI/TimelineSearchSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayUI/TimelineSearchSheet.swift; sourceTree = "<group>"; };
 		A0020001000100010001000A /* AppHost/Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = AppHost/Info.plist; sourceTree = "<group>"; };
 		A0020001000100010001000B /* AppHost/CashRunway.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AppHost/CashRunway.entitlements; sourceTree = "<group>"; };
 		A0020001000100010001000C /* CashRunway.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CashRunway.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -77,7 +93,7 @@
 		A01000010001000100010002 /* Sources/CashRunwayCore/XLSXConverter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayCore/XLSXConverter.swift; sourceTree = "<group>"; };
 		A00200010001000100010014 /* AppHost/UITestRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppHost/UITestRuntime.swift; sourceTree = "<group>"; };
 		A00200010001000100010015 /* Sources/CashRunwayUI/AccessibilityIdentifiers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayUI/AccessibilityIdentifiers.swift; sourceTree = "<group>"; };
-		A00200010001000100010052 /* Sources/CashRunwayUI/DeleteTransactionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayUI/DeleteTransactionsView.swift; sourceTree = "<group>"; };
+		A00200010001000100010060 /* Sources/CashRunwayUI/DeleteTransactionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayUI/DeleteTransactionsView.swift; sourceTree = "<group>"; };
 		A00200010001000100010016 /* Tests/CashRunwayUITests/CashRunwayUITestCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/CashRunwayUITests/CashRunwayUITestCase.swift; sourceTree = "<group>"; };
 		A00200010001000100010017 /* Tests/CashRunwayUITests/TransactionCRUDUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/CashRunwayUITests/TransactionCRUDUITests.swift; sourceTree = "<group>"; };
 		A00200010001000100010018 /* Tests/CashRunwayUITests/TransactionOverviewUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/CashRunwayUITests/TransactionOverviewUITests.swift; sourceTree = "<group>"; };
@@ -165,10 +181,18 @@
 				A00200010001000100010003 /* Sources/CashRunwayUI/Theme.swift */,
 				A00200010001000100010004 /* Sources/CashRunwayUI/RootView.swift */,
 				A00200010001000100010005 /* Sources/CashRunwayUI/DashboardView.swift */,
+				A00200010001000100010058 /* Sources/CashRunwayUI/TimelineOverviewView.swift */,
+				A00200010001000100010059 /* Sources/CashRunwayUI/TimelineSearchSheet.swift */,
 				A00200010001000100010006 /* Sources/CashRunwayUI/TransactionsView.swift */,
 				A00200010001000100010007 /* Sources/CashRunwayUI/BudgetsView.swift */,
 				A00200010001000100010008 /* Sources/CashRunwayUI/SettingsView.swift */,
 				A00200010001000100010009 /* Sources/CashRunwayUI/Editors.swift */,
+				A00200010001000100010052 /* Sources/CashRunwayUI/CategoryManagementView.swift */,
+				A00200010001000100010053 /* Sources/CashRunwayUI/BudgetEditorView.swift */,
+				A00200010001000100010054 /* Sources/CashRunwayUI/WalletEditorView.swift */,
+				A00200010001000100010055 /* Sources/CashRunwayUI/CategoryEditorView.swift */,
+				A00200010001000100010056 /* Sources/CashRunwayUI/LabelEditorView.swift */,
+				A00200010001000100010057 /* Sources/CashRunwayUI/RecurringEditorView.swift */,
 				A00200010001000100010015 /* Sources/CashRunwayUI/AccessibilityIdentifiers.swift */,
 				A0020001000100010001001B /* Sources/CashRunwayUI/MonobankCoordinator.swift */,
 				A0020001000100010001001C /* Sources/CashRunwayUI/MonobankWizardView.swift */,
@@ -182,7 +206,7 @@
 				A00200010001000100010029 /* Sources/CashRunwayUI/FeedbackReportService.swift */,
 				A0020001000100010001002A /* Sources/CashRunwayUI/FeedbackReportView.swift */,
 				A0020001000100010001002C /* Sources/CashRunwayUI/FeedbackReportScreenshotPicker.swift */,
-				A00200010001000100010052 /* Sources/CashRunwayUI/DeleteTransactionsView.swift */,
+				A00200010001000100010060 /* Sources/CashRunwayUI/DeleteTransactionsView.swift */,
 			);
 			name = UI;
 			sourceTree = "<group>";
@@ -372,6 +396,14 @@
 				A00100010001000100010007 /* Sources/CashRunwayUI/BudgetsView.swift in Sources */,
 				A00100010001000100010008 /* Sources/CashRunwayUI/SettingsView.swift in Sources */,
 				A00100010001000100010009 /* Sources/CashRunwayUI/Editors.swift in Sources */,
+				A00100010001000100010052 /* Sources/CashRunwayUI/CategoryManagementView.swift in Sources */,
+				A00100010001000100010053 /* Sources/CashRunwayUI/BudgetEditorView.swift in Sources */,
+				A00100010001000100010054 /* Sources/CashRunwayUI/WalletEditorView.swift in Sources */,
+				A00100010001000100010055 /* Sources/CashRunwayUI/CategoryEditorView.swift in Sources */,
+				A00100010001000100010056 /* Sources/CashRunwayUI/LabelEditorView.swift in Sources */,
+				A00100010001000100010057 /* Sources/CashRunwayUI/RecurringEditorView.swift in Sources */,
+				A00100010001000100010058 /* Sources/CashRunwayUI/TimelineOverviewView.swift in Sources */,
+				A00100010001000100010059 /* Sources/CashRunwayUI/TimelineSearchSheet.swift in Sources */,
 					A00100010001000100010051 /* AppHost/AppReportingSecrets.generated.swift in Sources */,
 				A00100010001000100010012 /* AppHost/UITestRuntime.swift in Sources */,
 				A00100010001000100010013 /* Sources/CashRunwayUI/AccessibilityIdentifiers.swift in Sources */,
@@ -387,7 +419,7 @@
 					A00100010001000100010029 /* Sources/CashRunwayUI/FeedbackReportService.swift in Sources */,
 					A0010001000100010001002A /* Sources/CashRunwayUI/FeedbackReportView.swift in Sources */,
 				A0010001000100010001002C /* Sources/CashRunwayUI/FeedbackReportScreenshotPicker.swift in Sources */,
-				A00100010001000100010052 /* Sources/CashRunwayUI/DeleteTransactionsView.swift in Sources */,
+				A00100010001000100010060 /* Sources/CashRunwayUI/DeleteTransactionsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
