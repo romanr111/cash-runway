@@ -1,86 +1,96 @@
 # Continuity Ledger
 
-## Snapshot — Bulk delete transactions feature (More → Data)
+## Snapshot — CSV import dedup hardening (category-independent identity + semantic fallback)
 
-Branch: `codex/bulk-delete-transactions`
-Worktree: `~/.codex/worktrees/cash-runway-bulk-delete-transactions`
-Base: `dev` @ d903f61
-Status: implemented, merged with current `dev`, resolving final conflicts, local gates pending, awaiting reviewer approval/merge.
+Branch: `codex/csv-import-dedup-category`
+Worktree: `~/.codex/worktrees/cash-runway-csv-dedup-category`
+Base: `origin/dev` @ dd941fe
+Status: implemented, all local gates green. Not committed/pushed (awaiting user instruction).
 
-## Feature
-Adds "Delete Transactions" to the More/Ще → Data section. User picks a period
-(This Day / This Month / This Year), sees live counts + total affected, then a
-4-step destructive flow: open sheet → select period → backup prompt (routes to
-existing Export Full Backup on "Back up") → type DELETE/ВИДАЛИТИ to enable the
-red CTA. Hard-deletes all transaction rows in the period regardless of source
-(manual/Monobank/CSV/recurring instances); recurring TEMPLATES preserved.
-Transfers: only the in-period half is removed.
+## Goal
+Prevent duplicated transactions when reimporting the same bank/CSV data after
+category/rule/mapping/app-version changes, and protect NULL-fingerprint legacy
+rows. TDD-first: failing tests added, then smallest robust fix.
+
+## Root cause
+`importFingerprint` hashed `resolvedCategoryName` (mutable/import-derived:
+user edits, bank rules, MCC mapping, localization, source-format detection).
+A reimport that resolved the same financial event to a different category
+produced a different fingerprint → duplicate insert.
+
+## Fix (3 source edits)
+- `Sources/CashRunwayCore/CSVSupport.swift`
+  - Removed `categoryName` from `ImportFingerprintInput` + `importFingerprint`
+    computation + all 3 call sites. Fingerprint now: source|wallet|kind|date|
+    amount|merchant|note|currency (currency kept as a stable bank-fact
+    differentiator per user decision).
+  - `parseDate`: try full ISO8601 (with time) BEFORE date-only `[.withFullDate]`.
+    The old order truncated ISO timestamps (e.g. Cash Runway exports) to
+    date-only, which broke timestamp equality and made export reimports insert
+    duplicates. Existing tests use `T00:00:00Z` (midnight) — no behavior change.
+- `Sources/CashRunwayCore/CashRunwayRepository.swift`
+  - `commitCSVImport`: loads `existingImportSemanticKeys` (all non-deleted
+    transactions, regardless of source) and checks each prepared row against
+    this set in addition to the fingerprint. New inserts also register their
+    semantic key in the batch set (mirrors `seenFingerprints.insert`).
+  - Semantic key: `walletID|kind|local_day_key|amountMinor|normalizedMerchant|
+    normalizedNote`. Day-granularity (uses stored `local_day_key` / computed
+    `DateKeys.dayKey`) to survive the export date-round-trip and timezone shifts.
+    Excludes currency (no `transactions.currency` column to backfill from).
 
 ## Decisions (locked with user)
-- Transfer pairs: delete only in-period half.
-- Confirmation depth: 4 steps incl. type-DELETE; live counters on period rows.
-- Backup: not automatic; mid-flow prompt offers route to Export Full Backup.
-- Scope: all sources; recurring instances deleted, templates preserved.
+- Keep `currency` in the fast fingerprint; semantic fallback excludes it
+  (covers algorithm-change + NULL-fingerprint cases; two rows identical except
+  currency collapse only via the rare fallback path).
+- Semantic fallback only, no backfill migration (avoids unique-index collisions
+  on old rows differing only by category).
+- Semantic key spans ALL non-deleted transactions (not just `source='import_csv'`)
+  so export reimports of manual/bank-sync transactions also dedup.
 
-## Changed files
-- Sources/CashRunwayCore/DeletePeriod.swift (NEW) — `DeletePeriod`, `TransactionDeletionPlan`, `TransactionDeletionError.planStale`, `TransactionDeletionResult`
-- Sources/CashRunwayCore/Collection+Chunked.swift (NEW) — chunked delete helper for SQLite variable limit
-- Sources/CashRunwayCore/CashRunwayRepository.swift — `transactionDeletionSummary(for:)` (SQL aggregates), `transactionDeletionPlan(for:)` (frozen IDs), `deleteTransactions(_ plan:)` (recomputes IDs, aborts on set change, deletes exact IDs), chunked cascade delete
-- Sources/CashRunwayCore/L10n.swift — `deleteTransactionsButtonTitle(_:)` plural helper
-- Sources/CashRunwayUI/AppModel.swift — async `transactionDeletionSummary(for:)`, `transactionDeletionPlan(for:)`, `deleteTransactions(plan:)` (awaits refresh, returns `TransactionDeletionResult`)
-- Sources/CashRunwayUI/DeleteTransactionsView.swift — async summary loading, period selection, impact card, confirmation field, delete CTA
-- Sources/CashRunwayUI/AccessibilityIdentifiers.swift — sheet/row/continue/confirm identifiers
-- Sources/CashRunwayUI/SettingsView.swift — "Delete Transactions" row and sheet presentation
-- AppHost/Localizable.xcstrings — new EN/uk strings for delete flow and stale-plan error
-- CashRunway.xcodeproj/project.pbxproj — added `DeleteTransactionsView.swift` to UI group and app target
-- Tests/CashRunwayCoreTests/BulkDeleteTransactionsTests.swift — 28 tests incl. frozen-scope, tombstone, chunking, identity, period-mismatch, and aggregate-summary guards
+## Tests (`Tests/CashRunwayCoreTests/CSVIdempotencyTests.swift`)
+New: `importingSameCSVTwiceIsIdempotent`, `reimportAfterCategoryChangedIsIdempotent`,
+`reimportCashRunwayExportIsIdempotent`, `oldTransactionsWithNullFingerprintProtectedBySemanticFallback`,
+`duplicateRowsInSameCSVDoNotMultiplyWhenOnlyCategoryDiffers`,
+`legitimateRepeatedPaymentsAreNotCollapsed` (guard against over-collapse),
+`reimportAfterSoftDeleteReInserts` (guard: deleted rows don't permanently suppress reimport),
+`crossSourceReimportCollapsesViaSemanticFallback` (characterizes intentional cross-source collapse),
+`reimportMonobankCSVIsIdempotent`, `reimportPrivatBankCSVIsIdempotent` (format coverage).
+Integration: `MigrationIntegrityTests.reimportAfterMigrationDedupesNullFingerprintLegacyRows`
+(simulates old-schema DB with NULL fingerprint, full migration, reimport dedup).
+Updated: removed 2 `withKnownIssue` wrappers (dedup now works); flipped
+`legacyGenericCSVEmptyCategoryDoesNotMatchMappedCategoryRow` →
+`...MatchesMappedCategoryRow` (new policy: category no longer distinguishes);
+fixed `csvImportReportsDuplicateRows` first-import count (3 identical rows now
+correctly collapse to 1 per requirement #5); flipped
+`importStatementMatchesLegacyGenericCSVEmptyCategoryNoCurrency` precondition
+`!=` → `==`; updated private `historicalImportFingerprint` helper to drop
+category (matches new production algorithm).
 
-## Review-driven fixes
-- P2 refresh reporting: `deleteTransactions(plan:)` now awaits `reloadAll()` and returns a structured `TransactionDeletionResult` so the UI can distinguish "delete succeeded, refresh failed" from complete success, and the sheet only dismisses after refresh succeeds.
-- P2/P3 summary loading: `transactionDeletionSummary(for:)` uses SQL `COUNT`/`SUM` aggregates (no row materialization) and `DeleteTransactionsView` loads summaries asynchronously with `isLoadingSummaries` gating the Continue button.
-- P1 scope race: preview creates an immutable `TransactionDeletionPlan` that
-  freezes the reference day/month/year keys and the exact transaction UUIDs.
-  Execution recomputes the matching set from the frozen keys and throws
-  `TransactionDeletionError.planStale` if the ID set changed.
-- P1 out-of-order plan loading race: `DeleteTransactionsView` tags each plan
-  request with a `planRequestID`, and accepts a result only when the task is not
-  cancelled, the request ID is still current, `selectedPeriod` is unchanged,
-  and `plan.period == selectedPeriod`. `hasSelectedTransactions` and
-  `performDelete()` independently enforce the period invariant.
-- Cancellation propagation: `CashRunwayAppModel.transactionDeletionPlan(for:)`
-  wraps the detached plan task in `withTaskCancellationHandler` so caller
-  cancellation cancels the detached work, and `CancellationError` is swallowed
-  rather than surfaced as a user-facing error.
-- P2 tombstone corruption: `deletePeriodPredicate` includes `is_deleted = 0` so
-  summary, plan, and execution ignore tombstoned rows; aggregate reversal
-  therefore cannot be skewed by pre-deleted rows.
-- Sheet dismissal: `.interactiveDismissDisabled(isDeleting)` prevents swipe-to-
-  dismiss while deletion runs.
-- UI polish: theme-token spacing, distinct accessibility identifiers, impact
-  card transition, consolidated destructive messaging.
-
-## Validation
-- `swift build --target CashRunwayCore` — pending after final merge
-- `just test-filter BulkDeleteTransactionsTests` — pending after final merge
-- `just build` (iPhone 17 simulator) — pending after final merge
-- `just lint` — pending after final merge
+## Validation (all ran successfully)
+- `swift build --target CashRunwayCore`: passed
+- `just check-unit-parallel`: 58/58 passed
+- `just check-integration`: 413/413 passed
+- `just check-perf`: 14/14 passed (incl. import timing gate)
+- `just lint`: 0 violations (91 files)
+- `just build` (iPhone 17 simulator): BUILD SUCCEEDED
+- `CSVIdempotencyTests` (30 tests): all passed
+- `MigrationIntegrityTests` (2 tests): all passed
 
 ## Skipped gates
-- True SwiftUI `.task(id:)` race cannot be unit-tested from SwiftPM because
-  `CashRunwayUI` is an Xcode-only target; XCUITest changes are out of scope per
-  AGENTS.md. The invariant is covered at the plan level and enforced in the view.
-- Interactive UI navigation to the new sheet remains a recommended manual gate.
+- None skipped. No XCUITest/E2E per AGENTS.md. No physical-device rehearsal
+  (not a release/SideStore task).
 
 ## Open / follow-ups
-- Dangling half-transfer when only one half of a transfer is in a deleted period
-  (accepted per decision). Future: consider demoting the orphan half.
+- Semantic fallback uses day-granularity: two legitimate same-day same-amount
+  same-merchant transactions where BOTH have NULL fingerprints would collapse.
+  Narrow edge case (NULL fingerprints only for pre-v3 imports or manual txns
+  being re-imported). The fingerprint path protects all post-v3 imports at full
+  timestamp precision. Documented as accepted trade-off.
 
 ## Freshness check (verify before next session)
-- [ ] `git status --short` is clean.
-- [ ] `CashRunway.xcodeproj/project.pbxproj.bak` is not in the index or worktree.
+- [ ] `git status --short` is clean (currently 3 modified files, uncommitted).
 - [ ] Validation counts reflect the latest test run.
 
 ## Note
-- The `origin/dev` ledger snapshots for `codex/wallet-selection-transaction-editor`
-  and `codex/custom-wallet-categories` belong to separate worktrees and are
-  intentionally not duplicated here.
+- The `origin/dev` ledger snapshots for other branches belong to separate
+  worktrees and are intentionally not duplicated here.

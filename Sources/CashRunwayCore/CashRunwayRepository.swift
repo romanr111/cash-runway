@@ -2666,12 +2666,16 @@ extension CashRunwayRepository {
             )
 
             var seenFingerprints = try existingImportFingerprints(db)
+            var seenSemanticKeys = try existingImportSemanticKeys(db)
             var insertedRows = 0
             var duplicateRows = 0
             var affectedMonths = Set<Int>()
 
             for row in preparedRows {
-                if seenFingerprints.contains(row.fingerprint) || row.legacyFingerprint.map { seenFingerprints.contains($0) } ?? false {
+                let semanticKey = importSemanticKey(for: row.draft)
+                if seenFingerprints.contains(row.fingerprint)
+                    || row.legacyFingerprint.map({ seenFingerprints.contains($0) }) ?? false
+                    || seenSemanticKeys.contains(semanticKey) {
                     duplicateRows += 1
                     continue
                 }
@@ -2704,6 +2708,7 @@ extension CashRunwayRepository {
                 }
 
                 seenFingerprints.insert(row.fingerprint)
+                seenSemanticKeys.insert(semanticKey)
                 insertedRows += 1
                 affectedMonths.insert(DateKeys.monthKey(for: row.draft.occurredAt))
             }
@@ -2754,6 +2759,58 @@ extension CashRunwayRepository {
     private func existingImportFingerprints(_ db: Database) throws -> Set<String> {
         let rows = try String.fetchAll(db, sql: "SELECT import_fingerprint FROM transactions WHERE import_fingerprint IS NOT NULL")
         return Set(rows)
+    }
+
+    private func existingImportSemanticKeys(_ db: Database) throws -> Set<String> {
+        let rows = try Row.fetchAll(
+            db,
+            sql: """
+            SELECT wallet_id, type, local_day_key, amount_minor, merchant, note
+            FROM transactions
+            WHERE is_deleted = 0
+            """
+        )
+        return Set(rows.map { row -> String in
+            Self.importSemanticKey(
+                walletID: row["wallet_id"],
+                kind: row["type"],
+                dayKey: row["local_day_key"],
+                amountMinor: row["amount_minor"],
+                merchant: row["merchant"],
+                note: row["note"]
+            )
+        })
+    }
+
+    private static func importSemanticKey(
+        walletID: String,
+        kind: String,
+        dayKey: Int,
+        amountMinor: Int64,
+        merchant: String?,
+        note: String?
+    ) -> String {
+        let normalizedMerchant = (merchant ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let normalizedNote = (note ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return [
+            walletID,
+            kind,
+            String(dayKey),
+            String(amountMinor),
+            normalizedMerchant,
+            normalizedNote,
+        ].joined(separator: "|")
+    }
+
+    private func importSemanticKey(for draft: TransactionDraft) -> String {
+        Self.importSemanticKey(
+            walletID: draft.walletID.uuidString,
+            kind: draft.kind.rawValue,
+            dayKey: DateKeys.dayKey(for: draft.occurredAt),
+            amountMinor: draft.amountMinor,
+            merchant: draft.merchant,
+            note: draft.note
+        )
     }
 
     private func resolveOrCreateCategory(
