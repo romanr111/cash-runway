@@ -1,5 +1,27 @@
 # Continuity Ledger
 
+## Snapshot — Two-tap category detail navigation
+
+Branch: `codex/two-tap-category-detail` @ `09a5190`.
+Worktree: `/Users/roman/.codex/worktrees/cash-runway-two-tap-category-detail`.
+Goal: Implement Overview category row behavior where the first user tap selects/arms a row and the second tap on the same selected row opens `CategoryDetailOverviewView` for the current month and wallet filter.
+Status: implemented, committed locally.
+
+## Notes
+- Source work is isolated from the dirty `dev` worktree.
+- Changed `Sources/CashRunwayUI/DashboardView.swift` to add route state, row arming state, `navigationDestination`, row tap handling, and context resets.
+- Changed `Tests/CashRunwayUITests/TransactionOverviewUITests.swift` to require two taps before category detail drilldown.
+- CodeGraph bootstrap initially left a partial `.codegraph` directory without `.codegraph/worktree-root`; removed the generated partial directory, re-ran bootstrap, and synced successfully.
+
+## Validation
+- `just build` (iPhone 17 simulator): BUILD SUCCEEDED. Warnings: duplicate `AppHost/uk.lproj/InfoPlist.strings` project reference, signed SQLCipher not stripped, AppIntents metadata skipped.
+- `git diff --check`: passed.
+- `just graph-sync`: passed after CodeGraph repair.
+- Detailed code review: no blocking or important issues found; no code fixes applied during review.
+
+## Skipped gates
+- XCUITest run: skipped per repo policy and implementation plan; test source was updated but not executed locally.
+
 ## Snapshot — Delete All History + success confirmation + UI polish (uncommitted on `dev`)
 
 Branch: `dev` @ `a07f25f` (audit commit). Work in main checkout, no worktree.
