@@ -1,75 +1,56 @@
-# Continuity Ledger
+## Snapshot — Two-tap category detail navigation
 
-## Snapshot - PR #81 merge with dev
+Branch: `codex/two-tap-category-detail`
+Worktree: `/Users/roman/.codex/worktrees/cash-runway-two-tap-category-detail`
+PR: https://github.com/romanr111/cash-runway/pull/83 (draft, base `dev`)
 
-Branch: `codex/csv-import-dedup-category`
-Worktree: `~/.codex/worktrees/cash-runway-csv-dedup-category`
-Target: merge into `dev` via PR #81 squash merge
-Status: merge from `origin/dev` into PR branch resolved locally. Validation passed; commit/push/PR squash merge pending.
+Goal: Overview category rows use a two-tap state machine. First user tap selects
+and arms a row; second tap on the same selected row opens
+`CategoryDetailOverviewView` for the active month and wallet filter.
 
-## Current Goal
+## Current state
 
-Resolve PR #81 conflicts with `dev`, validate the merged branch, push the conflict-resolution commit, then squash merge PR #81 into `dev`.
+- `Sources/CashRunwayUI/DashboardView.swift`
+  - Adds item-driven `CategoryDetailRoute` navigation.
+  - Tracks `categoryDetailArmedCategoryID`.
+  - Keeps donut chart taps selection-only.
+  - Resets arming when category kind, month, wallet, category identity list, donut selection,
+    or Show More/Less context changes.
+- `Tests/CashRunwayUITests/TransactionOverviewUITests.swift`
+  - Existing Overview drilldown test taps Groceries once, asserts detail does not open,
+    then taps again and asserts detail opens with the created note.
 
-## PR #81 Scope
+## Latest update
 
-Prevent duplicated transactions when reimporting the same bank/CSV data after category, rule, mapping, or app-version changes, and protect NULL-fingerprint legacy rows.
+- Merged `origin/dev` into this branch to resolve PR conflicts.
+  - `CONTINUITY.md` was the only manual conflict; auto-merged files:
+    `Sources/CashRunwayCore/CSVSupport.swift`,
+    `Sources/CashRunwayCore/CashRunwayRepository.swift`,
+    `Tests/CashRunwayCoreTests/CSVIdempotencyTests.swift`,
+    `Tests/CashRunwayCoreTests/MigrationIntegrityTests.swift`.
+  - No secrets, generated reporting secrets, project files, lock files, or entitlements were touched.
+- Fixed review issue: Show More/Less now clears the armed category before changing
+  the displayed category context.
+- Recreated this worktree because it was missing locally while the branch still existed.
+- Repaired partial `.codegraph` by removing the generated directory and rerunning bootstrap.
 
-Key behavior:
-- `importFingerprint` no longer hashes resolved category name.
-- Fingerprinted CSV imports dedupe by full timestamp precision.
-- Semantic fallback is scoped to NULL-fingerprint manual/bank_sync legacy rows.
-- Cross-source collapse of fingerprinted import rows is avoided.
+## Validation
 
-Touched PR files:
-- `Sources/CashRunwayCore/CSVSupport.swift`
-- `Sources/CashRunwayCore/CashRunwayRepository.swift`
-- `Tests/CashRunwayCoreTests/CSVIdempotencyTests.swift`
-- `Tests/CashRunwayCoreTests/MigrationIntegrityTests.swift`
+- `git diff --check`: passed.
+- `Scripts/pre-flight.sh`: passed.
+- `just build`: passed on iPhone 17 simulator.
+  - Existing warnings only: duplicate `AppHost/uk.lproj/InfoPlist.strings` project reference,
+    signed SQLCipher binary not stripped, AppIntents metadata skipped.
+- `just graph-bootstrap`: passed after `.codegraph` repair.
+- `just graph-sync`: passed.
+- `just check-unit-parallel`: passed, 58 tests in 5 suites.
 
-## Incoming dev Context
+## Skipped / blocked
 
-Incoming `origin/dev` includes:
-- Bulk delete transactions from PR #75, squash commit `dd941fe`.
-- Delete All History UI/success-confirmation polish.
-- Architecture audit document at `docs/ARCHITECTURE_AUDIT.md`.
-
-Relevant incoming files:
-- `AppHost/Localizable.xcstrings`
-- `PLAN.md`
-- `Sources/CashRunwayCore/DeletePeriod.swift`
-- `Sources/CashRunwayCore/L10n.swift`
-- `Sources/CashRunwayUI/AccessibilityIdentifiers.swift`
-- `Sources/CashRunwayUI/DeleteTransactionsView.swift`
-- `Tests/CashRunwayCoreTests/BulkDeleteTransactionsTests.swift`
-- `docs/ARCHITECTURE_AUDIT.md`
-
-## Merge Notes
-
-- `CONTINUITY.md` was the only conflicted file during `git merge --no-commit --no-ff origin/dev`.
-- `Sources/CashRunwayCore/CashRunwayRepository.swift` auto-merged with incoming `.allHistory` handling in `deletePeriodPredicate`.
-- No secrets, generated reporting secrets, project files, lock files, or entitlements were in the conflicted set.
-
-## Validation Receipts
-
-Before this merge, PR #81 had local green targeted gates:
-- `swift build --target CashRunwayCore`: passed
-- `just test-filter CSVIdempotencyTests`: passed
-- `just test-filter MigrationIntegrityTests`: passed
-
-Incoming `dev` receipts recorded by prior sessions:
-- `just test-filter BulkDeleteTransactionsTests`: passed
-- `just build`: passed
-- `swiftlint --strict` on changed files: passed
-
-Validation after this conflict resolution:
-- `just test-filter CSVIdempotencyTests`: passed, 32 tests
-- `just test-filter MigrationIntegrityTests`: passed, 2 tests
-- `just test-filter BulkDeleteTransactionsTests`: passed
-- `git diff --check`: passed
-- `just build`: passed, BUILD SUCCEEDED
-
-## Skipped Gates
-
-- XCUITest/E2E not run; repo instructions disallow unless explicitly requested.
+- XCUITest not run locally per repo policy.
 - Physical-device rehearsal not run; this is not a release/SideStore task.
+
+## Git safety notes
+
+- `dev` worktree was dirty but was not modified by this merge.
+- Only this isolated feature worktree was edited.
