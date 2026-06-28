@@ -441,7 +441,7 @@ struct DeleteTransactionsView: View {
 
     private func periodIcon(_ period: DeletePeriod) -> String {
         switch period {
-        case .allHistory: "skull.fill"
+        case .allHistory: "trash.fill"
         case .today: "sun.max.fill"
         case .thisMonth: "calendar"
         case .thisYear: "calendar.badge.clock"
