@@ -1,29 +1,37 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleDevelopmentRegion</key>
-    <string>en</string>
-    <key>CFBundleDisplayName</key>
-    <string>Cash Runway</string>
-    <key>CFBundleExecutable</key>
-    <string>$(EXECUTABLE_NAME)</string>
-    <key>CFBundleIdentifier</key>
-    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-    <key>CFBundleInfoDictionaryVersion</key>
-    <string>6.0</string>
-    <key>CFBundleName</key>
-    <string>$(PRODUCT_NAME)</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-    <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
-    <key>CFBundleVersion</key>
-    <string>1</string>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<string>dev.roman.cash-runway.maintenance</string>
 	</array>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>Cash Runway</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.1.3</string>
+	<key>CFBundleVersion</key>
+	<string>266</string>
+	<key>CashRunwayReportEndpointURL</key>
+	<string>$(CASH_RUNWAY_REPORT_ENDPOINT_URL)</string>
+	<key>CashRunwayReportEnvironment</key>
+	<string>$(CASH_RUNWAY_REPORT_ENVIRONMENT)</string>
+	<key>CashRunwayReportingEnabled</key>
+	<string>$(CASH_RUNWAY_REPORTING_ENABLED)</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Cash Runway uses photo access only when you choose to attach screenshots to a bug report.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -37,13 +45,5 @@
 	</array>
 	<key>UILaunchScreen</key>
 	<dict/>
-	<key>CashRunwayReportEndpointURL</key>
-	<string>$(CASH_RUNWAY_REPORT_ENDPOINT_URL)</string>
-	<key>CashRunwayReportingEnabled</key>
-	<string>$(CASH_RUNWAY_REPORTING_ENABLED)</string>
-	<key>CashRunwayReportEnvironment</key>
-	<string>$(CASH_RUNWAY_REPORT_ENVIRONMENT)</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Cash Runway uses photo access only when you choose to attach screenshots to a bug report.</string>
 </dict>
 </plist>
