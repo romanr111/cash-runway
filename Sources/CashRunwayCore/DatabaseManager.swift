@@ -809,8 +809,8 @@ public final class DatabaseManager: @unchecked Sendable {
                             id, provider, integration_id, bank_account_id, provider_account_id,
                             provider_statement_item_id, statement_time, amount_minor_signed,
                             operation_amount_minor_signed, currency_code, mcc, original_mcc,
-                            description, comment, counter_name, counter_iban, receipt_id, hold,
-                            raw_json, datetime(created_at, '+30 days'), cash_runway_transaction_id, import_status, created_at, updated_at
+                            description, comment, counter_name, NULL, NULL, hold,
+                            NULL, datetime(created_at, '+30 days'), cash_runway_transaction_id, import_status, created_at, updated_at
                         FROM bank_transaction_imports_old
                         """)
                     try db.execute(sql: "DROP TABLE bank_transaction_imports_old")

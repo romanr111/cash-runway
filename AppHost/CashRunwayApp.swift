@@ -45,6 +45,7 @@ struct CashRunwayApp: App {
 
 private final class BackgroundMaintenanceCoordinator {
     private let identifier = "dev.roman.cash-runway.maintenance"
+    private let logger = Logger(subsystem: "dev.roman.cashrunway", category: "background-maintenance")
     private var hasRegistered = false
 
     func register() {
@@ -73,12 +74,18 @@ private final class BackgroundMaintenanceCoordinator {
         schedule()
         let taskBox = BackgroundProcessingTaskBox(task)
         let maintenanceTask = Task(priority: .background) {
+            let bgLogger = Logger(subsystem: "dev.roman.cashrunway", category: "background-maintenance")
+            guard ProtectedDataMonitor.shared.isAvailable else {
+                bgLogger.debug("Skipping background maintenance: protected data unavailable.")
+                return true
+            }
             do {
                 let repository = try CashRunwayRepository()
                 try repository.runMaintenance()
                 try repository.refreshRecurringInstances()
                 return true
             } catch {
+                bgLogger.error("Background maintenance failed: \(error.localizedDescription, privacy: .public)")
                 return false
             }
         }
@@ -193,13 +200,13 @@ private enum DebugDataRecoveryAttempt {
         let attemptDirectory = recoveryDirectory.appendingPathComponent("RestoreAttempt-\(stamp)", isDirectory: true)
         try fileManager.createDirectory(at: attemptDirectory, withIntermediateDirectories: true)
 
+        let protection = FileProtectionService()
         for suffix in ["", "-wal", "-shm"] {
             let activeURL = URL(fileURLWithPath: databaseURL.path + suffix)
             guard fileManager.fileExists(atPath: activeURL.path) else { continue }
-            try fileManager.copyItem(
-                at: activeURL,
-                to: attemptDirectory.appendingPathComponent(activeURL.lastPathComponent)
-            )
+            let attemptURL = attemptDirectory.appendingPathComponent(activeURL.lastPathComponent)
+            try fileManager.copyItem(at: activeURL, to: attemptURL)
+            protection.protect(attemptURL)
             try fileManager.removeItem(at: activeURL)
         }
 
@@ -210,6 +217,7 @@ private enum DebugDataRecoveryAttempt {
             guard fileManager.fileExists(atPath: backupURL.path) else { continue }
             let destinationURL = URL(fileURLWithPath: databaseURL.path + destinationSuffix)
             try fileManager.copyItem(at: backupURL, to: destinationURL)
+            protection.protect(destinationURL)
         }
 
         let restoredProbe = try probe(databaseURL, key: key)

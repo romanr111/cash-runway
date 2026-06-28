@@ -58,6 +58,80 @@ struct RawPayloadPurgeTests {
         #expect(!rawJSON.contains("100000"))
     }
 
+    @Test func migrationRedactsExistingFullRawJSONImmediately() throws {
+        let key = "aaaabbbbccccddddeeeeffffgggghhhhiiiijjjjkkkkllllmmmmnnnnoooopppp"
+        let location = TestSupport.makeLocation()
+        let keychain = TestKeychainStore(items: ["database-key": Data(key.utf8)])
+
+        let partialMigrator = DatabaseManager.makeMigrator(upTo: "v5_custom_wallet_categories")
+        let fixtureManager = try DatabaseManager(locationProvider: location, keychain: keychain, migrator: partialMigrator)
+        let fixtureRepo = CashRunwayRepository(databaseManager: fixtureManager)
+        try fixtureRepo.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: fixtureRepo)
+        let wallet = try #require(try fixtureRepo.wallets().first)
+
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let integrationID = UUID()
+        let accountID = UUID()
+        let importID = UUID()
+        let fullRawJSON = """
+        {"id":"stmt-1","time":\(Int(now.timeIntervalSince1970)),"description":"Coffee","mcc":5812,
+        "amount":-1250,"currencyCode":980,"receiptId":"receipt-1","comment":"office",
+        "counterIban":"UA123456789","counterName":"Coffee Shop","balance":100000}
+        """
+
+        try fixtureRepo.databaseManager.dbQueue.write { db in
+            try db.execute(
+                sql: """
+                INSERT INTO bank_integrations (
+                    id, provider, display_name, status, sync_start_at, token_keychain_account, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                arguments: [integrationID.uuidString, "monobank", "Mono", "active", now, "mono-token", now, now]
+            )
+            try db.execute(
+                sql: """
+                INSERT INTO bank_accounts (
+                    id, integration_id, provider, provider_account_id, wallet_id, display_name, account_type,
+                    currency_code, is_enabled, sync_start_at, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                arguments: [accountID.uuidString, integrationID.uuidString, "monobank", "mono-account-1",
+                            wallet.id.uuidString, "Black Card", "black", 980, true, now, now, now]
+            )
+            try db.execute(
+                sql: """
+                INSERT INTO bank_transaction_imports (
+                    id, provider, integration_id, bank_account_id, provider_account_id,
+                    provider_statement_item_id, statement_time, amount_minor_signed,
+                    operation_amount_minor_signed, currency_code, mcc, original_mcc,
+                    description, comment, counter_name, counter_iban, receipt_id, hold,
+                    raw_json, cash_runway_transaction_id, import_status, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                arguments: [
+                    importID.uuidString, "monobank", integrationID.uuidString, accountID.uuidString,
+                    "mono-account-1", "stmt-1", Int(now.timeIntervalSince1970), -1_250,
+                    nil, 980, 5812, 5812, "Coffee", "office", "Coffee Shop", "UA123456789",
+                    "receipt-1", false, fullRawJSON, nil, "imported", now, now
+                ]
+            )
+        }
+        try fixtureManager.checkpointWal()
+
+        let fullManager = try DatabaseManager(locationProvider: location, keychain: keychain)
+        let repo = CashRunwayRepository(databaseManager: fullManager)
+        try repo.seedIfNeeded()
+
+        let row = try #require(try repo.databaseManager.dbQueue.read { db in
+            try Row.fetchOne(db, sql: "SELECT raw_json, raw_json_expires_at, counter_iban, receipt_id FROM bank_transaction_imports WHERE id = ?", arguments: [importID.uuidString])
+        })
+        #expect((row["raw_json"] as String?) == nil)
+        #expect((row["counter_iban"] as String?) == nil)
+        #expect((row["receipt_id"] as String?) == nil)
+        #expect((row["raw_json_expires_at"] as Date?) != nil)
+    }
+
     @Test func rawJSONExpiresAtIsSetOnInsert() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
