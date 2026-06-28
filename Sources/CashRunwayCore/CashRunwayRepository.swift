@@ -783,6 +783,7 @@ private func resolvedCategoryID(_ db: Database, kind: CategoryKind, named name: 
 
 public final class CashRunwayRepository: @unchecked Sendable {
     public let databaseManager: DatabaseManager
+    private var walletsHasCategoryIDColumn: Bool?
 
     public init(databaseManager: DatabaseManager) {
         self.databaseManager = databaseManager
@@ -790,6 +791,13 @@ public final class CashRunwayRepository: @unchecked Sendable {
 
     public convenience init(allowsDestructiveRecovery: Bool = false) throws {
         try self.init(databaseManager: DatabaseManager(allowsDestructiveRecovery: allowsDestructiveRecovery))
+    }
+
+    private func walletTableHasCategoryID(_ db: Database) throws -> Bool {
+        if let cached = walletsHasCategoryIDColumn { return cached }
+        let has = try Self.tableHasColumn(db, table: "wallets", column: "category_id")
+        walletsHasCategoryIDColumn = has
+        return has
     }
 }
 
@@ -828,6 +836,29 @@ extension CashRunwayRepository {
     public func wallets() throws -> [Wallet] {
         try databaseManager.dbQueue.read { db in
             try Row.fetchAll(db, sql: "SELECT * FROM wallets WHERE is_archived = 0 ORDER BY sort_order, name").map(Self.wallet)
+        }
+    }
+
+    public func walletCategories() throws -> [WalletCategory] {
+        try databaseManager.dbQueue.read { db in
+            try Row.fetchAll(
+                db,
+                sql: """
+                SELECT * FROM wallet_categories
+                ORDER BY
+                    is_system DESC,
+                    CASE
+                        WHEN is_system = 1 THEN
+                            CASE kind
+                                WHEN 'cash' THEN 0
+                                WHEN 'card' THEN 1
+                                WHEN 'account' THEN 2
+                                ELSE 3
+                            END
+                        ELSE LOWER(name)
+                    END
+                """
+            ).map(Self.walletCategory)
         }
     }
 
@@ -1258,7 +1289,7 @@ extension CashRunwayRepository {
         try databaseManager.dbQueue.read { db in
             let metadata = CashRunwayBackupMetadata(
                 format: "cash-runway-backup",
-                version: 1,
+                version: 2,
                 createdAt: Date(),
                 appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0",
                 currency: "UAH"
@@ -1267,6 +1298,7 @@ extension CashRunwayRepository {
             return CashRunwayBackup(
                 metadata: metadata,
                 wallets: try Row.fetchAll(db, sql: "SELECT * FROM wallets ORDER BY sort_order, name").map(Self.backupWallet),
+                walletCategories: try Row.fetchAll(db, sql: "SELECT * FROM wallet_categories ORDER BY name").map(Self.backupWalletCategory),
                 categories: try Row.fetchAll(db, sql: "SELECT * FROM categories ORDER BY kind, sort_order, name").map(Self.backupCategory),
                 labels: try Row.fetchAll(db, sql: "SELECT * FROM labels ORDER BY name").map(Self.backupLabel),
                 transactions: try Row.fetchAll(db, sql: "SELECT * FROM transactions ORDER BY occurred_at, created_at, id").map(Self.backupTransaction),
@@ -1308,29 +1340,90 @@ extension CashRunwayRepository {
         }
     }
 
-    public func saveWallet(_ wallet: Wallet) throws {
+    public func saveWalletCategory(_ category: WalletCategory) throws {
+        let trimmedName = category.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else {
+            throw CashRunwayError.validation(L10n.string("Category name cannot be empty."))
+        }
+
         try databaseManager.dbQueue.write { db in
+            let existing = try Row.fetchAll(db, sql: "SELECT * FROM wallet_categories").map(Self.walletCategory)
+            let normalizedNew = trimmedName.lowercased()
+            let hasDuplicate = existing.contains {
+                $0.id != category.id &&
+                $0.displayName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == normalizedNew
+            }
+            if hasDuplicate {
+                throw CashRunwayError.validation(L10n.string("A category with this name already exists."))
+            }
+
             try db.execute(
                 sql: """
-                INSERT INTO wallets (id, name, kind, color_hex, icon_name, starting_balance_minor, current_balance_minor, is_archived, sort_order, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO wallet_categories (id, name, kind, is_system, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     name = excluded.name,
                     kind = excluded.kind,
-                    color_hex = excluded.color_hex,
-                    icon_name = excluded.icon_name,
-                    starting_balance_minor = excluded.starting_balance_minor,
-                    current_balance_minor = excluded.current_balance_minor,
-                    is_archived = excluded.is_archived,
-                    sort_order = excluded.sort_order,
+                    is_system = excluded.is_system,
                     updated_at = excluded.updated_at
                 """,
                 arguments: [
-                    wallet.id.uuidString, wallet.name, wallet.kind.rawValue, wallet.colorHex, wallet.iconName,
-                    wallet.startingBalanceMinor, wallet.currentBalanceMinor, wallet.isArchived, wallet.sortOrder,
-                    wallet.createdAt, wallet.updatedAt,
+                    category.id.uuidString, trimmedName, category.kind.rawValue,
+                    category.isSystem, category.createdAt, category.updatedAt,
                 ]
             )
+        }
+    }
+
+    public func saveWallet(_ wallet: Wallet) throws {
+        try databaseManager.dbQueue.write { db in
+            if try walletTableHasCategoryID(db) {
+                try db.execute(
+                    sql: """
+                    INSERT INTO wallets (id, name, kind, category_id, color_hex, icon_name, starting_balance_minor, current_balance_minor, is_archived, sort_order, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(id) DO UPDATE SET
+                        name = excluded.name,
+                        kind = excluded.kind,
+                        category_id = excluded.category_id,
+                        color_hex = excluded.color_hex,
+                        icon_name = excluded.icon_name,
+                        starting_balance_minor = excluded.starting_balance_minor,
+                        current_balance_minor = excluded.current_balance_minor,
+                        is_archived = excluded.is_archived,
+                        sort_order = excluded.sort_order,
+                        updated_at = excluded.updated_at
+                    """,
+                    arguments: [
+                        wallet.id.uuidString, wallet.name, wallet.kind.rawValue, wallet.categoryID.uuidString,
+                        wallet.colorHex, wallet.iconName,
+                        wallet.startingBalanceMinor, wallet.currentBalanceMinor, wallet.isArchived, wallet.sortOrder,
+                        wallet.createdAt, wallet.updatedAt,
+                    ]
+                )
+            } else {
+                try db.execute(
+                    sql: """
+                    INSERT INTO wallets (id, name, kind, color_hex, icon_name, starting_balance_minor, current_balance_minor, is_archived, sort_order, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(id) DO UPDATE SET
+                        name = excluded.name,
+                        kind = excluded.kind,
+                        color_hex = excluded.color_hex,
+                        icon_name = excluded.icon_name,
+                        starting_balance_minor = excluded.starting_balance_minor,
+                        current_balance_minor = excluded.current_balance_minor,
+                        is_archived = excluded.is_archived,
+                        sort_order = excluded.sort_order,
+                        updated_at = excluded.updated_at
+                    """,
+                    arguments: [
+                        wallet.id.uuidString, wallet.name, wallet.kind.rawValue, wallet.colorHex, wallet.iconName,
+                        wallet.startingBalanceMinor, wallet.currentBalanceMinor, wallet.isArchived, wallet.sortOrder,
+                        wallet.createdAt, wallet.updatedAt,
+                    ]
+                )
+            }
         }
     }
 
@@ -2200,10 +2293,227 @@ extension CashRunwayRepository {
 
         for item in transactionsToDelete {
             try applyContribution(db, old: contribution(for: item), new: nil)
-            try db.execute(sql: "DELETE FROM transaction_labels WHERE transaction_id = ?", arguments: [item.id.uuidString])
-            try db.execute(sql: "DELETE FROM transaction_search WHERE transaction_id = ?", arguments: [item.id.uuidString])
-            try db.execute(sql: "DELETE FROM transactions WHERE id = ?", arguments: [item.id.uuidString])
         }
+        let idStrings = transactionsToDelete.map { $0.id.uuidString }
+        try Self.cleanupTransactionReferences(db: db, idStrings: idStrings)
+    }
+
+    /// Counts transactions that would be removed for `period`, split by financial
+    /// impact. `expenseMinor` / `incomeMinor` are absolute magnitudes so they render
+    /// correctly regardless of the stored sign. Used to preview impact before a bulk
+    /// delete. Transfers are counted in `count` but excluded from the money split
+    /// (moving money between own wallets is not money gained or lost).
+    ///
+    /// Uses SQL aggregates rather than loading every matching row, so it stays fast
+    /// for large year-scoped histories.
+    public func transactionDeletionSummary(for period: DeletePeriod, now: Date = Date()) throws -> TransactionDeletionSummary {
+        try databaseManager.dbQueue.read { db in
+            let (predicate, arguments) = Self.deletePeriodPredicate(period, now: now)
+            let row = try Row.fetchOne(
+                db,
+                sql: """
+                SELECT
+                    COUNT(*) AS count,
+                    COALESCE(SUM(CASE WHEN type != 'transfer_in' THEN 1 ELSE 0 END), 0) AS display_count,
+                    COALESCE(SUM(CASE WHEN type = 'expense' THEN ABS(amount_minor) ELSE 0 END), 0) AS expense_minor,
+                    COALESCE(SUM(CASE WHEN type = 'income' THEN ABS(amount_minor) ELSE 0 END), 0) AS income_minor
+                FROM transactions
+                WHERE \(predicate)
+                """,
+                arguments: arguments
+            )!
+            return TransactionDeletionSummary(
+                count: row["count"],
+                displayCount: row["display_count"],
+                expenseMinor: row["expense_minor"],
+                incomeMinor: row["income_minor"]
+            )
+        }
+    }
+
+    /// Creates an immutable plan of every transaction row that would be deleted for
+    /// `period` as of `now`. The plan freezes the calendar scope and the exact row IDs
+    /// so that later execution cannot drift to a different day/month/year or a
+    /// different set of transactions.
+    public func transactionDeletionPlan(for period: DeletePeriod, now: Date = Date()) throws -> TransactionDeletionPlan {
+        try databaseManager.dbQueue.read { db in
+            let impact = try Self.deletionImpactRows(db, period: period, now: now)
+            return TransactionDeletionPlan(
+                period: period,
+                referenceDayKey: DateKeys.dayKey(for: now),
+                referenceMonthKey: DateKeys.monthKey(for: now),
+                referenceYear: DateKeys.yearKey(for: now),
+                items: impact.items,
+                summary: impact.summary
+            )
+        }
+    }
+
+    /// Executes a frozen deletion plan. Recomputes the matching rows from the plan's
+    /// reference date keys; if the set of items has changed since preview — including
+    /// same-ID mutations detected via `updatedAt` fingerprints — the operation
+    /// aborts with `TransactionDeletionError.planStale` so the user must review again.
+    /// Otherwise deletes exactly the planned IDs, maintaining aggregates, cascading to
+    /// `transaction_labels` / `transaction_search`, and nulling dangling references in
+    /// `bank_transaction_imports` / `recurring_instances`. Returns the number of deleted rows.
+    @discardableResult
+    public func deleteTransactions(_ plan: TransactionDeletionPlan) throws -> Int {
+        guard !plan.items.isEmpty else { return 0 }
+
+        return try databaseManager.dbQueue.write { db in
+            // Recompute the current matching set from the frozen reference keys.
+            let (predicate, arguments) = Self.deletePeriodPredicate(
+                plan.period,
+                dayKey: plan.referenceDayKey,
+                monthKey: plan.referenceMonthKey,
+                year: plan.referenceYear
+            )
+            let currentItems = try Set(
+                Row.fetchAll(db, sql: "SELECT id, updated_at FROM transactions WHERE \(predicate)", arguments: arguments)
+                    .compactMap { row -> TransactionDeletionItem? in
+                        guard let id = UUID(uuidString: row["id"]) else { return nil }
+                        let updatedAt: String = row["updated_at"]
+                        return TransactionDeletionItem(id: id, updatedAt: updatedAt)
+                    }
+            )
+            let plannedItems = Set(plan.items)
+            guard currentItems == plannedItems else {
+                throw TransactionDeletionError.planStale
+            }
+
+            // Apply aggregate reversals before deleting so dashboard/category totals
+            // remain consistent even when the row disappears. The prior guard guarantees
+            // every planned item still exists unchanged.
+            for item in plan.items {
+                guard let row = try Row.fetchOne(db, sql: "SELECT * FROM transactions WHERE id = ?", arguments: [item.id.uuidString]) else {
+                    continue
+                }
+                let transaction = try Self.transaction(row)
+                try applyContribution(db, old: contribution(for: transaction), new: nil)
+            }
+
+            let idStrings = plan.transactionIDs.map { $0.uuidString }
+            try Self.cleanupTransactionReferences(db: db, idStrings: idStrings)
+
+            return plan.items.count
+        }
+    }
+
+    /// Deletes labels/search rows, nulls dangling FKs in bank_transaction_imports
+    /// and recurring_instances, then deletes the transactions themselves.
+    /// Chunked to stay under SQLite's 999-variable limit.
+    private static func cleanupTransactionReferences(db: Database, idStrings: [String]) throws {
+        let chunkSize = 900
+        for chunk in idStrings.chunked(into: chunkSize) {
+            let placeholders = Array(repeating: "?", count: chunk.count).joined(separator: ",")
+            let args: StatementArguments = StatementArguments(chunk)
+            try db.execute(
+                sql: "DELETE FROM transaction_labels WHERE transaction_id IN (\(placeholders))",
+                arguments: args
+            )
+            try db.execute(
+                sql: "DELETE FROM transaction_search WHERE transaction_id IN (\(placeholders))",
+                arguments: args
+            )
+            try db.execute(
+                sql: "UPDATE bank_transaction_imports SET cash_runway_transaction_id = NULL WHERE cash_runway_transaction_id IN (\(placeholders))",
+                arguments: args
+            )
+            try db.execute(
+                sql: "UPDATE recurring_instances SET linked_transaction_id = NULL WHERE linked_transaction_id IN (\(placeholders))",
+                arguments: args
+            )
+            try db.execute(
+                sql: "DELETE FROM transactions WHERE id IN (\(placeholders))",
+                arguments: args
+            )
+        }
+    }
+
+    private struct DeletionImpact: Sendable {
+        let items: [TransactionDeletionItem]
+        let summary: TransactionDeletionSummary
+    }
+
+    private static func deletionImpactRows(_ db: Database, period: DeletePeriod, now: Date) throws -> DeletionImpact {
+        let (sql, arguments) = Self.deletePeriodPredicate(period, now: now)
+        let rows = try Row.fetchAll(
+            db,
+            sql: """
+            SELECT id, type, amount_minor, updated_at
+            FROM transactions
+            WHERE \(sql)
+            ORDER BY id
+            """,
+            arguments: arguments
+        )
+        var expenseMinor: Int64 = 0
+        var incomeMinor: Int64 = 0
+        var displayCount = 0
+        var items: [TransactionDeletionItem] = []
+        items.reserveCapacity(rows.count)
+        for row in rows {
+            guard let id = UUID(uuidString: row["id"]) else { continue }
+            let updatedAt: String = row["updated_at"]
+            items.append(TransactionDeletionItem(id: id, updatedAt: updatedAt))
+            let type: String = row["type"]
+            let amount: Int64 = row["amount_minor"]
+            switch type {
+            case "expense":
+                expenseMinor += abs(amount)
+                displayCount += 1
+            case "income":
+                incomeMinor += abs(amount)
+                displayCount += 1
+            case "transfer_in":
+                break
+            default:
+                displayCount += 1
+            }
+        }
+        return DeletionImpact(
+            items: items,
+            summary: TransactionDeletionSummary(
+                count: items.count,
+                displayCount: displayCount,
+                expenseMinor: expenseMinor,
+                incomeMinor: incomeMinor
+            )
+        )
+    }
+
+    private static func deletePeriodPredicate(_ period: DeletePeriod, now: Date) -> (sql: String, arguments: StatementArguments) {
+        deletePeriodPredicate(
+            period,
+            dayKey: DateKeys.dayKey(for: now),
+            monthKey: DateKeys.monthKey(for: now),
+            year: DateKeys.yearKey(for: now)
+        )
+    }
+
+    private static func deletePeriodPredicate(
+        _ period: DeletePeriod,
+        dayKey: Int,
+        monthKey: Int,
+        year: Int
+    ) -> (sql: String, arguments: StatementArguments) {
+        let periodSQL: String
+        let periodArgs: StatementArguments
+        switch period {
+        case .allHistory:
+            periodSQL = "1 = 1"
+            periodArgs = StatementArguments()
+        case .today:
+            periodSQL = "local_day_key = ?"
+            periodArgs = StatementArguments([dayKey])
+        case .thisMonth:
+            periodSQL = "local_month_key = ?"
+            periodArgs = StatementArguments([monthKey])
+        case .thisYear:
+            periodSQL = "local_month_key >= ? AND local_month_key < ?"
+            periodArgs = StatementArguments([year * 100, (year + 1) * 100])
+        }
+        return ("is_deleted = 0 AND \(periodSQL)", periodArgs)
     }
 
     public func mergeCategory(oldCategoryID: UUID, into newCategoryID: UUID) throws {
@@ -2359,12 +2669,16 @@ extension CashRunwayRepository {
             )
 
             var seenFingerprints = try existingImportFingerprints(db)
+            let existingSemanticKeys = try existingImportSemanticKeys(db)
             var insertedRows = 0
             var duplicateRows = 0
             var affectedMonths = Set<Int>()
 
             for row in preparedRows {
-                if seenFingerprints.contains(row.fingerprint) || row.legacyFingerprint.map { seenFingerprints.contains($0) } ?? false {
+                let semanticKey = importSemanticKey(for: row.draft)
+                if seenFingerprints.contains(row.fingerprint)
+                    || row.legacyFingerprint.map({ seenFingerprints.contains($0) }) ?? false
+                    || existingSemanticKeys.contains(semanticKey) {
                     duplicateRows += 1
                     continue
                 }
@@ -2447,6 +2761,62 @@ extension CashRunwayRepository {
     private func existingImportFingerprints(_ db: Database) throws -> Set<String> {
         let rows = try String.fetchAll(db, sql: "SELECT import_fingerprint FROM transactions WHERE import_fingerprint IS NOT NULL")
         return Set(rows)
+    }
+
+    private func existingImportSemanticKeys(_ db: Database) throws -> Set<String> {
+        let rows = try Row.fetchAll(
+            db,
+            sql: """
+            SELECT wallet_id, type, local_day_key, amount_minor, merchant, note
+            FROM transactions
+            WHERE is_deleted = 0
+              AND (
+                import_fingerprint IS NULL
+                OR source IN ('manual', 'bank_sync')
+              )
+            """
+        )
+        return Set(rows.map { row -> String in
+            Self.importSemanticKey(
+                walletID: row["wallet_id"],
+                kind: row["type"],
+                dayKey: row["local_day_key"],
+                amountMinor: row["amount_minor"],
+                merchant: row["merchant"],
+                note: row["note"]
+            )
+        })
+    }
+
+    private static func importSemanticKey(
+        walletID: String,
+        kind: String,
+        dayKey: Int,
+        amountMinor: Int64,
+        merchant: String?,
+        note: String?
+    ) -> String {
+        let normalizedMerchant = (merchant ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let normalizedNote = (note ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return [
+            walletID,
+            kind,
+            String(dayKey),
+            String(amountMinor),
+            normalizedMerchant,
+            normalizedNote,
+        ].joined(separator: "|")
+    }
+
+    private func importSemanticKey(for draft: TransactionDraft) -> String {
+        Self.importSemanticKey(
+            walletID: draft.walletID.uuidString,
+            kind: draft.kind.rawValue,
+            dayKey: DateKeys.dayKey(for: draft.occurredAt),
+            amountMinor: draft.amountMinor,
+            merchant: draft.merchant,
+            note: draft.note
+        )
     }
 
     private func resolveOrCreateCategory(
@@ -3332,6 +3702,7 @@ extension CashRunwayRepository {
         try db.execute(sql: "DELETE FROM labels")
         try db.execute(sql: "DELETE FROM categories")
         try db.execute(sql: "DELETE FROM wallets")
+        try db.execute(sql: "DELETE FROM wallet_categories")
     }
 
     // swiftlint:disable:next function_body_length
@@ -3348,14 +3719,42 @@ extension CashRunwayRepository {
     }
 
     private func insertBackupSourceData(_ backup: CashRunwayBackup, into db: Database) throws {
-        for wallet in backup.wallets {
+        let walletCategories = backup.walletCategories.isEmpty
+            ? WalletCategory.allBuiltIn.map {
+                BackupWalletCategory(
+                    id: $0.id,
+                    name: $0.name,
+                    kind: $0.kind,
+                    isSystem: $0.isSystem,
+                    createdAt: $0.createdAt,
+                    updatedAt: $0.updatedAt
+                )
+            }
+            : backup.walletCategories
+
+        for category in walletCategories {
             try db.execute(
                 sql: """
-                INSERT INTO wallets (id, name, kind, color_hex, icon_name, starting_balance_minor, current_balance_minor, is_archived, sort_order, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO wallet_categories (id, name, kind, is_system, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 arguments: [
-                    wallet.id.uuidString, wallet.name, wallet.kind.rawValue, wallet.colorHex, wallet.iconName,
+                    category.id.uuidString, category.name, category.kind.rawValue,
+                    category.isSystem, category.createdAt, category.updatedAt,
+                ]
+            )
+        }
+
+        for wallet in backup.wallets {
+            let categoryID = wallet.categoryID ?? WalletCategory.builtIn(byKind: wallet.kind).id
+            try db.execute(
+                sql: """
+                INSERT INTO wallets (id, name, kind, category_id, color_hex, icon_name, starting_balance_minor, current_balance_minor, is_archived, sort_order, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                arguments: [
+                    wallet.id.uuidString, wallet.name, wallet.kind.rawValue, categoryID.uuidString,
+                    wallet.colorHex, wallet.iconName,
                     wallet.startingBalanceMinor, wallet.startingBalanceMinor, wallet.isArchived, wallet.sortOrder,
                     wallet.createdAt, wallet.updatedAt,
                 ]
@@ -3464,10 +3863,14 @@ extension CashRunwayRepository {
     }
 
     private static func wallet(_ row: Row) throws -> Wallet {
-        Wallet(
+        let kind: WalletKind = WalletKind(rawValue: row["kind"]) ?? .other
+        let categoryID = (row["category_id"] as String?).flatMap(UUID.init(uuidString:))
+            ?? WalletCategory.builtIn(byKind: kind).id
+        return Wallet(
             id: UUID(uuidString: row["id"])!,
             name: row["name"],
-            kind: WalletKind(rawValue: row["kind"]) ?? .other,
+            kind: kind,
+            categoryID: categoryID,
             colorHex: row["color_hex"],
             iconName: row["icon_name"],
             startingBalanceMinor: row["starting_balance_minor"],
@@ -3479,17 +3882,42 @@ extension CashRunwayRepository {
         )
     }
 
-    private static func backupWallet(_ row: Row) throws -> BackupWallet {
-        BackupWallet(
+    private static func walletCategory(_ row: Row) throws -> WalletCategory {
+        WalletCategory(
             id: UUID(uuidString: row["id"])!,
             name: row["name"],
             kind: WalletKind(rawValue: row["kind"]) ?? .other,
+            isSystem: row["is_system"],
+            createdAt: row["created_at"],
+            updatedAt: row["updated_at"]
+        )
+    }
+
+    private static func backupWallet(_ row: Row) throws -> BackupWallet {
+        let kind: WalletKind = WalletKind(rawValue: row["kind"]) ?? .other
+        let categoryID = (row["category_id"] as String?).flatMap(UUID.init(uuidString:))
+        return BackupWallet(
+            id: UUID(uuidString: row["id"])!,
+            name: row["name"],
+            kind: kind,
+            categoryID: categoryID,
             colorHex: row["color_hex"],
             iconName: row["icon_name"],
             startingBalanceMinor: row["starting_balance_minor"],
             currentBalanceMinor: row["current_balance_minor"],
             isArchived: row["is_archived"],
             sortOrder: row["sort_order"],
+            createdAt: row["created_at"],
+            updatedAt: row["updated_at"]
+        )
+    }
+
+    private static func backupWalletCategory(_ row: Row) throws -> BackupWalletCategory {
+        BackupWalletCategory(
+            id: UUID(uuidString: row["id"])!,
+            name: row["name"],
+            kind: WalletKind(rawValue: row["kind"]) ?? .other,
+            isSystem: row["is_system"],
             createdAt: row["created_at"],
             updatedAt: row["updated_at"]
         )
@@ -3593,6 +4021,11 @@ extension CashRunwayRepository {
             createdAt: row["created_at"],
             updatedAt: row["updated_at"]
         )
+    }
+
+    private static func tableHasColumn(_ db: Database, table: String, column: String) throws -> Bool {
+        let rows = try Row.fetchAll(db, sql: "PRAGMA table_info(\(table))")
+        return rows.contains { ($0["name"] as String?) == column }
     }
 
     private static func bankTransactionImport(_ row: Row) throws -> BankTransactionImport {

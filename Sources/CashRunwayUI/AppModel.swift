@@ -21,6 +21,7 @@ public final class CashRunwayAppModel {
     // public var lockStore: AppLockStore
 
     public var wallets: [Wallet] = []
+    public var walletCategories: [WalletCategory] = []
     public var expenseCategories: [CashRunwayCategory] = []
     public var incomeCategories: [CashRunwayCategory] = []
     public var labels: [CashRunwayLabel] = []
@@ -289,6 +290,7 @@ public final class CashRunwayAppModel {
                   timelineReloadState.canApply(reloadID: reloadID) else { return }
 
             budgets = mutable.budgets
+            walletCategories = mutable.walletCategories
             transactions = mutable.transactions
             dashboardSnapshot = mutable.dashboardSnapshot
             timelineSnapshot = mutable.timelineSnapshot
@@ -398,6 +400,67 @@ public final class CashRunwayAppModel {
         }
     }
 
+    /// Loads a deletion summary off the main actor so the sheet opening stays
+    /// responsive even when loading a large year-scoped count.
+    public func transactionDeletionSummary(for period: DeletePeriod) async -> TransactionDeletionSummary {
+        let repo = repository
+        do {
+            return try await Task.detached(priority: .userInitiated) {
+                try repo.transactionDeletionSummary(for: period)
+            }.value
+        } catch {
+            errorMessage = error.localizedDescription
+            return TransactionDeletionSummary(count: 0, displayCount: 0)
+        }
+    }
+
+    /// Builds a frozen deletion plan off the main actor so the period-selection UI
+    /// stays responsive even when previewing a large year-scoped set.
+    public func transactionDeletionPlan(for period: DeletePeriod) async -> TransactionDeletionPlan? {
+        let repo = repository
+        do {
+            let task = Task.detached(priority: .userInitiated) {
+                try repo.transactionDeletionPlan(for: period)
+            }
+            let plan = try await withTaskCancellationHandler {
+                try await task.value
+            } onCancel: {
+                task.cancel()
+            }
+            return plan
+        } catch is CancellationError {
+            return nil
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    /// Bulk-deletes transactions using a frozen `plan` off the main actor so the UI
+    /// stays responsive (and the loading spinner can animate) even for large
+    /// year-scoped deletes. Awaits the post-delete refresh so callers can distinguish
+    /// "delete succeeded, refresh failed" from complete success. Returns a structured
+    /// `TransactionDeletionResult`; sets `errorMessage` on any failure.
+    public func deleteTransactions(plan: TransactionDeletionPlan) async -> TransactionDeletionResult {
+        let repo = repository
+        foregroundRefreshTask?.cancel()
+        foregroundRefreshTask = nil
+        do {
+            let deleted = try await Task.detached(priority: .userInitiated) {
+                try repo.deleteTransactions(plan)
+            }.value
+            overviewSnapshotCache.removeAll()
+            let refreshSuccess = await reloadAll()
+            if refreshSuccess {
+                lastForegroundRefreshAt = Date()
+            }
+            return TransactionDeletionResult(deletedCount: deleted, refreshSuccess: refreshSuccess)
+        } catch {
+            errorMessage = error.localizedDescription
+            return TransactionDeletionResult(deletedCount: 0, refreshSuccess: false)
+        }
+    }
+
     public func deleteLabel(id: UUID) {
         runMutation {
             try repository.deleteLabel(id: id)
@@ -407,6 +470,13 @@ public final class CashRunwayAppModel {
     public func saveWallet(_ wallet: Wallet) {
         runMutation {
             try repository.saveWallet(wallet)
+        }
+    }
+
+    @discardableResult
+    public func saveWalletCategory(_ category: WalletCategory) -> Bool {
+        runMutation {
+            try repository.saveWalletCategory(category)
         }
     }
 
@@ -760,6 +830,7 @@ public func importStatement(
         query.walletID = selectedWalletID
         return AppModelSnapshot(
             wallets: try repository.wallets(),
+            walletCategories: try repository.walletCategories(),
             expenseCategories: try repository.categories(kind: .expense),
             incomeCategories: try repository.categories(kind: .income),
             labels: try repository.labels(),
@@ -785,6 +856,7 @@ public func importStatement(
         query.walletID = selectedWalletID
         return MutableSnapshots(
             budgets: try repository.budgets(monthKey: selectedMonthKey),
+            walletCategories: try repository.walletCategories(),
             transactions: try repository.transactions(query: query),
             dashboardSnapshot: try repository.dashboard(monthKey: selectedMonthKey, walletID: selectedWalletID),
             timelineSnapshot: try repository.timelineSnapshot(monthKey: selectedMonthKey, walletID: selectedWalletID, query: query, period: selectedTimelinePeriod),
@@ -799,6 +871,7 @@ public func importStatement(
 
     private func apply(_ snapshot: AppModelSnapshot) {
         wallets = snapshot.wallets
+        walletCategories = snapshot.walletCategories
         expenseCategories = snapshot.expenseCategories
         incomeCategories = snapshot.incomeCategories
         labels = snapshot.labels
@@ -950,6 +1023,7 @@ private actor BackgroundWork {
 
 fileprivate struct AppModelSnapshot: Sendable {
     var wallets: [Wallet]
+    var walletCategories: [WalletCategory]
     var expenseCategories: [CashRunwayCategory]
     var incomeCategories: [CashRunwayCategory]
     var labels: [CashRunwayLabel]
@@ -965,6 +1039,7 @@ fileprivate struct AppModelSnapshot: Sendable {
 
 fileprivate struct MutableSnapshots: Sendable {
     var budgets: [BudgetProgress]
+    var walletCategories: [WalletCategory]
     var transactions: [TransactionListItem]
     var dashboardSnapshot: DashboardSnapshot?
     var timelineSnapshot: TimelineSnapshot?

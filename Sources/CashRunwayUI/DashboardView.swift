@@ -642,6 +642,16 @@ private struct CategoryDonutBadge: View {
     }
 }
 
+private struct CategoryDetailRoute: Identifiable, Hashable {
+    let category: OverviewCategoryRow
+    let monthKey: Int
+    let walletID: UUID?
+
+    var id: String {
+        "\(category.id.uuidString)-\(monthKey)-\(walletID?.uuidString ?? "all-wallets")"
+    }
+}
+
 private struct TimelineOverviewView: View {
     @Bindable var model: CashRunwayAppModel
     @State private var chartMetric = OverviewChartMetric.wealth
@@ -649,6 +659,8 @@ private struct TimelineOverviewView: View {
     @State private var showsCategoryManagement = false
     @State private var showsAllCategories = false
     @State private var selectedCategoryID: UUID?
+    @State private var categoryDetailRoute: CategoryDetailRoute?
+    @State private var categoryDetailArmedCategoryID: UUID?
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -673,6 +685,14 @@ private struct TimelineOverviewView: View {
                     .font(.system(size: 18, weight: .bold))
                     .foregroundStyle(CashRunwayTheme.textPrimary)
             }
+        }
+        .navigationDestination(item: $categoryDetailRoute) { route in
+            CategoryDetailOverviewView(
+                model: model,
+                category: route.category,
+                monthKey: route.monthKey,
+                walletID: route.walletID
+            )
         }
         .sheet(isPresented: $showsCategoryManagement) {
             CategoryManagementView(model: model, initialKind: categoryKind)
@@ -922,17 +942,21 @@ private struct TimelineOverviewView: View {
         }
         .onChange(of: categoryKind) { _, _ in
             showsAllCategories = false
+            resetCategoryDetailArming()
             selectedCategoryID = categories.first?.id
         }
         .onChange(of: model.selectedMonthKey) { _, _ in
             showsAllCategories = false
+            resetCategoryDetailArming()
             selectedCategoryID = categories.first?.id
         }
         .onChange(of: model.selectedWalletID) { _, _ in
             showsAllCategories = false
+            resetCategoryDetailArming()
             selectedCategoryID = categories.first?.id
         }
         .onChange(of: categories.map(\.id)) { _, _ in
+            resetCategoryDetailArming()
             syncSelectedCategoryID(with: categories)
         }
     }
@@ -976,13 +1000,14 @@ private struct TimelineOverviewView: View {
                 kind: categoryKind,
                 selectedCategory: currentSelection
             ) { category in
+                resetCategoryDetailArming()
                 selectCategory(category, from: categories)
             }
 
             VStack(spacing: 10) {
                 ForEach(displayedCategories) { item in
                     Button {
-                        selectCategory(item, from: categories)
+                        handleCategoryRowTap(item, from: categories)
                     } label: {
                         categoryLegendRow(item, isSelected: item.id == currentSelection?.id)
                     }
@@ -1002,6 +1027,7 @@ private struct TimelineOverviewView: View {
         remainingCategoryCount: Int
     ) -> some View {
         Button {
+            resetCategoryDetailArming()
             withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
                 let nextShowsAllCategories = !showsAllCategories
                 showsAllCategories = nextShowsAllCategories
@@ -1129,6 +1155,25 @@ private struct TimelineOverviewView: View {
             return
         }
         selectedCategoryID = selected.id
+    }
+
+    private func handleCategoryRowTap(_ category: OverviewCategoryRow, from categories: [OverviewCategoryRow]) {
+        if categoryDetailArmedCategoryID == category.id, selectedCategoryID == category.id {
+            categoryDetailRoute = CategoryDetailRoute(
+                category: category,
+                monthKey: model.selectedMonthKey,
+                walletID: model.selectedWalletID
+            )
+            resetCategoryDetailArming()
+            return
+        }
+
+        selectCategory(category, from: categories)
+        categoryDetailArmedCategoryID = category.id
+    }
+
+    private func resetCategoryDetailArming() {
+        categoryDetailArmedCategoryID = nil
     }
 
     private func selectCategory(_ category: OverviewCategoryRow, from categories: [OverviewCategoryRow]) {
@@ -1622,6 +1667,12 @@ private struct TimelineSearchSheet: View {
             }
             .navigationTitle("Search")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                    .accessibilityIdentifier(CashRunwayAccessibilityID.timelineSearchCancelButton)
+                }
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Reset") {
                         draftQuery = .init()

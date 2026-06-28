@@ -766,6 +766,46 @@ public final class DatabaseManager: @unchecked Sendable {
                 try db.create(index: "idx_bank_imports_cash_transaction", on: "bank_transaction_imports", columns: ["cash_runway_transaction_id"])
                 try db.create(index: "idx_bank_category_rules_provider_type", on: "bank_category_rules", columns: ["provider", "rule_type"])
             }),
+
+            ("v5_custom_wallet_categories", { db in
+                try db.create(table: "wallet_categories") { table in
+                    table.column("id", .text).primaryKey()
+                    table.column("name", .text).notNull()
+                    table.column("kind", .text).notNull()
+                    table.column("is_system", .boolean).notNull().defaults(to: false)
+                    table.column("created_at", .datetime).notNull()
+                    table.column("updated_at", .datetime).notNull()
+                }
+
+                let now = Date()
+                for category in WalletCategory.allBuiltIn {
+                    try db.execute(
+                        sql: """
+                        INSERT INTO wallet_categories (id, name, kind, is_system, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                        """,
+                        arguments: [
+                            category.id.uuidString, category.name, category.kind.rawValue,
+                            true, now, now,
+                        ]
+                    )
+                }
+
+                let walletsTableExists = try Bool.fetchOne(
+                    db,
+                    sql: "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'wallets'"
+                ) != nil
+                guard walletsTableExists else { return }
+
+                try db.execute(sql: "ALTER TABLE wallets ADD COLUMN category_id TEXT")
+
+                for category in WalletCategory.allBuiltIn {
+                    try db.execute(
+                        sql: "UPDATE wallets SET category_id = ? WHERE kind = ?",
+                        arguments: [category.id.uuidString, category.kind.rawValue]
+                    )
+                }
+            }),
         ]
     }
 
