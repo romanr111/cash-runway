@@ -15,6 +15,7 @@ struct MigrationIntegrityTests {
             "v4_import_job_source_format_id",
             "v3_bank_sync",
             "v5_custom_wallet_categories",
+            "v6_bank_raw_json_ttl",
         ])
     }
 

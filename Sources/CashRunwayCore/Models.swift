@@ -243,7 +243,8 @@ public struct BankTransactionImport: Identifiable, Codable, Hashable, Sendable {
     public var counterIBAN: String?
     public var receiptID: String?
     public var hold: Bool?
-    public var rawJSON: String
+    public var rawJSON: String?
+    public var rawJSONExpiresAt: Date?
     public var cashRunwayTransactionID: UUID?
     public var importStatus: BankTransactionImportStatus
     public var createdAt: Date
@@ -268,7 +269,8 @@ public struct BankTransactionImport: Identifiable, Codable, Hashable, Sendable {
         counterIBAN: String?,
         receiptID: String?,
         hold: Bool?,
-        rawJSON: String,
+        rawJSON: String?,
+        rawJSONExpiresAt: Date?,
         cashRunwayTransactionID: UUID?,
         importStatus: BankTransactionImportStatus,
         createdAt: Date,
@@ -293,6 +295,7 @@ public struct BankTransactionImport: Identifiable, Codable, Hashable, Sendable {
         self.receiptID = receiptID
         self.hold = hold
         self.rawJSON = rawJSON
+        self.rawJSONExpiresAt = rawJSONExpiresAt
         self.cashRunwayTransactionID = cashRunwayTransactionID
         self.importStatus = importStatus
         self.createdAt = createdAt
@@ -1218,13 +1221,14 @@ public final class BackupService: @unchecked Sendable {
         return BackupRestoreResult(summary: restore.result.summary, safetyBackupURL: safetyBackupURL)
     }
 
-    private func writeSafetyBackup() throws -> URL {
+    func writeSafetyBackup() throws -> URL {
         let currentBackup = try exportFullBackup()
         let data = try encode(currentBackup)
         let directoryURL = FileManager.default.temporaryDirectory.appendingPathComponent("CashRunwayBackups", isDirectory: true)
         try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
         let url = directoryURL.appendingPathComponent("pre-restore-cash-runway-backup-\(Self.fileTimestamp()).json")
         try data.write(to: url, options: .atomic)
+        FileProtectionService().protect(url)
         return url
     }
 

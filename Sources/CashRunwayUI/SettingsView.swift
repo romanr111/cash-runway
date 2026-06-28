@@ -317,6 +317,7 @@ struct SettingsView: View {
                 let data = try await model.exportFullBackupData()
                 let url = FileManager.default.temporaryDirectory.appendingPathComponent("cash-runway-backup-\(backupFileTimestamp()).json")
                 try data.write(to: url, options: .atomic)
+                FileProtectionService().protect(url)
                 await MainActor.run {
                     backupExportFileURL = url
                     isBackupExporterPresented = true

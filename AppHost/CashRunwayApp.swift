@@ -237,17 +237,28 @@ private enum DebugDataRecoveryAttempt {
     }
 
     private static func write(_ report: String) throws {
-        let documents = try FileManager.default.url(
-            for: .documentDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        )
-        try report.write(
-            to: documents.appendingPathComponent("recovery-attempt-report.txt"),
-            atomically: true,
-            encoding: .utf8
-        )
+        let fileManager = FileManager.default
+        let directory = fileManager.temporaryDirectory.appendingPathComponent("CashRunwayRecoveryReports", isDirectory: true)
+        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+        cleanupStaleRecoveryReports(in: directory)
+
+        let url = directory.appendingPathComponent("recovery-attempt-report.txt")
+        try report.write(to: url, atomically: true, encoding: .utf8)
+        FileProtectionService().protect(url)
+    }
+
+    /// Remove recovery reports older than 24 hours as a best-effort cleanup fallback.
+    private static func cleanupStaleRecoveryReports(in directory: URL) {
+        let fileManager = FileManager.default
+        let cutoff = Date().addingTimeInterval(-24 * 60 * 60)
+        let keys: [URLResourceKey] = [.creationDateKey]
+        guard let urls = try? fileManager.contentsOfDirectory(at: directory, includingPropertiesForKeys: keys) else { return }
+        for url in urls {
+            guard let values = try? url.resourceValues(forKeys: [.creationDateKey]),
+                  let createdAt = values.creationDate,
+                  createdAt < cutoff else { continue }
+            try? fileManager.removeItem(at: url)
+        }
     }
 }
 

@@ -3,7 +3,10 @@ import GRDB
 
 extension CashRunwayRepository {
     public func exportFullBackup() throws -> CashRunwayBackup {
-        try databaseManager.dbQueue.read { db in
+        guard !ProtectedDataMonitor.skipIfUnavailable(work: "exportFullBackup") else {
+            throw CashRunwayError.validation("Protected data is unavailable. Try again after unlocking your device.")
+        }
+        return try databaseManager.dbQueue.read { db in
             let metadata = CashRunwayBackupMetadata(
                 format: "cash-runway-backup",
                 version: 2,
@@ -30,7 +33,10 @@ extension CashRunwayRepository {
 
     @discardableResult
     public func restoreFullBackup(_ backup: CashRunwayBackup) throws -> BackupRestoreResult {
-        try restoreFullBackupCollectingClearedBankTokens(backup).result
+        guard !ProtectedDataMonitor.skipIfUnavailable(work: "restoreFullBackup") else {
+            throw CashRunwayError.validation("Protected data is unavailable. Try again after unlocking your device.")
+        }
+        return try restoreFullBackupCollectingClearedBankTokens(backup).result
     }
 
     func restoreFullBackupCollectingClearedBankTokens(

@@ -500,6 +500,18 @@ extension CashRunwayRepository {
         }
     }
 
+    func purgeExpiredRawJSON(_ db: Database) throws {
+        try db.execute(
+            sql: """
+            UPDATE bank_transaction_imports
+            SET raw_json = NULL
+            WHERE raw_json_expires_at IS NOT NULL
+              AND raw_json_expires_at <= datetime('now')
+              AND raw_json IS NOT NULL
+            """
+        )
+    }
+
     func rebuildFTS(_ db: Database) throws {
         try db.execute(sql: "DELETE FROM transaction_search")
         let rows = try Row.fetchAll(db, sql: "SELECT * FROM transactions WHERE is_deleted = 0")

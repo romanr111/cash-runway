@@ -189,6 +189,7 @@ extension CashRunwayRepository {
             receiptID: row["receipt_id"],
             hold: row["hold"],
             rawJSON: row["raw_json"],
+            rawJSONExpiresAt: row["raw_json_expires_at"],
             cashRunwayTransactionID: (row["cash_runway_transaction_id"] as String?).flatMap(UUID.init(uuidString:)),
             importStatus: BankTransactionImportStatus(rawValue: row["import_status"]) ?? .failed,
             createdAt: row["created_at"],
@@ -221,7 +222,13 @@ extension CashRunwayRepository {
         cashRunwayTransactionID: UUID,
         now: Date
     ) throws {
-        let rawJSON = String(data: try JSONEncoder().encode(item), encoding: .utf8) ?? "{}"
+        let auditPayload = BankTransactionRawAuditPayload(
+            from: item,
+            provider: provider,
+            providerAccountID: providerAccountID
+        )
+        let rawJSON = String(data: try JSONEncoder().encode(auditPayload), encoding: .utf8)
+        let rawJSONExpiresAt = Calendar.current.date(byAdding: .day, value: 30, to: now)
         try db.execute(
             sql: """
             INSERT INTO bank_transaction_imports (
@@ -229,9 +236,9 @@ extension CashRunwayRepository {
                 provider_statement_item_id, statement_time, amount_minor_signed,
                 operation_amount_minor_signed, currency_code, mcc, original_mcc,
                 description, comment, counter_name, counter_iban, receipt_id, hold,
-                raw_json, cash_runway_transaction_id, import_status, created_at, updated_at
+                raw_json, raw_json_expires_at, cash_runway_transaction_id, import_status, created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             arguments: [
                 id.uuidString,
@@ -253,6 +260,7 @@ extension CashRunwayRepository {
                 item.receiptId,
                 item.hold,
                 rawJSON,
+                rawJSONExpiresAt,
                 cashRunwayTransactionID.uuidString,
                 BankTransactionImportStatus.imported.rawValue,
                 now,

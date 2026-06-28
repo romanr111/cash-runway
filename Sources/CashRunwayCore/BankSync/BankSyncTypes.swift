@@ -95,7 +95,7 @@ public final class MonobankDirectTokenValidator: MonobankTokenValidating, @unche
 
     public init(
         baseURL: URL = URL(string: "https://api.monobank.ua")!,
-        session: URLSession = .shared
+        session: URLSession = URLSession(configuration: .ephemeral)
     ) {
         self.baseURL = baseURL
         self.session = session
@@ -149,7 +149,7 @@ public final class MonobankPersonalAPIClient: MonobankClient, @unchecked Sendabl
         tokenStore: any BankTokenStore,
         tokenAccount: String,
         baseURL: URL = URL(string: "https://api.monobank.ua")!,
-        session: URLSession = .shared
+        session: URLSession = URLSession(configuration: .ephemeral)
     ) {
         self.tokenStore = tokenStore
         self.tokenAccount = tokenAccount
@@ -230,6 +230,7 @@ public final class BankSyncService: BankSyncPerforming, @unchecked Sendable {
     }
 
     public func syncOnDemand() async throws -> BankSyncResult {
+        guard !ProtectedDataMonitor.skipIfUnavailable(work: "syncOnDemand") else { return BankSyncResult() }
         var result = BankSyncResult()
         for integration in try repository.activeBankIntegrations() {
             do {
@@ -245,10 +246,12 @@ public final class BankSyncService: BankSyncPerforming, @unchecked Sendable {
     }
 
     public func syncOnForeground() async throws -> BankSyncResult {
-        try await syncOnDemand()
+        guard !ProtectedDataMonitor.skipIfUnavailable(work: "syncOnForeground") else { return BankSyncResult() }
+        return try await syncOnDemand()
     }
 
     public func syncIntegration(_ integrationID: UUID) async throws -> BankSyncResult {
+        guard !ProtectedDataMonitor.skipIfUnavailable(work: "syncIntegration") else { return BankSyncResult() }
         guard let integration = try repository.bankIntegrations().first(where: { $0.id == integrationID }) else {
             throw CashRunwayError.notFound
         }

@@ -48,6 +48,20 @@ struct BankSyncImportTests {
         #expect(stored?["note"] as String? == "Weekly food")
         #expect(stored?["source"] as String? == TransactionSource.bankSync.rawValue)
         #expect(stored?["provider_statement_item_id"] as String? == "statement-valid-1")
+
+        let audit: BankTransactionImport? = try repository.databaseManager.dbQueue.read { db in
+            guard let row = try Row.fetchOne(db, sql: "SELECT * FROM bank_transaction_imports WHERE provider_statement_item_id = ?", arguments: ["statement-valid-1"]) else { return nil }
+            return try CashRunwayRepository.bankTransactionImport(row)
+        }
+        let payload = try #require(audit?.rawJSON.flatMap { data in
+            try? JSONDecoder().decode(BankTransactionRawAuditPayload.self, from: Data(data.utf8))
+        })
+        #expect(payload.redacted == true)
+        #expect(payload.schemaVersion == 1)
+        #expect(payload.provider == BankProvider.monobank)
+        #expect(payload.providerAccountID == "mono-account-1")
+        #expect(payload.statementItemID == "statement-valid-1")
+        #expect(audit?.rawJSONExpiresAt != nil)
     }
 
     @Test func skipsOldPositiveZeroAndNonUAHMonobankItems() throws {
