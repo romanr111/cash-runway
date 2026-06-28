@@ -1,38 +1,6 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "DANGER": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "DANGER"
-          }
-        },
-        "uk": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "НЕБЕЗПЕКА"
-          }
-        }
-      }
-    },
-    "Choose a scope": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Choose a scope"
-          }
-        },
-        "uk": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Оберіть обсяг"
-          }
-        }
-      }
-    },
     "" : {
 
     },
@@ -1817,6 +1785,22 @@
         }
       }
     },
+    "Choose a scope" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose a scope"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Оберіть обсяг"
+          }
+        }
+      }
+    },
     "Choose destination category" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2358,6 +2342,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Валюта"
+          }
+        }
+      }
+    },
+    "DANGER" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "DANGER"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "НЕБЕЗПЕКА"
           }
         }
       }
@@ -6414,6 +6415,7 @@
       }
     },
     "Select a period" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
