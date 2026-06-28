@@ -1027,6 +1027,7 @@ private struct TimelineOverviewView: View {
         remainingCategoryCount: Int
     ) -> some View {
         Button {
+            resetCategoryDetailArming()
             withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
                 let nextShowsAllCategories = !showsAllCategories
                 showsAllCategories = nextShowsAllCategories
