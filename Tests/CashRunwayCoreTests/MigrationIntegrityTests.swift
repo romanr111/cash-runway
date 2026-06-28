@@ -200,4 +200,70 @@ struct MigrationIntegrityTests {
         }
         #expect(integrityOk == "ok")
     }
+
+    @Test func reimportAfterMigrationDedupesNullFingerprintLegacyRows() throws {
+        let key = "aaaabbbbccccddddeeeeffffgggghhhhiiiijjjjkkkkllllmmmmnnnnoooopppp"
+        let location = TestSupport.makeLocation()
+        let keychain = TestKeychainStore(items: ["database-key": Data(key.utf8)])
+
+        let partialMigrator = DatabaseManager.makeMigrator(upTo: "v3_import_idempotency")
+        let fixtureManager = try DatabaseManager(locationProvider: location, keychain: keychain, migrator: partialMigrator)
+        let fixtureRepo = CashRunwayRepository(databaseManager: fixtureManager)
+        try fixtureRepo.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: fixtureRepo)
+        let wallet = try #require(try fixtureRepo.wallets().first)
+        let expenseCategory = try #require(try fixtureRepo.categories(kind: .expense).first)
+        let occurredAt = try #require(ISO8601DateFormatter().date(from: "2025-04-01T00:00:00Z"))
+
+        let transactionID = UUID()
+        try fixtureRepo.saveTransaction(TransactionDraft(
+            id: transactionID,
+            kind: .expense,
+            walletID: wallet.id,
+            amountMinor: 4200,
+            occurredAt: occurredAt,
+            categoryID: expenseCategory.id,
+            merchant: "Migrated Shop",
+            source: .importCSV
+        ))
+        try fixtureManager.checkpointWal()
+
+        let fullManager = try DatabaseManager(locationProvider: location, keychain: keychain)
+        let repo = CashRunwayRepository(databaseManager: fullManager)
+        try repo.seedIfNeeded()
+
+        let nullFingerprintCount = try repo.databaseManager.dbQueue.read { db in
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM transactions WHERE import_fingerprint IS NULL AND source = 'import_csv'") ?? 0
+        }
+        #expect(nullFingerprintCount == 1)
+
+        let service = CSVService(repository: repo)
+        let text = """
+        Date,Amount,Merchant,Category,Note
+        2025-04-01T00:00:00Z,-42.00,Migrated Shop,Groceries,
+        """
+        let mapping = CSVImportMapping(
+            dateColumn: "Date",
+            amountColumn: "Amount",
+            debitColumn: nil,
+            creditColumn: nil,
+            merchantColumn: "Merchant",
+            noteColumn: "Note",
+            categoryColumn: "Category",
+            labelsColumn: nil,
+            walletID: wallet.id,
+            defaultKind: .expense
+        )
+        let result = try service.importStatement(
+            normalizedData: Data(text.utf8),
+            fileName: "post-migration.csv",
+            format: .genericBankCSV,
+            mapping: mapping
+        )
+        #expect(result.insertedTransactions == 0)
+        #expect(result.duplicateRows == 1)
+
+        let truth = try TestSupport.transactionTruth(repo)
+        #expect(truth.sourceImportCount == 1)
+    }
 }

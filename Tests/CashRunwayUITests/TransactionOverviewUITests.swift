@@ -72,7 +72,10 @@ final class OverviewFlowUITests: CashRunwayUITestCase {
         openOverview()
         XCTAssertNotEqual(app.buttons[CashRunwayUITestIdentifiers.overviewExpensesCard].label, initialExpensesLabel)
         XCTAssertNotEqual(app.buttons[CashRunwayUITestIdentifiers.overviewCategory("Groceries")].label, initialGroceriesLabel)
-        app.buttons[CashRunwayUITestIdentifiers.overviewCategory("Groceries")].tap()
+        let groceriesCategory = app.buttons[CashRunwayUITestIdentifiers.overviewCategory("Groceries")]
+        groceriesCategory.tap()
+        XCTAssertFalse(app.navigationBars["Groceries"].waitForExistence(timeout: 1))
+        groceriesCategory.tap()
         XCTAssertTrue(app.navigationBars["Groceries"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.staticTexts["Transactions"].waitForExistence(timeout: 3))
         assertStaticTextExists(note, allowScroll: true)
