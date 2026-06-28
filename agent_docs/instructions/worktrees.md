@@ -79,3 +79,15 @@ Follow the update contract in `CONTINUITY.md`. Update its Snapshot when:
 - work is transferred to another session or agent.
 
 Do not create an additional arbitrary handoff threshold.
+
+## Worktree-local `CONTINUITY.md`
+
+`CONTINUITY.md` is a per-worktree working log, not a shared source-of-truth file.
+
+- Maintain and update `CONTINUITY.md` inside the active worktree directory.
+- Let it diverge from `dev`, `main`, or other worktrees; each branch/worktree
+  records its own context, decisions, and validation history.
+- Do not attempt to keep `CONTINUITY.md` identical across worktrees or base branches.
+- When merging a feature branch/worktree into `dev` (or another shared branch),
+  resolve `CONTINUITY.md` conflicts by preserving both histories: keep the incoming
+  worktree snapshot(s) and the target branch snapshot(s) in the resulting file.
