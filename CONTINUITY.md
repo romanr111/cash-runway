@@ -22,6 +22,13 @@ and arms a row; second tap on the same selected row opens
 
 ## Latest update
 
+- Merged `origin/dev` into this branch to resolve PR conflicts.
+  - `CONTINUITY.md` was the only manual conflict; auto-merged files:
+    `Sources/CashRunwayCore/CSVSupport.swift`,
+    `Sources/CashRunwayCore/CashRunwayRepository.swift`,
+    `Tests/CashRunwayCoreTests/CSVIdempotencyTests.swift`,
+    `Tests/CashRunwayCoreTests/MigrationIntegrityTests.swift`.
+  - No secrets, generated reporting secrets, project files, lock files, or entitlements were touched.
 - Fixed review issue: Show More/Less now clears the armed category before changing
   the displayed category context.
 - Recreated this worktree because it was missing locally while the branch still existed.
@@ -36,14 +43,14 @@ and arms a row; second tap on the same selected row opens
     signed SQLCipher binary not stripped, AppIntents metadata skipped.
 - `just graph-bootstrap`: passed after `.codegraph` repair.
 - `just graph-sync`: passed.
+- `just check-unit-parallel`: passed, 58 tests in 5 suites.
 
 ## Skipped / blocked
 
 - XCUITest not run locally per repo policy.
-- PR #83 remains `CONFLICTING` against `origin/dev`.
-- Merging or rebasing `origin/dev` into this branch still needs explicit user confirmation.
+- Physical-device rehearsal not run; this is not a release/SideStore task.
 
 ## Git safety notes
 
-- `dev` worktree is dirty and was not modified.
+- `dev` worktree was dirty but was not modified by this merge.
 - Only this isolated feature worktree was edited.

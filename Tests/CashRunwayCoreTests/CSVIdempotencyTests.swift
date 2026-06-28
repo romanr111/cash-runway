@@ -740,7 +740,7 @@ struct CSVIdempotencyTests {
             )
         }
         let service = CSVService(repository: repository)
-        let text = "Date,Amount,Merchant,Category,Note\n2025-01-01T00:00:00Z,-100.00,АТБ,Продукти,Продукти"
+        let text = "Date,Amount,Merchant,Category,Note\n2025-01-01T00:00:00Z,-100.00,АТБ,Продукти,"
         let mapping = CSVImportMapping(
             dateColumn: "Date",
             amountColumn: "Amount",
@@ -754,7 +754,6 @@ struct CSVIdempotencyTests {
             defaultKind: .expense
         )
 
-        withKnownIssue("Known limitation: legacy generic CSV dedup broken when bank alias changes category ('Продукти' → 'Groceries')") {
         let result = try service.importStatement(
             normalizedData: Data(text.utf8),
             fileName: "legacy-alias.csv",
@@ -763,7 +762,7 @@ struct CSVIdempotencyTests {
         )
 
         #expect(result.duplicateRows == 1)
-    }
+        #expect(result.insertedTransactions == 0)
     }
 
     @Test func legacyGenericUnknownRawCategoryDedupWorks() throws {
@@ -783,7 +782,7 @@ struct CSVIdempotencyTests {
             merchant: "Employer",
             note: "",
             categoryName: "Other Expense",
-            currency: "UAH"
+            currency: nil
         )
         try repository.saveTransaction(TransactionDraft(
             id: transactionID,
@@ -816,7 +815,6 @@ struct CSVIdempotencyTests {
             defaultKind: .expense
         )
 
-        withKnownIssue("Known limitation: legacy generic CSV dedup broken when category column present and raw category unknown (resolver falls back to 'Other Expense')") {
         let result = try service.importStatement(
             normalizedData: Data(text.utf8),
             fileName: "legacy-unknown-cat.csv",
@@ -825,7 +823,7 @@ struct CSVIdempotencyTests {
         )
 
         #expect(result.duplicateRows == 1)
-    }
+        #expect(result.insertedTransactions == 0)
     }
 
     @Test func importStatementMatchesLegacyGenericCSVEmptyCategoryNoCurrency() throws {
@@ -858,8 +856,8 @@ struct CSVIdempotencyTests {
             categoryName: "Other Expense",
             currency: nil
         )
-        #expect(seededFingerprint != currentFingerprint,
-            "Current fingerprint with resolved category differs from legacy empty-category fingerprint")
+        #expect(seededFingerprint == currentFingerprint,
+            "Category-independent fingerprint matches regardless of resolved category")
         try repository.saveTransaction(TransactionDraft(
             id: transactionID,
             kind: .expense,
@@ -964,7 +962,7 @@ struct CSVIdempotencyTests {
             #expect(result.insertedTransactions == 0)
     }
 
-    @Test func legacyGenericCSVEmptyCategoryDoesNotMatchMappedCategoryRow() throws {
+    @Test func legacyGenericCSVEmptyCategoryMatchesMappedCategoryRow() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
         try TestSupport.seedFixtureWallets(into: repository)
@@ -1021,8 +1019,8 @@ struct CSVIdempotencyTests {
             mapping: mapping
         )
 
-        #expect(result.insertedTransactions == 1)
-        #expect(result.duplicateRows == 0)
+        #expect(result.insertedTransactions == 0)
+        #expect(result.duplicateRows == 1)
     }
 
     @Test func legacyGenericCSVEmptyCellInMappedCategoryDedupWorks() throws {
@@ -1086,6 +1084,564 @@ struct CSVIdempotencyTests {
         #expect(result.insertedTransactions == 0)
     }
 
+    // MARK: - Dedup hardening (category-independent identity + semantic fallback)
+
+    @Test func importingSameCSVTwiceIsIdempotent() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let wallet = try #require(try repository.wallets().first)
+        let service = CSVService(repository: repository)
+        let text = """
+        Date,Amount,Merchant,Category,Note
+        2025-01-01T00:00:00Z,-50.00,Shop,Groceries,Weekly groceries
+        2025-01-02T00:00:00Z,-30.00,Cafe,Restaurants,Coffee
+        2025-01-10T00:00:00Z,1000.00,Employer,Salary,January
+        """
+        let mapping = CSVImportMapping(
+            dateColumn: "Date",
+            amountColumn: "Amount",
+            debitColumn: nil,
+            creditColumn: nil,
+            merchantColumn: "Merchant",
+            noteColumn: "Note",
+            categoryColumn: "Category",
+            labelsColumn: nil,
+            walletID: wallet.id,
+            defaultKind: .expense
+        )
+
+        let result1 = try service.importStatement(
+            normalizedData: Data(text.utf8),
+            fileName: "first.csv",
+            format: .genericBankCSV,
+            mapping: mapping
+        )
+        #expect(result1.insertedTransactions == 3)
+        #expect(result1.duplicateRows == 0)
+
+        let balanceAfterFirst = try #require(try repository.wallets().first?.currentBalanceMinor)
+        let snapshotAfterFirst = try repository.overviewSnapshot(
+            monthKey: DateKeys.monthKey(for: ISO8601DateFormatter().date(from: "2025-01-01T00:00:00Z")!)
+        )
+
+        let result2 = try service.importStatement(
+            normalizedData: Data(text.utf8),
+            fileName: "second.csv",
+            format: .genericBankCSV,
+            mapping: mapping
+        )
+        #expect(result2.insertedTransactions == 0)
+        #expect(result2.duplicateRows == 3)
+
+        let truth = try TestSupport.transactionTruth(repository)
+        #expect(truth.sourceImportCount == 3)
+
+        let balanceAfterSecond = try #require(try repository.wallets().first?.currentBalanceMinor)
+        #expect(balanceAfterSecond == balanceAfterFirst)
+
+        let snapshotAfterSecond = try repository.overviewSnapshot(
+            monthKey: DateKeys.monthKey(for: ISO8601DateFormatter().date(from: "2025-01-01T00:00:00Z")!)
+        )
+        #expect(snapshotAfterSecond.monthExpenseMinor == snapshotAfterFirst.monthExpenseMinor)
+        #expect(snapshotAfterSecond.monthIncomeMinor == snapshotAfterFirst.monthIncomeMinor)
+    }
+
+    @Test func reimportAfterCategoryChangedIsIdempotent() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let wallet = try #require(try repository.wallets().first)
+        let service = CSVService(repository: repository)
+        let mapping = CSVImportMapping(
+            dateColumn: "Date",
+            amountColumn: "Amount",
+            debitColumn: nil,
+            creditColumn: nil,
+            merchantColumn: "Merchant",
+            noteColumn: "Note",
+            categoryColumn: "Category",
+            labelsColumn: nil,
+            walletID: wallet.id,
+            defaultKind: .expense
+        )
+
+        let firstText = """
+        Date,Amount,Merchant,Category,Note
+        2025-02-01T00:00:00Z,-50.00,Shop,Groceries,Weekly
+        """
+        let result1 = try service.importStatement(
+            normalizedData: Data(firstText.utf8),
+            fileName: "first.csv",
+            format: .genericBankCSV,
+            mapping: mapping
+        )
+        #expect(result1.insertedTransactions == 1)
+
+        let secondText = """
+        Date,Amount,Merchant,Category,Note
+        2025-02-01T00:00:00Z,-50.00,Shop,Restaurants,Weekly
+        """
+        let result2 = try service.importStatement(
+            normalizedData: Data(secondText.utf8),
+            fileName: "second.csv",
+            format: .genericBankCSV,
+            mapping: mapping
+        )
+        #expect(result2.insertedTransactions == 0)
+        #expect(result2.duplicateRows == 1)
+
+        let truth = try TestSupport.transactionTruth(repository)
+        #expect(truth.sourceImportCount == 1)
+    }
+
+    @Test func reimportCashRunwayExportIsIdempotent() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let wallet = try #require(try repository.wallets().first)
+        let expenseCategory = try #require(try repository.categories(kind: .expense).first)
+        let incomeCategory = try #require(try repository.categories(kind: .income).first)
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+
+        try repository.saveTransaction(
+            TransactionDraft(
+                kind: .expense,
+                walletID: wallet.id,
+                amountMinor: 12_000,
+                occurredAt: now,
+                categoryID: expenseCategory.id,
+                merchant: "Grocery",
+                source: .manual
+            )
+        )
+        try repository.saveTransaction(
+            TransactionDraft(
+                kind: .income,
+                walletID: wallet.id,
+                amountMinor: 50_000,
+                occurredAt: now,
+                categoryID: incomeCategory.id,
+                merchant: "Salary",
+                source: .manual
+            )
+        )
+
+        let exportService = CSVService(repository: repository)
+        let exported = try exportService.exportCSV()
+
+        let importService = CSVService(repository: repository)
+        let mapping = CSVImportMapping(
+            dateColumn: "Date",
+            amountColumn: "Amount",
+            debitColumn: nil,
+            creditColumn: nil,
+            merchantColumn: "Merchant",
+            noteColumn: "Note",
+            categoryColumn: "Category name",
+            labelsColumn: "Labels",
+            walletID: wallet.id,
+            defaultKind: .expense,
+            typeColumn: "Type",
+            walletColumn: "Wallet",
+            currencyColumn: "Currency"
+        )
+        let result = try importService.importCSV(data: Data(exported.utf8), fileName: "export.csv", mapping: mapping)
+
+        #expect(result.insertedTransactions == 0)
+        #expect(result.duplicateRows == 2)
+
+        let allTransactions = try repository.transactions()
+        #expect(allTransactions.count == 2)
+    }
+
+    @Test func oldTransactionsWithNullFingerprintProtectedBySemanticFallback() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let wallet = try #require(try repository.wallets().first)
+        let otherExpenseID = try #require(try repository.categories(kind: .expense).first { $0.name == "Other Expense" }?.id)
+        let occurredAt = try #require(ISO8601DateFormatter().date(from: "2025-03-01T00:00:00Z"))
+        let transactionID = UUID()
+        try repository.saveTransaction(
+            TransactionDraft(
+                id: transactionID,
+                kind: .expense,
+                walletID: wallet.id,
+                amountMinor: 4200,
+                occurredAt: occurredAt,
+                categoryID: otherExpenseID,
+                merchant: "Old Shop",
+                source: .importCSV
+            )
+        )
+        try repository.databaseManager.dbQueue.write { db in
+            try db.execute(
+                sql: "UPDATE transactions SET import_fingerprint = NULL WHERE id = ?",
+                arguments: [transactionID.uuidString]
+            )
+        }
+
+        let service = CSVService(repository: repository)
+        let text = """
+        Date,Amount,Merchant,Category,Note
+        2025-03-01T00:00:00Z,-42.00,Old Shop,Groceries,
+        """
+        let mapping = CSVImportMapping(
+            dateColumn: "Date",
+            amountColumn: "Amount",
+            debitColumn: nil,
+            creditColumn: nil,
+            merchantColumn: "Merchant",
+            noteColumn: "Note",
+            categoryColumn: "Category",
+            labelsColumn: nil,
+            walletID: wallet.id,
+            defaultKind: .expense
+        )
+        let result = try service.importStatement(
+            normalizedData: Data(text.utf8),
+            fileName: "legacy-null-fp.csv",
+            format: .genericBankCSV,
+            mapping: mapping
+        )
+        #expect(result.insertedTransactions == 0)
+        #expect(result.duplicateRows == 1)
+
+        let truth = try TestSupport.transactionTruth(repository)
+        #expect(truth.sourceImportCount == 1)
+    }
+
+    @Test func duplicateRowsInSameCSVDoNotMultiplyWhenOnlyCategoryDiffers() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let wallet = try #require(try repository.wallets().first)
+        let service = CSVService(repository: repository)
+        let text = """
+        Date,Amount,Merchant,Category,Note
+        2025-04-01T00:00:00Z,-50.00,Shop,Groceries,Same note
+        2025-04-01T00:00:00Z,-50.00,Shop,Restaurants,Same note
+        """
+        let mapping = CSVImportMapping(
+            dateColumn: "Date",
+            amountColumn: "Amount",
+            debitColumn: nil,
+            creditColumn: nil,
+            merchantColumn: "Merchant",
+            noteColumn: "Note",
+            categoryColumn: "Category",
+            labelsColumn: nil,
+            walletID: wallet.id,
+            defaultKind: .expense
+        )
+        let result = try service.importStatement(
+            normalizedData: Data(text.utf8),
+            fileName: "intra-dup.csv",
+            format: .genericBankCSV,
+            mapping: mapping
+        )
+        #expect(result.insertedTransactions == 1)
+        #expect(result.duplicateRows == 1)
+
+        let truth = try TestSupport.transactionTruth(repository)
+        #expect(truth.sourceImportCount == 1)
+    }
+
+    @Test func legitimateRepeatedPaymentsAreNotCollapsed() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let wallet = try #require(try repository.wallets().first)
+        let service = CSVService(repository: repository)
+        let text = """
+        Date,Amount,Merchant,Category,Note
+        2025-05-01T08:00:00Z,-50.00,Gym,Fitness,May dues
+        2025-06-01T08:00:00Z,-50.00,Gym,Fitness,June dues
+        """
+        let mapping = CSVImportMapping(
+            dateColumn: "Date",
+            amountColumn: "Amount",
+            debitColumn: nil,
+            creditColumn: nil,
+            merchantColumn: "Merchant",
+            noteColumn: "Note",
+            categoryColumn: "Category",
+            labelsColumn: nil,
+            walletID: wallet.id,
+            defaultKind: .expense
+        )
+        let result = try service.importStatement(
+            normalizedData: Data(text.utf8),
+            fileName: "repeated.csv",
+            format: .genericBankCSV,
+            mapping: mapping
+        )
+        #expect(result.insertedTransactions == 2)
+        #expect(result.duplicateRows == 0)
+
+        let truth = try TestSupport.transactionTruth(repository)
+        #expect(truth.sourceImportCount == 2)
+    }
+
+    @Test func sameDaySameMerchantSameAmountDifferentTimestampsAreNotCollapsed() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let wallet = try #require(try repository.wallets().first)
+        let service = CSVService(repository: repository)
+        let text = """
+        Date,Amount,Merchant,Category,Note
+        2025-05-01T08:00:00Z,-50.00,Gym,Fitness,Membership
+        2025-05-01T18:00:00Z,-50.00,Gym,Fitness,Membership
+        """
+        let mapping = CSVImportMapping(
+            dateColumn: "Date",
+            amountColumn: "Amount",
+            debitColumn: nil,
+            creditColumn: nil,
+            merchantColumn: "Merchant",
+            noteColumn: "Note",
+            categoryColumn: "Category",
+            labelsColumn: nil,
+            walletID: wallet.id,
+            defaultKind: .expense
+        )
+        let result = try service.importStatement(
+            normalizedData: Data(text.utf8),
+            fileName: "same-day-repeat.csv",
+            format: .genericBankCSV,
+            mapping: mapping
+        )
+        #expect(result.insertedTransactions == 2)
+        #expect(result.duplicateRows == 0)
+        #expect(try repository.transactions().count == 2)
+    }
+
+    @Test func existingDayKeyDoesNotSuppressLaterDistinctTimestamp() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let wallet = try #require(try repository.wallets().first)
+        let service = CSVService(repository: repository)
+        let mapping = CSVImportMapping(
+            dateColumn: "Date",
+            amountColumn: "Amount",
+            debitColumn: nil,
+            creditColumn: nil,
+            merchantColumn: "Merchant",
+            noteColumn: "Note",
+            categoryColumn: "Category",
+            labelsColumn: nil,
+            walletID: wallet.id,
+            defaultKind: .expense
+        )
+
+        let firstText = """
+        Date,Amount,Merchant,Category,Note
+        2025-05-01T08:00:00Z,-50.00,Gym,Fitness,Membership
+        """
+        let result1 = try service.importStatement(
+            normalizedData: Data(firstText.utf8),
+            fileName: "first.csv",
+            format: .genericBankCSV,
+            mapping: mapping
+        )
+        #expect(result1.insertedTransactions == 1)
+
+        let secondText = """
+        Date,Amount,Merchant,Category,Note
+        2025-05-01T08:00:00Z,-50.00,Gym,Fitness,Membership
+        2025-05-01T18:00:00Z,-50.00,Gym,Fitness,Membership
+        """
+        let result2 = try service.importStatement(
+            normalizedData: Data(secondText.utf8),
+            fileName: "second.csv",
+            format: .genericBankCSV,
+            mapping: mapping
+        )
+        #expect(result2.insertedTransactions == 1)
+        #expect(result2.duplicateRows == 1)
+
+        let truth = try TestSupport.transactionTruth(repository)
+        #expect(truth.sourceImportCount == 2)
+    }
+
+    @Test func reimportAfterSoftDeleteReInserts() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let wallet = try #require(try repository.wallets().first)
+        let service = CSVService(repository: repository)
+        let text = """
+        Date,Amount,Merchant,Category,Note
+        2025-07-01T08:00:00Z,-50.00,Gym,Fitness,Dues
+        """
+        let mapping = CSVImportMapping(
+            dateColumn: "Date",
+            amountColumn: "Amount",
+            debitColumn: nil,
+            creditColumn: nil,
+            merchantColumn: "Merchant",
+            noteColumn: "Note",
+            categoryColumn: "Category",
+            labelsColumn: nil,
+            walletID: wallet.id,
+            defaultKind: .expense
+        )
+        let result1 = try service.importStatement(
+            normalizedData: Data(text.utf8),
+            fileName: "first.csv",
+            format: .genericBankCSV,
+            mapping: mapping
+        )
+        #expect(result1.insertedTransactions == 1)
+
+        let imported = try #require(try repository.transactions().first)
+        try repository.deleteTransaction(id: imported.id)
+
+        let result2 = try service.importStatement(
+            normalizedData: Data(text.utf8),
+            fileName: "second.csv",
+            format: .genericBankCSV,
+            mapping: mapping
+        )
+        #expect(result2.insertedTransactions == 1)
+        #expect(result2.duplicateRows == 0)
+
+        let truth = try TestSupport.transactionTruth(repository)
+        #expect(truth.sourceImportCount == 1)
+    }
+
+    @Test func crossSourceReimportDoesNotCollapseFingerprintedRows() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let wallet = try #require(try repository.wallets().first)
+        let service = CSVService(repository: repository)
+        let mapping = CSVImportMapping(
+            dateColumn: "Date",
+            amountColumn: "Amount",
+            debitColumn: nil,
+            creditColumn: nil,
+            merchantColumn: "Merchant",
+            noteColumn: "Note",
+            categoryColumn: "Category",
+            labelsColumn: nil,
+            walletID: wallet.id,
+            defaultKind: .expense
+        )
+        let text = """
+        Date,Amount,Merchant,Category,Note
+        2025-08-01T08:00:00Z,-50.00,Gym,Fitness,Dues
+        """
+        let result1 = try service.importStatement(
+            normalizedData: Data(text.utf8),
+            fileName: "generic.csv",
+            format: .genericBankCSV,
+            mapping: mapping
+        )
+        #expect(result1.insertedTransactions == 1)
+
+        let result2 = try service.importStatement(
+            normalizedData: Data(text.utf8),
+            fileName: "cashrunway.csv",
+            format: .cashRunwayCSV,
+            mapping: mapping
+        )
+        #expect(result2.insertedTransactions == 1)
+        #expect(result2.duplicateRows == 0)
+
+        let truth = try TestSupport.transactionTruth(repository)
+        #expect(truth.sourceImportCount == 2)
+    }
+
+    @Test func reimportMonobankCSVIsIdempotent() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let walletID = try #require(try repository.wallets().first?.id)
+        let service = CSVService(repository: repository)
+        let text = """
+        Дата і час операції,Деталі операції,MCC,Сума в валюті картки (UAH)
+        17.06.2026 07:59:13,Bolt,4121,-128.0
+        """
+        let mapping = CSVImportMapping(
+            dateColumn: "Дата і час операції",
+            amountColumn: "Сума в валюті картки (UAH)",
+            debitColumn: nil,
+            creditColumn: nil,
+            merchantColumn: "Деталі операції",
+            noteColumn: nil,
+            categoryColumn: nil,
+            labelsColumn: nil,
+            walletID: walletID,
+            defaultKind: .income
+        )
+
+        let result1 = try service.importStatement(
+            normalizedData: Data(text.utf8),
+            fileName: "first.csv",
+            format: .monobankCSVv1,
+            mapping: mapping
+        )
+        #expect(result1.insertedTransactions == 1)
+
+        let result2 = try service.importStatement(
+            normalizedData: Data(text.utf8),
+            fileName: "second.csv",
+            format: .monobankCSVv1,
+            mapping: mapping
+        )
+        #expect(result2.insertedTransactions == 0)
+        #expect(result2.duplicateRows == 1)
+
+        let truth = try TestSupport.transactionTruth(repository)
+        #expect(truth.sourceImportCount == 1)
+    }
+
+    @Test func reimportPrivatBankCSVIsIdempotent() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let walletID = try #require(try repository.wallets().first?.id)
+        let service = CSVService(repository: repository)
+        let headers = [
+            "Дата", "Категорія", "Картка", "Опис операції",
+            "Сума в валюті картки", "Валюта картки", "Сума в валюті транзакції",
+            "Валюта транзакції", "Залишок на кінець періоду", "Валюта залишку"
+        ]
+        let mapping = service.defaultMapping(
+            headers: headers,
+            format: .privatBankCSVv1,
+            walletID: walletID
+        )
+        let csvText = """
+        Дата,Категорія,Картка,Опис операції,Сума в валюті картки,Валюта картки,Сума транзакції,Валюта транзакції,Залишок на кінець періоду,Валюта залишку
+        16.06.2026,Житло,1234,Temu,-552.70,UAH,-552.70,UAH,1000.00,UAH
+        """
+
+        let result1 = try service.importStatement(
+            normalizedData: Data(csvText.utf8),
+            fileName: "first.csv",
+            format: .privatBankCSVv1,
+            mapping: mapping
+        )
+        #expect(result1.insertedTransactions == 1)
+
+        let result2 = try service.importStatement(
+            normalizedData: Data(csvText.utf8),
+            fileName: "second.csv",
+            format: .privatBankCSVv1,
+            mapping: mapping
+        )
+        #expect(result2.insertedTransactions == 0)
+        #expect(result2.duplicateRows == 1)
+
+        let truth = try TestSupport.transactionTruth(repository)
+        #expect(truth.sourceImportCount == 1)
+    }
+
     private func historicalImportFingerprint(
         sourceName: String,
         walletID: UUID,
@@ -1105,7 +1661,6 @@ struct CSVIdempotencyTests {
             String(amountMinor),
             (merchant ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
             (note ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
-            (categoryName ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
             (currency ?? "").trimmingCharacters(in: .whitespacesAndNewlines).uppercased(),
         ]
         let input = components.joined(separator: "|")

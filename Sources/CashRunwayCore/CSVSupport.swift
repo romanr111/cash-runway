@@ -164,7 +164,6 @@ private struct ImportFingerprintInput {
     let amountMinor: Int64
     let merchant: String?
     let note: String?
-    let categoryName: String?
     let currency: String?
 }
 
@@ -176,7 +175,6 @@ private struct ParsedAmount {
 private func importFingerprint(_ input: ImportFingerprintInput) -> String {
     let normalizedMerchant = (input.merchant ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     let normalizedNote = (input.note ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-    let normalizedCategory = (input.categoryName ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     let normalizedCurrency = (input.currency ?? "").trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
     let kindString = input.kind.rawValue
     let dateString = ISO8601DateFormatter().string(from: input.occurredAt)
@@ -188,7 +186,6 @@ private func importFingerprint(_ input: ImportFingerprintInput) -> String {
         String(input.amountMinor),
         normalizedMerchant,
         normalizedNote,
-        normalizedCategory,
         normalizedCurrency
     ]
     let input = components.joined(separator: "|")
@@ -474,7 +471,6 @@ guard rowFilter.includes(kind) else {
                         amountMinor: abs(signedAmount),
                         merchant: merchant,
                         note: note,
-                        categoryName: resolvedCategoryName,
                         currency: currency
                     )
                 )
@@ -602,7 +598,6 @@ do {
                         amountMinor: abs(signedAmount),
                         merchant: merchant,
                         note: note,
-                        categoryName: resolvedCategoryName,
                         currency: currency
                     )
                 )
@@ -618,7 +613,6 @@ do {
                             amountMinor: abs(signedAmount),
                             merchant: merchant,
                             note: note,
-                            categoryName: nil,
                             currency: mapping.currencyColumn != nil ? currency : nil
                         )
                     )
@@ -862,13 +856,13 @@ do {
     }
 
     private func parseDate(from input: String) throws -> Date {
+        if let iso = ISO8601DateFormatter().date(from: input) {
+            return iso
+        }
         let isoDateFormatter = ISO8601DateFormatter()
         isoDateFormatter.formatOptions = [.withFullDate]
         if let dateOnly = isoDateFormatter.date(from: input) {
             return dateOnly
-        }
-        if let iso = ISO8601DateFormatter().date(from: input) {
-            return iso
         }
         let isoLikeFormatter = DateFormatter()
         isoLikeFormatter.locale = Locale(identifier: "en_US_POSIX")
