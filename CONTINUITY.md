@@ -1,37 +1,52 @@
 ## Snapshot — Two-tap category detail navigation
 
-## Architecture Audit — Phase 1 (cleanup & foundation)
+## Architecture Audit — Phases 1 & 2 complete
 
-Status: Phase 1 complete on `codex/arch-phase-1-cleanup` (worktree `cash-runway-arch-phase-1`), rebased onto `dev` @ `f46f838`; verified (sim build + integration pass, 2 known CSV idempotency issues CI-excluded). Phases 2 (persistence/domain separation), 3 (privacy/security hardening), 4 (performance & benchmarks), and 5 (consent-gated LLM-agent access) pending. See `docs/ARCHITECTURE_AUDIT.md`.
+### Phase 1: cleanup & foundation — DONE
+- Branch: `codex/arch-phase-1-cleanup` (PR #80 → `dev`)
+- Split `Editors.swift` (2266→937) and `DashboardView.swift` (1658→638) into 8 per-view files
+- Removed deprecated `appendImportedTransactions`/`finalizeImport` CSV APIs
+- Replaced DEBUG-gated `NSLog` with `OSLog Logger` + privacy annotations
+- Added `Scripts/check-no-ungated-logging.sh` CI gate (depth-aware awk, `#else`/`#elseif` handling, `--self-test` 5 fixtures)
+- Documented migration-identifier permanence invariant; added `MigrationIntegrityTests.migrationIdentifierSetIsStable`
+- Verified: build, integration (425/425), lint (0/98), pre-flight, pbxproj, logging
 
-> **Note:** Audit was generated from `dev` @ `fed7859`; rebased onto `dev` @ `dd941fe`. Audit findings reflect the codebase at the earlier baseline (the one intervening commit `dd941fe` added the bulk-delete-transactions feature, which does not materially affect the audit's findings).
+### Phase 2: persistence/domain separation — DONE
+- Branch: `codex/arch-phase-2-extraction` (PR #82 → `codex/arch-phase-1-cleanup`)
+- Split `CashRunwayRepository.swift` (4204→2263 lines, 46% reduction) into:
+  - `BankSync/BankSyncTypes.swift` (715 lines) — protocols, API clients, sync services, category resolver
+  - `Recurring/RecurringGeneration.swift` (79 lines) — recurring instance generation
+  - `Persistence/Aggregates/AggregateMaintenance.swift` (509 lines) — aggregate maintenance + FTS sync
+  - `Backup/BackupService.swift` (231 lines) — backup export/restore
+  - `Persistence/DAOs/RowMappers.swift` (425 lines) — row mappers + persistence helpers
+- Introduced `protocol CashRunwayRepositorying` (57 methods, no `databaseManager`) — clean domain abstraction
+- `AppModel.repository`, `BackgroundWork`, `BankSyncService`, `MonobankConnectionService`, `BankSyncCoordinator` depend on `any CashRunwayRepositorying`
+- Protocol-extension default-arg wrappers preserve call-site ergonomics
+- `BackupService`/`CSVService`/`BankCategoryResolver` retain concrete `CashRunwayRepository` dependency (need internal DB methods)
+- `AppModel` mock init accepts injected `csvService` + `backupService` for testability
+- Added `CashRunwayRepositoryingTests` — mock conformance without `DatabaseManager` (2/2 pass)
+- Verified: build, integration (427/427), lint (0/105), pre-flight, pbxproj, logging
 
-## Deliverable
-- `docs/ARCHITECTURE_AUDIT.md` — full report (Executive Summary, Current Architecture, Maintainability/Security/Performance findings tables, LLM-Agent Integration Architecture, Proposed Target Architecture, 6-phase Roadmap, Open Questions, Appendix).
+### Pending phases
+- **Phase 3:** privacy/security hardening (Data Protection entitlement, `NSFileProtectionComplete`, `raw_json` TTL purge, ephemeral URLSession, `AppLockStore` gating)
+- **Phase 4:** performance/benchmarks (overview aggregate rewrite, timeline pagination, FTS rebuild chunking, fingerprint per-row checks)
+- **Phase 5:** consent-gated LLM-agent access (`AgentAccessService` protocol + read capabilities + redaction + consent UI + audit log)
 
-## Key findings (top risks)
-1. God repository — `Sources/CashRunwayCore/CashRunwayRepository.swift` (4,029 lines): DAO + bank sync + resolver + backup + recurring + aggregates in one `@unchecked Sendable` class.
-2. Empty `AppHost/CashRunway.entitlements` (`<dict/>`) — no `com.apple.developer.default-data-protection` capability; DB file lacks iOS file-level protection (SQLCipher passphrase only).
-3. `bank_transaction_imports.raw_json` stores full Monobank JSON indefinitely (no TTL/redaction). Not exported in JSON backups, but maximizes local PII surface.
-4. `NSLog` calls in DEBUG-gated UI code (`Editors.swift:624`, `FeedbackReportScreenshotPicker.swift:164`) — not shipping, but violates AGENTS.md logging convention; cleanup item.
-5. God view model — `Sources/CashRunwayUI/AppModel.swift` (1,045 lines) holds `repository`, `csvService`, `backupService`, `bankTokenStore`; direct persistence coupling.
+See `docs/ARCHITECTURE_AUDIT.md` for the full roadmap.
 
-## Notable facts verified
-- The `Modules/CashRunwayCorePackage/` mirror described in the task brief **does not exist** on `dev` or the `codex/dedup-core` worktree. Single source tree at `Sources/CashRunwayCore/` (enforced by `Scripts/check-core-module-wiring.sh`).
-- Migration `v3_bank_sync` is registered AFTER `v4_import_job_source_format_id` (names are identifiers, not sort keys — GRDB runs in registration order). **Must not be renamed** — GRDB tracks by identifier; renaming would break existing DBs.
-- `bank_transaction_imports` is NOT included in `exportFullBackup` (verified in `insertBackupSourceData`).
-- DEBUG recovery paths are correctly `#if DEBUG`-gated; `allowsDestructiveRecovery` is `FatalError` in release.
+### Follow-ups from Phase 2 review (not blocking)
+- `BackupServicing` protocol for full `CashRunwayAppModel` DB-free mockability — Phase 3+
+- Split `CashRunwayRepositorying` (57 methods) into per-feature protocols (`DashboardRepositorying`/`TransactionRepositorying`/etc.) — Phase 3+
+- Narrow `AppModel.repository` from `public var` to `private let` — Phase 3+
+- Split `RowMappers.swift` (pure mappers vs query helpers) — next extraction pass
+- `BankCategoryResolver` → split into `SnapshotLoader` + pure `Resolver` — Phase 3+
 
-## Recommendations (prioritized)
-- P0: Split god repository into focused internal services (BankSync → Recurring → Aggregates → Backup → DAOs), file/type-level first; keep `CashRunwayRepository` as a compatibility facade.
-- P0: Add `com.apple.developer.default-data-protection` entitlement + `NSFileProtectionComplete`/`completeUnlessOpen` via a `FileProtectionService`; validate on real device.
-- P0: Redact + TTL-purge `bank_transaction_imports.raw_json`; add `raw_json_expires_at` + purge job in `runMaintenance`.
-- P1: Do not rename migrations; add a `MigrationIntegrityTests` assertion that the identifier set is stable.
-- P1: Clean up DEBUG `NSLog`; add CI grep check preventing ungated `print`/`NSLog`.
-- P1: Split `Editors.swift` (2,266 lines) and `DashboardView.swift` (1,658 lines) into per-view files.
-- P2: Introduce `protocol CashRunwayRepositorying`; UI depends on protocol.
-- P2: Keep `DatabaseQueue` (not `DatabasePool`) unless read contention is measured.
-- Phase 5: LLM-agent access as local-first in-app `AgentAccessService` (consent-gated, read-only by default, redacted DTOs, audit log, short-lived sessions, immediate revocation). Reject direct DB access and localhost HTTP.
+## Key audit findings (top risks, still open)
+1. God repository — **resolved by Phase 2** (4204→2263 lines, 6 focused files)
+2. Empty `AppHost/CashRunway.entitlements` — no Data Protection capability — **Phase 3**
+3. `bank_transaction_imports.raw_json` stored indefinitely — **Phase 3**
+4. `NSLog` in DEBUG-gated UI code — **resolved by Phase 1**
+5. God view model `AppModel` (1045 lines) — **partially addressed by Phase 2 protocol; full split is Phase 3+**
 
 ## Open questions for product/security
 1. Data Protection class: `complete` (safer, blocks BG tasks when locked) vs `completeUnlessOpen`?
@@ -41,9 +56,14 @@ Status: Phase 1 complete on `codex/arch-phase-1-cleanup` (worktree `cash-runway-
 5. Agent LLM host: on-device vs user-approved remote?
 6. Budgets feature: remove frozen code/tables, or keep?
 
-## Areas not inspected
-- `Theme.swift`, `TransactionsView.swift`, `BudgetsView.swift`, coordinator files (listed/grepped only).
-- `reporting-api/` Node backend, `sidestore/`, `DesignReferences/`, `docs/` content.
-- `.swiftlint.yml` rules; `XLSXConverter`, `MCCCategoryMapping`, `BankCategoryNameMapping`, `L10n`, `DateKeys`, `Money` internals.
-- `CashRunway.xcodeproj/project.pbxproj` (not hand-edited per AGENTS.md).
-- Nightly/release workflows beyond confirming existence.
+## PR status
+- PR #80 (Phase 1 → `dev`): MERGEABLE, CI green
+- PR #82 (Phase 2 → Phase 1): MERGEABLE, CI green
+- Merge order: PR #80 first, then retarget PR #82 to `dev`, then merge
+
+## Areas not inspected (audit baseline)
+- `Theme.swift`, `TransactionsView.swift`, `BudgetsView.swift`, coordinator files (listed/grepped only)
+- `reporting-api/` Node backend, `sidestore/`, `DesignReferences/`, `docs/` content
+- `.swiftlint.yml` rules; `XLSXConverter`, `MCCCategoryMapping`, `BankCategoryNameMapping`, `L10n`, `DateKeys`, `Money` internals
+- `CashRunway.xcodeproj/project.pbxproj` (not hand-edited per AGENTS.md)
+- Nightly/release workflows beyond confirming existence

@@ -9,7 +9,7 @@ public typealias CashRunwayLabel = CashRunwayCore.Label
 @MainActor
 @Observable
 public final class CashRunwayAppModel {
-    public var repository: CashRunwayRepository
+    public var repository: any CashRunwayRepositorying
     public var csvService: CSVService
     public var backupService: BackupService
     public var bankTokenStore: any BankTokenStore
@@ -107,13 +107,13 @@ public final class CashRunwayAppModel {
     }
 
     public init(
-        repository: CashRunwayRepository,
+        repository: any CashRunwayRepositorying,
         bankTokenStore: any BankTokenStore,
         bankSyncPerformer: any BankSyncPerforming,
-        monobankTokenValidator: any MonobankTokenValidating
+        monobankTokenValidator: any MonobankTokenValidating,
+        csvService: CSVService,
+        backupService: BackupService
     ) {
-        let csvService = CSVService(repository: repository)
-        let backupService = BackupService(repository: repository, bankTokenStore: bankTokenStore)
         let performer = BankSyncSerialPerformer(bankSyncPerformer)
         let backgroundWork = BackgroundWork(
             repository: repository,
@@ -820,7 +820,7 @@ public func importStatement(
     }
 
     fileprivate nonisolated static func loadSnapshot(
-        repository: CashRunwayRepository,
+        repository: any CashRunwayRepositorying,
         selectedMonthKey: Int,
         selectedWalletID: UUID?,
         selectedTimelinePeriod: TimelinePeriod,
@@ -846,7 +846,7 @@ public func importStatement(
     }
 
     fileprivate nonisolated static func loadMutableSnapshots(
-        repository: CashRunwayRepository,
+        repository: any CashRunwayRepositorying,
         selectedMonthKey: Int,
         selectedWalletID: UUID?,
         selectedTimelinePeriod: TimelinePeriod,
@@ -909,13 +909,13 @@ public func importStatement(
 }
 
 private actor BackgroundWork {
-    private let repository: CashRunwayRepository
+    private let repository: any CashRunwayRepositorying
     private let csvService: CSVService
     private let backupService: BackupService
     private let bankSyncPerformer: any BankSyncPerforming
 
     init(
-        repository: CashRunwayRepository,
+        repository: any CashRunwayRepositorying,
         csvService: CSVService,
         backupService: BackupService,
         bankSyncPerformer: any BankSyncPerforming
