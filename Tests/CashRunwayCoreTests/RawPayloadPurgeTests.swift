@@ -56,6 +56,11 @@ struct RawPayloadPurgeTests {
         #expect(!rawJSON.contains("receipt-1"))
         #expect(!rawJSON.contains("office"))
         #expect(!rawJSON.contains("100000"))
+
+        // The source item had counter_iban/receipt_id, but post-v6 the insert path
+        // stores NULL for these PII columns (see DatabaseManager v6 table comment).
+        #expect(importRow.counterIBAN == nil)
+        #expect(importRow.receiptID == nil)
     }
 
     @Test func migrationRedactsExistingFullRawJSONImmediately() throws {

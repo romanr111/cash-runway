@@ -354,12 +354,15 @@ public final class DatabaseManager: @unchecked Sendable {
 
     static func allMigrations() -> [(String, @Sendable (Database) throws -> Void)] {
         // Migration identifiers are permanent. GRDB tracks applied migrations
-        // by identifier (not by name ordering), so `v3_bank_sync` registered
-        // after `v4_import_job_source_format_id` runs in registration order.
-        // Never rename, reorder, or delete existing entries — existing
-        // databases would treat a renamed migration as new and re-run it.
-        // Use monotonic names (`v6_*`, `v7_*`, …) only for new migrations.
-        // `MigrationIntegrityTests` asserts this identifier set is stable.
+        // by identifier (not by name ordering) and runs them in registration order.
+        // Existing identifiers are immutable in place; new migrations append only.
+        // Never rename, reorder, or delete an existing entry — existing databases
+        // would treat a renamed/reordered migration as new and re-run it, corrupting data.
+        // The non-monotonic position of `v3_bank_sync` (registered after `v4_…`) is
+        // intentional and must not be "fixed" by reordering.
+        // Use monotonic names (`v6_*`, `v7_*`, …) for NEW migrations only.
+        // `MigrationIntegrityTests.migrationIdentifierSetMatchesRegistrationOrder`
+        // asserts this exact ordered set so accidental edits are caught.
         [
             ("v1_schema", { db in
                 try db.create(table: "wallets") { table in
@@ -784,6 +787,11 @@ public final class DatabaseManager: @unchecked Sendable {
                     table.column("description", .text)
                     table.column("comment", .text)
                     table.column("counter_name", .text)
+                    // DEPRECATED post-v6: always NULL going forward. Retained as
+                    // nullable for schema compatibility, but no code path populates
+                    // them. Do not re-enable without privacy review — these columns
+                    // hold PII (IBAN, receipt id) that the v6 migration intentionally
+                    // redacted from existing rows.
                     table.column("counter_iban", .text)
                     table.column("receipt_id", .text)
                     table.column("hold", .boolean)
@@ -797,6 +805,11 @@ public final class DatabaseManager: @unchecked Sendable {
                 }
 
                 if tableExists {
+                    // raw_json is intentionally set to NULL for all migrated rows; existing
+                    // full payloads are redacted on upgrade per the privacy policy.
+                    // raw_json_expires_at is set to created_at+30d for bookkeeping, but
+                    // the payload is already gone. counter_iban and receipt_id are also
+                    // cleared (NULL) to drop retained PII from legacy imports.
                     try db.execute(sql: """
                         INSERT INTO bank_transaction_imports (
                             id, provider, integration_id, bank_account_id, provider_account_id,
@@ -819,14 +832,6 @@ public final class DatabaseManager: @unchecked Sendable {
                 try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_bank_imports_account_time ON bank_transaction_imports(bank_account_id, statement_time)")
                 try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_bank_imports_cash_transaction ON bank_transaction_imports(cash_runway_transaction_id)")
                 try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_bank_transaction_imports_statement_time ON bank_transaction_imports(statement_time)")
-
-                try db.execute(sql: """
-                    UPDATE bank_transaction_imports
-                    SET raw_json = NULL
-                    WHERE raw_json_expires_at IS NOT NULL
-                      AND raw_json_expires_at <= datetime('now')
-                      AND raw_json IS NOT NULL
-                    """)
             }),
         ]
     }

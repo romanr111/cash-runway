@@ -6,7 +6,14 @@ import Testing
 
 @Suite(.serialized)
 struct MigrationIntegrityTests {
-    @Test func migrationIdentifierSetIsStable() throws {
+    /// Asserts the migration identifiers in the exact order GRDB will run them.
+    ///
+    /// GRDB runs migrations in registration order (not name order), so the
+    /// non-monotonic position of `v3_bank_sync` (registered after `v4_…`) is
+    /// intentional and must not be "fixed" by reordering — existing databases
+    /// would treat a reordered identifier as new and re-run it, corrupting data.
+    /// New migrations append only; never rename, reorder, or delete an entry.
+    @Test func migrationIdentifierSetMatchesRegistrationOrder() throws {
         let identifiers = DatabaseManager.allMigrations().map(\.0)
         #expect(identifiers == [
             "v1_schema",

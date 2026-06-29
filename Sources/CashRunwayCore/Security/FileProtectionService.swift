@@ -29,6 +29,12 @@ public struct FileProtectionService: Sendable {
             Self.logger.debug("Applied complete protection: \(path, privacy: .private)")
         } catch {
             Self.logger.error("Failed to apply complete protection to \(path, privacy: .private): \(error.localizedDescription, privacy: .public)")
+            #if DEBUG
+            // A finance app's file protection is a security control, not a warning.
+            // Fail loudly in DEBUG so integration regressions are caught immediately;
+            // release builds log and continue (the entitlement provides a default).
+            assertionFailure("FileProtectionService failed to protect \(path): \(error)")
+            #endif
         }
     }
 
