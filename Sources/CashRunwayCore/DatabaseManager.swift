@@ -840,7 +840,7 @@ public final class DatabaseManager: @unchecked Sendable {
 
                 try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_bank_imports_account_time ON bank_transaction_imports(bank_account_id, statement_time)")
                 try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_bank_imports_cash_transaction ON bank_transaction_imports(cash_runway_transaction_id)")
-                try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_bank_transaction_imports_statement_time ON bank_transaction_imports(statement_time)
+                try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_bank_transaction_imports_statement_time ON bank_transaction_imports(statement_time)")
                 try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_bank_imports_raw_expires ON bank_transaction_imports(raw_json_expires_at)")
             }),
 

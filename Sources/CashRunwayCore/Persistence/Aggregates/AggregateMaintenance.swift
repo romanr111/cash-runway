@@ -673,7 +673,33 @@ extension CashRunwayRepository {
             arguments: StatementArguments([now] + monthKeyArgs)
         )
 
+        try recomputeWalletBalances(db)
         try recomputeBudgetSnapshots(db, monthKeys: monthKeys)
+    }
+
+    func recomputeWalletBalances(_ db: Database) throws {
+        let now = Date()
+        try db.execute(
+            sql: """
+            UPDATE wallets
+            SET current_balance_minor = starting_balance_minor + (
+                SELECT COALESCE(SUM(
+                    CASE t.type
+                        WHEN 'expense' THEN -t.amount_minor
+                        WHEN 'transfer_out' THEN -t.amount_minor
+                        WHEN 'income' THEN t.amount_minor
+                        WHEN 'transfer_in' THEN t.amount_minor
+                        ELSE 0
+                    END
+                ), 0)
+                FROM transactions t
+                WHERE t.wallet_id = wallets.id
+                  AND t.is_deleted = 0
+            ),
+            updated_at = ?
+            """,
+            arguments: [now]
+        )
     }
 
     func markDirtyRanges(_ db: Database, monthKeys: Set<Int>) throws {
