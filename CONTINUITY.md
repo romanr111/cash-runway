@@ -66,17 +66,24 @@ All architecture phases are now stacked on this branch and pushed to origin.
 
 ## CI status
 
-PR #86 runs the full `iOS CI` workflow. The `Source Membership Check` initially failed because `Scripts/check-unchecked-sendable.sh` was not executable; fixed in commit `e7af218`.
+PR #86 full `iOS CI` workflow is now green (run `28397532095`).
+
+Earlier run `28396573815` failed because `FileProtectionService.protect` called
+`setAttributes([.protectionKey: .complete])` on macOS SwiftPM tests, where
+`NSFileProtectionComplete` is unsupported and returns `EINVAL`; the DEBUG
+`assertionFailure` then crashed the test runner. Fixed in commit `b6c6cc7` by
+wrapping the attribute application in `#if canImport(UIKit)` and no-oping on
+non-UIKit platforms. iOS behavior and loud DEBUG failure are unchanged.
 
 ## Next steps
 
-1. Wait for PR #86 CI to go green.
-2. Merge PR #86 into `dev`.
-3. Close the superseded stacked PRs (#80, #82, #84) if not already closed.
-4. Schedule physical-device rehearsal before releasing Phase 3 security changes.
-5. Delete stale worktrees after merge:
+1. Merge PR #86 into `dev`.
+2. Close the superseded stacked PRs (#80, #82, #84) if not already closed.
+3. Schedule physical-device rehearsal before releasing Phase 3 security changes.
+4. Delete stale worktrees after merge:
    - `/Users/roman/.codex/worktrees/cash-runway-arch-phase-1` (was `codex/arch-phase-3.5-protocol-cleanup`)
    - `/Users/roman/.codex/worktrees/cash-runway-arch-phase-4` (now `backup/codex-arch-phase-4-performance-before-restack` exists; can be removed after merge)
+5. Begin Phase 5 (consent-gated LLM-agent access) design/scoping.
 
 ## Open questions for product/security
 
