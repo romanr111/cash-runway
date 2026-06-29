@@ -63,6 +63,7 @@ extension CashRunwayRepository {
         try db.execute(sql: "DELETE FROM budget_progress_snapshot")
         try db.execute(sql: "DELETE FROM daily_wallet_balance_delta")
         try db.execute(sql: "DELETE FROM monthly_category_spend")
+        try db.execute(sql: "DELETE FROM monthly_label_spend")
         try db.execute(sql: "DELETE FROM monthly_wallet_cashflow")
     }
 
