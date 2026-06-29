@@ -6,6 +6,18 @@ import Testing
 
 @Suite(.serialized)
 struct MigrationIntegrityTests {
+    @Test func migrationIdentifierSetIsStable() throws {
+        let identifiers = DatabaseManager.allMigrations().map(\.0)
+        #expect(identifiers == [
+            "v1_schema",
+            "v2_transaction_search_category_name",
+            "v3_import_idempotency",
+            "v4_import_job_source_format_id",
+            "v3_bank_sync",
+            "v5_custom_wallet_categories",
+        ])
+    }
+
     @Test func migrationFromPreviousEncryptedSchemaPreservesLedger() throws {
         let key = "aaaabbbbccccddddeeeeffffgggghhhhiiiijjjjkkkkllllmmmmnnnnoooopppp"
         let location = TestSupport.makeLocation()

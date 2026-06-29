@@ -1,7 +1,7 @@
 # Cash Runway — Architecture Audit & Modernization Plan
 
 **Date:** 2026-06-27
-**Branch inspected:** `dev` @ `fed7859`
+**Branch inspected:** `dev` @ `fed7859` (audit baseline). PR branch later rebased onto `dev` @ `dd941fe`; the one intervening commit (`dd941fe` "Add bulk delete transactions by period") does not materially affect these findings — the repository file is unchanged in its architecture-relevant boundaries, only new `DeletePeriod`/`transactionDeletion*` APIs were added.
 **Scope:** static code review, no UI/E2E tests executed
 
 ---
@@ -385,7 +385,7 @@ CashRunwayAgentAccess (future, new)
 **Not yet.** AGENTS.md mandates a single source tree at `Sources/CashRunwayCore/` compiled by both Xcode and SwiftPM. Introducing separate packages now would require either (a) moving files (high churn, risks the pbxproj) or (b) symlinking (fragile). Instead:
 
 - **Phase 2:** Create *logical* subdirectories inside `Sources/CashRunwayCore/` (`Persistence/`, `Domain/`, `Security/`, `BankSync/`, `Recurring/`, `Backup/`) with file-level boundaries and `internal` access where possible. The SwiftPM target stays one.
-- **Phase 3+:** Once boundaries are stable and `internal`, promote to separate SwiftPM targets/products with `@_exported` re-exports for backward compatibility. This is reversible and low-risk.
+- **Phase 4+:** Once boundaries are stable and `internal`, promote to separate SwiftPM targets/products with `@_exported` re-exports for backward compatibility. This is reversible and low-risk.
 
 ## What to avoid
 
@@ -399,13 +399,13 @@ CashRunwayAgentAccess (future, new)
 
 # Roadmap
 
-## Phase 0: Documentation and tests
+## Phase 0: Documentation and tests — DONE
 - Document the single-source-tree invariant and the migration-name-is-identifier rule in `agent_docs/`.
 - Add `DataProtectionTests`, `RawPayloadPurgeTests` stubs.
 - Add a perf benchmark for `overviewSnapshot` at 150k.
 - Verify: `just check-unit-parallel`.
 
-## Phase 1: Low-risk cleanup
+## Phase 1: Low-risk cleanup — DONE (PR #80)
 - **Do not** rename existing migrations. Preserve `v3_bank_sync` forever; add a code comment that registration order is authoritative; use monotonic names (`v6_*`) only for *new* migrations. Add a `MigrationIntegrityTests` assertion that the identifier set is stable.
 - Remove/clean up DEBUG-gated `NSLog` calls; replace with `Logger` + privacy annotations.
 - Add a lint/grep check (e.g. a `Scripts/check-no-ungated-logging.sh` wired into CI) preventing ungated `print(`/`NSLog` outside `#if DEBUG`.
@@ -424,19 +424,18 @@ CashRunwayAgentAccess (future, new)
 - **Avoid broad model moves** until the repository is smaller and tests cover the extracted services.
 - Verify after each extraction: `just check-integration`, `BankSyncImportTests`, `FullBackupTests`, `RecurringIdempotencyTests`, `RepositoryCRUDTests`, `MigrationIntegrityTests`.
 
-## Phase 3: Performance and benchmark work
-- Rewrite `overviewSnapshot` to use aggregates (add `monthly_label_spend`).
-- Paginate timeline; chunk FTS/aggregate rebuilds into a background actor.
-- Replace `existingImportFingerprints` bulk-load with per-row indexed checks.
-- Add `idx_bank_transaction_imports_statement_time` + TTL purge.
-- Verify: `just check-perf` at 150k; new overview benchmark.
-
-## Phase 4: Privacy/security hardening
+## Phase 3: Privacy/security hardening
 - Add `com.apple.developer.default-data-protection` entitlement + `NSFileProtectionComplete`/`completeUnlessOpen` on DB/WAL/SHM, backups, and recovery files via a `FileProtectionService`. Validate on a real device (simulator does not enforce).
-- Redact + TTL-purge `bank_transaction_imports.raw_json`.
+- Redact + TTL-purge `bank_transaction_imports.raw_json`; add `raw_json_expires_at` column + `idx_bank_transaction_imports_statement_time` for the purge job.
 - Use ephemeral `URLSession` for Monobank calls.
 - Remove or `#if DEBUG`-gate `AppLockStore`.
 - Verify: new `DataProtectionTests`, `RawPayloadPurgeTests`; device rehearsal.
+
+## Phase 4: Performance and benchmark work
+- Rewrite `overviewSnapshot` to use aggregates (add `monthly_label_spend`).
+- Paginate timeline; chunk FTS/aggregate rebuilds into a background actor.
+- Replace `existingImportFingerprints` bulk-load with per-row indexed checks.
+- Verify: `just check-perf` at 150k; new overview benchmark. (Index `idx_bank_transaction_imports_statement_time` already added in Phase 3 for the purge job.)
 
 ## Phase 5: Consent-gated LLM-agent access
 - Implement `AgentAccessService` protocol + read capabilities + redaction.

@@ -43,6 +43,10 @@ jobs:
         shell: bash
         run: Scripts/check-core-module-wiring.sh
 
+      - name: Verify no ungated logging
+        shell: bash
+        run: Scripts/check-no-ungated-logging.sh
+
   static-analysis:
     name: Static Analysis
     runs-on: macos-26
