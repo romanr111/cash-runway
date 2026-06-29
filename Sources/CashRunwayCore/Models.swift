@@ -1179,7 +1179,18 @@ public enum BackupError: LocalizedError, Equatable {
     }
 }
 
-public final class BackupService: @unchecked Sendable {
+public protocol BackupServicing: Sendable {
+    func exportFullBackup() throws -> CashRunwayBackup
+    func encode(_ backup: CashRunwayBackup) throws -> Data
+    func decode(data: Data) throws -> CashRunwayBackup
+    func validate(_ backup: CashRunwayBackup) throws -> BackupValidationSummary
+    func restore(_ backup: CashRunwayBackup) throws -> BackupRestoreResult
+}
+
+public final class BackupService: BackupServicing, @unchecked Sendable {
+    // @unchecked Sendable is justified: `repository` and `bankTokenStore` are
+    // immutable `let` references to Sendable types; backup operations delegate
+    // to `CashRunwayRepository` (GRDB-serialized).
     private let repository: CashRunwayRepository
     private let bankTokenStore: (any BankTokenStore)?
 

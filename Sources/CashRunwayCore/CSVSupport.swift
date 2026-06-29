@@ -196,6 +196,9 @@ private func importFingerprint(_ input: ImportFingerprintInput) -> String {
 // CSV import/export intentionally keeps its parser and category heuristics together.
 // swiftlint:disable:next type_body_length
 public final class CSVService: @unchecked Sendable {
+    // @unchecked Sendable is justified: `repository` is Sendable (GRDB
+    // DatabaseQueue serialization); `formatDefinitions` is an immutable `let`
+    // array of value types.
     private let repository: CashRunwayRepository
     private let formatDefinitions: [BankStatementFormatDefinition]
 

@@ -47,6 +47,10 @@ jobs:
         shell: bash
         run: Scripts/check-no-ungated-logging.sh
 
+      - name: Verify @unchecked Sendable justifications
+        shell: bash
+        run: Scripts/check-unchecked-sendable.sh
+
   static-analysis:
     name: Static Analysis
     runs-on: macos-26

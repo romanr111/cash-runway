@@ -9,7 +9,11 @@ public typealias CashRunwayLabel = CashRunwayCore.Label
 @MainActor
 @Observable
 public final class CashRunwayAppModel {
-    public var repository: any CashRunwayRepositorying
+    // Narrowed from `public var` to `private let` for encapsulation: no external
+    // code reassigns the repository mid-session, and the static snapshot loaders
+    // receive it as a parameter. `csvService`/`backupService` remain `public var`
+    // until BackupServicing/CSVServicing protocols are introduced (Phase 3.6).
+    private let repository: any CashRunwayRepositorying
     public var csvService: CSVService
     public var backupService: BackupService
     public var bankTokenStore: any BankTokenStore
@@ -383,6 +387,12 @@ public final class CashRunwayAppModel {
 
     public func saveTransaction(_ draft: TransactionDraft) {
         saveTransaction(draft, recurringTemplate: nil)
+    }
+
+    /// Loads a transaction draft for editing. Returns nil if the transaction
+    /// cannot be found or loaded.
+    public func loadTransactionDraft(id: UUID) -> TransactionDraft? {
+        try? repository.transactionDraft(id: id)
     }
 
     public func saveTransaction(_ draft: TransactionDraft, recurringTemplate: RecurringTemplate?) {

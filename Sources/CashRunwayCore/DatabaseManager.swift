@@ -76,6 +76,9 @@ public protocol BankTokenStore: Sendable {
 }
 
 public final class KeychainStore: KeychainStoring, @unchecked Sendable {
+    // @unchecked Sendable is justified: all stored properties are immutable
+    // `let` (service, accessibility). Keychain operations (SecItem*) are
+    // thread-safe per Apple's documentation.
     private let service: String
     private let accessibility: CFString
 
@@ -137,6 +140,9 @@ public final class KeychainStore: KeychainStoring, @unchecked Sendable {
 }
 
 public final class KeychainBankTokenStore: BankTokenStore, @unchecked Sendable {
+    // @unchecked Sendable is justified: `keychain` is an immutable `let` to a
+    // Sendable protocol; `BankTokenStore` methods delegate to `KeychainStore`
+    // which is thread-safe.
     private let keychain: any KeychainStoring
 
     public init(keychain: any KeychainStoring) {
@@ -202,6 +208,9 @@ public struct DatabaseLocationProvider {
 }
 
 public final class DatabaseManager: @unchecked Sendable {
+    // @unchecked Sendable is justified: `dbQueue` (GRDB DatabaseQueue) is
+    // Sendable and serializes all DB access; `keychain` is an immutable `let`
+    // to a Sendable protocol. No mutable instance state outside GRDB's lock.
     private static let logger = Logger(subsystem: "dev.roman.cashrunway", category: "keychain")
 
     public let dbQueue: DatabaseQueue

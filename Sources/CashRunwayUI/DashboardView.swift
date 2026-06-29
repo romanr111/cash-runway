@@ -342,7 +342,7 @@ struct DashboardView: View {
     }
 
     private func openEditor(for item: TransactionListItem) {
-        if let loadedDraft = try? model.repository.transactionDraft(id: item.id) {
+        if let loadedDraft = model.loadTransactionDraft(id: item.id) {
             draft = loadedDraft
             isComposerPresented = true
         }
