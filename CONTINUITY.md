@@ -1,86 +1,83 @@
-## Snapshot — Two-tap category detail navigation
+# Continuity Ledger
 
-## Architecture Audit — Phases 1 & 2 complete
+## Snapshot — `codex/arch-improvements` integration branch
+
+**Canonical integration PR:** https://github.com/romanr111/cash-runway/pull/86 (`codex/arch-improvements → dev`)
+
+All architecture phases are now stacked on this branch and pushed to origin.
+
+## Architecture improvements — all phases integrated
 
 ### Phase 1: cleanup & foundation — DONE
-- Branch: `codex/arch-phase-1-cleanup` (PR #80 → `dev`)
-- Split `Editors.swift` (2266→937) and `DashboardView.swift` (1658→638) into 8 per-view files
+- Branch: `codex/arch-phase-1-cleanup`
+- Split `Editors.swift` (2266→937) and `DashboardView.swift` (1658→638) into per-view files
 - Removed deprecated `appendImportedTransactions`/`finalizeImport` CSV APIs
 - Replaced DEBUG-gated `NSLog` with `OSLog Logger` + privacy annotations
-- Added `Scripts/check-no-ungated-logging.sh` CI gate (depth-aware awk, `#else`/`#elseif` handling, `--self-test` 5 fixtures)
+- Added `Scripts/check-no-ungated-logging.sh` CI gate
 - Documented migration-identifier permanence invariant; added `MigrationIntegrityTests.migrationIdentifierSetIsStable`
-- Verified: build, integration (425/425), lint (0/98), pre-flight, pbxproj, logging
 
 ### Phase 2: persistence/domain separation — DONE
-- Branch: `codex/arch-phase-2-extraction` (PR #82 → `codex/arch-phase-1-cleanup`)
-- Split `CashRunwayRepository.swift` (4204→2263 lines, 46% reduction) into:
-  - `BankSync/BankSyncTypes.swift` (715 lines) — protocols, API clients, sync services, category resolver
-  - `Recurring/RecurringGeneration.swift` (79 lines) — recurring instance generation
-  - `Persistence/Aggregates/AggregateMaintenance.swift` (509 lines) — aggregate maintenance + FTS sync
-  - `Backup/BackupService.swift` (231 lines) — backup export/restore
-  - `Persistence/DAOs/RowMappers.swift` (425 lines) — row mappers + persistence helpers
-- Introduced `protocol CashRunwayRepositorying` (57 methods, no `databaseManager`) — clean domain abstraction
+- Branch: `codex/arch-phase-2-extraction`
+- Split `CashRunwayRepository.swift` (4204→2263 lines, 46% reduction) into focused files
+- Introduced `protocol CashRunwayRepositorying` (57 methods)
 - `AppModel.repository`, `BackgroundWork`, `BankSyncService`, `MonobankConnectionService`, `BankSyncCoordinator` depend on `any CashRunwayRepositorying`
-- Protocol-extension default-arg wrappers preserve call-site ergonomics
-- `BackupService`/`CSVService`/`BankCategoryResolver` retain concrete `CashRunwayRepository` dependency (need internal DB methods)
-- `AppModel` mock init accepts injected `csvService` + `backupService` for testability
-- Added `CashRunwayRepositoryingTests` — mock conformance without `DatabaseManager` (2/2 pass)
-- Verified: build, integration (427/427), lint (0/105), pre-flight, pbxproj, logging
+- Added `CashRunwayRepositoryingTests` — mock conformance without `DatabaseManager`
 
-### Phase 3.5: protocol cleanup — IN PROGRESS
-- Branch: `codex/arch-phase-3.5-protocol-cleanup` (branched from `codex/arch-phase-3-security-hardening` `107faa1`)
-- Goal: decouple `AppModel`/`BackgroundWork` from concrete `CSVService`/`BackupService` types.
-- Added `BackupServicing` protocol (already present in `Models.swift`) and `CSVImportServicing` protocol.
-- Made `CSVService: CSVImportServicing` and `BackupService: BackupServicing`.
-- Updated `CashRunwayAppModel` and `BackgroundWork` to hold `csvService: any CSVImportServicing` / `backupService: any BackupServicing`.
-- Updated `AppHost/CashRunwayApp.swift` and `AppHost/UITestRuntime.swift` injectors to remain compatible.
-- Fixed `CSVImportView.swift` call site to use the `CSVImportServicing` `previewPreparedRows` overload.
-- Verified: pre-flight, `swift build --target CashRunwayCore`, `just check-unit-parallel` (58/58), `just check-integration` (434/434), `just build`.
-- Pending: commit changes.
+### Phase 3: privacy/security hardening — DONE
+- Branch: `codex/arch-phase-3-security-hardening`
+- Added `com.apple.developer.default-data-protection` entitlement with `NSFileProtectionComplete`
+- Added `FileProtectionService`, `ProtectedDataMonitor`, protected-data gating for DB/bank sync/CSV/backup operations
+- Added `v6_bank_raw_json_ttl` migration: nullable `raw_json`, redacted audit payload, 30-day TTL purge
+- Switched Monobank validator and `FeedbackReport` to ephemeral `URLSession`
+- Removed `AppLockStore`, updated `PLAN.md` reference
+- Added `DataProtectionTests` and `RawPayloadPurgeTests`
+- **Release gate:** physical-device rehearsal required before shipping Phase 3 security behavior
 
-### Phase 4: performance — COMMITTED (needs wallet-balance fix)
-- Branch: `codex/arch-phase-4-performance` (branched from `codex/arch-phase-2-extraction` `d4aad8b`)
-- Commit `f253034`: wallet-scoped v7 aggregate migrations, per-row import fingerprint checks, chunked FTS rebuild, query offset, `PersistenceHelpers.swift`.
-- Two `FullBackupTests` failures discovered post-commit: `fullBackupImportRebuildsAggregates` and `fullBackupExportThenImportRoundTripPreservesBalances`.
-- Root cause: new bulk `rebuildMonths` in `AggregateMaintenance.swift` does not recompute `wallets.current_balance_minor`, leaving balances at `starting_balance_minor` after restore.
-- Fix pending in Phase 4 worktree.
+### Phase 3.5: protocol cleanup — DONE
+- Branch: `codex/arch-phase-3.5-protocol-cleanup`
+- Added `CSVImportServicing` protocol; `CSVService: CSVImportServicing` and `BackupService: BackupServicing`
+- Updated `CashRunwayAppModel` and `BackgroundWork` to depend on `any CSVImportServicing` / `any BackupServicing`
+- Narrowed `AppModel.repository` from `public var` to `private let`
+- Extracted `ProtectedDataCache`, fixed cold-cache issue, added `@unchecked Sendable` guard checks
 
-### Pending phases
-- **Phase 3:** privacy/security hardening (Data Protection entitlement, `NSFileProtectionComplete`, `raw_json` TTL purge, ephemeral URLSession, `AppLockStore` gating)
-- **Phase 5:** consent-gated LLM-agent access (`AgentAccessService` protocol + read capabilities + redaction + consent UI + audit log)
+### Phase 4: performance — DONE
+- Branch: `codex/arch-phase-4-performance` (rebuilt on top of `codex/arch-improvements`, replacing the stale Phase-2-based branch)
+- Added wallet-scoped v7 aggregate migrations:
+  - `v7_monthly_category_spend_wallet_kind_income`
+  - `v7_monthly_label_spend_wallet`
+- Updated `overviewSnapshot` and dashboard top-categories to filter by `wallet_id`
+- Added `offset` to `TransactionQuery` for timeline pagination
+- Implemented per-row import fingerprint/semantic duplicate checks
+- Implemented chunked `rebuildFTS` and bulk `rebuildMonths`
+- Extracted `PersistenceHelpers.swift` for shared `tableExists`/`columnExists`
+- **Bug fix:** `rebuildMonths` now calls `recomputeWalletBalances(_:)` so backup restore preserves `current_balance_minor`
 
-See `docs/ARCHITECTURE_AUDIT.md` for the full roadmap.
+## Validation on `codex/arch-improvements`
 
-### Follow-ups from Phase 2 review (not blocking)
-- `BackupServicing` protocol for full `CashRunwayAppModel` DB-free mockability — Phase 3+
-- Split `CashRunwayRepositorying` (57 methods) into per-feature protocols (`DashboardRepositorying`/`TransactionRepositorying`/etc.) — Phase 3+
-- Narrow `AppModel.repository` from `public var` to `private let` — Phase 3+
-- Split `RowMappers.swift` (pure mappers vs query helpers) — next extraction pass
-- `BankCategoryResolver` → split into `SnapshotLoader` + pure `Resolver` — Phase 3+
+| Gate | Result |
+|---|---|
+| `Scripts/pre-flight.sh` | ✅ |
+| `just build` | ✅ BUILD SUCCEEDED |
+| `just check-unit-parallel` | ✅ 58/58 |
+| `just check-integration` | ✅ 434/434 |
+| `just lint` | ✅ 0 violations / 111 files |
+| `FullBackupTests` | ✅ 29/29 |
+| `just check-perf` | ⚠️ 13/14; `fixturePopulationTimingGate` is a known pre-existing bottleneck (fails locally on clean `dev` too) |
 
-## Key audit findings (top risks, still open)
-1. God repository — **resolved by Phase 2** (4204→2263 lines, 6 focused files)
-2. Empty `AppHost/CashRunway.entitlements` — no Data Protection capability — **Phase 3**
-3. `bank_transaction_imports.raw_json` stored indefinitely — **Phase 3**
-4. `NSLog` in DEBUG-gated UI code — **resolved by Phase 1**
-5. God view model `AppModel` (1045 lines) — **partially addressed by Phase 2 protocol; full split is Phase 3+**
+## CI status
+
+PR #86 runs the full `iOS CI` workflow. The `Source Membership Check` initially failed because `Scripts/check-unchecked-sendable.sh` was not executable; fixed in commit `e7af218`.
+
+## Next steps
+
+1. Wait for PR #86 CI to go green.
+2. Merge PR #86 into `dev`.
+3. Close the superseded stacked PRs (#80, #82, #84) if not already closed.
+4. Schedule physical-device rehearsal before releasing Phase 3 security changes.
+5. Delete stale worktrees after merge:
+   - `/Users/roman/.codex/worktrees/cash-runway-arch-phase-1` (was `codex/arch-phase-3.5-protocol-cleanup`)
+   - `/Users/roman/.codex/worktrees/cash-runway-arch-phase-4` (now `backup/codex-arch-phase-4-performance-before-restack` exists; can be removed after merge)
 
 ## Open questions for product/security
-1. Data Protection class: `complete` (safer, blocks BG tasks when locked) vs `completeUnlessOpen`?
-2. `raw_json` retention: N days for reprocessing, or drop after linking?
-3. Database key rotation: support on user request?
-4. Backup encryption: passphrase-encrypt exports?
-5. Agent LLM host: on-device vs user-approved remote?
-6. Budgets feature: remove frozen code/tables, or keep?
 
-## PR status
-- PR #80 (Phase 1 → `dev`): MERGEABLE, CI green
-- PR #82 (Phase 2 → Phase 1): MERGEABLE, CI green
-- Merge order: PR #80 first, then retarget PR #82 to `dev`, then merge
-
-## Areas not inspected (audit baseline)
-- `Theme.swift`, `TransactionsView.swift`, `BudgetsView.swift`, coordinator files (listed/grepped only)
-- `reporting-api/` Node backend, `sidestore/`, `DesignReferences/`, `docs/` content
-- `.swiftlint.yml` rules; `XLSXConverter`, `MCCCategoryMapping`, `BankCategoryNameMapping`, `L10n`, `DateKeys`, `Money` internals
-- `CashRunway.xcodeproj/project.pbxproj` (not hand-edited per AGENTS.md)
-- Nightly/release workflows beyond confirming existence
+See `docs/ARCHITECTURE_AUDIT.md`.
