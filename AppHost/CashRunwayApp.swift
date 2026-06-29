@@ -102,6 +102,8 @@ private final class BackgroundMaintenanceCoordinator {
 }
 
 private final class BackgroundProcessingTaskBox: @unchecked Sendable {
+    // @unchecked Sendable is justified: `task` is an immutable `let`;
+    // BGProcessingTask is not Sendable but is only accessed on the main thread.
     let task: BGProcessingTask
 
     init(_ task: BGProcessingTask) {

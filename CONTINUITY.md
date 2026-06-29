@@ -27,9 +27,26 @@
 - Added `CashRunwayRepositoryingTests` — mock conformance without `DatabaseManager` (2/2 pass)
 - Verified: build, integration (427/427), lint (0/105), pre-flight, pbxproj, logging
 
+### Phase 3.5: protocol cleanup — IN PROGRESS
+- Branch: `codex/arch-phase-3.5-protocol-cleanup` (branched from `codex/arch-phase-3-security-hardening` `107faa1`)
+- Goal: decouple `AppModel`/`BackgroundWork` from concrete `CSVService`/`BackupService` types.
+- Added `BackupServicing` protocol (already present in `Models.swift`) and `CSVImportServicing` protocol.
+- Made `CSVService: CSVImportServicing` and `BackupService: BackupServicing`.
+- Updated `CashRunwayAppModel` and `BackgroundWork` to hold `csvService: any CSVImportServicing` / `backupService: any BackupServicing`.
+- Updated `AppHost/CashRunwayApp.swift` and `AppHost/UITestRuntime.swift` injectors to remain compatible.
+- Fixed `CSVImportView.swift` call site to use the `CSVImportServicing` `previewPreparedRows` overload.
+- Verified: pre-flight, `swift build --target CashRunwayCore`, `just check-unit-parallel` (58/58), `just check-integration` (434/434), `just build`.
+- Pending: commit changes.
+
+### Phase 4: performance — COMMITTED (needs wallet-balance fix)
+- Branch: `codex/arch-phase-4-performance` (branched from `codex/arch-phase-2-extraction` `d4aad8b`)
+- Commit `f253034`: wallet-scoped v7 aggregate migrations, per-row import fingerprint checks, chunked FTS rebuild, query offset, `PersistenceHelpers.swift`.
+- Two `FullBackupTests` failures discovered post-commit: `fullBackupImportRebuildsAggregates` and `fullBackupExportThenImportRoundTripPreservesBalances`.
+- Root cause: new bulk `rebuildMonths` in `AggregateMaintenance.swift` does not recompute `wallets.current_balance_minor`, leaving balances at `starting_balance_minor` after restore.
+- Fix pending in Phase 4 worktree.
+
 ### Pending phases
 - **Phase 3:** privacy/security hardening (Data Protection entitlement, `NSFileProtectionComplete`, `raw_json` TTL purge, ephemeral URLSession, `AppLockStore` gating)
-- **Phase 4:** performance/benchmarks (overview aggregate rewrite, timeline pagination, FTS rebuild chunking, fingerprint per-row checks)
 - **Phase 5:** consent-gated LLM-agent access (`AgentAccessService` protocol + read capabilities + redaction + consent UI + audit log)
 
 See `docs/ARCHITECTURE_AUDIT.md` for the full roadmap.

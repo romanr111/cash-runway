@@ -17,6 +17,9 @@ public protocol BankSyncPerforming: Sendable {
 }
 
 public final class BankSyncSerialPerformer: BankSyncPerforming, @unchecked Sendable {
+    // @unchecked Sendable is justified: `base` and `gate` are immutable; the
+    // actor-isolated `BankSyncSerialGate` serializes all sync calls, so there
+    // is no concurrent access to shared state.
     private let base: any BankSyncPerforming
     private let gate = BankSyncSerialGate()
 
@@ -89,6 +92,9 @@ public func statementWindows(from: Date, to: Date) -> [DateInterval] {
 }
 
 public final class MonobankDirectTokenValidator: MonobankTokenValidating, @unchecked Sendable {
+    // @unchecked Sendable is justified: all stored properties are immutable
+    // `let` (URL, URLSession, JSONDecoder). URLSession is thread-safe for
+    // concurrent data tasks.
     private let baseURL: URL
     private let session: URLSession
     private let decoder = JSONDecoder()
@@ -139,6 +145,8 @@ public final class MonobankDirectTokenValidator: MonobankTokenValidating, @unche
 }
 
 public final class MonobankPersonalAPIClient: MonobankClient, @unchecked Sendable {
+    // @unchecked Sendable is justified: all stored properties are immutable
+    // `let`. URLSession is thread-safe; `BankTokenStore` is Sendable.
     private let tokenStore: any BankTokenStore
     private let tokenAccount: String
     private let baseURL: URL
@@ -215,6 +223,10 @@ public final class MonobankPersonalAPIClient: MonobankClient, @unchecked Sendabl
 }
 
 public final class BankSyncService: BankSyncPerforming, @unchecked Sendable {
+    // @unchecked Sendable is justified: all stored properties are immutable
+    // `let`; `repository` is `any CashRunwayRepositorying` (Sendable, backed by
+    // GRDB DatabaseQueue serialization); `client` is Sendable; `now` is
+    // `@Sendable`.
     private let repository: any CashRunwayRepositorying
     private let client: any MonobankClient
     private let now: @Sendable () -> Date
@@ -312,6 +324,9 @@ public final class BankSyncService: BankSyncPerforming, @unchecked Sendable {
 }
 
 public final class MonobankConnectionService: @unchecked Sendable {
+    // @unchecked Sendable is justified: all stored properties are immutable
+    // `let`; `repository`, `tokenStore`, `tokenValidator`, `syncPerformer` are
+    // Sendable protocols; `now` is `@Sendable`.
     private let repository: any CashRunwayRepositorying
     private let tokenStore: any BankTokenStore
     private let tokenValidator: any MonobankTokenValidating
@@ -426,6 +441,8 @@ public final class MonobankConnectionService: @unchecked Sendable {
 }
 
 public final class BankSyncCoordinator: BankSyncPerforming, @unchecked Sendable {
+    // @unchecked Sendable is justified: all stored properties are immutable
+    // `let`; `repository`, `tokenStore` are Sendable; `now` is `@Sendable`.
     private let repository: any CashRunwayRepositorying
     private let tokenStore: any BankTokenStore
     private let now: @Sendable () -> Date
@@ -484,6 +501,9 @@ public struct BankCategoryResolutionResult: Sendable {
 /// in-memory. This avoids a database read per imported row, which is critical
 /// for large CSV/XLSX imports.
 public final class BankCategoryResolver: @unchecked Sendable {
+    // @unchecked Sendable is justified: all stored properties are immutable
+    // `let` (rules and category entries are loaded once in init and never
+    // mutated). Reads are concurrent-safe over immutable data.
     private struct Rule {
         let provider: BankProvider
         let merchantPattern: String?

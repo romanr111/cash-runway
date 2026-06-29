@@ -34,7 +34,7 @@ public final class ProtectedDataMonitor: @unchecked Sendable {
     /// notification. Reads off the main thread consult this cache instead of hopping
     /// to the main queue (which would risk deadlock under Swift Concurrency's
     /// cooperative threading).
-    private let cachedSystemAvailable = OSAllocatedUnfairLock<Bool?>(initialState: nil)
+    private let cachedSystemAvailable = ProtectedDataCache()
     #endif
 
     public init() {
@@ -70,8 +70,7 @@ public final class ProtectedDataMonitor: @unchecked Sendable {
 
     #if canImport(UIKit)
     private func cacheSystemAvailability() {
-        let available = UIApplication.shared.isProtectedDataAvailable
-        cachedSystemAvailable.withLock { $0 = available }
+        cachedSystemAvailable.write(UIApplication.shared.isProtectedDataAvailable)
     }
     #endif
 
@@ -103,15 +102,18 @@ public final class ProtectedDataMonitor: @unchecked Sendable {
                 : .unavailable(reason: "UIApplication.shared.isProtectedDataAvailable is false")
         }
         // Off the main thread, use the cached value. `nil` means we have not yet
-        // observed a protectedDataAvailableDidChange notification — treat as
-        // unavailable so background work defers until the cache is populated, rather
-        // than risking a DispatchQueue.main.sync deadlock under Swift Concurrency.
-        if let cached = monitor.cachedSystemAvailable.withLock({ $0 }) {
+        // observed a protectedDataDidBecomeAvailable/WillBecomeUnavailable
+        // notification. Treat as unavailable so background work defers safely, but
+        // kick off a one-shot MainActor seed so the next read finds a warm cache,
+        // rather than risking a DispatchQueue.main.sync deadlock under Swift
+        // Concurrency.
+        if let cached = monitor.cachedSystemAvailable.read() {
             return cached
                 ? .available
                 : .unavailable(reason: "cached UIApplication.shared.isProtectedDataAvailable is false")
         }
-        return .unavailable(reason: "protected data availability unknown until first notification")
+        Task { @MainActor in monitor.cacheSystemAvailability() }
+        return .unavailable(reason: "protected data availability unknown; seeding cache")
     }
     #else
     private static func systemState(_ monitor: ProtectedDataMonitor) -> ProtectedDataState {
@@ -141,3 +143,25 @@ public protocol ProtectedDataMonitoring: Sendable {
 }
 
 extension ProtectedDataMonitor: ProtectedDataMonitoring {}
+
+/// Thread-safe cache for the UIKit protected-data availability flag.
+///
+/// Extracted from `ProtectedDataMonitor` so the cache mechanism is unit-testable
+/// under SwiftPM (where `#if canImport(UIKit)` code is not compiled). The monitor
+/// wires this cache to real `UIApplication.shared.isProtectedDataAvailable` reads
+/// via notification observers; tests exercise the read/write/invalidate behavior
+/// directly without UIKit.
+public struct ProtectedDataCache: Sendable {
+    private let storage = OSAllocatedUnfairLock<Bool?>(initialState: nil)
+
+    public init() {}
+
+    /// Returns the cached value, or `nil` if no value has been written yet.
+    public func read() -> Bool? { storage.withLock { $0 } }
+
+    /// Updates the cached value.
+    public func write(_ value: Bool) { storage.withLock { $0 = value } }
+
+    /// Resets the cache to the unknown (`nil`) state.
+    public func invalidate() { storage.withLock { $0 = nil } }
+}

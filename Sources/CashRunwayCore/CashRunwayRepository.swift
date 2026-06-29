@@ -54,6 +54,10 @@ private func resolvedCategoryID(_ db: Database, kind: CategoryKind, named name: 
 }
 
 public final class CashRunwayRepository: CashRunwayRepositorying, @unchecked Sendable {
+    // @unchecked Sendable is justified: `databaseManager` is Sendable (GRDB
+    // DatabaseQueue serializes all DB access). `walletsHasCategoryIDColumn`
+    // is a `var` cache but is only read/written inside `dbQueue.read/write`
+    // callbacks, so GRDB's queue serialization prevents concurrent access.
     public let databaseManager: DatabaseManager
     private var walletsHasCategoryIDColumn: Bool?
 
