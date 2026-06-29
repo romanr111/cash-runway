@@ -11,7 +11,12 @@ import UIKit
 /// When `NSFileProtectionComplete` is active, files are inaccessible while the
 /// device is locked. Background work that touches the database must check this
 /// state and defer safely rather than fail or fall back to a weaker class.
-public final class ProtectedDataMonitor: Sendable {
+public final class ProtectedDataMonitor: @unchecked Sendable {
+    // @unchecked Sendable is justified: the only mutable state (overrideState,
+    // cachedSystemAvailable) is protected by OSAllocatedUnfairLock. The observers
+    // array holds immutable NSObjectProtocol tokens assigned once in init and read
+    // only in deinit; it is never accessed concurrently. NSObjectProtocol is not
+    // Sendable, which prevents deriving Sendable automatically.
     private static let logger = Logger(subsystem: "dev.roman.cashrunway", category: "protected-data")
 
     /// Shared monitor. Tests should prefer injecting a custom `ProtectedDataMonitoring`
@@ -20,27 +25,38 @@ public final class ProtectedDataMonitor: Sendable {
 
     private let overrideState = OSAllocatedUnfairLock<ProtectedDataState?>(initialState: nil)
 
+    private var observers: [NSObjectProtocol] = []
+
     #if canImport(UIKit)
     /// Last cached value of `UIApplication.shared.isProtectedDataAvailable`, updated
-    /// by a `protectedDataAvailableDidChange` observer. `nil` means "unknown" — the
-    /// monitor has not yet observed a notification. Reads off the main thread consult
-    /// this cache instead of hopping to the main queue (which would risk deadlock
-    /// under Swift Concurrency's cooperative threading).
+    /// by `protectedDataDidBecomeAvailable`/`protectedDataWillBecomeUnavailable`
+    /// observers. `nil` means "unknown" — the monitor has not yet observed a
+    /// notification. Reads off the main thread consult this cache instead of hopping
+    /// to the main queue (which would risk deadlock under Swift Concurrency's
+    /// cooperative threading).
     private let cachedSystemAvailable = OSAllocatedUnfairLock<Bool?>(initialState: nil)
-    private let observer: NSObjectProtocol?
     #endif
 
     public init() {
         #if canImport(UIKit)
-        // UIKit posts protectedDataAvailableDidChange on the main thread, so the
-        // observer callback runs on main and may safely write cachedSystemAvailable.
-        observer = NotificationCenter.default.addObserver(
-            forName: UIApplication.protectedDataAvailableDidChange,
+        // UIKit posts both notifications on the main thread, so the observer
+        // callbacks run on main and may safely write cachedSystemAvailable.
+        let center = NotificationCenter.default
+        let didBecomeAvailable = center.addObserver(
+            forName: UIApplication.protectedDataDidBecomeAvailableNotification,
             object: nil,
             queue: .main
         ) { [weak self] _ in
             self?.cacheSystemAvailability()
         }
+        let willBecomeUnavailable = center.addObserver(
+            forName: UIApplication.protectedDataWillBecomeUnavailableNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.cacheSystemAvailability()
+        }
+        observers = [didBecomeAvailable, willBecomeUnavailable]
         // Seed the cache opportunistically if init happens on the main thread.
         if Thread.isMainThread { cacheSystemAvailability() }
         #endif
@@ -48,7 +64,7 @@ public final class ProtectedDataMonitor: Sendable {
 
     deinit {
         #if canImport(UIKit)
-        if let observer { NotificationCenter.default.removeObserver(observer) }
+        for observer in observers { NotificationCenter.default.removeObserver(observer) }
         #endif
     }
 
