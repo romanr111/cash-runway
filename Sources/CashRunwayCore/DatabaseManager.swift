@@ -841,6 +841,106 @@ public final class DatabaseManager: @unchecked Sendable {
                 try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_bank_imports_account_time ON bank_transaction_imports(bank_account_id, statement_time)")
                 try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_bank_imports_cash_transaction ON bank_transaction_imports(cash_runway_transaction_id)")
                 try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_bank_transaction_imports_statement_time ON bank_transaction_imports(statement_time)")
+                try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_bank_imports_raw_expires ON bank_transaction_imports(raw_json_expires_at)")
+            }),
+
+            // Phase 4: wallet-scoped category and label aggregates so the overview
+            // can stay filtered per-wallet without rescanning transactions.
+            ("v7_monthly_category_spend_wallet_kind_income", { db in
+                let tableExists = try Bool.fetchOne(
+                    db,
+                    sql: "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'monthly_category_spend'"
+                ) != nil
+                guard tableExists else { return }
+
+                try db.execute(sql: "DROP INDEX IF EXISTS idx_monthly_category_spend_month_category")
+
+                try db.create(table: "monthly_category_spend_new") { table in
+                    table.column("category_id", .text).notNull()
+                    table.column("month_key", .integer).notNull()
+                    table.column("wallet_id", .text).notNull()
+                    table.column("kind", .text).notNull().defaults(to: "expense")
+                    table.column("expense_minor", .integer).notNull().defaults(to: 0)
+                    table.column("income_minor", .integer).notNull().defaults(to: 0)
+                    table.column("txn_count", .integer).notNull().defaults(to: 0)
+                    table.column("updated_at", .datetime).notNull()
+                    table.uniqueKey(["category_id", "month_key", "wallet_id", "kind"])
+                }
+                try db.create(
+                    index: "idx_monthly_category_spend_month_category",
+                    on: "monthly_category_spend_new",
+                    columns: ["month_key", "category_id"]
+                )
+
+                let now = Date()
+                try db.execute(
+                    sql: """
+                    INSERT INTO monthly_category_spend_new (category_id, month_key, wallet_id, kind, expense_minor, income_minor, txn_count, updated_at)
+                    SELECT
+                        t.category_id,
+                        t.local_month_key,
+                        t.wallet_id,
+                        CASE t.type WHEN 'income' THEN 'income' ELSE 'expense' END,
+                        SUM(CASE WHEN t.type = 'expense' THEN t.amount_minor ELSE 0 END),
+                        SUM(CASE WHEN t.type = 'income' THEN t.amount_minor ELSE 0 END),
+                        COUNT(t.id),
+                        ?
+                    FROM transactions t
+                    WHERE t.is_deleted = 0
+                      AND t.type IN ('expense', 'income')
+                      AND t.category_id IS NOT NULL
+                    GROUP BY t.category_id, t.local_month_key, t.wallet_id, CASE t.type WHEN 'income' THEN 'income' ELSE 'expense' END
+                    """,
+                    arguments: [now]
+                )
+
+                try db.drop(table: "monthly_category_spend")
+                try db.execute(sql: "ALTER TABLE monthly_category_spend_new RENAME TO monthly_category_spend")
+            }),
+
+            ("v7_monthly_label_spend_wallet", { db in
+                try db.create(table: "monthly_label_spend") { table in
+                    table.column("label_id", .text).notNull()
+                    table.column("month_key", .integer).notNull()
+                    table.column("wallet_id", .text).notNull()
+                    table.column("kind", .text).notNull()
+                    table.column("amount_minor", .integer).notNull().defaults(to: 0)
+                    table.column("txn_count", .integer).notNull().defaults(to: 0)
+                    table.column("updated_at", .datetime).notNull()
+                    table.uniqueKey(["label_id", "month_key", "wallet_id", "kind"])
+                }
+                try db.create(
+                    index: "idx_monthly_label_spend_month_label",
+                    on: "monthly_label_spend",
+                    columns: ["month_key", "label_id"]
+                )
+
+                let transactionLabelsExists = try Bool.fetchOne(
+                    db,
+                    sql: "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'transaction_labels'"
+                ) != nil
+                guard transactionLabelsExists else { return }
+
+                try db.execute(
+                    sql: """
+                    INSERT INTO monthly_label_spend (label_id, month_key, wallet_id, kind, amount_minor, txn_count, updated_at)
+                    SELECT
+                        tl.label_id,
+                        t.local_month_key,
+                        t.wallet_id,
+                        CASE t.type WHEN 'income' THEN 'income' ELSE 'expense' END,
+                        SUM(t.amount_minor),
+                        COUNT(DISTINCT t.id),
+                        ?
+                    FROM transaction_labels tl
+                    JOIN transactions t ON t.id = tl.transaction_id
+                    WHERE t.is_deleted = 0
+                      AND t.type IN ('expense', 'income')
+                    GROUP BY tl.label_id, t.local_month_key, t.wallet_id, CASE t.type WHEN 'income' THEN 'income' ELSE 'expense' END
+                    HAVING SUM(t.amount_minor) > 0
+                    """,
+                    arguments: [Date()]
+                )
             }),
         ]
     }
