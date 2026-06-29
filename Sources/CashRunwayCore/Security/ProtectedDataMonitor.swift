@@ -101,19 +101,25 @@ public final class ProtectedDataMonitor: @unchecked Sendable {
                 ? .available
                 : .unavailable(reason: "UIApplication.shared.isProtectedDataAvailable is false")
         }
-        // Off the main thread, use the cached value. `nil` means we have not yet
-        // observed a protectedDataDidBecomeAvailable/WillBecomeUnavailable
-        // notification. Treat as unavailable so background work defers safely, but
-        // kick off a one-shot MainActor seed so the next read finds a warm cache,
-        // rather than risking a DispatchQueue.main.sync deadlock under Swift
-        // Concurrency.
+        // Off the main thread, use the cached value. `nil` means the notification
+        // observers have not yet fired. In that case synchronously read from the
+        // main thread and seed the cache. This is safe because the `Thread.isMainThread`
+        // guard above guarantees we are on a background thread, so
+        // `DispatchQueue.main.sync` cannot self-deadlock. Returning `.unavailable`
+        // here would silently no-op the first background export/bank-sync even when
+        // protected data is actually available.
         if let cached = monitor.cachedSystemAvailable.read() {
             return cached
                 ? .available
                 : .unavailable(reason: "cached UIApplication.shared.isProtectedDataAvailable is false")
         }
-        Task { @MainActor in monitor.cacheSystemAvailability() }
-        return .unavailable(reason: "protected data availability unknown; seeding cache")
+        let available = DispatchQueue.main.sync {
+            UIApplication.shared.isProtectedDataAvailable
+        }
+        monitor.cachedSystemAvailable.write(available)
+        return available
+            ? .available
+            : .unavailable(reason: "UIApplication.shared.isProtectedDataAvailable is false")
     }
     #else
     private static func systemState(_ monitor: ProtectedDataMonitor) -> ProtectedDataState {
