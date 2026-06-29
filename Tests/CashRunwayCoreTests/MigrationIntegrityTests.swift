@@ -15,6 +15,8 @@ struct MigrationIntegrityTests {
             "v4_import_job_source_format_id",
             "v3_bank_sync",
             "v5_custom_wallet_categories",
+            "v7_monthly_category_spend_wallet_kind_income",
+            "v7_monthly_label_spend_wallet",
         ])
     }
 
@@ -129,6 +131,8 @@ struct MigrationIntegrityTests {
         }
         #expect(appliedVersions.contains("v3_bank_sync"))
         #expect(appliedVersions.contains("v5_custom_wallet_categories"))
+        #expect(appliedVersions.contains("v7_monthly_category_spend_wallet_kind_income"))
+        #expect(appliedVersions.contains("v7_monthly_label_spend_wallet"))
 
         let walletCategories = try repo.walletCategories()
         #expect(walletCategories.filter(\.isSystem).count == 4)

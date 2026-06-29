@@ -1495,6 +1495,7 @@ public struct TransactionQuery: Sendable, Equatable {
     public var startDate: Date?
     public var endDate: Date?
     public var kinds: Set<TransactionDraft.Kind>
+    public var offset: Int
 
     public init(
         walletID: UUID? = nil,
@@ -1503,7 +1504,8 @@ public struct TransactionQuery: Sendable, Equatable {
         searchText: String = "",
         startDate: Date? = nil,
         endDate: Date? = nil,
-        kinds: Set<TransactionDraft.Kind> = Set(TransactionDraft.Kind.allCases)
+        kinds: Set<TransactionDraft.Kind> = Set(TransactionDraft.Kind.allCases),
+        offset: Int = 0
     ) {
         self.walletID = walletID
         self.categoryID = categoryID
@@ -1512,6 +1514,7 @@ public struct TransactionQuery: Sendable, Equatable {
         self.startDate = startDate
         self.endDate = endDate
         self.kinds = kinds
+        self.offset = offset
     }
 }
 

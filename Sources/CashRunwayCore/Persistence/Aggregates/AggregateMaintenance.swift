@@ -8,23 +8,27 @@ struct AggregateContribution {
     let type: TransactionKind
     let amountMinor: Int64
     let categoryID: UUID?
+    let labelIDs: [UUID]
 }
 
 struct CategorySpendDelta {
     let monthKey: Int
+    let walletID: UUID
     let expenseMinor: Int64
+    let incomeMinor: Int64
     let transactionCount: Int
 }
 
 extension CashRunwayRepository {
-    func contribution(for transaction: CashRunwayTransaction) -> AggregateContribution {
+    func contribution(for transaction: CashRunwayTransaction, labelIDs: [UUID] = []) -> AggregateContribution {
         AggregateContribution(
             walletID: transaction.walletID,
             monthKey: transaction.localMonthKey,
             dayKey: transaction.localDayKey,
             type: transaction.type,
             amountMinor: transaction.amountMinor,
-            categoryID: transaction.categoryID
+            categoryID: transaction.categoryID,
+            labelIDs: labelIDs
         )
     }
 
@@ -43,17 +47,22 @@ extension CashRunwayRepository {
         let rows = try Row.fetchAll(
             db,
             sql: """
-            SELECT local_month_key, COALESCE(SUM(amount_minor), 0) AS expense_minor, COUNT(*) AS txn_count
+            SELECT local_month_key, wallet_id,
+                   COALESCE(SUM(CASE WHEN type = 'expense' THEN amount_minor ELSE 0 END), 0) AS expense_minor,
+                   COALESCE(SUM(CASE WHEN type = 'income' THEN amount_minor ELSE 0 END), 0) AS income_minor,
+                   COUNT(*) AS txn_count
             FROM transactions
-            WHERE is_deleted = 0 AND type = 'expense' AND category_id = ?
-            GROUP BY local_month_key
+            WHERE is_deleted = 0 AND type IN ('expense', 'income') AND category_id = ?
+            GROUP BY local_month_key, wallet_id
             """,
             arguments: [categoryID.uuidString]
         )
         return rows.map {
             CategorySpendDelta(
                 monthKey: $0["local_month_key"],
+                walletID: UUID(uuidString: $0["wallet_id"]) ?? UUID(),
                 expenseMinor: $0["expense_minor"],
+                incomeMinor: $0["income_minor"],
                 transactionCount: $0["txn_count"]
             )
         }
@@ -62,30 +71,64 @@ extension CashRunwayRepository {
     func applyCategoryMergeDeltas(_ db: Database, oldCategoryID: UUID, newCategoryID: UUID, deltas: [CategorySpendDelta]) throws {
         guard !deltas.isEmpty else { return }
         let now = Date()
+        let hasWalletScope = try columnExists(db, table: "monthly_category_spend", column: "wallet_id")
+        guard hasWalletScope else {
+            // Pre-Phase 4 schema: only expense_minor exists. Recompute aggregates for affected months.
+            let monthKeys = Set(deltas.map(\.monthKey))
+            try rebuildMonths(db, monthKeys: monthKeys)
+            return
+        }
         for delta in deltas {
-            try db.execute(
-                sql: """
-                UPDATE monthly_category_spend
-                SET expense_minor = expense_minor - ?, txn_count = txn_count - ?, updated_at = ?
-                WHERE category_id = ? AND month_key = ?
-                """,
-                arguments: [delta.expenseMinor, delta.transactionCount, now, oldCategoryID.uuidString, delta.monthKey]
-            )
-            try db.execute(
-                sql: "DELETE FROM monthly_category_spend WHERE category_id = ? AND month_key = ? AND expense_minor = 0 AND txn_count <= 0",
-                arguments: [oldCategoryID.uuidString, delta.monthKey]
-            )
-            try db.execute(
-                sql: """
-                INSERT INTO monthly_category_spend (category_id, month_key, expense_minor, txn_count, updated_at)
-                VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT(category_id, month_key) DO UPDATE SET
-                    expense_minor = expense_minor + excluded.expense_minor,
-                    txn_count = txn_count + excluded.txn_count,
-                    updated_at = excluded.updated_at
-                """,
-                arguments: [newCategoryID.uuidString, delta.monthKey, delta.expenseMinor, delta.transactionCount, now]
-            )
+            if delta.expenseMinor > 0 {
+                try db.execute(
+                    sql: """
+                    UPDATE monthly_category_spend
+                    SET expense_minor = expense_minor - ?, txn_count = txn_count - ?, updated_at = ?
+                    WHERE category_id = ? AND month_key = ? AND wallet_id = ? AND kind = 'expense'
+                    """,
+                    arguments: [delta.expenseMinor, delta.transactionCount, now, oldCategoryID.uuidString, delta.monthKey, delta.walletID.uuidString]
+                )
+                try db.execute(
+                    sql: "DELETE FROM monthly_category_spend WHERE category_id = ? AND month_key = ? AND wallet_id = ? AND kind = 'expense' AND expense_minor = 0 AND txn_count <= 0",
+                    arguments: [oldCategoryID.uuidString, delta.monthKey, delta.walletID.uuidString]
+                )
+                try db.execute(
+                    sql: """
+                    INSERT INTO monthly_category_spend (category_id, month_key, wallet_id, kind, expense_minor, income_minor, txn_count, updated_at)
+                    VALUES (?, ?, ?, 'expense', ?, 0, ?, ?)
+                    ON CONFLICT(category_id, month_key, wallet_id, kind) DO UPDATE SET
+                        expense_minor = expense_minor + excluded.expense_minor,
+                        txn_count = txn_count + excluded.txn_count,
+                        updated_at = excluded.updated_at
+                    """,
+                    arguments: [newCategoryID.uuidString, delta.monthKey, delta.walletID.uuidString, delta.expenseMinor, delta.transactionCount, now]
+                )
+            }
+            if delta.incomeMinor > 0 {
+                try db.execute(
+                    sql: """
+                    UPDATE monthly_category_spend
+                    SET income_minor = income_minor - ?, txn_count = txn_count - ?, updated_at = ?
+                    WHERE category_id = ? AND month_key = ? AND wallet_id = ? AND kind = 'income'
+                    """,
+                    arguments: [delta.incomeMinor, delta.transactionCount, now, oldCategoryID.uuidString, delta.monthKey, delta.walletID.uuidString]
+                )
+                try db.execute(
+                    sql: "DELETE FROM monthly_category_spend WHERE category_id = ? AND month_key = ? AND wallet_id = ? AND kind = 'income' AND income_minor = 0 AND txn_count <= 0",
+                    arguments: [oldCategoryID.uuidString, delta.monthKey, delta.walletID.uuidString]
+                )
+                try db.execute(
+                    sql: """
+                    INSERT INTO monthly_category_spend (category_id, month_key, wallet_id, kind, expense_minor, income_minor, txn_count, updated_at)
+                    VALUES (?, ?, ?, 'income', 0, ?, ?, ?)
+                    ON CONFLICT(category_id, month_key, wallet_id, kind) DO UPDATE SET
+                        income_minor = income_minor + excluded.income_minor,
+                        txn_count = txn_count + excluded.txn_count,
+                        updated_at = excluded.updated_at
+                    """,
+                    arguments: [newCategoryID.uuidString, delta.monthKey, delta.walletID.uuidString, delta.incomeMinor, delta.transactionCount, now]
+                )
+            }
         }
     }
 
@@ -117,22 +160,67 @@ extension CashRunwayRepository {
             ]
         )
 
-        if contribution.type == .expense, let categoryID = contribution.categoryID {
-            try db.execute(
-                sql: """
-                INSERT INTO monthly_category_spend (category_id, month_key, expense_minor, txn_count, updated_at)
-                VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT(category_id, month_key) DO UPDATE SET
-                    expense_minor = expense_minor + excluded.expense_minor,
-                    txn_count = txn_count + excluded.txn_count,
-                    updated_at = excluded.updated_at
-                """,
-                arguments: [categoryID.uuidString, contribution.monthKey, amount, multiplier, now]
-            )
-            try db.execute(
-                sql: "DELETE FROM monthly_category_spend WHERE category_id = ? AND month_key = ? AND expense_minor = 0 AND txn_count <= 0",
-                arguments: [categoryID.uuidString, contribution.monthKey]
-            )
+        if contribution.type != .transferOut && contribution.type != .transferIn, let categoryID = contribution.categoryID {
+            let hasWalletScope = try columnExists(db, table: "monthly_category_spend", column: "wallet_id")
+            if hasWalletScope {
+                let (column, kind): (String, String) = contribution.type == .income ? ("income_minor", "income") : ("expense_minor", "expense")
+                try db.execute(
+                    sql: """
+                    INSERT INTO monthly_category_spend (category_id, month_key, wallet_id, kind, \(column), txn_count, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(category_id, month_key, wallet_id, kind) DO UPDATE SET
+                        \(column) = \(column) + excluded.\(column),
+                        txn_count = txn_count + excluded.txn_count,
+                        updated_at = excluded.updated_at
+                    """,
+                    arguments: [categoryID.uuidString, contribution.monthKey, contribution.walletID.uuidString, kind, amount, multiplier, now]
+                )
+                try db.execute(
+                    sql: "DELETE FROM monthly_category_spend WHERE category_id = ? AND month_key = ? AND wallet_id = ? AND kind = ? AND \(column) = 0 AND txn_count <= 0",
+                    arguments: [categoryID.uuidString, contribution.monthKey, contribution.walletID.uuidString, kind]
+                )
+
+                if !contribution.labelIDs.isEmpty,
+                   try tableExists(db, name: "monthly_label_spend") {
+                    let labelKind = contribution.type == .income ? "income" : "expense"
+                    for labelID in contribution.labelIDs {
+                        try db.execute(
+                            sql: """
+                            INSERT INTO monthly_label_spend (label_id, month_key, wallet_id, kind, amount_minor, txn_count, updated_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                            ON CONFLICT(label_id, month_key, wallet_id, kind) DO UPDATE SET
+                                amount_minor = amount_minor + excluded.amount_minor,
+                                txn_count = txn_count + excluded.txn_count,
+                                updated_at = excluded.updated_at
+                            """,
+                            arguments: [labelID.uuidString, contribution.monthKey, contribution.walletID.uuidString, labelKind, amount, multiplier, now]
+                        )
+                        try db.execute(
+                            sql: "DELETE FROM monthly_label_spend WHERE label_id = ? AND month_key = ? AND wallet_id = ? AND kind = ? AND amount_minor = 0 AND txn_count <= 0",
+                            arguments: [labelID.uuidString, contribution.monthKey, contribution.walletID.uuidString, labelKind]
+                        )
+                    }
+                }
+            } else {
+                // Pre-Phase 4 schema: only expense_minor is tracked.
+                if contribution.type == .expense {
+                    try db.execute(
+                        sql: """
+                        INSERT INTO monthly_category_spend (category_id, month_key, expense_minor, txn_count, updated_at)
+                        VALUES (?, ?, ?, ?, ?)
+                        ON CONFLICT(category_id, month_key) DO UPDATE SET
+                            expense_minor = expense_minor + excluded.expense_minor,
+                            txn_count = txn_count + excluded.txn_count,
+                            updated_at = excluded.updated_at
+                        """,
+                        arguments: [categoryID.uuidString, contribution.monthKey, amount, multiplier, now]
+                    )
+                    try db.execute(
+                        sql: "DELETE FROM monthly_category_spend WHERE category_id = ? AND month_key = ? AND expense_minor = 0 AND txn_count <= 0",
+                        arguments: [categoryID.uuidString, contribution.monthKey]
+                    )
+                }
+            }
         }
 
         try db.execute(
@@ -166,15 +254,25 @@ extension CashRunwayRepository {
     func recomputeBudgetSnapshots(_ db: Database, monthKeys: Set<Int>) throws {
         guard !monthKeys.isEmpty else { return }
         let now = Date()
+        let hasWalletScope = try columnExists(db, table: "monthly_category_spend", column: "wallet_id")
         for monthKey in monthKeys {
-            let rows = try Row.fetchAll(
-                db,
-                sql: """
+            let spendSQL = hasWalletScope
+                ? """
+                SELECT b.id, b.limit_minor, COALESCE(SUM(m.expense_minor), 0) AS spent_minor
+                FROM budgets b
+                LEFT JOIN monthly_category_spend m ON m.category_id = b.category_id AND m.month_key = b.month_key AND m.kind = 'expense'
+                WHERE b.month_key = ? AND b.is_archived = 0
+                GROUP BY b.id
+                """
+                : """
                 SELECT b.id, b.limit_minor, COALESCE(m.expense_minor, 0) AS spent_minor
                 FROM budgets b
                 LEFT JOIN monthly_category_spend m ON m.category_id = b.category_id AND m.month_key = b.month_key
                 WHERE b.month_key = ? AND b.is_archived = 0
-                """,
+                """
+            let rows = try Row.fetchAll(
+                db,
+                sql: spendSQL,
                 arguments: [monthKey]
             )
             for row in rows {
@@ -251,6 +349,7 @@ extension CashRunwayRepository {
         WHERE \(conditions.joined(separator: " AND "))
         ORDER BY t.occurred_at DESC, t.created_at DESC
         \(limit.map { "LIMIT \($0)" } ?? "")
+        \(query.offset > 0 ? "OFFSET \(query.offset)" : "")
         """
 
         let rows = try Row.fetchAll(db, sql: sql, arguments: StatementArguments(arguments))
@@ -449,17 +548,131 @@ extension CashRunwayRepository {
     }
 
     func rebuildMonths(_ db: Database, monthKeys: Set<Int>) throws {
-        for monthKey in monthKeys {
-            try db.execute(sql: "DELETE FROM monthly_wallet_cashflow WHERE month_key = ?", arguments: [monthKey])
-            try db.execute(sql: "DELETE FROM monthly_category_spend WHERE month_key = ?", arguments: [monthKey])
-            try db.execute(sql: "DELETE FROM budget_progress_snapshot WHERE month_key = ?", arguments: [monthKey])
+        let allMonths = try Int.fetchAll(
+            db,
+            sql: "SELECT DISTINCT local_month_key FROM transactions WHERE is_deleted = 0 AND local_month_key IS NOT NULL"
+        )
+        let monthKeys = monthKeys.union(Set(allMonths))
+        guard !monthKeys.isEmpty else { return }
+        let now = Date()
 
-            let rows = try Row.fetchAll(db, sql: "SELECT * FROM transactions WHERE is_deleted = 0 AND local_month_key = ?", arguments: [monthKey])
-            for row in rows {
-                let transaction = try Self.transaction(row)
-                try mutateAggregate(db, contribution: contribution(for: transaction), multiplier: 1)
-            }
+        let inPlaceholders = monthKeys.enumerated().map { ":month\($0.offset)" }.joined(separator: ", ")
+        var inArgs: [String: any DatabaseValueConvertible] = [:]
+        for (index, monthKey) in monthKeys.enumerated() {
+            inArgs["month\(index)"] = monthKey
         }
+
+        try db.execute(
+            sql: "DELETE FROM monthly_wallet_cashflow WHERE month_key IN (\(inPlaceholders))",
+            arguments: StatementArguments(inArgs)
+        )
+        let hasWalletScope = try columnExists(db, table: "monthly_category_spend", column: "wallet_id")
+        try db.execute(
+            sql: "DELETE FROM monthly_category_spend WHERE month_key IN (\(inPlaceholders))",
+            arguments: StatementArguments(inArgs)
+        )
+        if try tableExists(db, name: "monthly_label_spend") {
+            try db.execute(
+                sql: "DELETE FROM monthly_label_spend WHERE month_key IN (\(inPlaceholders))",
+                arguments: StatementArguments(inArgs)
+            )
+        }
+        try db.execute(
+            sql: "DELETE FROM budget_progress_snapshot WHERE month_key IN (\(inPlaceholders))",
+            arguments: StatementArguments(inArgs)
+        )
+
+        let sortedMonthKeys = monthKeys.sorted()
+        let monthKeyArgs: [any DatabaseValueConvertible] = sortedMonthKeys
+
+        if hasWalletScope {
+            try db.execute(
+                sql: """
+                INSERT INTO monthly_category_spend (category_id, month_key, wallet_id, kind, expense_minor, income_minor, txn_count, updated_at)
+                SELECT
+                    t.category_id,
+                    t.local_month_key,
+                    t.wallet_id,
+                    CASE t.type WHEN 'income' THEN 'income' ELSE 'expense' END,
+                    SUM(CASE WHEN t.type = 'expense' THEN t.amount_minor ELSE 0 END),
+                    SUM(CASE WHEN t.type = 'income' THEN t.amount_minor ELSE 0 END),
+                    COUNT(t.id),
+                    ?
+                FROM transactions t
+                WHERE t.is_deleted = 0
+                  AND t.type IN ('expense', 'income')
+                  AND t.category_id IS NOT NULL
+                  AND t.local_month_key IN (\(inPlaceholders))
+                GROUP BY t.category_id, t.local_month_key, t.wallet_id, CASE t.type WHEN 'income' THEN 'income' ELSE 'expense' END
+                """,
+                arguments: StatementArguments([now] + monthKeyArgs)
+            )
+
+            if try tableExists(db, name: "monthly_label_spend") {
+                try db.execute(
+                    sql: """
+                    INSERT INTO monthly_label_spend (label_id, month_key, wallet_id, kind, amount_minor, txn_count, updated_at)
+                    SELECT
+                        tl.label_id,
+                        t.local_month_key,
+                        t.wallet_id,
+                        CASE t.type WHEN 'income' THEN 'income' ELSE 'expense' END,
+                        SUM(t.amount_minor),
+                        COUNT(DISTINCT t.id),
+                        ?
+                    FROM transaction_labels tl
+                    JOIN transactions t ON t.id = tl.transaction_id
+                    WHERE t.is_deleted = 0
+                      AND t.type IN ('expense', 'income')
+                      AND t.local_month_key IN (\(inPlaceholders))
+                    GROUP BY tl.label_id, t.local_month_key, t.wallet_id, CASE t.type WHEN 'income' THEN 'income' ELSE 'expense' END
+                    """,
+                    arguments: StatementArguments([now] + monthKeyArgs)
+                )
+            }
+        } else {
+            // Pre-Phase 4 schema: only expense_minor is tracked per category/month.
+            try db.execute(
+                sql: """
+                INSERT INTO monthly_category_spend (category_id, month_key, expense_minor, txn_count, updated_at)
+                SELECT
+                    t.category_id,
+                    t.local_month_key,
+                    SUM(t.amount_minor),
+                    COUNT(t.id),
+                    ?
+                FROM transactions t
+                WHERE t.is_deleted = 0
+                  AND t.type = 'expense'
+                  AND t.category_id IS NOT NULL
+                  AND t.local_month_key IN (\(inPlaceholders))
+                GROUP BY t.category_id, t.local_month_key
+                """,
+                arguments: StatementArguments([now] + monthKeyArgs)
+            )
+        }
+
+        try db.execute(
+            sql: """
+            INSERT INTO monthly_wallet_cashflow (wallet_id, month_key, income_minor, expense_minor, transfer_in_minor, transfer_out_minor, txn_count, updated_at)
+            SELECT
+                t.wallet_id,
+                t.local_month_key,
+                SUM(CASE WHEN t.type = 'income' THEN t.amount_minor ELSE 0 END),
+                SUM(CASE WHEN t.type = 'expense' THEN t.amount_minor ELSE 0 END),
+                SUM(CASE WHEN t.type = 'transfer_in' THEN t.amount_minor ELSE 0 END),
+                SUM(CASE WHEN t.type = 'transfer_out' THEN t.amount_minor ELSE 0 END),
+                COUNT(t.id),
+                ?
+            FROM transactions t
+            WHERE t.is_deleted = 0
+              AND t.type != 'transfer_in'
+              AND t.local_month_key IN (\(inPlaceholders))
+            GROUP BY t.wallet_id, t.local_month_key
+            """,
+            arguments: StatementArguments([now] + monthKeyArgs)
+        )
+
         try recomputeBudgetSnapshots(db, monthKeys: monthKeys)
     }
 
@@ -498,13 +711,33 @@ extension CashRunwayRepository {
                 arguments: [finishedAt, monthKey]
             )
         }
+        try db.execute(sql: "DELETE FROM aggregate_dirty_ranges WHERE kind = 'month' AND status = 'done'")
     }
 
-    func rebuildFTS(_ db: Database) throws {
+    func rebuildFTS(_ db: Database, chunkSize: Int = 1000) throws {
         try db.execute(sql: "DELETE FROM transaction_search")
-        let rows = try Row.fetchAll(db, sql: "SELECT * FROM transactions WHERE is_deleted = 0")
-        for row in rows {
-            try syncSearch(db, transaction: try Self.transaction(row))
+        let total = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM transactions WHERE is_deleted = 0") ?? 0
+        guard total > 0 else { return }
+        var lastID: String? = nil
+        var processed = 0
+        while processed < total {
+            let rows = try Row.fetchAll(
+                db,
+                sql: """
+                SELECT * FROM transactions
+                WHERE is_deleted = 0
+                  AND (? IS NULL OR id > ?)
+                ORDER BY id
+                LIMIT ?
+                """,
+                arguments: [lastID, lastID, chunkSize]
+            )
+            guard !rows.isEmpty else { break }
+            for row in rows {
+                try syncSearch(db, transaction: try Self.transaction(row))
+                lastID = row["id"]
+                processed += 1
+            }
         }
     }
 }

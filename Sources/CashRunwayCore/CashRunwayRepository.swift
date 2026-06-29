@@ -868,11 +868,12 @@ extension CashRunwayRepository {
                 SELECT c.id, c.name, c.color_hex, c.icon_name, m.expense_minor, m.txn_count
                 FROM monthly_category_spend m
                 JOIN categories c ON c.id = m.category_id
-                WHERE m.month_key = ?
+                WHERE m.month_key = ? AND m.kind = 'expense'
+                  AND (? IS NULL OR m.wallet_id = ?)
                 ORDER BY m.expense_minor DESC
                 LIMIT 8
                 """,
-                arguments: [monthKey]
+                arguments: [monthKey, walletID?.uuidString, walletID?.uuidString]
             )
             let totalExpense = max(monthExpenseMinor, 1)
             let categories = categoryRows.map { row in
@@ -1287,22 +1288,17 @@ extension CashRunwayRepository {
                 db,
                 sql: """
                 SELECT c.id, c.name, c.kind, c.color_hex, c.icon_name,
-                       COALESCE(SUM(t.amount_minor), 0) AS expense_minor,
-                       COUNT(t.id) AS txn_count
+                       COALESCE(SUM(m.expense_minor), 0) AS expense_minor,
+                       COALESCE(SUM(m.income_minor), 0) AS income_minor,
+                       COALESCE(SUM(m.txn_count), 0) AS txn_count
                 FROM categories c
-                LEFT JOIN transactions t
-                  ON t.category_id = c.id
-                 AND t.is_deleted = 0
-                 AND (
-                    (c.kind = 'expense' AND t.type = 'expense')
-                    OR
-                    (c.kind = 'income' AND t.type = 'income')
-                 )
-                 AND t.local_month_key = ?
-                 \(walletID == nil ? "" : "AND t.wallet_id = ?")
+                LEFT JOIN monthly_category_spend m
+                  ON m.category_id = c.id
+                 AND m.month_key = ?
+                 \(walletID == nil ? "" : "AND m.wallet_id = ?")
                 WHERE c.kind IN ('expense', 'income')
                 GROUP BY c.id
-                HAVING expense_minor > 0
+                HAVING (expense_minor > 0 OR income_minor > 0)
                 ORDER BY c.kind, expense_minor DESC, c.sort_order, c.name
                 """,
                 arguments: walletID == nil ? [monthKey] : [monthKey, walletID!.uuidString]
@@ -1310,8 +1306,9 @@ extension CashRunwayRepository {
             let totalExpense = max(selectedPoint.expenseMinor, 1)
             let totalIncome = max(selectedPoint.incomeMinor, 1)
             let categories = categoryRows.map { row in
-                let amountMinor: Int64 = row["expense_minor"]
                 let kind = CategoryKind(rawValue: row["kind"]) ?? .expense
+                let amountMinor: Int64 = kind == .expense ? row["expense_minor"] : row["income_minor"]
+                let transactionCount: Int = row["txn_count"]
                 return OverviewCategoryRow(
                     id: UUID(uuidString: row["id"])!,
                     name: row["name"],
@@ -1319,7 +1316,7 @@ extension CashRunwayRepository {
                     colorHex: row["color_hex"],
                     iconName: row["icon_name"],
                     amountMinor: amountMinor,
-                    transactionCount: row["txn_count"],
+                    transactionCount: transactionCount,
                     percentage: Double(amountMinor) / Double(kind == .expense ? totalExpense : totalIncome)
                 )
             }
@@ -1327,20 +1324,17 @@ extension CashRunwayRepository {
             let labelRows = try Row.fetchAll(
                 db,
                 sql: """
-                SELECT l.id, l.name, l.color_hex,
-                       CASE t.type WHEN 'income' THEN 'income' ELSE 'expense' END AS kind,
-                       COALESCE(SUM(t.amount_minor), 0) AS label_minor,
-                       COUNT(DISTINCT t.id) AS txn_count
+                SELECT l.id, l.name, l.color_hex, m.kind,
+                       COALESCE(SUM(m.amount_minor), 0) AS label_minor,
+                       COALESCE(SUM(m.txn_count), 0) AS txn_count
                 FROM labels l
-                JOIN transaction_labels tl ON tl.label_id = l.id
-                JOIN transactions t ON t.id = tl.transaction_id
-                WHERE t.is_deleted = 0
-                  AND t.type IN ('expense', 'income')
-                  AND t.local_month_key = ?
-                  \(walletID == nil ? "" : "AND t.wallet_id = ?")
-                GROUP BY l.id, kind
+                JOIN monthly_label_spend m
+                  ON m.label_id = l.id
+                 AND m.month_key = ?
+                 \(walletID == nil ? "" : "AND m.wallet_id = ?")
+                GROUP BY l.id, m.kind
                 HAVING label_minor > 0
-                ORDER BY kind, label_minor DESC, l.name
+                ORDER BY m.kind, label_minor DESC, l.name
                 """,
                 arguments: walletID == nil ? [monthKey] : [monthKey, walletID!.uuidString]
             )
@@ -1515,7 +1509,12 @@ extension CashRunwayRepository {
         }
 
         for item in transactionsToDelete {
-            try applyContribution(db, old: contribution(for: item), new: nil)
+            let labelIDs: [UUID] = try String.fetchAll(
+                db,
+                sql: "SELECT label_id FROM transaction_labels WHERE transaction_id = ?",
+                arguments: [item.id.uuidString]
+            ).compactMap(UUID.init(uuidString:))
+            try applyContribution(db, old: contribution(for: item, labelIDs: labelIDs), new: nil)
         }
         let idStrings = transactionsToDelete.map { $0.id.uuidString }
         try Self.cleanupTransactionReferences(db: db, idStrings: idStrings)
@@ -1612,7 +1611,12 @@ extension CashRunwayRepository {
                     continue
                 }
                 let transaction = try Self.transaction(row)
-                try applyContribution(db, old: contribution(for: transaction), new: nil)
+                let labelIDs: [UUID] = try String.fetchAll(
+                    db,
+                    sql: "SELECT label_id FROM transaction_labels WHERE transaction_id = ?",
+                    arguments: [transaction.id.uuidString]
+                ).compactMap(UUID.init(uuidString:))
+                try applyContribution(db, old: contribution(for: transaction, labelIDs: labelIDs), new: nil)
             }
 
             let idStrings = plan.transactionIDs.map { $0.uuidString }
@@ -1852,17 +1856,20 @@ extension CashRunwayRepository {
                 ]
             )
 
-            var seenFingerprints = try existingImportFingerprints(db)
-            let existingSemanticKeys = try existingImportSemanticKeys(db)
+            var seenFingerprints = Set<String>()
             var insertedRows = 0
             var duplicateRows = 0
             var affectedMonths = Set<Int>()
 
             for row in preparedRows {
                 let semanticKey = importSemanticKey(for: row.draft)
+                let fingerprintDuplicate = try importFingerprintExists(db, fingerprint: row.fingerprint)
+                    || (row.legacyFingerprint.map { try importFingerprintExists(db, fingerprint: $0) } ?? false)
+                let semanticDuplicate = try importSemanticKeyExists(db, key: semanticKey)
                 if seenFingerprints.contains(row.fingerprint)
                     || row.legacyFingerprint.map({ seenFingerprints.contains($0) }) ?? false
-                    || existingSemanticKeys.contains(semanticKey) {
+                    || fingerprintDuplicate
+                    || semanticDuplicate {
                     duplicateRows += 1
                     continue
                 }
@@ -1942,11 +1949,39 @@ extension CashRunwayRepository {
         }
     }
 
+    private func importFingerprintExists(_ db: Database, fingerprint: String) throws -> Bool {
+        let count = try Int.fetchOne(
+            db,
+            sql: "SELECT COUNT(*) FROM transactions WHERE import_fingerprint = ?",
+            arguments: [fingerprint]
+        ) ?? 0
+        return count > 0
+    }
+
+    private func importSemanticKeyExists(_ db: Database, key: String) throws -> Bool {
+        let count = try Int.fetchOne(
+            db,
+            sql: """
+            SELECT COUNT(*) FROM transactions
+            WHERE is_deleted = 0
+              AND (
+                import_fingerprint IS NULL
+                OR source IN ('manual', 'bank_sync')
+              )
+              AND wallet_id || '|' || type || '|' || local_day_key || '|' || amount_minor || '|' || lower(trim(coalesce(merchant, ''))) || '|' || lower(trim(coalesce(note, ''))) = ?
+            """,
+            arguments: [key]
+        ) ?? 0
+        return count > 0
+    }
+
+    @available(*, deprecated, message: "Replaced by per-row importFingerprintExists and importSemanticKeyExists checks")
     private func existingImportFingerprints(_ db: Database) throws -> Set<String> {
         let rows = try String.fetchAll(db, sql: "SELECT import_fingerprint FROM transactions WHERE import_fingerprint IS NOT NULL")
         return Set(rows)
     }
 
+    @available(*, deprecated, message: "Replaced by per-row importSemanticKeyExists check")
     private func existingImportSemanticKeys(_ db: Database) throws -> Set<String> {
         let rows = try Row.fetchAll(
             db,
@@ -2169,8 +2204,22 @@ extension CashRunwayRepository {
             updatedAt: now
         )
 
+        let existingLabelIDs: [UUID] = if let existing {
+            try String.fetchAll(
+                db,
+                sql: "SELECT label_id FROM transaction_labels WHERE transaction_id = ?",
+                arguments: [existing.id.uuidString]
+            ).compactMap(UUID.init(uuidString:))
+        } else {
+            []
+        }
+
         if updateDerivedData {
-            try applyContribution(db, old: existing.map(contribution(for:)), new: contribution(for: record))
+            try applyContribution(
+                db,
+                old: existing.map { contribution(for: $0, labelIDs: existingLabelIDs) },
+                new: contribution(for: record, labelIDs: draft.labelIDs)
+            )
         }
         try upsertTransactionRow(db, transaction: record)
         try syncLabels(db, transactionID: id, labelIDs: draft.labelIDs)
@@ -2240,9 +2289,27 @@ extension CashRunwayRepository {
             updatedAt: now
         )
 
+        let transferExistingLabelIDs: [UUID] = if let sourceExisting {
+            try String.fetchAll(
+                db,
+                sql: "SELECT label_id FROM transaction_labels WHERE transaction_id IN (?, ?)",
+                arguments: [sourceExisting.id.uuidString, targetID.uuidString]
+            ).compactMap(UUID.init(uuidString:))
+        } else {
+            []
+        }
+
         if updateDerivedData {
-            try applyContribution(db, old: sourceExisting.map(contribution(for:)), new: contribution(for: sourceRecord))
-            try applyContribution(db, old: targetExisting.map(contribution(for:)), new: contribution(for: targetRecord))
+            try applyContribution(
+                db,
+                old: sourceExisting.map { contribution(for: $0, labelIDs: transferExistingLabelIDs) },
+                new: contribution(for: sourceRecord, labelIDs: draft.labelIDs)
+            )
+            try applyContribution(
+                db,
+                old: targetExisting.map { contribution(for: $0, labelIDs: transferExistingLabelIDs) },
+                new: contribution(for: targetRecord, labelIDs: draft.labelIDs)
+            )
         }
         try upsertTransactionRow(db, transaction: sourceRecord)
         try upsertTransactionRow(db, transaction: targetRecord)
