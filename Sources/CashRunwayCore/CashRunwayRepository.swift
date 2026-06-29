@@ -1835,6 +1835,9 @@ extension CashRunwayRepository {
         rowErrors: [CSVRowError],
         invalidRows: Int? = nil
     ) throws -> CSVImportResult {
+        guard !ProtectedDataMonitor.skipIfUnavailable(work: "commitCSVImport") else {
+            throw CashRunwayError.validation("Protected data is unavailable. Try again after unlocking your device.")
+        }
         let now = Date()
         let jobID = UUID()
         let resolvedInvalidRows = invalidRows ?? rowErrors.count
@@ -2077,12 +2080,15 @@ extension CashRunwayRepository {
     }
 
     public func runMaintenance() throws {
+        guard !ProtectedDataMonitor.skipIfUnavailable(work: "runMaintenance") else { return }
         try databaseManager.dbQueue.write { db in
             try processPendingAggregateRebuilds(db)
+            try purgeExpiredRawJSON(db)
         }
     }
 
     public func refreshRecurringInstances() throws {
+        guard !ProtectedDataMonitor.skipIfUnavailable(work: "refreshRecurringInstances") else { return }
         try databaseManager.dbQueue.write { db in
             try refreshRecurringInstances(db)
         }

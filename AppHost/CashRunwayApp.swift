@@ -45,6 +45,7 @@ struct CashRunwayApp: App {
 
 private final class BackgroundMaintenanceCoordinator {
     private let identifier = "dev.roman.cash-runway.maintenance"
+    private let logger = Logger(subsystem: "dev.roman.cashrunway", category: "background-maintenance")
     private var hasRegistered = false
 
     func register() {
@@ -73,12 +74,18 @@ private final class BackgroundMaintenanceCoordinator {
         schedule()
         let taskBox = BackgroundProcessingTaskBox(task)
         let maintenanceTask = Task(priority: .background) {
+            let bgLogger = Logger(subsystem: "dev.roman.cashrunway", category: "background-maintenance")
+            guard ProtectedDataMonitor.shared.isAvailable else {
+                bgLogger.debug("Skipping background maintenance: protected data unavailable.")
+                return true
+            }
             do {
                 let repository = try CashRunwayRepository()
                 try repository.runMaintenance()
                 try repository.refreshRecurringInstances()
                 return true
             } catch {
+                bgLogger.error("Background maintenance failed: \(error.localizedDescription, privacy: .public)")
                 return false
             }
         }
@@ -193,13 +200,13 @@ private enum DebugDataRecoveryAttempt {
         let attemptDirectory = recoveryDirectory.appendingPathComponent("RestoreAttempt-\(stamp)", isDirectory: true)
         try fileManager.createDirectory(at: attemptDirectory, withIntermediateDirectories: true)
 
+        let protection = FileProtectionService()
         for suffix in ["", "-wal", "-shm"] {
             let activeURL = URL(fileURLWithPath: databaseURL.path + suffix)
             guard fileManager.fileExists(atPath: activeURL.path) else { continue }
-            try fileManager.copyItem(
-                at: activeURL,
-                to: attemptDirectory.appendingPathComponent(activeURL.lastPathComponent)
-            )
+            let attemptURL = attemptDirectory.appendingPathComponent(activeURL.lastPathComponent)
+            try fileManager.copyItem(at: activeURL, to: attemptURL)
+            protection.protect(attemptURL)
             try fileManager.removeItem(at: activeURL)
         }
 
@@ -210,6 +217,7 @@ private enum DebugDataRecoveryAttempt {
             guard fileManager.fileExists(atPath: backupURL.path) else { continue }
             let destinationURL = URL(fileURLWithPath: databaseURL.path + destinationSuffix)
             try fileManager.copyItem(at: backupURL, to: destinationURL)
+            protection.protect(destinationURL)
         }
 
         let restoredProbe = try probe(databaseURL, key: key)
@@ -237,17 +245,28 @@ private enum DebugDataRecoveryAttempt {
     }
 
     private static func write(_ report: String) throws {
-        let documents = try FileManager.default.url(
-            for: .documentDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        )
-        try report.write(
-            to: documents.appendingPathComponent("recovery-attempt-report.txt"),
-            atomically: true,
-            encoding: .utf8
-        )
+        let fileManager = FileManager.default
+        let directory = fileManager.temporaryDirectory.appendingPathComponent("CashRunwayRecoveryReports", isDirectory: true)
+        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+        cleanupStaleRecoveryReports(in: directory)
+
+        let url = directory.appendingPathComponent("recovery-attempt-report.txt")
+        try report.write(to: url, atomically: true, encoding: .utf8)
+        FileProtectionService().protect(url)
+    }
+
+    /// Remove recovery reports older than 24 hours as a best-effort cleanup fallback.
+    private static func cleanupStaleRecoveryReports(in directory: URL) {
+        let fileManager = FileManager.default
+        let cutoff = Date().addingTimeInterval(-24 * 60 * 60)
+        let keys: [URLResourceKey] = [.creationDateKey]
+        guard let urls = try? fileManager.contentsOfDirectory(at: directory, includingPropertiesForKeys: keys) else { return }
+        for url in urls {
+            guard let values = try? url.resourceValues(forKeys: [.creationDateKey]),
+                  let createdAt = values.creationDate,
+                  createdAt < cutoff else { continue }
+            try? fileManager.removeItem(at: url)
+        }
     }
 }
 

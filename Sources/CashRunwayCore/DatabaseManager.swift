@@ -2,7 +2,6 @@ import Foundation
 import GRDB
 import Security
 import CryptoKit
-import LocalAuthentication
 import OSLog
 
 public enum KeychainStoreError: Error, LocalizedError, Equatable {
@@ -161,66 +160,6 @@ public final class KeychainBankTokenStore: BankTokenStore, @unchecked Sendable {
     }
 }
 
-// DEPRECATED — App Lock is deprecated. Remove when work resumes or feature is removed.
-public struct AppLockConfiguration: Codable, Sendable, Equatable {
-    public var pinHash: String
-    public var isEnabled: Bool
-    public var usesBiometrics: Bool
-    public var backgroundLockSeconds: Int
-}
-
-// DEPRECATED — App Lock is deprecated. Remove when work resumes or feature is removed.
-public final class AppLockStore: @unchecked Sendable {
-    private let keychain: any KeychainStoring
-    private let account = "app-lock-config"
-
-    public init(keychain: any KeychainStoring) {
-        self.keychain = keychain
-    }
-
-    public func configuration() -> AppLockConfiguration? {
-        guard let data = try? keychain.read(account: account) else { return nil }
-        return try? JSONDecoder().decode(AppLockConfiguration.self, from: data)
-    }
-
-    public func save(pin: String, biometrics: Bool, backgroundLockSeconds: Int) throws {
-        guard pin.count >= 4 else {
-            throw CashRunwayError.validation("PIN must be at least 4 digits.")
-        }
-        let config = AppLockConfiguration(
-            pinHash: SHA256.hash(data: Data(pin.utf8)).compactMap { String(format: "%02x", $0) }.joined(),
-            isEnabled: true,
-            usesBiometrics: biometrics,
-            backgroundLockSeconds: backgroundLockSeconds
-        )
-        try keychain.write(try JSONEncoder().encode(config), account: account)
-    }
-
-    public func validate(pin: String) -> Bool {
-        guard let config = configuration() else { return false }
-        let hash = SHA256.hash(data: Data(pin.utf8)).compactMap { String(format: "%02x", $0) }.joined()
-        return config.pinHash == hash
-    }
-
-    public func canUseBiometrics() -> Bool {
-        guard configuration()?.usesBiometrics == true else { return false }
-        let context = LAContext()
-        var error: NSError?
-        return context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
-    }
-
-    @MainActor
-    public func unlockWithBiometrics(reason: String = "Unlock Cash Runway") async -> Bool {
-        guard canUseBiometrics() else { return false }
-        let context = LAContext()
-        do {
-            return try await context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: reason)
-        } catch {
-            return false
-        }
-    }
-}
-
 public struct DatabaseLocationProvider {
     public var appGroupIdentifier: String?
     public var databaseURLOverride: URL?
@@ -357,6 +296,7 @@ public final class DatabaseManager: @unchecked Sendable {
         do {
             let dbQueue = try DatabaseQueue(path: url.path, configuration: makeConfiguration(keychain: keychain))
             try migrator.migrate(dbQueue)
+            FileProtectionService().protectSQLiteTrio(at: url)
             return dbQueue
         } catch {
             guard allowsDestructiveRecovery, shouldRecover(from: error) else {
@@ -366,6 +306,7 @@ public final class DatabaseManager: @unchecked Sendable {
             keychain.delete(account: "database-key")
             let recoveredQueue = try DatabaseQueue(path: url.path, configuration: makeConfiguration(keychain: keychain))
             try migrator.migrate(recoveredQueue)
+            FileProtectionService().protectSQLiteTrio(at: url)
             return recoveredQueue
         }
     }
@@ -407,17 +348,21 @@ public final class DatabaseManager: @unchecked Sendable {
                 try fileManager.removeItem(at: destinationURL)
             }
             try fileManager.moveItem(at: sourceURL, to: destinationURL)
+            FileProtectionService().protect(destinationURL)
         }
     }
 
     static func allMigrations() -> [(String, @Sendable (Database) throws -> Void)] {
         // Migration identifiers are permanent. GRDB tracks applied migrations
-        // by identifier (not by name ordering), so `v3_bank_sync` registered
-        // after `v4_import_job_source_format_id` runs in registration order.
-        // Never rename, reorder, or delete existing entries — existing
-        // databases would treat a renamed migration as new and re-run it.
-        // Use monotonic names (`v6_*`, `v7_*`, …) only for new migrations.
-        // `MigrationIntegrityTests` asserts this identifier set is stable.
+        // by identifier (not by name ordering) and runs them in registration order.
+        // Existing identifiers are immutable in place; new migrations append only.
+        // Never rename, reorder, or delete an existing entry — existing databases
+        // would treat a renamed/reordered migration as new and re-run it, corrupting data.
+        // The non-monotonic position of `v3_bank_sync` (registered after `v4_…`) is
+        // intentional and must not be "fixed" by reordering.
+        // Use monotonic names (`v6_*`, `v7_*`, …) for NEW migrations only.
+        // `MigrationIntegrityTests.migrationIdentifierSetMatchesRegistrationOrder`
+        // asserts this exact ordered set so accidental edits are caught.
         [
             ("v1_schema", { db in
                 try db.create(table: "wallets") { table in
@@ -812,6 +757,81 @@ public final class DatabaseManager: @unchecked Sendable {
                         arguments: [category.id.uuidString, category.kind.rawValue]
                     )
                 }
+            }),
+
+            ("v6_bank_raw_json_ttl", { db in
+                // Recreate bank_transaction_imports so raw_json becomes nullable.
+                // This allows the 30-day TTL purge to actually delete payloads.
+                let tableExists = try Bool.fetchOne(
+                    db,
+                    sql: "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'bank_transaction_imports'"
+                ) != nil
+
+                if tableExists {
+                    try db.execute(sql: "ALTER TABLE bank_transaction_imports RENAME TO bank_transaction_imports_old")
+                }
+
+                try db.create(table: "bank_transaction_imports") { table in
+                    table.column("id", .text).primaryKey()
+                    table.column("provider", .text).notNull()
+                    table.column("integration_id", .text).notNull()
+                    table.column("bank_account_id", .text).notNull()
+                    table.column("provider_account_id", .text).notNull()
+                    table.column("provider_statement_item_id", .text).notNull()
+                    table.column("statement_time", .integer).notNull()
+                    table.column("amount_minor_signed", .integer).notNull()
+                    table.column("operation_amount_minor_signed", .integer)
+                    table.column("currency_code", .integer).notNull()
+                    table.column("mcc", .integer)
+                    table.column("original_mcc", .integer)
+                    table.column("description", .text)
+                    table.column("comment", .text)
+                    table.column("counter_name", .text)
+                    // DEPRECATED post-v6: always NULL going forward. Retained as
+                    // nullable for schema compatibility, but no code path populates
+                    // them. Do not re-enable without privacy review — these columns
+                    // hold PII (IBAN, receipt id) that the v6 migration intentionally
+                    // redacted from existing rows.
+                    table.column("counter_iban", .text)
+                    table.column("receipt_id", .text)
+                    table.column("hold", .boolean)
+                    table.column("raw_json", .text)
+                    table.column("raw_json_expires_at", .datetime)
+                    table.column("cash_runway_transaction_id", .text)
+                    table.column("import_status", .text).notNull()
+                    table.column("created_at", .datetime).notNull()
+                    table.column("updated_at", .datetime).notNull()
+                    table.uniqueKey(["provider", "provider_account_id", "provider_statement_item_id"])
+                }
+
+                if tableExists {
+                    // raw_json is intentionally set to NULL for all migrated rows; existing
+                    // full payloads are redacted on upgrade per the privacy policy.
+                    // raw_json_expires_at is set to created_at+30d for bookkeeping, but
+                    // the payload is already gone. counter_iban and receipt_id are also
+                    // cleared (NULL) to drop retained PII from legacy imports.
+                    try db.execute(sql: """
+                        INSERT INTO bank_transaction_imports (
+                            id, provider, integration_id, bank_account_id, provider_account_id,
+                            provider_statement_item_id, statement_time, amount_minor_signed,
+                            operation_amount_minor_signed, currency_code, mcc, original_mcc,
+                            description, comment, counter_name, counter_iban, receipt_id, hold,
+                            raw_json, raw_json_expires_at, cash_runway_transaction_id, import_status, created_at, updated_at
+                        )
+                        SELECT
+                            id, provider, integration_id, bank_account_id, provider_account_id,
+                            provider_statement_item_id, statement_time, amount_minor_signed,
+                            operation_amount_minor_signed, currency_code, mcc, original_mcc,
+                            description, comment, counter_name, NULL, NULL, hold,
+                            NULL, datetime(created_at, '+30 days'), cash_runway_transaction_id, import_status, created_at, updated_at
+                        FROM bank_transaction_imports_old
+                        """)
+                    try db.execute(sql: "DROP TABLE bank_transaction_imports_old")
+                }
+
+                try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_bank_imports_account_time ON bank_transaction_imports(bank_account_id, statement_time)")
+                try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_bank_imports_cash_transaction ON bank_transaction_imports(cash_runway_transaction_id)")
+                try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_bank_transaction_imports_statement_time ON bank_transaction_imports(statement_time)")
             }),
         ]
     }

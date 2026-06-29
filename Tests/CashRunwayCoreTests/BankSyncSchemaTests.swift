@@ -26,7 +26,8 @@ struct BankSyncSchemaTests {
                     'idx_bank_accounts_integration',
                     'idx_bank_imports_account_time',
                     'idx_bank_imports_cash_transaction',
-                    'idx_bank_category_rules_provider_type'
+                    'idx_bank_category_rules_provider_type',
+                    'idx_bank_transaction_imports_statement_time'
                 )
                 """
             ))
@@ -39,6 +40,7 @@ struct BankSyncSchemaTests {
             "idx_bank_imports_account_time",
             "idx_bank_imports_cash_transaction",
             "idx_bank_category_rules_provider_type",
+            "idx_bank_transaction_imports_statement_time",
         ])
     }
 

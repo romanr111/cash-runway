@@ -815,8 +815,8 @@ struct BulkDeleteTransactionsTests {
                 INSERT INTO bank_transaction_imports
                 (id, provider, integration_id, bank_account_id, provider_account_id,
                  provider_statement_item_id, statement_time, amount_minor_signed,
-                 currency_code, raw_json, cash_runway_transaction_id, import_status, created_at, updated_at)
-                VALUES (?, 'monobank', 'int1', 'acc1', 'acc1', 'item1', ?, ?, 980, '{}', ?, 'imported', ?, ?)
+                 currency_code, raw_json, raw_json_expires_at, cash_runway_transaction_id, import_status, created_at, updated_at)
+                VALUES (?, 'monobank', 'int1', 'acc1', 'acc1', 'item1', ?, ?, 980, '{}', datetime('now', '+30 days'), ?, 'imported', ?, ?)
                 """,
                 arguments: [importID.uuidString, Int(now.timeIntervalSince1970), -1_000, txnID.uuidString, Date(), Date()]
             )
