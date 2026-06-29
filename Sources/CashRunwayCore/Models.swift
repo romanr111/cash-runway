@@ -1187,6 +1187,27 @@ public protocol BackupServicing: Sendable {
     func restore(_ backup: CashRunwayBackup) throws -> BackupRestoreResult
 }
 
+public protocol CSVImportServicing: Sendable {
+    func preview(data: Data) throws -> CSVImportPreview
+    func detectPreset(headers: [String]) -> CSVPreset
+    func detectFormat(headers: [String], fileKind: StatementFileKind) -> BankStatementFormat
+    func previewPreparedRows(
+        data: Data,
+        mapping: CSVImportMapping,
+        rowFilter: CSVImportRowFilter,
+        limit: Int
+    ) throws -> [PreparedImportRow]
+    func defaultMapping(headers: [String], format: BankStatementFormat, walletID: UUID?) -> CSVImportMapping
+    func exportCSV(query: TransactionQuery) throws -> String
+    func importStatement(
+        normalizedData: Data,
+        fileName: String,
+        format: BankStatementFormat,
+        mapping: CSVImportMapping,
+        rowFilter: CSVImportRowFilter
+    ) throws -> CSVImportResult
+}
+
 public final class BackupService: BackupServicing, @unchecked Sendable {
     // @unchecked Sendable is justified: `repository` and `bankTokenStore` are
     // immutable `let` references to Sendable types; backup operations delegate

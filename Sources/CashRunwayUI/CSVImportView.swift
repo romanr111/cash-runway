@@ -215,7 +215,6 @@ struct CSVImportView: View {
     private var reviewRows: [CSVImportReviewRow] {
         if let preparedRows = try? coordinator.model.csvService.previewPreparedRows(
             data: coordinator.importData,
-                format: coordinator.importFormat,
             mapping: coordinator.importMapping,
             rowFilter: coordinator.rowFilter,
             limit: 3

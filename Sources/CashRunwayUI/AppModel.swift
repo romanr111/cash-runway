@@ -14,8 +14,8 @@ public final class CashRunwayAppModel {
     // receive it as a parameter. `csvService`/`backupService` remain `public var`
     // until BackupServicing/CSVServicing protocols are introduced (Phase 3.6).
     private let repository: any CashRunwayRepositorying
-    public var csvService: CSVService
-    public var backupService: BackupService
+    public var csvService: any CSVImportServicing
+    public var backupService: any BackupServicing
     public var bankTokenStore: any BankTokenStore
     private let bankSyncPerformer: any BankSyncPerforming
     private let monobankTokenValidator: any MonobankTokenValidating
@@ -115,8 +115,8 @@ public final class CashRunwayAppModel {
         bankTokenStore: any BankTokenStore,
         bankSyncPerformer: any BankSyncPerforming,
         monobankTokenValidator: any MonobankTokenValidating,
-        csvService: CSVService,
-        backupService: BackupService
+        csvService: any CSVImportServicing,
+        backupService: any BackupServicing
     ) {
         let performer = BankSyncSerialPerformer(bankSyncPerformer)
         let backgroundWork = BackgroundWork(
@@ -920,14 +920,14 @@ public func importStatement(
 
 private actor BackgroundWork {
     private let repository: any CashRunwayRepositorying
-    private let csvService: CSVService
-    private let backupService: BackupService
+    private let csvService: any CSVImportServicing
+    private let backupService: any BackupServicing
     private let bankSyncPerformer: any BankSyncPerforming
 
     init(
         repository: any CashRunwayRepositorying,
-        csvService: CSVService,
-        backupService: BackupService,
+        csvService: any CSVImportServicing,
+        backupService: any BackupServicing,
         bankSyncPerformer: any BankSyncPerforming
     ) {
         self.repository = repository
