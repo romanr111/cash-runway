@@ -116,6 +116,31 @@ struct BankConnectionServiceTests {
         #expect(try repository.bankIntegrations().isEmpty)
     }
 
+    @Test func uahMonobankAccountRequiresUAHWalletMapping() async throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        var wallet = try #require(try repository.wallets().first)
+        wallet.currencyCode = .usd
+        try repository.saveWallet(wallet)
+        let service = MonobankConnectionService(
+            repository: repository,
+            tokenStore: KeychainBankTokenStore(keychain: TestKeychainStore()),
+            tokenValidator: FakeMonobankTokenValidator(info: MonobankClientInfo(name: "Test", accounts: [])),
+            syncPerformer: RecordingBankSyncPerformer()
+        )
+
+        await #expect(throws: CashRunwayError.self) {
+            _ = try await service.connectMonobank(
+                token: "personal-token",
+                selections: [
+                    MonobankAccountConnectionSelection(account: Self.uahAccount(id: "uah-1"), walletID: wallet.id, isEnabled: true),
+                ]
+            )
+        }
+        #expect(try repository.bankIntegrations().isEmpty)
+    }
+
     @Test func successfulSyncClearsPreviousErrorAndUpdatesIntegrationStatus() async throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
@@ -306,11 +331,11 @@ struct BankConnectionServiceTests {
     }
 
     private static func uahAccount(id: String, name: String = "Black", maskedPAN: [String] = ["1234"]) -> MonobankAccount {
-        MonobankAccount(id: id, type: name.lowercased(), currencyCode: 980, maskedPan: maskedPAN, iban: nil)
+        MonobankAccount(id: id, type: name.lowercased(), currencyCode: ISO4217NumericCurrencyCode.uah, maskedPan: maskedPAN, iban: nil)
     }
 
     private static func usdAccount(id: String) -> MonobankAccount {
-        MonobankAccount(id: id, type: "white", currencyCode: 840, maskedPan: ["9999"], iban: nil)
+        MonobankAccount(id: id, type: "white", currencyCode: ISO4217NumericCurrencyCode.usd, maskedPan: ["9999"], iban: nil)
     }
 
     private func monobankItem(

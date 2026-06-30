@@ -90,6 +90,58 @@ struct FullBackupTests {
         #expect(decoded.transactions.count == 4)
     }
 
+    @Test func fullBackupRoundTripPreservesCurrencyCodes() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let wallet = try #require(try repository.wallets().first)
+        let category = try #require(try repository.categories(kind: .expense).first)
+        var usdWallet = wallet
+        usdWallet.currencyCode = .usd
+        try repository.saveWallet(usdWallet)
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        try repository.saveTransaction(TransactionDraft(
+            kind: .expense,
+            walletID: usdWallet.id,
+            amountMinor: 12_34,
+            currencyCode: .usd,
+            occurredAt: now,
+            categoryID: category.id,
+            merchant: "Currency Backup"
+        ))
+        try repository.saveRecurringTemplate(RecurringTemplate(
+            id: UUID(),
+            kind: .expense,
+            walletID: usdWallet.id,
+            counterpartyWalletID: nil,
+            amountMinor: 12_34,
+            currencyCode: .usd,
+            categoryID: category.id,
+            merchant: "Currency Backup",
+            note: nil,
+            ruleType: .monthly,
+            ruleInterval: 1,
+            dayOfMonth: 1,
+            weekday: nil,
+            startDate: now,
+            endDate: nil,
+            isActive: true,
+            createdAt: now,
+            updatedAt: now
+        ))
+
+        let backup = try repository.exportFullBackup()
+        let target = try TestSupport.makeRepository()
+        try target.restoreFullBackup(backup)
+
+        #expect(backup.wallets.first { $0.id == usdWallet.id }?.currencyCode == .usd)
+        #expect(backup.transactions.first { $0.merchant == "Currency Backup" }?.currencyCode == .usd)
+        #expect(backup.recurringTemplates.first { $0.merchant == "Currency Backup" }?.currencyCode == .usd)
+        #expect(try target.wallets().first { $0.id == usdWallet.id }?.currencyCode == .usd)
+        #expect(try target.transactionDraft(id: try #require(backup.transactions.first { $0.merchant == "Currency Backup" }?.id)).currencyCode == .usd)
+        #expect(try target.recurringTemplates().first { $0.merchant == "Currency Backup" }?.currencyCode == .usd)
+    }
+
     @Test func fullBackupDoesNotExposeKeychainOrLocalPaths() throws {
         let (repository, _) = try makePopulatedRepository()
         let service = BackupService(repository: repository)

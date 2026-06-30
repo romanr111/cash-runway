@@ -278,7 +278,7 @@ public final class BankSyncService: BankSyncPerforming, @unchecked Sendable {
         for integration in integrations {
             var integrationSyncedAt: Date?
             for account in try repository.enabledBankAccounts(integrationID: integration.id) {
-                guard account.currencyCode == 980 else { continue }
+                guard account.currencyCode == ISO4217NumericCurrencyCode.uah else { continue }
                 let lowerBound = integration.syncStartAt
                 let from = max(account.lastSuccessfulSyncAt?.addingTimeInterval(-6 * 60 * 60) ?? lowerBound, lowerBound)
                 let to = now()
@@ -296,7 +296,7 @@ public final class BankSyncService: BankSyncPerforming, @unchecked Sendable {
                     let importable = items.filter { item in
                         Date(timeIntervalSince1970: TimeInterval(item.time)) >= lowerBound
                             && item.amount < 0
-                            && item.currencyCode == 980
+                            && item.currencyCode == ISO4217NumericCurrencyCode.uah
                     }
                     result.skippedCount += items.count - importable.count
                     let importResult = try repository.importMonobankExpenseItems(importable, account: account, integration: integration)
@@ -360,13 +360,16 @@ public final class MonobankConnectionService: @unchecked Sendable {
     ) async throws -> BankIntegration {
         let trimmedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedToken.isEmpty else { throw BankSyncError.tokenInvalid }
-        let enabledSelections = selections.filter { $0.isEnabled && $0.account.currencyCode == 980 }
+        let enabledSelections = selections.filter { $0.isEnabled && $0.account.currencyCode == ISO4217NumericCurrencyCode.uah }
         guard !enabledSelections.isEmpty else {
             throw CashRunwayError.validation(L10n.string("Select at least one UAH Monobank card."))
         }
-        let walletIDs = Set(try repository.wallets().map(\.id))
-        guard enabledSelections.allSatisfy({ walletIDs.contains($0.walletID) }) else {
+        let walletsByID = Dictionary(uniqueKeysWithValues: try repository.wallets().map { ($0.id, $0) })
+        guard enabledSelections.allSatisfy({ walletsByID[$0.walletID] != nil }) else {
             throw CashRunwayError.validation(L10n.string("Each selected Monobank account must map to an existing wallet."))
+        }
+        guard enabledSelections.allSatisfy({ walletsByID[$0.walletID]?.currencyCode == .uah }) else {
+            throw CashRunwayError.validation(L10n.string("Monobank UAH accounts can only map to UAH wallets."))
         }
 
         let timestamp = now()

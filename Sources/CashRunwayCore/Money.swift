@@ -2,12 +2,129 @@ import Foundation
 
 public enum MoneyError: Error, LocalizedError, Equatable {
     case invalidAmount(String)
+    case currencyMismatch(lhs: CurrencyCode, rhs: CurrencyCode)
+    case missingExchangeRate(from: CurrencyCode, to: CurrencyCode)
 
     public var errorDescription: String? {
         switch self {
         case let .invalidAmount(value):
             "Invalid amount: \(value)"
+        case let .currencyMismatch(lhs, rhs):
+            "Currency mismatch: \(lhs.rawValue) cannot be combined with \(rhs.rawValue)."
+        case let .missingExchangeRate(source, target):
+            "Missing exchange rate from \(source.rawValue) to \(target.rawValue)."
         }
+    }
+}
+
+public struct CurrencyCode: RawRepresentable, Codable, Hashable, Sendable {
+    public let rawValue: String
+
+    public init(rawValue: String) {
+        self.rawValue = rawValue.uppercased()
+    }
+}
+
+public extension CurrencyCode {
+    static let uah = CurrencyCode(rawValue: "UAH")
+    static let usd = CurrencyCode(rawValue: "USD")
+    static let eur = CurrencyCode(rawValue: "EUR")
+}
+
+public struct MoneyAmount: Codable, Hashable, Sendable {
+    public var minorUnits: Int64
+    public var currencyCode: CurrencyCode
+
+    public init(minorUnits: Int64, currencyCode: CurrencyCode) {
+        self.minorUnits = minorUnits
+        self.currencyCode = currencyCode
+    }
+
+    public func adding(_ other: MoneyAmount) throws -> MoneyAmount {
+        guard currencyCode == other.currencyCode else {
+            throw MoneyError.currencyMismatch(lhs: currencyCode, rhs: other.currencyCode)
+        }
+        return MoneyAmount(minorUnits: minorUnits + other.minorUnits, currencyCode: currencyCode)
+    }
+}
+
+public struct CurrencyPreferences: Codable, Hashable, Sendable {
+    public var defaultCurrencyCode: CurrencyCode
+    public var reportingCurrencyCode: CurrencyCode
+
+    public init(
+        defaultCurrencyCode: CurrencyCode = .uah,
+        reportingCurrencyCode: CurrencyCode = .uah
+    ) {
+        self.defaultCurrencyCode = defaultCurrencyCode
+        self.reportingCurrencyCode = reportingCurrencyCode
+    }
+
+    public static let `default` = CurrencyPreferences()
+}
+
+public struct ExchangeRate: Codable, Hashable, Sendable {
+    public var sourceCurrencyCode: CurrencyCode
+    public var targetCurrencyCode: CurrencyCode
+    public var rateDecimal: String
+    public var effectiveDate: Date
+    public var source: String
+
+    public init(
+        sourceCurrencyCode: CurrencyCode,
+        targetCurrencyCode: CurrencyCode,
+        rateDecimal: String,
+        effectiveDate: Date,
+        source: String
+    ) {
+        self.sourceCurrencyCode = sourceCurrencyCode
+        self.targetCurrencyCode = targetCurrencyCode
+        self.rateDecimal = rateDecimal
+        self.effectiveDate = effectiveDate
+        self.source = source
+    }
+}
+
+public enum CurrencyConversionPolicy: Codable, Hashable, Sendable {
+    case latestAvailable
+    case effectiveDate
+    case noConversion
+}
+
+public protocol ExchangeRateProviding: Sendable {
+    func rate(
+        from sourceCurrency: CurrencyCode,
+        to targetCurrency: CurrencyCode,
+        on date: Date
+    ) async throws -> ExchangeRate
+}
+
+public protocol CurrencyConverting: Sendable {
+    func convert(
+        _ amount: MoneyAmount,
+        to targetCurrency: CurrencyCode,
+        on date: Date,
+        policy: CurrencyConversionPolicy
+    ) async throws -> MoneyAmount
+}
+
+public protocol PublicExchangeRateClient: Sendable {
+    func fetchRates(baseCurrency: CurrencyCode, date: Date?) async throws -> [ExchangeRate]
+}
+
+public struct NoopCurrencyConverter: CurrencyConverting {
+    public init() {}
+
+    public func convert(
+        _ amount: MoneyAmount,
+        to targetCurrency: CurrencyCode,
+        on date: Date,
+        policy: CurrencyConversionPolicy
+    ) async throws -> MoneyAmount {
+        guard amount.currencyCode == targetCurrency else {
+            throw MoneyError.missingExchangeRate(from: amount.currencyCode, to: targetCurrency)
+        }
+        return amount
     }
 }
 

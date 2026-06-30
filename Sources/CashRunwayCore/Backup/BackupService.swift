@@ -124,13 +124,13 @@ extension CashRunwayRepository {
             let categoryID = wallet.categoryID ?? WalletCategory.builtIn(byKind: wallet.kind).id
             try db.execute(
                 sql: """
-                INSERT INTO wallets (id, name, kind, category_id, color_hex, icon_name, starting_balance_minor, current_balance_minor, is_archived, sort_order, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO wallets (id, name, kind, category_id, color_hex, icon_name, starting_balance_minor, current_balance_minor, currency_code, is_archived, sort_order, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 arguments: [
                     wallet.id.uuidString, wallet.name, wallet.kind.rawValue, categoryID.uuidString,
                     wallet.colorHex, wallet.iconName,
-                    wallet.startingBalanceMinor, wallet.startingBalanceMinor, wallet.isArchived, wallet.sortOrder,
+                    wallet.startingBalanceMinor, wallet.startingBalanceMinor, wallet.currencyCode.rawValue, wallet.isArchived, wallet.sortOrder,
                     wallet.createdAt, wallet.updatedAt,
                 ]
             )
@@ -184,12 +184,12 @@ extension CashRunwayRepository {
         for template in backup.recurringTemplates {
             try db.execute(
                 sql: """
-                INSERT INTO recurring_templates (id, kind, wallet_id, counterparty_wallet_id, amount_minor, category_id, merchant, note, rule_type, rule_interval, day_of_month, weekday, start_date, end_date, is_active, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO recurring_templates (id, kind, wallet_id, counterparty_wallet_id, amount_minor, currency_code, category_id, merchant, note, rule_type, rule_interval, day_of_month, weekday, start_date, end_date, is_active, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 arguments: [
                     template.id.uuidString, template.kind.rawValue, template.walletID.uuidString,
-                    template.counterpartyWalletID?.uuidString, template.amountMinor, template.categoryID?.uuidString,
+                    template.counterpartyWalletID?.uuidString, template.amountMinor, template.currencyCode.rawValue, template.categoryID?.uuidString,
                     template.merchant, template.note, template.ruleType.rawValue, template.ruleInterval,
                     template.dayOfMonth, template.weekday, template.startDate, template.endDate, template.isActive,
                     template.createdAt, template.updatedAt,
@@ -215,12 +215,12 @@ extension CashRunwayRepository {
         for transaction in backup.transactions {
             try db.execute(
                 sql: """
-                INSERT INTO transactions (id, wallet_id, type, linked_transfer_id, amount_minor, occurred_at, local_day_key, local_month_key, category_id, merchant, note, is_deleted, source, recurring_template_id, recurring_instance_id, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO transactions (id, wallet_id, type, linked_transfer_id, amount_minor, currency_code, occurred_at, local_day_key, local_month_key, category_id, merchant, note, is_deleted, source, recurring_template_id, recurring_instance_id, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 arguments: [
                     transaction.id.uuidString, transaction.walletID.uuidString, transaction.type.rawValue,
-                    transaction.linkedTransferID?.uuidString, transaction.amountMinor, transaction.occurredAt,
+                    transaction.linkedTransferID?.uuidString, transaction.amountMinor, transaction.currencyCode.rawValue, transaction.occurredAt,
                     transaction.localDayKey, transaction.localMonthKey, transaction.categoryID?.uuidString,
                     transaction.merchant, transaction.note, transaction.isDeleted, transaction.source.rawValue,
                     transaction.recurringTemplateID?.uuidString, transaction.recurringInstanceID?.uuidString,

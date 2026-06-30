@@ -25,7 +25,81 @@ struct MigrationIntegrityTests {
             "v6_bank_raw_json_ttl",
             "v7_monthly_category_spend_wallet_kind_income",
             "v7_monthly_label_spend_wallet",
+            "v8_currency_foundation",
         ])
+    }
+
+    @Test func currencyFoundationMigrationDefaultsLegacyLedgerToUAH() throws {
+        let location = TestSupport.makeLocation()
+        let dbURL = try location.databaseURL()
+        let key = "currency-foundation-key"
+        let keychain = TestKeychainStore(items: ["database-key": Data(key.utf8)])
+        let partialMigrator = DatabaseManager.makeMigrator(upTo: "v7_monthly_label_spend_wallet")
+        var fixtureManager: DatabaseManager? = try DatabaseManager(
+            locationProvider: location,
+            keychain: keychain,
+            migrator: partialMigrator
+        )
+        let fixtureRepo = CashRunwayRepository(databaseManager: fixtureManager!)
+        try fixtureRepo.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: fixtureRepo)
+        let wallet = try #require(try fixtureRepo.wallets().first)
+        let category = try #require(try fixtureRepo.categories(kind: .expense).first)
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+        try fixtureRepo.saveTransaction(TransactionDraft(
+            kind: .expense,
+            walletID: wallet.id,
+            amountMinor: 12_34,
+            occurredAt: now,
+            categoryID: category.id,
+            merchant: "Legacy Currency",
+            source: .manual
+        ))
+        try fixtureRepo.saveRecurringTemplate(RecurringTemplate(
+            id: UUID(),
+            kind: .expense,
+            walletID: wallet.id,
+            counterpartyWalletID: nil,
+            amountMinor: 12_34,
+            categoryID: category.id,
+            merchant: "Legacy Currency",
+            note: nil,
+            ruleType: .monthly,
+            ruleInterval: 1,
+            dayOfMonth: 1,
+            weekday: nil,
+            startDate: now,
+            endDate: nil,
+            isActive: true,
+            createdAt: now,
+            updatedAt: now
+        ))
+        try fixtureManager?.checkpointWal()
+        fixtureManager = nil
+
+        let fullManager = try DatabaseManager(locationProvider: location, keychain: keychain)
+
+        try fullManager.dbQueue.read { db in
+            let walletCurrency = try String.fetchOne(db, sql: "SELECT currency_code FROM wallets LIMIT 1")
+            let transactionCurrency = try String.fetchOne(db, sql: "SELECT currency_code FROM transactions LIMIT 1")
+            let recurringTemplateCurrency = try String.fetchOne(db, sql: "SELECT currency_code FROM recurring_templates LIMIT 1")
+            let preferences = try String.fetchOne(
+                db,
+                sql: """
+                SELECT default_currency_code || ':' || reporting_currency_code
+                FROM currency_preferences
+                WHERE id = 'default'
+                """
+            )
+
+            #expect(walletCurrency == "UAH")
+            #expect(transactionCurrency == "UAH")
+            #expect(recurringTemplateCurrency == "UAH")
+            #expect(preferences == "UAH:UAH")
+        }
+
+        #expect(FileManager.default.fileExists(atPath: dbURL.path))
     }
 
     @Test func migrationFromPreviousEncryptedSchemaPreservesLedger() throws {
