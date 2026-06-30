@@ -1,3 +1,29 @@
+## Snapshot — Cash Runway persistence rules and skill updates
+
+Branch: `codex/cash-runway-persistence-change`
+Worktree: `/Users/roman/.codex/worktrees/cash-runway-persistence-change`
+Merge status: not-merged
+Worktree reason: isolated-feature
+
+Goal: update local Cash Runway AGENTS guidance and local skills for persistence, migration, and review workflows.
+
+## Current state
+
+- `AGENTS.md` updated with SwiftPM silent-hang fallback, safe test-filter quoting, CodeGraph narrow-window reads, and persistence-change notes.
+- `~/.codex/skills/cash-runway-validation/SKILL.md` updated with the same validation rules plus log-first routing for `just check-integration` and `just check`.
+- `~/.codex/skills/self-review/SKILL.md` and `~/.codex/skills/code-review/SKILL.md` now call out new repository or protocol seams that lack direct behavioral tests.
+- New local skill `cash-runway-persistence-change` created for migrations, repository seams, and backup/export/restore compatibility.
+
+## Validation
+
+- `git diff --check`: passed.
+- No build or test run; this was a documentation and skill-metadata update only.
+
+## Receipts
+
+- Separate worktree used because the primary checkout was dirty with unrelated files.
+- Local skills live outside the repo and are not tracked by git.
+
 ## Snapshot — Two-tap category detail navigation
 
 Branch: `codex/two-tap-category-detail`
