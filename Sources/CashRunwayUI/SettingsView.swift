@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 import UIKit
 #endif
 import CashRunwayCore
+import CashRunwayUIVM
 
 struct SettingsView: View {
     @Bindable var model: CashRunwayAppModel
@@ -12,18 +13,17 @@ struct SettingsView: View {
     @State private var isLabelsPresented = false
     @State private var isTemplatesPresented = false
     @State private var isWalletsPresented = false
-    @State private var monobankCoordinator: MonobankCoordinator? = nil
-    @State private var csvImportCoordinator: CSVImportCoordinator? = nil
     @State private var isCSVImporterPresented = false
+    @State private var isCSVImportViewPresented = false
     @State private var isCSVExporterPresented = false
     @State private var exportFileURL: URL?
     @State private var isExporting = false
-    @State private var backupCoordinator: BackupCoordinator? = nil
-    @State private var isBackupImporterPresented = false
+    @State private var backupImportFlow = BackupImportFlowState()
     @State private var isBackupExportWarningPresented = false
     @State private var isBackupExporterPresented = false
     @State private var backupExportFileURL: URL?
     @State private var isBackupExporting = false
+    @State private var isMonobankPresented = false
     @State private var isDeleteTransactionsPresented = false
     @State private var isFeedbackReportPresented = false
     @State private var isDiagnosticsPresented = false
@@ -142,9 +142,9 @@ struct SettingsView: View {
                             }
                             .accessibilityIdentifier(CashRunwayAccessibilityID.settingsExportCSVRow)
                             rowDivider
-                            moreRow(icon: "externaldrive.fill", tint: "#4A80C1", title: "Import Full Backup", subtitle: L10n.string("Replace data from JSON")) {
-                                isBackupImporterPresented = true
-                            }
+                        moreRow(icon: "externaldrive.fill", tint: "#4A80C1", title: "Import Full Backup", subtitle: L10n.string("Replace data from JSON")) {
+                            backupImportFlow.beginImport()
+                        }
                             .accessibilityIdentifier(CashRunwayAccessibilityID.settingsImportBackupRow)
                             rowDivider
                             moreRow(icon: "externaldrive.badge.plus", tint: "#7A6FF0", title: "Export Full Backup", subtitle: isBackupExporting ? L10n.string("Exporting…") : L10n.string("Share unencrypted backup JSON")) {
@@ -172,7 +172,9 @@ struct SettingsView: View {
 
                         VStack(spacing: 0) {
                             moreRow(icon: "creditcard.fill", tint: "#1CC389", title: "Monobank", subtitle: monobankSubtitle) {
-                                monobankCoordinator = MonobankCoordinator(model: model)
+                                model.bankSyncViewModel.step = .intro
+                                model.bankSyncViewModel.completedStatus = nil
+                                isMonobankPresented = true
                             }
                             .accessibilityIdentifier(CashRunwayAccessibilityID.settingsMonobankRow)
                         }
@@ -218,11 +220,17 @@ struct SettingsView: View {
             .sheet(isPresented: $isWalletsPresented) {
                 WalletManagementView(model: model)
             }
-            .sheet(item: $monobankCoordinator) { coordinator in
-                MonobankWizardView(coordinator: coordinator)
-            }
-            .sheet(item: $csvImportCoordinator) { coordinator in
-                CSVImportView(coordinator: coordinator)
+            .sheet(
+                isPresented: $isMonobankPresented,
+                onDismiss: {
+                    model.bankSyncViewModel.resetSensitiveWizardState()
+                },
+                content: {
+                    MonobankWizardView(model: model, viewModel: model.bankSyncViewModel)
+                }
+            )
+            .sheet(isPresented: $isCSVImportViewPresented) {
+                CSVImportView(viewModel: model.importViewModel)
             }
             .sheet(isPresented: $isDiagnosticsPresented) {
                 DiagnosticsView(model: model)
@@ -257,7 +265,7 @@ struct SettingsView: View {
                 Text("Bank statement import is unavailable on this platform.")
                 #endif
             }
-            .sheet(isPresented: $isBackupImporterPresented) {
+            .sheet(isPresented: $backupImportFlow.isBackupImporterPresented) {
                 #if canImport(UIKit)
                 DocumentPicker(allowedContentTypes: [.json, .plainText]) { result in
                     handleBackupImporterResult(result)
@@ -266,8 +274,8 @@ struct SettingsView: View {
                 Text("Backup import is unavailable on this platform.")
                 #endif
             }
-            .sheet(item: $backupCoordinator) { coordinator in
-                BackupView(coordinator: coordinator)
+            .sheet(isPresented: $backupImportFlow.isBackupImportViewPresented) {
+                BackupView(viewModel: model.backupViewModel)
             }
             .sheet(isPresented: $isFeedbackReportPresented) {
                 FeedbackReportView(service: ConfiguredFeedbackReportService())
@@ -299,9 +307,8 @@ struct SettingsView: View {
         isCSVImporterPresented = false
         switch result {
         case let .success(url):
-            let coordinator = CSVImportCoordinator(model: model)
-            csvImportCoordinator = coordinator
-            coordinator.prepareImport(from: url)
+            model.importViewModel.prepareImport(from: url)
+            isCSVImportViewPresented = true
         case let .failure(error):
             if let pickerError = error as? DocumentPickerError, pickerError == .cancelled {
                 return
@@ -314,7 +321,7 @@ struct SettingsView: View {
         isBackupExporting = true
         Task {
             do {
-                let data = try await model.exportFullBackupData()
+                let data = try await model.backupViewModel.exportFullBackupData()
                 let url = FileManager.default.temporaryDirectory.appendingPathComponent("cash-runway-backup-\(backupFileTimestamp()).json")
                 try data.write(to: url, options: .atomic)
                 FileProtectionService().protect(url)
@@ -334,12 +341,11 @@ struct SettingsView: View {
     }
 
     private func handleBackupImporterResult(_ result: Result<URL, any Error>) {
-        isBackupImporterPresented = false
+        backupImportFlow.reset()
         switch result {
         case let .success(url):
-            let coordinator = BackupCoordinator(model: model)
-            backupCoordinator = coordinator
-            coordinator.prepareImport(from: url)
+            model.backupViewModel.prepareImport(from: url)
+            backupImportFlow.presentBackupView()
         case let .failure(error):
             if let pickerError = error as? DocumentPickerError, pickerError == .cancelled {
                 return
@@ -360,7 +366,7 @@ struct SettingsView: View {
     }
 
     private var monobankSubtitle: String {
-        let status = model.monobankConnectionStatus()
+        let status = model.bankSyncViewModel.connectionStatus()
         guard let integration = status.integration, integration.status != .disabled else {
             return L10n.string("Connect cards and import new expenses automatically")
         }

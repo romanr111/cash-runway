@@ -16,6 +16,15 @@ public protocol BankSyncPerforming: Sendable {
     func syncIntegration(_ integrationID: UUID) async throws -> BankSyncResult
 }
 
+public protocol MonobankConnectionServicing: Sendable {
+    func validateToken(_ token: String) async throws -> MonobankClientInfo
+    func connectMonobank(
+        token: String,
+        selections: [MonobankAccountConnectionSelection]
+    ) async throws -> BankIntegration
+    func disconnectIntegration(_ integrationID: UUID) throws
+}
+
 public final class BankSyncSerialPerformer: BankSyncPerforming, @unchecked Sendable {
     // @unchecked Sendable is justified: `base` and `gate` are immutable; the
     // actor-isolated `BankSyncSerialGate` serializes all sync calls, so there
@@ -323,7 +332,7 @@ public final class BankSyncService: BankSyncPerforming, @unchecked Sendable {
     }
 }
 
-public final class MonobankConnectionService: @unchecked Sendable {
+public final class MonobankConnectionService: MonobankConnectionServicing, @unchecked Sendable {
     // @unchecked Sendable is justified: all stored properties are immutable
     // `let`; `repository`, `tokenStore`, `tokenValidator`, `syncPerformer` are
     // Sendable protocols; `now` is `@Sendable`.

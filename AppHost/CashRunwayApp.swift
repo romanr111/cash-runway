@@ -6,6 +6,7 @@ import OSLog
 import SwiftUI
 import UIKit
 import CashRunwayCore
+import CashRunwayUIVM
 
 @main
 struct CashRunwayApp: App {
@@ -312,7 +313,7 @@ private enum DebugCSVImportSelfTest {
         try repository.seedIfNeeded()
 
         let service = CSVService(repository: repository)
-        let data = try CSVImportFileReader.readData(from: csvURL)
+        let data = try ImportFileReader.readData(from: csvURL)
         let preview = try service.preview(data: data)
         let format = service.detectFormat(headers: preview.headers)
         guard format == .cashRunwayCSV else {
