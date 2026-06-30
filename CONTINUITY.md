@@ -77,13 +77,58 @@ non-UIKit platforms. iOS behavior and loud DEBUG failure are unchanged.
 
 ## Next steps
 
-1. Merge PR #86 into `dev`.
+1. ~~Merge PR #86 into `dev`.~~ **DONE** — merged as `9f3ca21`.
 2. Close the superseded stacked PRs (#80, #82, #84) if not already closed.
 3. Schedule physical-device rehearsal before releasing Phase 3 security changes.
 4. Delete stale worktrees after merge:
    - `/Users/roman/.codex/worktrees/cash-runway-arch-phase-1` (was `codex/arch-phase-3.5-protocol-cleanup`)
    - `/Users/roman/.codex/worktrees/cash-runway-arch-phase-4` (now `backup/codex-arch-phase-4-performance-before-restack` exists; can be removed after merge)
-5. Begin Phase 5 (consent-gated LLM-agent access) design/scoping.
+5. Begin Phase 5.0 (AgentAccess foundation) on `codex/arch-phase-5-agent-access-design`.
+
+## Phase 5.0: AgentAccess foundation — COMPLETE (local only)
+
+**Branch:** `codex/arch-phase-5-agent-access-design` (local only; not pushed, no PR)
+**Base:** `dev` after PR #86 merge (`9f3ca21`)
+
+### What landed
+- `Sources/CashRunwayCore/AgentAccess/` with the full foundation:
+  - `AgentCapability.swift` — read-only v1 capability set
+  - `AgentScope.swift` — explicit `AgentWalletScope`/`AgentDateScope`/`AgentScope` (conservative defaults)
+  - `AgentSession.swift` — short-lived, revocable, fail-closed session
+  - `AgentConsentGrant.swift` — user-approved grant with 15-min TTL clamp and `v1.0` consent version
+  - `AgentAccessError.swift` — safe-to-surface typed errors
+  - `AgentDTOs.swift` — dedicated `Agent*DTO` response types with opaque `tx_NNN` handles
+  - `AgentRedactionService.swift` — hard-blocks forbidden fields and redacts IBAN/card/account patterns
+  - `AgentAuditLog.swift` — `AgentAuditEntry` + `AgentAuditLogging` + in-memory fake
+  - `AgentSessionStoring.swift` — session store contract + in-memory fake
+  - `AgentAccessService.swift` — concrete `AgentAccessServicing` using only narrow repository protocols
+- `Tests/CashRunwayCoreTests/`:
+  - `AgentPermissionBoundaryTests.swift` (7 tests)
+  - `AgentRedactionTests.swift` (8 tests)
+  - `AgentRedactionServiceUnitTests.swift` (3 tests)
+  - `AgentAuditContractTests.swift` (3 tests)
+  - `AgentTestMocks.swift` (fakes + helpers)
+
+### Design notes
+- No LLM, no UI, no DB migration, no write capabilities, no `DatabaseManager`/`dbQueue` access.
+- Service depends only on `DashboardRepositorying`, `BankSyncRepositorying`, plus session/audit/redaction collaborators.
+- Redaction uses deterministic string scanning (no `NSRegularExpression`) to be concurrency-safe and backtracking-free.
+- Session store and audit log use `@unchecked Sendable` + `NSLock` with justification comments.
+- In-memory fakes are intentionally non-isolated classes (not actors) to avoid actor hops in tests.
+
+### Validation gates (all green)
+| Gate | Result |
+|---|---|
+| `swift build --target CashRunwayCore` | BUILD SUCCEEDED |
+| Targeted AgentAccess tests | 21/21 passed |
+| `just check-unit-parallel` | 58/58 passed (includes new AgentAccess suites) |
+| `just lint` | 0 violations / 126 files |
+| `Scripts/check-no-ungated-logging.sh` | passed |
+| `Scripts/check-unchecked-sendable.sh` | passed |
+| `Scripts/pre-flight.sh` | OK (module wiring correct) |
+
+### Bug found and fixed during implementation
+A re-entrant `NSLock` deadlock in `FakeDashboardRepository.transactions` (called `walletName(for:)` while already holding the lock) caused Swift Testing to hang on any `readTransactions` call scoped to a single wallet. Fixed by computing the target wallet name before entering the locked region.
 
 ## Open questions for product/security
 
