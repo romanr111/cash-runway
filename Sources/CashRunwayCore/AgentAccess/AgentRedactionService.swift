@@ -40,6 +40,8 @@ public struct AgentRedactionService: Sendable {
     /// substring. This is intentionally conservative: if a forbidden literal appears
     /// anywhere in the encoded output, the response must not leave the service.
     public func containsBlockedContent(_ data: Data) -> Bool {
+        guard !data.isEmpty else { return false }
+
         guard let string = String(data: data, encoding: .utf8) else {
             return true
         }

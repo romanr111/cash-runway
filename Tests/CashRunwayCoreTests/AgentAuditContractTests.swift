@@ -52,8 +52,9 @@ struct AgentAuditContractTests {
             scope: AgentScope(walletScope: .selectedWallets([walletID]))
         )
 
-        let response = try await service.readOverview(sessionID: session.id, request: .init(monthKey: 202501))
-        #expect(response.totalBalanceMinor == 500)
+        let response = try await service.readOverview(sessionID: session.id, request: .init(monthKey: currentMonthKey(clock: clock)))
+        #expect(response.totalBalance.amountMinor == 500)
+        #expect(response.totalBalance.currencyCode == "UAH")
 
         let entries = try await audit.entries(forSessionID: session.id)
         #expect(entries.count == 1)
@@ -65,6 +66,13 @@ struct AgentAuditContractTests {
         #expect(!entry.scopeHash.isEmpty)
         #expect(!entry.requestSummary.contains("Food"))
         #expect(!entry.requestSummary.contains("500"))
+    }
+
+    private func currentMonthKey(clock: TestClock) -> Int {
+        let calendar = Calendar.current
+        let year = calendar.component(.year, from: clock.now)
+        let month = calendar.component(.month, from: clock.now)
+        return year * 100 + month
     }
 
     @Test func deniedRequestRecordsAuditEntryWithDenialReasonAndNoRawContents() async throws {

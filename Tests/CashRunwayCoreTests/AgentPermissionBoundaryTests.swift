@@ -181,6 +181,7 @@ struct AgentPermissionBoundaryTests {
         #expect(response.transactions.count == 3)
         #expect(response.returnedCount == 3)
         #expect(response.truncatedToMax == true)
+        #expect(response.transactions.allSatisfy { $0.amount.currencyCode == "UAH" })
 
         let entries = try await audit.entries(forSessionID: session.id)
         #expect(entries.count == 1)

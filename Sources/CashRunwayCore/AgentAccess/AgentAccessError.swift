@@ -15,6 +15,7 @@ public enum AgentAccessError: Error, Equatable, Sendable, Codable {
     case dateRangeOutOfScope
     case invalidScope
     case redactionFailed
+    case invalidConsentVersion
 }
 
 // MARK: - LocalizedError
@@ -38,6 +39,8 @@ extension AgentAccessError: LocalizedError {
             return "Agent scope is invalid."
         case .redactionFailed:
             return "Could not produce a safe agent response."
+        case .invalidConsentVersion:
+            return "Agent consent version is not valid."
         }
     }
 }

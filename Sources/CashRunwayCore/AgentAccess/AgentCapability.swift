@@ -12,7 +12,6 @@ public enum AgentCapability: String, CaseIterable, Codable, Hashable, Sendable {
     case readWallets
     case readCategories
     case readTransactions
-    case readRecurring
     case readBankConnectionStatus
 }
 
@@ -26,7 +25,6 @@ extension AgentCapability {
         case .readWallets: "read:wallets"
         case .readCategories: "read:categories"
         case .readTransactions: "read:transactions"
-        case .readRecurring: "read:recurring"
         case .readBankConnectionStatus: "read:bankConnectionStatus"
         }
     }

@@ -35,13 +35,18 @@ public struct AgentConsentGrant: Codable, Hashable, Sendable {
         self.consentVersion = consentVersion
     }
 
-    /// Clamp TTL and validate scope.
-    public func validated() throws(AgentAccessError) -> AgentConsentGrant {
+    /// Clamp TTL, enforce consent version, and validate scope.
+    public func validated(currentConsentVersion: String) throws(AgentAccessError) -> AgentConsentGrant {
+        guard consentVersion == currentConsentVersion else {
+            throw .invalidConsentVersion
+        }
         guard !capabilities.isEmpty else {
             throw .missingCapability
         }
-        try scope.validate()
+        var validatedScope = scope
+        try validatedScope.validate()
         var copy = self
+        copy.scope = validatedScope
         copy.requestedTTL = min(requestedTTL, AgentConsentConstants.maxSessionTTL)
         return copy
     }

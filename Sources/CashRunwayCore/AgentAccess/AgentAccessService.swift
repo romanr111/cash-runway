@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 
 // MARK: - Agent Access Servicing
 
@@ -19,8 +20,8 @@ public protocol AgentAccessServicing: Sendable {
 /// The concrete agent access service.
 ///
 /// Depends only on narrow repository protocols (`DashboardRepositorying`,
-/// `SettingsRepositorying`, `BankSyncRepositorying`) plus session/audit/redaction
-/// collaborators. No `DatabaseManager` or `dbQueue` access.
+/// `BankSyncRepositorying`) plus session/audit/redaction collaborators. No
+/// `DatabaseManager` or `dbQueue` access.
 public final class AgentAccessService: AgentAccessServicing, Sendable {
     private let sessionStore: any AgentSessionStoring
     private let auditLog: any AgentAuditLogging
@@ -51,7 +52,9 @@ public final class AgentAccessService: AgentAccessServicing, Sendable {
     // MARK: - Session management
 
     public func createSession(_ grant: AgentConsentGrant) async throws(AgentAccessError) -> AgentSession {
-        let validated = try grant.validated()
+        var mutableGrant = grant
+        try mutableGrant.scope.validate()
+        let validated = try mutableGrant.validated(currentConsentVersion: consentVersion)
         let now = dateProvider()
         let session = AgentSession(
             id: UUID(),
@@ -85,46 +88,46 @@ public final class AgentAccessService: AgentAccessServicing, Sendable {
         request: AgentOverviewRequest
     ) async throws(AgentAccessError) -> AgentOverviewResponse {
         let session = try await validatedSession(sessionID, capability: .readOverview)
-        let monthKey = request.monthKey ?? currentMonthKey()
+        let monthKey = try await validatedMonthKey(request.monthKey, session: session)
 
         let snapshot = try repository {
-            try dashboardRepository.overviewSnapshot(
-                monthKey: monthKey,
-                walletID: selectedSingleWalletID(from: session.scope)
-            )
+            try overviewSnapshotScoped(session: session, monthKey: monthKey)
         }
 
         let wallets = try repository { try scopedWallets(session: session) }
         let walletSummaries = wallets.map {
             AgentWalletSummaryDTO(
                 handle: walletHandle($0),
-                name: $0.name,
+                name: redactionService.redactAccountLikePatterns($0.name),
                 kind: $0.kind,
-                currentBalanceMinor: $0.currentBalanceMinor,
-                currencyCode: "UAH"
+                currentBalance: uahMoney($0.currentBalanceMinor)
             )
         }
 
         let categoryRows = snapshot.categories.map {
             AgentCategoryRowDTO(
-                name: $0.name,
+                name: redactionService.redactAccountLikePatterns($0.name),
                 kind: $0.kind,
-                amountMinor: $0.amountMinor,
+                amount: uahMoney($0.amountMinor),
                 transactionCount: $0.transactionCount
             )
         }
 
         let response = AgentOverviewResponse(
-            totalBalanceMinor: snapshot.totalWealthMinor,
-            monthIncomeMinor: snapshot.monthIncomeMinor,
-            monthExpenseMinor: snapshot.monthExpenseMinor,
-            monthNetMinor: snapshot.monthCashFlowMinor,
+            totalBalance: uahMoney(snapshot.totalWealthMinor),
+            monthIncome: uahMoney(snapshot.monthIncomeMinor),
+            monthExpense: uahMoney(snapshot.monthExpenseMinor),
+            monthNet: uahMoney(snapshot.monthCashFlowMinor),
             categoryRows: categoryRows,
             walletSummaries: walletSummaries
         )
 
-        try await auditAllow(session: session, operation: "read:overview", resultCount: categoryRows.count)
-        return response
+        return try await finalizeAllowedResponse(
+            response,
+            session: session,
+            capability: .readOverview,
+            resultCount: categoryRows.count
+        )
     }
 
     public func readWallets(sessionID: UUID) async throws(AgentAccessError) -> AgentWalletsResponse {
@@ -133,14 +136,18 @@ public final class AgentAccessService: AgentAccessServicing, Sendable {
         let dtos = wallets.map {
             AgentWalletSummaryDTO(
                 handle: walletHandle($0),
-                name: $0.name,
+                name: redactionService.redactAccountLikePatterns($0.name),
                 kind: $0.kind,
-                currentBalanceMinor: $0.currentBalanceMinor,
-                currencyCode: "UAH"
+                currentBalance: uahMoney($0.currentBalanceMinor)
             )
         }
-        try await auditAllow(session: session, operation: "read:wallets", resultCount: dtos.count)
-        return AgentWalletsResponse(wallets: dtos)
+        let response = AgentWalletsResponse(wallets: dtos)
+        return try await finalizeAllowedResponse(
+            response,
+            session: session,
+            capability: .readWallets,
+            resultCount: dtos.count
+        )
     }
 
     public func readCategories(sessionID: UUID) async throws(AgentAccessError) -> AgentCategoriesResponse {
@@ -148,14 +155,19 @@ public final class AgentAccessService: AgentAccessServicing, Sendable {
         let categories = try repository { try dashboardRepository.categories(kind: nil) }
         let rows = categories.map {
             AgentCategoryRowDTO(
-                name: $0.name,
+                name: redactionService.redactAccountLikePatterns($0.name),
                 kind: $0.kind,
-                amountMinor: 0,
+                amount: uahMoney(0),
                 transactionCount: 0
             )
         }
-        try await auditAllow(session: session, operation: "read:categories", resultCount: rows.count)
-        return AgentCategoriesResponse(categories: rows)
+        let response = AgentCategoriesResponse(categories: rows)
+        return try await finalizeAllowedResponse(
+            response,
+            session: session,
+            capability: .readCategories,
+            resultCount: rows.count
+        )
     }
 
     public func readTransactions(
@@ -170,7 +182,7 @@ public final class AgentAccessService: AgentAccessServicing, Sendable {
                 guard session.scope.walletScope.contains(walletID) else {
                     try await auditDeny(
                         session: session,
-                        operation: "read:transactions",
+                        capability: .readTransactions,
                         reason: .walletOutOfScope
                     )
                     throw .walletOutOfScope
@@ -183,11 +195,11 @@ public final class AgentAccessService: AgentAccessServicing, Sendable {
 
         // Validate explicit request dates against scope.
         if let start = request.startDate, start < scopeInterval.start {
-            try await auditDeny(session: session, operation: "read:transactions", reason: .dateRangeOutOfScope)
+            try await auditDeny(session: session, capability: .readTransactions, reason: .dateRangeOutOfScope)
             throw .dateRangeOutOfScope
         }
         if let end = request.endDate, end > scopeInterval.end {
-            try await auditDeny(session: session, operation: "read:transactions", reason: .dateRangeOutOfScope)
+            try await auditDeny(session: session, capability: .readTransactions, reason: .dateRangeOutOfScope)
             throw .dateRangeOutOfScope
         }
 
@@ -195,17 +207,15 @@ public final class AgentAccessService: AgentAccessServicing, Sendable {
         let effectiveEnd = min(request.endDate ?? scopeInterval.end, scopeInterval.end)
         let walletIDs = request.walletIDs ?? session.scope.walletScope.walletIDs
 
-        var query = TransactionQuery(
-            startDate: effectiveStart,
-            endDate: effectiveEnd,
-            offset: 0
-        )
-        if let walletIDs, let first = walletIDs.first, walletIDs.count == 1 {
-            query.walletID = first
-        }
-
         let limit = session.scope.maxTransactionCount
-        let items = try repository { try dashboardRepository.transactions(query: query, limit: limit) }
+        let items = try repository {
+            try transactionsScoped(
+                walletIDs: walletIDs,
+                startDate: effectiveStart,
+                endDate: effectiveEnd,
+                limit: limit
+            )
+        }
         let truncated = items.count >= limit
 
         // Map to safe DTOs.
@@ -230,8 +240,7 @@ public final class AgentAccessService: AgentAccessServicing, Sendable {
                 occurredAt: item.occurredAt,
                 walletDisplayName: item.walletName,
                 kind: item.kind.asTransactionKind,
-                amountMinor: item.amountMinor,
-                currencyCode: "UAH",
+                amount: uahMoney(item.amountMinor),
                 categoryName: item.categoryName,
                 merchantPreview: merchant,
                 notePreview: note,
@@ -247,14 +256,12 @@ public final class AgentAccessService: AgentAccessServicing, Sendable {
             truncatedToMax: truncated
         )
 
-        let data = try encodeForAuditCheck(response)
-        guard !redactionService.containsBlockedContent(data) else {
-            try await auditDeny(session: session, operation: "read:transactions", reason: .redactionFailed)
-            throw .redactionFailed
-        }
-
-        try await auditAllow(session: session, operation: "read:transactions", resultCount: dtos.count)
-        return response
+        return try await finalizeAllowedResponse(
+            response,
+            session: session,
+            capability: .readTransactions,
+            resultCount: dtos.count
+        )
     }
 
     public func readBankConnectionStatus(
@@ -263,18 +270,131 @@ public final class AgentAccessService: AgentAccessServicing, Sendable {
     ) async throws(AgentAccessError) -> AgentBankConnectionStatusResponse {
         let session = try await validatedSession(sessionID, capability: .readBankConnectionStatus)
         guard session.scope.includeBankSyncMetadata else {
-            try await auditDeny(session: session, operation: "read:bankConnectionStatus", reason: .missingCapability)
+            try await auditDeny(session: session, capability: .readBankConnectionStatus, reason: .missingCapability)
             throw .missingCapability
         }
         let status = try repository { try bankSyncRepository.bankConnectionStatus(provider: provider) }
+        let sanitized = sanitizedBankStatus(status)
         let response = AgentBankConnectionStatusResponse(
             provider: provider,
             isConnected: status.integration != nil,
             enabledAccountCount: status.enabledAccountCount,
-            lastSyncError: status.lastSyncError
+            health: sanitized.health,
+            sanitizedErrorHint: redactBankHint(sanitized.hint)
         )
-        try await auditAllow(session: session, operation: "read:bankConnectionStatus", resultCount: 1)
-        return response
+        return try await finalizeAllowedResponse(
+            response,
+            session: session,
+            capability: .readBankConnectionStatus,
+            resultCount: 1
+        )
+    }
+
+    // MARK: - Scope-aware repository reads
+
+    /// Fetches transactions for the effective wallet selection. Multi-wallet
+    /// selections are fetched per-wallet and merged so the repository's default
+    /// unfiltered behavior cannot leak out-of-scope wallets.
+    private func transactionsScoped(
+        walletIDs: Set<UUID>?,
+        startDate: Date,
+        endDate: Date,
+        limit: Int
+    ) throws -> [TransactionListItem] {
+        switch effectiveWalletSelection(walletIDs: walletIDs) {
+        case .all:
+            let query = TransactionQuery(
+                startDate: startDate,
+                endDate: endDate,
+                offset: 0
+            )
+            return try dashboardRepository.transactions(query: query, limit: limit)
+
+        case .single(let walletID):
+            var query = TransactionQuery(
+                startDate: startDate,
+                endDate: endDate,
+                offset: 0
+            )
+            query.walletID = walletID
+            return try dashboardRepository.transactions(query: query, limit: limit)
+
+        case .multiple(let ids):
+            var merged: [TransactionListItem] = []
+            for walletID in ids {
+                var query = TransactionQuery(
+                    startDate: startDate,
+                    endDate: endDate,
+                    offset: 0
+                )
+                query.walletID = walletID
+                let items = try dashboardRepository.transactions(query: query, limit: limit)
+                merged.append(contentsOf: items)
+            }
+            // Sort using the app's primary transaction order (descending date, stable).
+            merged.sort {
+                if $0.occurredAt != $1.occurredAt {
+                    return $0.occurredAt > $1.occurredAt
+                }
+                return $0.id.uuidString < $1.id.uuidString
+            }
+            return Array(merged.prefix(limit))
+        }
+    }
+
+    private func overviewSnapshotScoped(session: AgentSession, monthKey: Int) throws -> OverviewSnapshot {
+        switch effectiveWalletSelection(walletIDs: session.scope.walletScope.walletIDs) {
+        case .all:
+            return try dashboardRepository.overviewSnapshot(monthKey: monthKey, walletID: nil)
+        case .single(let walletID):
+            return try dashboardRepository.overviewSnapshot(monthKey: monthKey, walletID: walletID)
+        case .multiple(let ids):
+            // Aggregate across selected wallets by summing per-wallet snapshots.
+            // This avoids relying on overviewSnapshot supporting a multi-wallet filter.
+            var totalWealthMinor: Int64 = 0
+            var monthCashFlowMinor: Int64 = 0
+            var monthIncomeMinor: Int64 = 0
+            var monthExpenseMinor: Int64 = 0
+            var mergedCategories: [UUID: OverviewCategoryRow] = [:]
+            for walletID in ids {
+                let snapshot = try dashboardRepository.overviewSnapshot(monthKey: monthKey, walletID: walletID)
+                totalWealthMinor += snapshot.totalWealthMinor
+                monthCashFlowMinor += snapshot.monthCashFlowMinor
+                monthIncomeMinor += snapshot.monthIncomeMinor
+                monthExpenseMinor += snapshot.monthExpenseMinor
+                for category in snapshot.categories {
+                    var existing = mergedCategories[category.id] ?? category
+                    existing.amountMinor += category.amountMinor
+                    existing.transactionCount += category.transactionCount
+                    mergedCategories[category.id] = existing
+                }
+            }
+            return OverviewSnapshot(
+                selectedMonthKey: monthKey,
+                walletFilterID: nil,
+                months: [],
+                totalWealthMinor: totalWealthMinor,
+                monthCashFlowMinor: monthCashFlowMinor,
+                monthIncomeMinor: monthIncomeMinor,
+                monthExpenseMinor: monthExpenseMinor,
+                categories: Array(mergedCategories.values),
+                labels: []
+            )
+        }
+    }
+
+    private enum EffectiveWalletSelection {
+        case all
+        case single(UUID)
+        case multiple(Set<UUID>)
+    }
+
+    private func effectiveWalletSelection(walletIDs: Set<UUID>?) -> EffectiveWalletSelection {
+        guard let ids = walletIDs else { return .all }
+        if ids.count == 1, let first = ids.first {
+            return .single(first)
+        }
+        return .multiple(ids)
     }
 
     // MARK: - Helpers
@@ -301,9 +421,42 @@ public final class AgentAccessService: AgentAccessServicing, Sendable {
             try session.requireCapability(capability, now: dateProvider())
             return session
         } catch {
-            try await auditDeny(session: session, operation: capability.auditOperation, reason: error)
+            try await auditDeny(session: session, capability: capability, reason: error)
             throw error
         }
+    }
+
+    private func validatedMonthKey(_ monthKey: Int?, session: AgentSession) async throws(AgentAccessError) -> Int {
+        let resolved = monthKey ?? currentMonthKey()
+        guard monthKeyInside(dateScope: session.scope.dateScope, monthKey: resolved) else {
+            try await auditDeny(session: session, capability: .readOverview, reason: .dateRangeOutOfScope)
+            throw .dateRangeOutOfScope
+        }
+        return resolved
+    }
+
+    private func monthKeyInside(dateScope: AgentDateScope, monthKey: Int) -> Bool {
+        let now = dateProvider()
+        let interval = dateScope.dateInterval(now: now)
+        let calendar = Calendar.current
+        guard let startComponents = monthKeyComponents(monthKey),
+              let startDate = calendar.date(from: startComponents) else {
+            return false
+        }
+        guard let endDate = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: startDate) else {
+            return false
+        }
+        // The requested month must overlap the approved date scope.
+        // This lets a "last 30 days" session ask about the current month without
+        // silently broadening access to months entirely outside the scope.
+        return interval.start <= endDate && startDate <= interval.end
+    }
+
+    private func monthKeyComponents(_ monthKey: Int) -> DateComponents? {
+        let year = monthKey / 100
+        let month = monthKey % 100
+        guard year >= 1, month >= 1, month <= 12 else { return nil }
+        return DateComponents(year: year, month: month, day: 1)
     }
 
     private func scopedWallets(session: AgentSession) throws -> [Wallet] {
@@ -324,13 +477,6 @@ public final class AgentAccessService: AgentAccessServicing, Sendable {
         }
     }
 
-    private func selectedSingleWalletID(from scope: AgentScope) -> UUID? {
-        if case let .selectedWallets(ids) = scope.walletScope, ids.count == 1 {
-            return ids.first
-        }
-        return nil
-    }
-
     private func currentMonthKey() -> Int {
         let now = dateProvider()
         let calendar = Calendar.current
@@ -347,6 +493,30 @@ public final class AgentAccessService: AgentAccessServicing, Sendable {
         String(format: "tx_%03d", index + 1)
     }
 
+    private func uahMoney(_ amountMinor: Int64) -> AgentMoneyDTO {
+        AgentMoneyDTO(amountMinor: amountMinor, currencyCode: "UAH", scale: 2)
+    }
+
+    // MARK: - Egress validation
+
+    /// Mandatory egress gate: encodes the response, checks for blocked content,
+    /// writes an allow audit entry, and returns the response.
+    private func finalizeAllowedResponse<Response: Codable & Sendable>(
+        _ response: Response,
+        session: AgentSession,
+        capability: AgentCapability,
+        resultCount: Int?
+    ) async throws(AgentAccessError) -> Response {
+        let data = try encodeForAuditCheck(response)
+        guard !redactionService.containsBlockedContent(data) else {
+            try await auditDeny(session: session, capability: capability, reason: .redactionFailed)
+            throw .redactionFailed
+        }
+
+        try await auditAllow(session: session, capability: capability, resultCount: resultCount)
+        return response
+    }
+
     private func encodeForAuditCheck(_ value: some Codable & Sendable) throws(AgentAccessError) -> Data {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -357,14 +527,42 @@ public final class AgentAccessService: AgentAccessServicing, Sendable {
         }
     }
 
+    // MARK: - Stable scope hash
+
     private func scopeHash(_ session: AgentSession) -> String {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        guard let data = try? encoder.encode(session.scope),
-              let string = String(data: data, encoding: .utf8) else {
+        guard let data = try? encoder.encode(session.scope) else {
             return ""
         }
-        return String(string.hash)
+        let digest = SHA256.hash(data: data)
+        return digest.compactMap { String(format: "%02x", $0) }.joined()
+    }
+
+    // MARK: - Bank status sanitization
+
+    private struct SanitizedBankStatus {
+        let health: AgentBankSyncHealth
+        let hint: String?
+    }
+
+    private func sanitizedBankStatus(_ status: BankConnectionStatusSnapshot) -> SanitizedBankStatus {
+        let rawError = status.lastSyncError?.lowercased() ?? ""
+        if rawError.isEmpty {
+            return SanitizedBankStatus(health: status.integration != nil ? .connected : .disconnected, hint: nil)
+        }
+        if rawError.contains("token") || rawError.contains("auth") || rawError.contains("unauthorized") {
+            return SanitizedBankStatus(health: .tokenInvalid, hint: nil)
+        }
+        if rawError.contains("rate") || rawError.contains("429") || rawError.contains("throttle") {
+            return SanitizedBankStatus(health: .rateLimited, hint: nil)
+        }
+        return SanitizedBankStatus(health: .syncFailed, hint: nil)
+    }
+
+    private func redactBankHint(_ hint: String?) -> String? {
+        guard let hint else { return nil }
+        return redactionService.redactAccountLikePatterns(hint)
     }
 
     // MARK: - Collaborator wrappers (typed throws)
@@ -401,12 +599,12 @@ public final class AgentAccessService: AgentAccessServicing, Sendable {
         }
     }
 
-    private func auditAllow(session: AgentSession, operation: String, resultCount: Int?) async throws(AgentAccessError) {
+    private func auditAllow(session: AgentSession, capability: AgentCapability, resultCount: Int?) async throws(AgentAccessError) {
         let entry = AgentAuditEntry(
             id: UUID(),
             sessionID: session.id,
-            capability: capabilityFor(operation: operation),
-            operation: operation,
+            capability: capability,
+            operation: capability.auditOperation,
             decision: .allowed,
             denialReason: nil,
             scopeHash: scopeHash(session),
@@ -417,12 +615,12 @@ public final class AgentAccessService: AgentAccessServicing, Sendable {
         try await appendAudit(entry)
     }
 
-    private func auditDeny(session: AgentSession, operation: String, reason: AgentAccessError) async throws(AgentAccessError) {
+    private func auditDeny(session: AgentSession, capability: AgentCapability, reason: AgentAccessError) async throws(AgentAccessError) {
         let entry = AgentAuditEntry(
             id: UUID(),
             sessionID: session.id,
-            capability: capabilityFor(operation: operation),
-            operation: operation,
+            capability: capability,
+            operation: capability.auditOperation,
             decision: .denied,
             denialReason: reason,
             scopeHash: scopeHash(session),
@@ -431,16 +629,6 @@ public final class AgentAccessService: AgentAccessServicing, Sendable {
             createdAt: dateProvider()
         )
         try await appendAudit(entry)
-    }
-
-    private func capabilityFor(operation: String) -> AgentCapability {
-        switch operation {
-        case "read:wallets": .readWallets
-        case "read:categories": .readCategories
-        case "read:transactions": .readTransactions
-        case "read:bankConnectionStatus": .readBankConnectionStatus
-        default: .readOverview
-        }
     }
 }
 

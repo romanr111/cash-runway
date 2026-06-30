@@ -150,10 +150,14 @@ final class FakeDashboardRepository: DashboardRepositorying, @unchecked Sendable
         }
     }
 
-    private func walletName(for walletID: UUID) -> String {
+    private     func walletName(for walletID: UUID) -> String {
         lock.withLock {
             storedWallets.first { $0.id == walletID }?.name ?? ""
         }
+    }
+
+    func walletID(for name: String) -> UUID? {
+        lock.withLock { storedWallets.first { $0.name == name }?.id }
     }
 }
 
@@ -247,9 +251,10 @@ extension AgentTestMocks {
         service: AgentAccessService,
         capabilities: Set<AgentCapability> = [.readOverview],
         scope: AgentScope = .init(),
-        ttl: TimeInterval = AgentConsentConstants.maxSessionTTL
+        ttl: TimeInterval = AgentConsentConstants.maxSessionTTL,
+        consentVersion: String = AgentConsentConstants.consentVersion
     ) async throws(AgentAccessError) -> AgentSession {
-        let grant = AgentConsentGrant(capabilities: capabilities, scope: scope, requestedTTL: ttl)
+        let grant = AgentConsentGrant(capabilities: capabilities, scope: scope, requestedTTL: ttl, consentVersion: consentVersion)
         return try await service.createSession(grant)
     }
 }

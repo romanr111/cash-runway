@@ -81,20 +81,37 @@ public struct AgentScope: Codable, Hashable, Sendable {
         self.includeBankSyncMetadata = includeBankSyncMetadata
     }
 
-    /// Validates that the scope is well-formed.
-    public func validate() throws(AgentAccessError) {
+    /// Validates that the scope is well-formed and clamps to hard upper bounds.
+    public mutating func validate() throws(AgentAccessError) {
         switch dateScope {
         case let .lastDays(days):
             guard days > 0 else {
                 throw .invalidScope
             }
+            self.dateScope = .lastDays(min(days, AgentScopeLimits.maxLastDays))
         case let .closedRange(interval):
             guard interval.duration > 0, interval.start <= interval.end else {
+                throw .invalidScope
+            }
+            let maxDuration: TimeInterval = Double(AgentScopeLimits.maxLastDays) * 24 * 60 * 60
+            guard interval.duration <= maxDuration + 1 else {
                 throw .invalidScope
             }
         }
         guard maxTransactionCount > 0 else {
             throw .invalidScope
         }
+        self.maxTransactionCount = min(maxTransactionCount, AgentScopeLimits.maxTransactionCount)
     }
+}
+
+// MARK: - Scope Limits
+
+/// Hard upper bounds for agent scope dimensions. Centralized so they can be
+/// reviewed and audited in one place.
+public enum AgentScopeLimits {
+    /// Maximum number of transactions returned in a single agent read.
+    public static let maxTransactionCount: Int = 100
+    /// Maximum lookback for date-based scopes, in days.
+    public static let maxLastDays: Int = 365
 }

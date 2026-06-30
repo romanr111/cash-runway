@@ -29,27 +29,39 @@ public struct AgentTransactionsRequest: Codable, Hashable, Sendable {
 // MARK: - Responses
 
 public struct AgentOverviewResponse: Codable, Sendable {
-    public let totalBalanceMinor: Int64
-    public let monthIncomeMinor: Int64
-    public let monthExpenseMinor: Int64
-    public let monthNetMinor: Int64
+    public let totalBalance: AgentMoneyDTO
+    public let monthIncome: AgentMoneyDTO
+    public let monthExpense: AgentMoneyDTO
+    public let monthNet: AgentMoneyDTO
     public let categoryRows: [AgentCategoryRowDTO]
     public let walletSummaries: [AgentWalletSummaryDTO]
 
     public init(
-        totalBalanceMinor: Int64,
-        monthIncomeMinor: Int64,
-        monthExpenseMinor: Int64,
-        monthNetMinor: Int64,
+        totalBalance: AgentMoneyDTO,
+        monthIncome: AgentMoneyDTO,
+        monthExpense: AgentMoneyDTO,
+        monthNet: AgentMoneyDTO,
         categoryRows: [AgentCategoryRowDTO] = [],
         walletSummaries: [AgentWalletSummaryDTO] = []
     ) {
-        self.totalBalanceMinor = totalBalanceMinor
-        self.monthIncomeMinor = monthIncomeMinor
-        self.monthExpenseMinor = monthExpenseMinor
-        self.monthNetMinor = monthNetMinor
+        self.totalBalance = totalBalance
+        self.monthIncome = monthIncome
+        self.monthExpense = monthExpense
+        self.monthNet = monthNet
         self.categoryRows = categoryRows
         self.walletSummaries = walletSummaries
+    }
+}
+
+public struct AgentMoneyDTO: Codable, Hashable, Sendable {
+    public let amountMinor: Int64
+    public let currencyCode: String
+    public let scale: Int
+
+    public init(amountMinor: Int64, currencyCode: String, scale: Int = 2) {
+        self.amountMinor = amountMinor
+        self.currencyCode = currencyCode
+        self.scale = scale
     }
 }
 
@@ -57,21 +69,18 @@ public struct AgentWalletSummaryDTO: Codable, Hashable, Sendable {
     public let handle: String
     public let name: String
     public let kind: WalletKind
-    public let currentBalanceMinor: Int64
-    public let currencyCode: String
+    public let currentBalance: AgentMoneyDTO
 
     public init(
         handle: String,
         name: String,
         kind: WalletKind,
-        currentBalanceMinor: Int64,
-        currencyCode: String
+        currentBalance: AgentMoneyDTO
     ) {
         self.handle = handle
         self.name = name
         self.kind = kind
-        self.currentBalanceMinor = currentBalanceMinor
-        self.currencyCode = currencyCode
+        self.currentBalance = currentBalance
     }
 }
 
@@ -94,18 +103,18 @@ public struct AgentCategoriesResponse: Codable, Sendable {
 public struct AgentCategoryRowDTO: Codable, Hashable, Sendable {
     public let name: String
     public let kind: CategoryKind
-    public let amountMinor: Int64
+    public let amount: AgentMoneyDTO
     public let transactionCount: Int
 
     public init(
         name: String,
         kind: CategoryKind,
-        amountMinor: Int64,
+        amount: AgentMoneyDTO,
         transactionCount: Int
     ) {
         self.name = name
         self.kind = kind
-        self.amountMinor = amountMinor
+        self.amount = amount
         self.transactionCount = transactionCount
     }
 }
@@ -131,8 +140,7 @@ public struct AgentTransactionDTO: Codable, Hashable, Sendable {
     public let occurredAt: Date
     public let walletDisplayName: String
     public let kind: TransactionKind
-    public let amountMinor: Int64
-    public let currencyCode: String
+    public let amount: AgentMoneyDTO
     public let categoryName: String?
     public let merchantPreview: String?
     public let notePreview: String?
@@ -144,8 +152,7 @@ public struct AgentTransactionDTO: Codable, Hashable, Sendable {
         occurredAt: Date,
         walletDisplayName: String,
         kind: TransactionKind,
-        amountMinor: Int64,
-        currencyCode: String,
+        amount: AgentMoneyDTO,
         categoryName: String? = nil,
         merchantPreview: String? = nil,
         notePreview: String? = nil,
@@ -156,8 +163,7 @@ public struct AgentTransactionDTO: Codable, Hashable, Sendable {
         self.occurredAt = occurredAt
         self.walletDisplayName = walletDisplayName
         self.kind = kind
-        self.amountMinor = amountMinor
-        self.currencyCode = currencyCode
+        self.amount = amount
         self.categoryName = categoryName
         self.merchantPreview = merchantPreview
         self.notePreview = notePreview
@@ -166,21 +172,33 @@ public struct AgentTransactionDTO: Codable, Hashable, Sendable {
     }
 }
 
+public enum AgentBankSyncHealth: String, Codable, Sendable {
+    case connected
+    case disconnected
+    case syncFailed
+    case tokenInvalid
+    case rateLimited
+    case unknown
+}
+
 public struct AgentBankConnectionStatusResponse: Codable, Sendable {
     public let provider: BankProvider
     public let isConnected: Bool
     public let enabledAccountCount: Int
-    public let lastSyncError: String?
+    public let health: AgentBankSyncHealth
+    public let sanitizedErrorHint: String?
 
     public init(
         provider: BankProvider,
         isConnected: Bool,
         enabledAccountCount: Int,
-        lastSyncError: String?
+        health: AgentBankSyncHealth,
+        sanitizedErrorHint: String? = nil
     ) {
         self.provider = provider
         self.isConnected = isConnected
         self.enabledAccountCount = enabledAccountCount
-        self.lastSyncError = lastSyncError
+        self.health = health
+        self.sanitizedErrorHint = sanitizedErrorHint
     }
 }
