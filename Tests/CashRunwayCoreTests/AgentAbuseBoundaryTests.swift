@@ -72,6 +72,62 @@ struct AgentAbuseBoundaryTests {
         #expect(response.walletSummaries.count == 2)
     }
 
+    @Test func multiWalletOverviewAggregatesCategoriesWithoutDoubleCounting() async throws {
+        let clock = TestClock()
+        let (service, _, _, dashboard, _) = AgentTestMocks.makeService(clock: clock)
+        let walletA = UUID()
+        let walletB = UUID()
+        let categoryFood = UUID()
+        let monthKey = currentMonthKey(clock: clock)
+        dashboard.set(wallets: [
+            Wallet(id: walletA, name: "A", kind: .cash, colorHex: nil, iconName: nil, startingBalanceMinor: 0, currentBalanceMinor: 1000, isArchived: false, sortOrder: 0, createdAt: clock.now, updatedAt: clock.now),
+            Wallet(id: walletB, name: "B", kind: .card, colorHex: nil, iconName: nil, startingBalanceMinor: 0, currentBalanceMinor: 2000, isArchived: false, sortOrder: 1, createdAt: clock.now, updatedAt: clock.now)
+        ])
+
+        let overviewA = OverviewSnapshot(
+            selectedMonthKey: monthKey,
+            walletFilterID: walletA,
+            months: [],
+            totalWealthMinor: 1000,
+            monthCashFlowMinor: 100,
+            monthIncomeMinor: 0,
+            monthExpenseMinor: 100,
+            categories: [
+                OverviewCategoryRow(id: categoryFood, name: "Food", kind: .expense, colorHex: nil, iconName: nil, amountMinor: 100, transactionCount: 1, percentage: 1.0)
+            ],
+            labels: []
+        )
+        let overviewB = OverviewSnapshot(
+            selectedMonthKey: monthKey,
+            walletFilterID: walletB,
+            months: [],
+            totalWealthMinor: 2000,
+            monthCashFlowMinor: 200,
+            monthIncomeMinor: 0,
+            monthExpenseMinor: 200,
+            categories: [
+                OverviewCategoryRow(id: categoryFood, name: "Food", kind: .expense, colorHex: nil, iconName: nil, amountMinor: 200, transactionCount: 2, percentage: 1.0)
+            ],
+            labels: []
+        )
+        dashboard.set(overviewByWalletID: [walletA: overviewA, walletB: overviewB])
+
+        let session = try await AgentTestMocks.makeSession(
+            service: service,
+            capabilities: [.readOverview],
+            scope: AgentScope(walletScope: .selectedWallets([walletA, walletB]))
+        )
+
+        let response = try await service.readOverview(sessionID: session.id, request: .init(monthKey: monthKey))
+        let foodRow = response.categoryRows.first { $0.name == "Food" }
+        #expect(foodRow != nil)
+        #expect(foodRow?.amount.amountMinor == 300)
+        #expect(foodRow?.transactionCount == 3)
+        #expect(response.totalBalance.amountMinor == 3000)
+        #expect(response.monthExpense.amountMinor == 300)
+        #expect(response.walletSummaries.count == 2)
+    }
+
     @Test func overviewRejectsMonthKeyOutsideDateScope() async throws {
         let clock = TestClock()
         let (service, _, audit, dashboard, _) = AgentTestMocks.makeService(clock: clock)
@@ -176,12 +232,12 @@ struct AgentAbuseBoundaryTests {
 
     // MARK: - Bank status sanitization
 
-    @Test func bankStatusWithRawTokenErrorIsSanitizedToTokenInvalid() async throws {
+    @Test func bankStatusWithActiveIntegrationAndRawTokenErrorIsSanitizedToTokenInvalid() async throws {
         let clock = TestClock()
         let (service, _, _, _, bankSync) = AgentTestMocks.makeService(clock: clock)
         bankSync.setStatus(
             BankConnectionStatusSnapshot(
-                integration: nil,
+                integration: activeBankIntegration(status: .active, clock: clock),
                 enabledAccountCount: 1,
                 syncStartAt: nil,
                 lastSuccessfulSyncAt: nil,
@@ -198,15 +254,16 @@ struct AgentAbuseBoundaryTests {
 
         let response = try await service.readBankConnectionStatus(sessionID: session.id, provider: .monobank)
         #expect(response.health == .tokenInvalid)
+        #expect(response.isConnected == false)
         #expect(response.sanitizedErrorHint == nil)
     }
 
-    @Test func bankStatusWithKeychainPathErrorIsSanitizedToSyncFailed() async throws {
+    @Test func bankStatusWithActiveIntegrationAndKeychainPathErrorIsSanitizedToSyncFailed() async throws {
         let clock = TestClock()
         let (service, _, _, _, bankSync) = AgentTestMocks.makeService(clock: clock)
         bankSync.setStatus(
             BankConnectionStatusSnapshot(
-                integration: nil,
+                integration: activeBankIntegration(status: .active, clock: clock),
                 enabledAccountCount: 1,
                 syncStartAt: nil,
                 lastSuccessfulSyncAt: nil,
@@ -223,7 +280,162 @@ struct AgentAbuseBoundaryTests {
 
         let response = try await service.readBankConnectionStatus(sessionID: session.id, provider: .monobank)
         #expect(response.health == .syncFailed)
+        #expect(response.isConnected == false)
         #expect(response.sanitizedErrorHint == nil)
+    }
+
+    @Test func bankStatusWithDisabledIntegrationReportsDisconnected() async throws {
+        let clock = TestClock()
+        let (service, _, _, _, bankSync) = AgentTestMocks.makeService(clock: clock)
+        bankSync.setStatus(
+            BankConnectionStatusSnapshot(
+                integration: activeBankIntegration(status: .disabled, clock: clock),
+                enabledAccountCount: 0,
+                syncStartAt: nil,
+                lastSuccessfulSyncAt: nil,
+                lastSyncError: nil,
+                importedExpenseCount: 0
+            ),
+            provider: .monobank
+        )
+        let session = try await AgentTestMocks.makeSession(
+            service: service,
+            capabilities: [.readBankConnectionStatus],
+            scope: AgentScope(includeBankSyncMetadata: true)
+        )
+
+        let response = try await service.readBankConnectionStatus(sessionID: session.id, provider: .monobank)
+        #expect(response.health == .disconnected)
+        #expect(response.isConnected == false)
+    }
+
+    @Test func bankStatusWithTokenInvalidIntegrationReportsTokenInvalid() async throws {
+        let clock = TestClock()
+        let (service, _, _, _, bankSync) = AgentTestMocks.makeService(clock: clock)
+        bankSync.setStatus(
+            BankConnectionStatusSnapshot(
+                integration: activeBankIntegration(status: .tokenInvalid, clock: clock),
+                enabledAccountCount: 0,
+                syncStartAt: nil,
+                lastSuccessfulSyncAt: nil,
+                lastSyncError: nil,
+                importedExpenseCount: 0
+            ),
+            provider: .monobank
+        )
+        let session = try await AgentTestMocks.makeSession(
+            service: service,
+            capabilities: [.readBankConnectionStatus],
+            scope: AgentScope(includeBankSyncMetadata: true)
+        )
+
+        let response = try await service.readBankConnectionStatus(sessionID: session.id, provider: .monobank)
+        #expect(response.health == .tokenInvalid)
+        #expect(response.isConnected == false)
+    }
+
+    @Test func bankStatusWithActiveIntegrationAndNoErrorReportsConnected() async throws {
+        let clock = TestClock()
+        let (service, _, _, _, bankSync) = AgentTestMocks.makeService(clock: clock)
+        bankSync.setStatus(
+            BankConnectionStatusSnapshot(
+                integration: activeBankIntegration(status: .active, clock: clock),
+                enabledAccountCount: 2,
+                syncStartAt: nil,
+                lastSuccessfulSyncAt: nil,
+                lastSyncError: nil,
+                importedExpenseCount: 0
+            ),
+            provider: .monobank
+        )
+        let session = try await AgentTestMocks.makeSession(
+            service: service,
+            capabilities: [.readBankConnectionStatus],
+            scope: AgentScope(includeBankSyncMetadata: true)
+        )
+
+        let response = try await service.readBankConnectionStatus(sessionID: session.id, provider: .monobank)
+        #expect(response.health == .connected)
+        #expect(response.isConnected == true)
+        #expect(response.enabledAccountCount == 2)
+    }
+
+    // MARK: - Transaction display-name redaction
+
+    @Test func transactionWalletAndCategoryNamesWithAccountLikeStringsAreRedacted() async throws {
+        let clock = TestClock()
+        let (service, _, _, dashboard, _) = AgentTestMocks.makeService(clock: clock)
+        let walletID = UUID()
+        let category = Category(id: UUID(), name: "UA12345678901234567890123456", kind: .expense, iconName: nil, colorHex: nil, parentID: nil, isSystem: false, isArchived: false, sortOrder: 0, createdAt: clock.now, updatedAt: clock.now)
+        dashboard.set(wallets: [
+            Wallet(id: walletID, name: "Card 4141 4141 4141 4141", kind: .card, colorHex: nil, iconName: nil, startingBalanceMinor: 0, currentBalanceMinor: 0, isArchived: false, sortOrder: 0, createdAt: clock.now, updatedAt: clock.now)
+        ])
+        dashboard.set(categories: [category])
+        dashboard.set(transactions: [
+            TransactionListItem(
+                id: UUID(),
+                walletName: "Card 4141 4141 4141 4141",
+                amountMinor: 100,
+                occurredAt: clock.now,
+                categoryName: "UA12345678901234567890123456",
+                categoryColorHex: nil,
+                categoryIconName: nil,
+                merchant: "Merchant",
+                note: "",
+                kind: .expense,
+                source: .manual,
+                labels: [],
+                dayKey: 0
+            )
+        ])
+        let session = try await AgentTestMocks.makeSession(
+            service: service,
+            capabilities: [.readTransactions],
+            scope: AgentScope(walletScope: .selectedWallets([walletID]), maxTransactionCount: 10)
+        )
+
+        let response = try await service.readTransactions(sessionID: session.id, request: .init())
+        #expect(response.transactions.count == 1)
+        let tx = response.transactions[0]
+        #expect(tx.walletDisplayName.contains("[REDACTED_CARD]"))
+        #expect(tx.categoryName?.contains("[REDACTED_IBAN]") == true)
+    }
+
+    // MARK: - Canonical scope hash
+
+    @Test func identicalScopesWithDifferentWalletSetOrderProduceSameAuditHash() async throws {
+        let clock = TestClock()
+        let (service, _, audit, dashboard, _) = AgentTestMocks.makeService(clock: clock)
+        let walletA = UUID()
+        let walletB = UUID()
+        dashboard.set(wallets: [
+            Wallet(id: walletA, name: "A", kind: .cash, colorHex: nil, iconName: nil, startingBalanceMinor: 0, currentBalanceMinor: 0, isArchived: false, sortOrder: 0, createdAt: clock.now, updatedAt: clock.now),
+            Wallet(id: walletB, name: "B", kind: .cash, colorHex: nil, iconName: nil, startingBalanceMinor: 0, currentBalanceMinor: 0, isArchived: false, sortOrder: 1, createdAt: clock.now, updatedAt: clock.now)
+        ])
+
+        let idsOne = Set([walletA, walletB])
+        let idsTwo = Set([walletB, walletA])
+
+        let sessionOne = try await AgentTestMocks.makeSession(
+            service: service,
+            capabilities: [.readWallets],
+            scope: AgentScope(walletScope: .selectedWallets(idsOne))
+        )
+        _ = try await service.readWallets(sessionID: sessionOne.id)
+
+        let sessionTwo = try await AgentTestMocks.makeSession(
+            service: service,
+            capabilities: [.readWallets],
+            scope: AgentScope(walletScope: .selectedWallets(idsTwo))
+        )
+        _ = try await service.readWallets(sessionID: sessionTwo.id)
+
+        let entriesOne = try await audit.entries(forSessionID: sessionOne.id)
+        let entriesTwo = try await audit.entries(forSessionID: sessionTwo.id)
+        #expect(entriesOne.count == 1)
+        #expect(entriesTwo.count == 1)
+        #expect(entriesOne[0].scopeHash == entriesTwo[0].scopeHash)
+        #expect(!entriesOne[0].scopeHash.isEmpty)
     }
 
     // MARK: - Consent version
@@ -311,6 +523,22 @@ struct AgentAbuseBoundaryTests {
             source: .manual,
             labels: [],
             dayKey: 0
+        )
+    }
+
+    private func activeBankIntegration(status: BankIntegrationStatus, clock: TestClock) -> BankIntegration {
+        BankIntegration(
+            id: UUID(),
+            provider: .monobank,
+            displayName: "Monobank",
+            status: status,
+            syncStartAt: clock.now,
+            tokenKeychainAccount: "monobank-token",
+            lastClientInfoSyncAt: nil,
+            lastSuccessfulSyncAt: nil,
+            lastSyncError: nil,
+            createdAt: clock.now,
+            updatedAt: clock.now
         )
     }
 

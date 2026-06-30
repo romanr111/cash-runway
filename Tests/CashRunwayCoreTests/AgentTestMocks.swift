@@ -28,6 +28,7 @@ final class FakeDashboardRepository: DashboardRepositorying, @unchecked Sendable
     private var storedCategories: [CashRunwayCore.Category] = []
     private var storedTransactions: [TransactionListItem] = []
     private var storedOverview: OverviewSnapshot?
+    private var storedOverviewByWalletID: [UUID: OverviewSnapshot]?
     private let lock = NSLock()
 
     init() {}
@@ -45,7 +46,17 @@ final class FakeDashboardRepository: DashboardRepositorying, @unchecked Sendable
     }
 
     func set(overview: OverviewSnapshot?) {
-        lock.withLock { storedOverview = overview }
+        lock.withLock {
+            storedOverview = overview
+            storedOverviewByWalletID = nil
+        }
+    }
+
+    func set(overviewByWalletID: [UUID: OverviewSnapshot]?) {
+        lock.withLock {
+            storedOverviewByWalletID = overviewByWalletID
+            storedOverview = nil
+        }
     }
 
     func wallets() throws -> [Wallet] {
@@ -113,7 +124,20 @@ final class FakeDashboardRepository: DashboardRepositorying, @unchecked Sendable
 
     func overviewSnapshot(monthKey: Int, walletID: UUID?) throws -> OverviewSnapshot {
         lock.withLock {
-            storedOverview ?? OverviewSnapshot(
+            if let byWalletID = storedOverviewByWalletID, let id = walletID {
+                return byWalletID[id] ?? OverviewSnapshot(
+                    selectedMonthKey: monthKey,
+                    walletFilterID: walletID,
+                    months: [],
+                    totalWealthMinor: 0,
+                    monthCashFlowMinor: 0,
+                    monthIncomeMinor: 0,
+                    monthExpenseMinor: 0,
+                    categories: [],
+                    labels: []
+                )
+            }
+            return storedOverview ?? OverviewSnapshot(
                 selectedMonthKey: monthKey,
                 walletFilterID: walletID,
                 months: [],

@@ -238,10 +238,10 @@ public final class AgentAccessService: AgentAccessServicing, Sendable {
             let dto = AgentTransactionDTO(
                 handle: handle,
                 occurredAt: item.occurredAt,
-                walletDisplayName: item.walletName,
+                walletDisplayName: redactionService.redactAccountLikePatterns(item.walletName),
                 kind: item.kind.asTransactionKind,
                 amount: uahMoney(item.amountMinor),
-                categoryName: item.categoryName,
+                categoryName: item.categoryName.map(redactionService.redactAccountLikePatterns),
                 merchantPreview: merchant,
                 notePreview: note,
                 labels: labels,
@@ -274,13 +274,13 @@ public final class AgentAccessService: AgentAccessServicing, Sendable {
             throw .missingCapability
         }
         let status = try repository { try bankSyncRepository.bankConnectionStatus(provider: provider) }
-        let sanitized = sanitizedBankStatus(status)
+        let (isConnected, health) = bankConnectionHealth(status)
         let response = AgentBankConnectionStatusResponse(
             provider: provider,
-            isConnected: status.integration != nil,
+            isConnected: isConnected,
             enabledAccountCount: status.enabledAccountCount,
-            health: sanitized.health,
-            sanitizedErrorHint: redactBankHint(sanitized.hint)
+            health: health,
+            sanitizedErrorHint: nil
         )
         return try await finalizeAllowedResponse(
             response,
@@ -363,10 +363,13 @@ public final class AgentAccessService: AgentAccessServicing, Sendable {
                 monthIncomeMinor += snapshot.monthIncomeMinor
                 monthExpenseMinor += snapshot.monthExpenseMinor
                 for category in snapshot.categories {
-                    var existing = mergedCategories[category.id] ?? category
-                    existing.amountMinor += category.amountMinor
-                    existing.transactionCount += category.transactionCount
-                    mergedCategories[category.id] = existing
+                    if var existing = mergedCategories[category.id] {
+                        existing.amountMinor += category.amountMinor
+                        existing.transactionCount += category.transactionCount
+                        mergedCategories[category.id] = existing
+                    } else {
+                        mergedCategories[category.id] = category
+                    }
                 }
             }
             return OverviewSnapshot(
@@ -529,10 +532,54 @@ public final class AgentAccessService: AgentAccessServicing, Sendable {
 
     // MARK: - Stable scope hash
 
+    /// Canonical payload for hashing agent scopes. Sorts selected wallet IDs and
+    /// uses stable string representations so identical scopes always produce the
+    /// same audit hash regardless of `Set` iteration order or `DateInterval`
+    /// encoding details.
+    private struct CanonicalScopeHashPayload: Codable {
+        let walletScope: String
+        let walletIDs: [String]
+        let dateScope: String
+        let maxTransactionCount: Int
+        let includeMerchantNames: Bool
+        let includeNotes: Bool
+        let includeLabels: Bool
+        let includeBankSyncMetadata: Bool
+    }
+
+    private func canonicalWalletScope(_ walletScope: AgentWalletScope) -> (scope: String, ids: [String]) {
+        switch walletScope {
+        case .allWallets:
+            return ("allWallets", [])
+        case .selectedWallets(let ids):
+            return ("selectedWallets", ids.map(\.uuidString).sorted())
+        }
+    }
+
+    private func canonicalDateScopeString(_ dateScope: AgentDateScope) -> String {
+        switch dateScope {
+        case .lastDays(let days):
+            return "lastDays:\(days)"
+        case .closedRange(let interval):
+            return "closedRange:\(interval.start.timeIntervalSince1970):\(interval.end.timeIntervalSince1970)"
+        }
+    }
+
     private func scopeHash(_ session: AgentSession) -> String {
+        let (walletScope, walletIDs) = canonicalWalletScope(session.scope.walletScope)
+        let payload = CanonicalScopeHashPayload(
+            walletScope: walletScope,
+            walletIDs: walletIDs,
+            dateScope: canonicalDateScopeString(session.scope.dateScope),
+            maxTransactionCount: session.scope.maxTransactionCount,
+            includeMerchantNames: session.scope.includeMerchantNames,
+            includeNotes: session.scope.includeNotes,
+            includeLabels: session.scope.includeLabels,
+            includeBankSyncMetadata: session.scope.includeBankSyncMetadata
+        )
         let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        guard let data = try? encoder.encode(session.scope) else {
+        encoder.outputFormatting = .sortedKeys
+        guard let data = try? encoder.encode(payload) else {
             return ""
         }
         let digest = SHA256.hash(data: data)
@@ -547,22 +594,34 @@ public final class AgentAccessService: AgentAccessServicing, Sendable {
     }
 
     private func sanitizedBankStatus(_ status: BankConnectionStatusSnapshot) -> SanitizedBankStatus {
-        let rawError = status.lastSyncError?.lowercased() ?? ""
-        if rawError.isEmpty {
-            return SanitizedBankStatus(health: status.integration != nil ? .connected : .disconnected, hint: nil)
-        }
-        if rawError.contains("token") || rawError.contains("auth") || rawError.contains("unauthorized") {
-            return SanitizedBankStatus(health: .tokenInvalid, hint: nil)
-        }
-        if rawError.contains("rate") || rawError.contains("429") || rawError.contains("throttle") {
-            return SanitizedBankStatus(health: .rateLimited, hint: nil)
-        }
-        return SanitizedBankStatus(health: .syncFailed, hint: nil)
+        let (_, health) = bankConnectionHealth(status)
+        return SanitizedBankStatus(health: health, hint: nil)
     }
 
-    private func redactBankHint(_ hint: String?) -> String? {
-        guard let hint else { return nil }
-        return redactionService.redactAccountLikePatterns(hint)
+    /// Derives connection state and sanitized health from the integration status.
+    /// Raw `lastSyncError` is used only as a secondary signal for `.active`
+    /// integrations; non-active statuses are reported directly.
+    private func bankConnectionHealth(_ status: BankConnectionStatusSnapshot) -> (isConnected: Bool, health: AgentBankSyncHealth) {
+        let rawError = status.lastSyncError?.lowercased() ?? ""
+        switch status.integration?.status {
+        case .active:
+            if rawError.contains("token") || rawError.contains("auth") || rawError.contains("unauthorized") {
+                return (false, .tokenInvalid)
+            }
+            if rawError.contains("rate") || rawError.contains("429") || rawError.contains("throttle") {
+                return (false, .rateLimited)
+            }
+            if !rawError.isEmpty {
+                return (false, .syncFailed)
+            }
+            return (true, .connected)
+        case .tokenInvalid:
+            return (false, .tokenInvalid)
+        case .syncFailed:
+            return (false, .syncFailed)
+        case .disabled, .none:
+            return (false, .disconnected)
+        }
     }
 
     // MARK: - Collaborator wrappers (typed throws)
