@@ -86,18 +86,28 @@ struct FullBackupTests {
         let decoded = try service.decode(data: service.encode(try service.exportFullBackup()))
 
         #expect(decoded.metadata.format == "cash-runway-backup")
-        #expect(decoded.metadata.version == 2)
+        #expect(decoded.metadata.version == 3)
         #expect(decoded.transactions.count == 4)
     }
 
     @Test func fullBackupRoundTripPreservesCurrencyCodes() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
-        try TestSupport.seedFixtureWallets(into: repository)
-        let wallet = try #require(try repository.wallets().first)
         let category = try #require(try repository.categories(kind: .expense).first)
-        var usdWallet = wallet
-        usdWallet.currencyCode = .usd
+        let usdWallet = Wallet(
+            id: UUID(),
+            name: "USD Wallet",
+            kind: .cash,
+            colorHex: nil,
+            iconName: nil,
+            startingBalanceMinor: 0,
+            currentBalanceMinor: 0,
+            currencyCode: .usd,
+            isArchived: false,
+            sortOrder: 0,
+            createdAt: .now,
+            updatedAt: .now
+        )
         try repository.saveWallet(usdWallet)
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         try repository.saveTransaction(TransactionDraft(

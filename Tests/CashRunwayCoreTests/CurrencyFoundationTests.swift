@@ -178,10 +178,317 @@ struct CurrencyFoundationTests {
         #expect(try repository.cachedExchangeRate(from: .uah, to: .usd, on: sameDayEvening) == nil)
     }
 
+    @Test func currencyCodeCodableUsesValidatedSingleStringValue() throws {
+        let decoder = JSONDecoder()
+        let decoded = try decoder.decode(CurrencyCode.self, from: Data(#"" usd ""#.utf8))
+        #expect(decoded == .usd)
+
+        let encoded = try JSONEncoder().encode(CurrencyCode.eur)
+        #expect(String(decoding: encoded, as: UTF8.self) == #""EUR""#)
+
+        #expect(throws: DecodingError.self) {
+            _ = try decoder.decode(CurrencyCode.self, from: Data(#""US1""#.utf8))
+        }
+        #expect(throws: DecodingError.self) {
+            _ = try decoder.decode(CurrencyCode.self, from: Data(#""USDT""#.utf8))
+        }
+    }
+
+    @Test func repositoryRejectsTransactionCurrencyMismatch() throws {
+        let repository = try makeCurrencyRepository()
+        let wallet = try saveCurrencyWallet(repository, currencyCode: .usd)
+        let category = try saveExpenseCategory(repository)
+
+        #expect(throws: CashRunwayError.self) {
+            try repository.saveTransaction(TransactionDraft(
+                kind: .expense,
+                walletID: wallet.id,
+                amountMinor: 1_000,
+                currencyCode: .uah,
+                occurredAt: .now,
+                categoryID: category.id
+            ))
+        }
+    }
+
+    @Test func repositoryAcceptsTransactionMatchingWalletCurrency() throws {
+        let repository = try makeCurrencyRepository()
+        let wallet = try saveCurrencyWallet(repository, currencyCode: .usd)
+        let category = try saveExpenseCategory(repository)
+
+        try repository.saveTransaction(TransactionDraft(
+            kind: .expense,
+            walletID: wallet.id,
+            amountMinor: 1_000,
+            currencyCode: .usd,
+            occurredAt: .now,
+            categoryID: category.id
+        ))
+
+        let transaction = try #require(try repository.exportFullBackup().transactions.first)
+        #expect(transaction.currencyCode == .usd)
+    }
+
+    @Test func repositoryRejectsTransferBetweenDifferentWalletCurrencies() throws {
+        let repository = try makeCurrencyRepository()
+        let source = try saveCurrencyWallet(repository, currencyCode: .uah)
+        let destination = try saveCurrencyWallet(repository, currencyCode: .usd)
+
+        #expect(throws: CashRunwayError.self) {
+            try repository.saveTransaction(TransactionDraft(
+                kind: .transfer,
+                walletID: source.id,
+                destinationWalletID: destination.id,
+                amountMinor: 1_000,
+                currencyCode: .uah,
+                occurredAt: .now
+            ))
+        }
+    }
+
+    @Test func repositoryRejectsTransferDraftCurrencyMismatch() throws {
+        let repository = try makeCurrencyRepository()
+        let source = try saveCurrencyWallet(repository, currencyCode: .usd)
+        let destination = try saveCurrencyWallet(repository, currencyCode: .usd)
+
+        #expect(throws: CashRunwayError.self) {
+            try repository.saveTransaction(TransactionDraft(
+                kind: .transfer,
+                walletID: source.id,
+                destinationWalletID: destination.id,
+                amountMinor: 1_000,
+                currencyCode: .uah,
+                occurredAt: .now
+            ))
+        }
+    }
+
+    @Test func repositoryRejectsRecurringTemplateCurrencyMismatch() throws {
+        let repository = try makeCurrencyRepository()
+        let wallet = try saveCurrencyWallet(repository, currencyCode: .usd)
+        let category = try saveExpenseCategory(repository)
+
+        #expect(throws: CashRunwayError.self) {
+            try repository.saveRecurringTemplate(RecurringTemplate(
+                id: UUID(),
+                kind: .expense,
+                walletID: wallet.id,
+                counterpartyWalletID: nil,
+                amountMinor: 1_000,
+                currencyCode: .uah,
+                categoryID: category.id,
+                merchant: "Rent",
+                note: nil,
+                ruleType: .monthly,
+                ruleInterval: 1,
+                dayOfMonth: 1,
+                weekday: nil,
+                startDate: .now,
+                endDate: nil,
+                isActive: true,
+                createdAt: .now,
+                updatedAt: .now
+            ))
+        }
+    }
+
+    @Test func repositoryRejectsWalletCurrencyChangeAfterTransactionsExist() throws {
+        let repository = try makeCurrencyRepository()
+        var wallet = try saveCurrencyWallet(repository, currencyCode: .uah)
+        let category = try saveExpenseCategory(repository)
+        try repository.saveTransaction(TransactionDraft(
+            kind: .expense,
+            walletID: wallet.id,
+            amountMinor: 1_000,
+            currencyCode: .uah,
+            occurredAt: .now,
+            categoryID: category.id
+        ))
+
+        wallet.currencyCode = .usd
+
+        #expect(throws: CashRunwayError.self) {
+            try repository.saveWallet(wallet)
+        }
+    }
+
+    @Test func repositoryRejectsWalletCurrencyChangeAfterBankAccountMappingExists() throws {
+        let repository = try makeCurrencyRepository()
+        var wallet = try saveCurrencyWallet(repository, currencyCode: .uah)
+        let integrationID = UUID()
+        try repository.saveBankConnection(
+            integration: BankIntegration(
+                id: integrationID,
+                provider: .monobank,
+                displayName: "Monobank",
+                status: .active,
+                syncStartAt: .now,
+                tokenKeychainAccount: "token",
+                lastClientInfoSyncAt: nil,
+                lastSuccessfulSyncAt: nil,
+                lastSyncError: nil,
+                createdAt: .now,
+                updatedAt: .now
+            ),
+            accounts: [
+                BankAccount(
+                    id: UUID(),
+                    integrationID: integrationID,
+                    provider: .monobank,
+                    providerAccountID: "acc-1",
+                    walletID: wallet.id,
+                    displayName: "Black",
+                    accountType: "black",
+                    currencyCode: 980,
+                    maskedPAN: "1234",
+                    iban: nil,
+                    isEnabled: true,
+                    syncStartAt: .now,
+                    lastSuccessfulSyncAt: nil,
+                    lastStatementItemTime: nil,
+                    createdAt: .now,
+                    updatedAt: .now
+                ),
+            ]
+        )
+
+        wallet.currencyCode = .usd
+
+        #expect(throws: CashRunwayError.self) {
+            try repository.saveWallet(wallet)
+        }
+    }
+
+    @Test func mixedCurrencyAllWalletSnapshotsAreRejected() throws {
+        let repository = try makeCurrencyRepository()
+        let uahWallet = try saveCurrencyWallet(repository, currencyCode: .uah)
+        _ = try saveCurrencyWallet(repository, currencyCode: .usd)
+        let monthKey = DateKeys.monthKey(for: .now)
+
+        #expect(throws: CashRunwayError.self) {
+            _ = try repository.dashboard(monthKey: monthKey, walletID: nil)
+        }
+        #expect(throws: CashRunwayError.self) {
+            _ = try repository.overviewSnapshot(monthKey: monthKey, walletID: nil)
+        }
+        #expect(throws: CashRunwayError.self) {
+            _ = try repository.timelineSnapshot(monthKey: monthKey, walletID: nil)
+        }
+        #expect(throws: CashRunwayError.self) {
+            _ = try repository.allBars(walletID: nil)
+        }
+
+        _ = try repository.dashboard(monthKey: monthKey, walletID: uahWallet.id)
+        _ = try repository.overviewSnapshot(monthKey: monthKey, walletID: uahWallet.id)
+        _ = try repository.timelineSnapshot(monthKey: monthKey, walletID: uahWallet.id)
+        _ = try repository.allBars(walletID: uahWallet.id)
+    }
+
+    @Test func backupExportUsesV3AndStringCurrencyCodes() throws {
+        let repository = try makeCurrencyRepository()
+        _ = try saveCurrencyWallet(repository, currencyCode: .usd)
+        let data = try JSONEncoder().encode(repository.exportFullBackup())
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let metadata = try #require(object["metadata"] as? [String: Any])
+        let wallets = try #require(object["wallets"] as? [[String: Any]])
+        let firstWallet = try #require(wallets.first)
+
+        #expect(metadata["version"] as? Int == 3)
+        #expect(firstWallet["currencyCode"] as? String == "USD")
+    }
+
+    @Test func backupV3RestoresCurrencyPreferencesAndEntityCurrencyCodes() throws {
+        let source = try makeCurrencyRepository()
+        let wallet = try saveCurrencyWallet(source, currencyCode: .usd)
+        let category = try saveExpenseCategory(source)
+        try source.saveCurrencyPreferences(CurrencyPreferences(defaultCurrencyCode: .usd, reportingCurrencyCode: .eur))
+        try source.saveTransaction(TransactionDraft(
+            kind: .expense,
+            walletID: wallet.id,
+            amountMinor: 1_000,
+            currencyCode: .usd,
+            occurredAt: .now,
+            categoryID: category.id
+        ))
+        try source.saveRecurringTemplate(RecurringTemplate(
+            id: UUID(),
+            kind: .expense,
+            walletID: wallet.id,
+            counterpartyWalletID: nil,
+            amountMinor: 2_000,
+            currencyCode: .usd,
+            categoryID: category.id,
+            merchant: "Subscription",
+            note: nil,
+            ruleType: .monthly,
+            ruleInterval: 1,
+            dayOfMonth: 1,
+            weekday: nil,
+            startDate: .now,
+            endDate: nil,
+            isActive: true,
+            createdAt: .now,
+            updatedAt: .now
+        ))
+
+        let backup = try source.exportFullBackup()
+        let target = try makeCurrencyRepository()
+        _ = try BackupService(repository: target).restore(backup)
+
+        #expect(try target.currencyPreferences() == CurrencyPreferences(defaultCurrencyCode: .usd, reportingCurrencyCode: .eur))
+        #expect(try target.wallets().first?.currencyCode == .usd)
+        #expect(try target.exportFullBackup().transactions.first?.currencyCode == .usd)
+        #expect(try target.recurringTemplates().first?.currencyCode == .usd)
+    }
+
     private func makeCurrencyRepository() throws -> CashRunwayRepository {
         let location = TestSupport.makeLocation()
         return CashRunwayRepository(
             databaseManager: try DatabaseManager(locationProvider: location, keychain: TestKeychainStore())
         )
+    }
+
+    @discardableResult
+    private func saveCurrencyWallet(
+        _ repository: CashRunwayRepository,
+        currencyCode: CurrencyCode,
+        startingBalanceMinor: Int64 = 0,
+        currentBalanceMinor: Int64 = 0
+    ) throws -> Wallet {
+        let wallet = Wallet(
+            id: UUID(),
+            name: "Wallet \(currencyCode.rawValue) \(UUID().uuidString.prefix(4))",
+            kind: .cash,
+            colorHex: nil,
+            iconName: nil,
+            startingBalanceMinor: startingBalanceMinor,
+            currentBalanceMinor: currentBalanceMinor,
+            currencyCode: currencyCode,
+            isArchived: false,
+            sortOrder: 0,
+            createdAt: .now,
+            updatedAt: .now
+        )
+        try repository.saveWallet(wallet)
+        return wallet
+    }
+
+    @discardableResult
+    private func saveExpenseCategory(_ repository: CashRunwayRepository) throws -> CashRunwayCore.Category {
+        let category = CashRunwayCore.Category(
+            id: UUID(),
+            name: "Category \(UUID().uuidString.prefix(4))",
+            kind: .expense,
+            iconName: nil,
+            colorHex: nil,
+            parentID: nil,
+            isSystem: false,
+            isArchived: false,
+            sortOrder: 0,
+            createdAt: .now,
+            updatedAt: .now
+        )
+        try repository.saveCategory(category)
+        return category
     }
 }

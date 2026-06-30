@@ -896,6 +896,7 @@ public struct CashRunwayBackup: Codable, Sendable {
     public var recurringTemplates: [BackupRecurringTemplate]
     public var recurringInstances: [BackupRecurringInstance]
     public var importJobs: [BackupImportJob]
+    public var currencyPreferences: CurrencyPreferences?
 
     private enum CodingKeys: String, CodingKey {
         case metadata
@@ -909,6 +910,7 @@ public struct CashRunwayBackup: Codable, Sendable {
         case recurringTemplates
         case recurringInstances
         case importJobs
+        case currencyPreferences
     }
 
     public init(
@@ -922,7 +924,8 @@ public struct CashRunwayBackup: Codable, Sendable {
         budgets: [BackupBudget],
         recurringTemplates: [BackupRecurringTemplate],
         recurringInstances: [BackupRecurringInstance],
-        importJobs: [BackupImportJob]
+        importJobs: [BackupImportJob],
+        currencyPreferences: CurrencyPreferences? = nil
     ) {
         self.metadata = metadata
         self.wallets = wallets
@@ -935,6 +938,7 @@ public struct CashRunwayBackup: Codable, Sendable {
         self.recurringTemplates = recurringTemplates
         self.recurringInstances = recurringInstances
         self.importJobs = importJobs
+        self.currencyPreferences = currencyPreferences
     }
 
     public init(from decoder: Decoder) throws {
@@ -950,6 +954,7 @@ public struct CashRunwayBackup: Codable, Sendable {
         recurringTemplates = try container.decode([BackupRecurringTemplate].self, forKey: .recurringTemplates)
         recurringInstances = try container.decode([BackupRecurringInstance].self, forKey: .recurringInstances)
         importJobs = try container.decode([BackupImportJob].self, forKey: .importJobs)
+        currencyPreferences = try container.decodeIfPresent(CurrencyPreferences.self, forKey: .currencyPreferences)
     }
 }
 
@@ -1481,7 +1486,7 @@ enum BackupValidator {
         guard backup.metadata.format == "cash-runway-backup" else {
             throw BackupError.unsupportedFormat
         }
-        guard backup.metadata.version == 1 || backup.metadata.version == 2 else {
+        guard backup.metadata.version == 1 || backup.metadata.version == 2 || backup.metadata.version == 3 else {
             throw BackupError.unsupportedVersion(backup.metadata.version)
         }
 

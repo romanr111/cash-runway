@@ -604,6 +604,7 @@ extension CashRunwayRepository {
 
     public func saveWallet(_ wallet: Wallet) throws {
         try databaseManager.dbQueue.write { db in
+            try validateWalletCurrencyChange(db, wallet: wallet)
             if try walletTableHasCategoryID(db), try Self.tableHasColumn(db, table: "wallets", column: "currency_code") {
                 try db.execute(
                     sql: """
@@ -786,6 +787,7 @@ extension CashRunwayRepository {
 
     public func saveRecurringTemplate(_ template: RecurringTemplate) throws {
         try databaseManager.dbQueue.write { db in
+            try validateRecurringTemplateCurrency(db, template: template)
             if try !Self.tableHasColumn(db, table: "recurring_templates", column: "currency_code") {
                 try db.execute(
                     sql: """
@@ -880,6 +882,7 @@ extension CashRunwayRepository {
 
     public func dashboard(monthKey: Int, walletID: UUID? = nil) throws -> DashboardSnapshot {
         try databaseManager.dbQueue.read { db in
+            try rejectMixedCurrencyAllWalletSnapshot(db, walletID: walletID)
             let totalBalanceMinor: Int64
             if let walletID {
                 totalBalanceMinor = try Int64.fetchOne(db, sql: "SELECT current_balance_minor FROM wallets WHERE id = ?", arguments: [walletID.uuidString]) ?? 0
@@ -968,6 +971,7 @@ extension CashRunwayRepository {
     public func timelineSnapshot(monthKey: Int, walletID: UUID? = nil, query: TransactionQuery = .init(), period: TimelinePeriod = .month) throws -> TimelineSnapshot {
         try databaseManager.dbQueue.read { db in
             let effectiveWalletID = walletID ?? query.walletID
+            try rejectMixedCurrencyAllWalletSnapshot(db, walletID: effectiveWalletID)
             let bars = try Self.loadBars(db, monthKey: monthKey, walletID: effectiveWalletID, period: period)
             let anchorPeriodKey = Self.anchorPeriodKey(monthKey: monthKey, period: period)
 
@@ -1097,6 +1101,7 @@ extension CashRunwayRepository {
 
     public func allBars(walletID: UUID? = nil, period: TimelinePeriod = .month) throws -> [TimelineBarPoint] {
         try databaseManager.dbQueue.read { db in
+            try rejectMixedCurrencyAllWalletSnapshot(db, walletID: walletID)
             switch period {
             case .month:
                 return try Self.loadAllMonthlyBars(db, walletID: walletID)
@@ -1276,6 +1281,7 @@ extension CashRunwayRepository {
     // swiftlint:disable:next function_body_length
     public func overviewSnapshot(monthKey: Int, walletID: UUID? = nil) throws -> OverviewSnapshot {
         try databaseManager.dbQueue.read { db in
+            try rejectMixedCurrencyAllWalletSnapshot(db, walletID: walletID)
             let months = Self.monthWindow(endingAt: monthKey, count: 6)
             let cashflowRows = try Row.fetchAll(
                 db,
@@ -1519,6 +1525,7 @@ extension CashRunwayRepository {
     public func saveTransaction(_ draft: TransactionDraft) throws {
         try validate(draft)
         try databaseManager.dbQueue.write { db in
+            try validateTransactionCurrency(db, draft: draft)
             if draft.kind == .transfer {
                 try saveTransfer(db, draft: draft)
             } else {
@@ -2456,6 +2463,108 @@ extension CashRunwayRepository {
         }
         if draft.kind != .transfer, draft.categoryID == nil {
             throw CashRunwayError.validation(L10n.string("Category is required for income and expense transactions."))
+        }
+    }
+
+    private func validateTransactionCurrency(_ db: Database, draft: TransactionDraft) throws {
+        let sourceCurrency = try walletCurrencyCode(db, walletID: draft.walletID)
+        if draft.kind == .transfer {
+            guard let destinationWalletID = draft.destinationWalletID else { return }
+            let destinationCurrency = try walletCurrencyCode(db, walletID: destinationWalletID)
+            guard sourceCurrency == destinationCurrency, sourceCurrency == draft.currencyCode else {
+                throw CashRunwayError.validation(L10n.string("Transfers require source wallet, destination wallet, and transaction currency to match."))
+            }
+        } else if sourceCurrency != draft.currencyCode {
+            throw CashRunwayError.validation(L10n.string("Transaction currency must match the selected wallet currency."))
+        }
+    }
+
+    private func validateRecurringTemplateCurrency(_ db: Database, template: RecurringTemplate) throws {
+        let sourceCurrency = try walletCurrencyCode(db, walletID: template.walletID)
+        if let counterpartyWalletID = template.counterpartyWalletID {
+            let counterpartyCurrency = try walletCurrencyCode(db, walletID: counterpartyWalletID)
+            guard sourceCurrency == counterpartyCurrency, sourceCurrency == template.currencyCode else {
+                throw CashRunwayError.validation(L10n.string("Recurring transfer currency must match both wallets."))
+            }
+        } else if sourceCurrency != template.currencyCode {
+            throw CashRunwayError.validation(L10n.string("Recurring template currency must match the selected wallet currency."))
+        }
+    }
+
+    private func validateWalletCurrencyChange(_ db: Database, wallet: Wallet) throws {
+        guard try Self.tableHasColumn(db, table: "wallets", column: "currency_code"),
+              let row = try Row.fetchOne(
+                  db,
+                  sql: "SELECT currency_code, starting_balance_minor, current_balance_minor FROM wallets WHERE id = ?",
+                  arguments: [wallet.id.uuidString]
+              )
+        else {
+            return
+        }
+
+        let existingCurrency = CurrencyCode(rawValue: row["currency_code"])
+        guard existingCurrency != wallet.currencyCode else { return }
+
+        let existingStarting: Int64 = row["starting_balance_minor"]
+        let existingCurrent: Int64 = row["current_balance_minor"]
+        guard existingStarting == 0,
+              existingCurrent == 0,
+              wallet.startingBalanceMinor == 0,
+              wallet.currentBalanceMinor == 0,
+              try dependentCurrencyDataCount(db, walletID: wallet.id) == 0
+        else {
+            throw CashRunwayError.validation(L10n.string("Wallet currency cannot be changed after ledger or bank data exists."))
+        }
+    }
+
+    private func dependentCurrencyDataCount(_ db: Database, walletID: UUID) throws -> Int {
+        let walletID = walletID.uuidString
+        var count = try Int.fetchOne(
+            db,
+            sql: "SELECT COUNT(*) FROM transactions WHERE wallet_id = ?",
+            arguments: [walletID]
+        ) ?? 0
+        count += try Int.fetchOne(
+            db,
+            sql: "SELECT COUNT(*) FROM recurring_templates WHERE wallet_id = ? OR counterparty_wallet_id = ?",
+            arguments: [walletID, walletID]
+        ) ?? 0
+        if try tableExists(db, name: "bank_accounts") {
+            count += try Int.fetchOne(
+                db,
+                sql: "SELECT COUNT(*) FROM bank_accounts WHERE wallet_id = ?",
+                arguments: [walletID]
+            ) ?? 0
+        }
+        return count
+    }
+
+    private func walletCurrencyCode(_ db: Database, walletID: UUID) throws -> CurrencyCode {
+        guard try Self.tableHasColumn(db, table: "wallets", column: "currency_code") else {
+            return .uah
+        }
+        guard let rawValue = try String.fetchOne(
+            db,
+            sql: "SELECT currency_code FROM wallets WHERE id = ?",
+            arguments: [walletID.uuidString]
+        ) else {
+            throw CashRunwayError.notFound
+        }
+        return CurrencyCode(rawValue: rawValue)
+    }
+
+    private func rejectMixedCurrencyAllWalletSnapshot(_ db: Database, walletID: UUID?) throws {
+        guard walletID == nil,
+              try Self.tableHasColumn(db, table: "wallets", column: "currency_code")
+        else {
+            return
+        }
+        let activeCurrencyCount = try Int.fetchOne(
+            db,
+            sql: "SELECT COUNT(DISTINCT currency_code) FROM wallets WHERE is_archived = 0"
+        ) ?? 0
+        guard activeCurrencyCount <= 1 else {
+            throw CashRunwayError.validation(L10n.string("All-wallet totals require a single wallet currency until currency conversion is available."))
         }
     }
 

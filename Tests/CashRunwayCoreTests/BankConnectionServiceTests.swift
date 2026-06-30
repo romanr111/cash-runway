@@ -119,9 +119,20 @@ struct BankConnectionServiceTests {
     @Test func uahMonobankAccountRequiresUAHWalletMapping() async throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()
-        try TestSupport.seedFixtureWallets(into: repository)
-        var wallet = try #require(try repository.wallets().first)
-        wallet.currencyCode = .usd
+        let wallet = Wallet(
+            id: UUID(),
+            name: "USD Wallet",
+            kind: .cash,
+            colorHex: nil,
+            iconName: nil,
+            startingBalanceMinor: 0,
+            currentBalanceMinor: 0,
+            currencyCode: .usd,
+            isArchived: false,
+            sortOrder: 0,
+            createdAt: .now,
+            updatedAt: .now
+        )
         try repository.saveWallet(wallet)
         let service = MonobankConnectionService(
             repository: repository,

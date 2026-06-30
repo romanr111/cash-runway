@@ -9,11 +9,27 @@ extension CashRunwayRepository {
         return try databaseManager.dbQueue.read { db in
             let metadata = CashRunwayBackupMetadata(
                 format: "cash-runway-backup",
-                version: 2,
+                version: 3,
                 createdAt: Date(),
                 appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0",
                 currency: "UAH"
             )
+
+            let preferencesRow = try Row.fetchOne(
+                db,
+                sql: """
+                SELECT default_currency_code, reporting_currency_code
+                FROM currency_preferences
+                WHERE id = 'default'
+                LIMIT 1
+                """
+            )
+            let preferences = preferencesRow.map {
+                CurrencyPreferences(
+                    defaultCurrencyCode: CurrencyCode(rawValue: $0["default_currency_code"]),
+                    reportingCurrencyCode: CurrencyCode(rawValue: $0["reporting_currency_code"])
+                )
+            } ?? .default
 
             return CashRunwayBackup(
                 metadata: metadata,
@@ -26,7 +42,8 @@ extension CashRunwayRepository {
                 budgets: try Row.fetchAll(db, sql: "SELECT * FROM budgets ORDER BY month_key, category_id").map(Self.backupBudget),
                 recurringTemplates: try Row.fetchAll(db, sql: "SELECT * FROM recurring_templates ORDER BY created_at, id").map(Self.backupRecurringTemplate),
                 recurringInstances: try Row.fetchAll(db, sql: "SELECT * FROM recurring_instances ORDER BY due_date, id").map(Self.backupRecurringInstance),
-                importJobs: try Row.fetchAll(db, sql: "SELECT * FROM import_jobs ORDER BY started_at, id").map(Self.backupImportJob)
+                importJobs: try Row.fetchAll(db, sql: "SELECT * FROM import_jobs ORDER BY started_at, id").map(Self.backupImportJob),
+                currencyPreferences: preferences
             )
         }
     }
@@ -78,6 +95,7 @@ extension CashRunwayRepository {
         try db.execute(sql: "DELETE FROM categories")
         try db.execute(sql: "DELETE FROM wallets")
         try db.execute(sql: "DELETE FROM wallet_categories")
+        try db.execute(sql: "DELETE FROM currency_preferences")
     }
 
     // swiftlint:disable:next function_body_length
@@ -94,6 +112,15 @@ extension CashRunwayRepository {
     }
 
     func insertBackupSourceData(_ backup: CashRunwayBackup, into db: Database) throws {
+        let preferences = backup.currencyPreferences ?? .default
+        try db.execute(
+            sql: """
+            INSERT INTO currency_preferences (id, default_currency_code, reporting_currency_code, updated_at)
+            VALUES ('default', ?, ?, ?)
+            """,
+            arguments: [preferences.defaultCurrencyCode.rawValue, preferences.reportingCurrencyCode.rawValue, Date()]
+        )
+
         let walletCategories = backup.walletCategories.isEmpty
             ? WalletCategory.allBuiltIn.map {
                 BackupWalletCategory(

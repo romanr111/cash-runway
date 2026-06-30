@@ -21,7 +21,31 @@ public struct CurrencyCode: RawRepresentable, Codable, Hashable, Sendable {
     public let rawValue: String
 
     public init(rawValue: String) {
-        self.rawValue = rawValue.uppercased()
+        self.rawValue = rawValue.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let rawValue = try container.decode(String.self)
+        let normalized = rawValue.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard CurrencyCode.isValid(normalized) else {
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "Currency code must be a three-letter ISO 4217 alpha code."
+            )
+        }
+        self.rawValue = normalized
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+
+    private static func isValid(_ value: String) -> Bool {
+        value.count == 3 && value.unicodeScalars.allSatisfy { scalar in
+            scalar.value >= 65 && scalar.value <= 90
+        }
     }
 }
 
