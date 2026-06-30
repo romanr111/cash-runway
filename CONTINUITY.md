@@ -1,12 +1,55 @@
 # Continuity Ledger
 
-## Snapshot — `codex/arch-improvements` integration branch
+## Snapshot — `codex/market-rate-projection` branch
 
-**Canonical integration PR:** https://github.com/romanr111/cash-runway/pull/86 (`codex/arch-improvements → dev`)
+**Base:** `codex/currency-foundation-dev` (PR #87, stashed uncommitted worktree edits preserved).  
+**Branch:** `codex/market-rate-projection` adds wallet-native currency selection UI and market-rate projection on top of PR #87's currency foundation.
 
-All architecture phases are now stacked on this branch and pushed to origin.
+## What was implemented
 
-## Architecture improvements — all phases integrated
+- Added `ExchangeRateBasis`, `MarketRatePolicy`, `WalletValueProjection`, `WalletValueProjectionProvider` in `Sources/CashRunwayCore/ExchangeRateBasis.swift`.
+- Added `SupportedCurrency` enum in `Sources/CashRunwayCore/SupportedCurrency.swift`.
+- Implemented public rate clients conforming to PR #87's `PublicExchangeRateClient`:
+  - `MonobankPublicRateClient`
+  - `PrivatBankPublicRateClient`
+  - `NBUOfficialRateClient`
+- Implemented `CompositeBankMidpointRateProvider` conforming to PR #87's `ExchangeRateProviding`.
+- Implemented `WalletValueProjectionService` for UAH-pivot cross-currency wallet balance projection.
+- Ported UI:
+  - `WalletEditorView` currency picker (disabled when balance is non-zero; repository still enforces hard block).
+  - `WalletManagementView` uses `model.defaultCurrencyCode` for new wallets.
+  - `SettingsView` Main Currency row opens a new `CurrencySettingsView` (embedded in `SettingsView.swift` to avoid `pbxproj` edits).
+  - `Editors.swift` inherits transaction currency from selected wallet and filters transfer destinations to same-currency wallets.
+- Added `AppModel.defaultCurrencyCode`, `reportingCurrencyCode`, and `saveCurrencyPreferences(_:)`.
+- Added tests:
+  - `WalletValueProjectionServiceTests` (6 tests)
+  - `CompositeBankMidpointRateProviderTests` (4 tests)
+- Extended `WalletBuilder` with `with(currencyCode:)`.
+
+## Validation
+
+| Gate | Result |
+|---|---|
+| `swift build --target CashRunwayCore` | ✅ |
+| `just build` | ✅ BUILD SUCCEEDED |
+| `just lint` | ✅ 0 violations / 122 files |
+| `swift test --filter "WalletValueProjectionServiceTests\|CompositeBankMidpointRateProviderTests\|CurrencyFoundationTests"` | ✅ 35/35 |
+| `swift test --filter "WalletCategoryTests"` | ✅ 14/14 |
+| `just check-unit-parallel` | ⚠️ timed out (>15 min); aborted to avoid blocking |
+| `just check-integration` | ⏭️ skipped (unit gate timeout) |
+
+## Stash
+
+`git stash` contains PR #87 uncommitted worktree edits stashed before the market-rate layer was applied. To restore: `git stash pop` on `codex/market-rate-projection`.
+
+## Next steps
+
+1. Restore/pop PR #87 stash and integrate if those edits are still needed.
+2. Re-run full `just check-unit-parallel` and `just check-integration` when time permits.
+3. Decide whether to open a PR from `codex/market-rate-projection` into `codex/currency-foundation-dev` or wait until PR #87 lands.
+4. Consider adding a `CurrencyConverter` conforming to `CurrencyConverting` for non-wallet conversions in a follow-up.
+
+## Architecture improvements — all phases integrated (legacy)
 
 ### Phase 1: cleanup & foundation — DONE
 - Branch: `codex/arch-phase-1-cleanup`
