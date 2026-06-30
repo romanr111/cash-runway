@@ -2425,7 +2425,11 @@ extension CashRunwayRepository {
 
         try db.execute(
             sql: """
-            INSERT INTO transactions (id, wallet_id, type, linked_transfer_id, amount_minor, currency_code, occurred_at, local_day_key, local_month_key, category_id, merchant, note, is_deleted, source, recurring_template_id, recurring_instance_id, import_job_id, import_fingerprint, created_at, updated_at)
+            INSERT INTO transactions (
+                id, wallet_id, type, linked_transfer_id, amount_minor, currency_code, occurred_at, local_day_key,
+                local_month_key, category_id, merchant, note, is_deleted, source, recurring_template_id,
+                recurring_instance_id, import_job_id, import_fingerprint, created_at, updated_at
+            )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 wallet_id = excluded.wallet_id,
