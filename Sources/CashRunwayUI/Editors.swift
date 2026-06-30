@@ -734,7 +734,7 @@ struct TransactionEditorView: View {
         if learnCategoryRule,
            let transactionID = pendingLearnTransactionID ?? draft.id,
            let categoryID = pendingLearnCategoryID ?? draft.categoryID {
-            model.learnBankCategoryRule(transactionID: transactionID, categoryID: categoryID)
+            model.bankSyncViewModel.learnBankCategoryRule(transactionID: transactionID, categoryID: categoryID)
         }
         dismiss()
     }
