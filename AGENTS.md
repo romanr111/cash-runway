@@ -64,15 +64,21 @@ Manual fallback if `just` is unavailable:
 
 | Goal | First try | If parallel runs hang or stale state is suspected |
 |---|---|---|
-| Fast unit feedback | `just check-unit-parallel` | `just test-isolated --filter ...` |
+| AgentAccess changes | `just check-agent` | `just test-isolated --filter Agent` |
+| Fast unit feedback (selected suites) | `just check-unit-parallel` | `just test-isolated --filter ...` |
 | Broader integration coverage | `just check-integration` | `just check-isolated` |
-| Full gate | `just check` | `just check-isolated` |
+| Full gate (excludes performance timing) | `just check-isolated` | `just check-isolated-with-perf` |
+| Full gate with performance timing | `just check-isolated-with-perf` | — |
 
 - When multiple Cash Runway worktrees are active on the machine, start the full
   gate with `just check-isolated` instead of `just check-integration`. Parallel
   SwiftPM helper processes from other worktrees can cause lock contention.
 - If SwiftPM appears blocked by stale build state or lock contention, retry once
   with `just test-isolated` or `just check-isolated`.
+- `CashRunwayPerformanceTests` is intentionally excluded from `check-isolated`.
+  Run `just check-isolated-with-perf` or `just check-perf` when performance-sensitive
+  code changed or before final release sign-off.
+
 
 ## Git Safety
 

@@ -37,6 +37,10 @@ build:
 test *args:
     swift test {{args}}
 
+# Fast targeted recipes for feature work.
+check-agent:
+    swift test --parallel --filter Agent
+
 check-unit-parallel:
     swift test --parallel --filter '(ModelSerializationTests|UtilityAndModelTests|BankCategoryMapperTests|BankConnectionServiceTests|BankSyncServiceTests)'
 
@@ -50,6 +54,9 @@ test-isolated *args:
     scratch="$(mktemp -d /tmp/cash-runway-swiftpm.XXXXXX)"; trap 'rm -rf "$scratch"' EXIT; swift test --scratch-path "$scratch" {{args}}
 
 check-isolated:
+    scratch="$(mktemp -d /tmp/cash-runway-swiftpm.XXXXXX)"; trap 'rm -rf "$scratch"' EXIT; swift test --scratch-path "$scratch" --skip CashRunwayPerformanceTests
+
+check-isolated-with-perf:
     scratch="$(mktemp -d /tmp/cash-runway-swiftpm.XXXXXX)"; trap 'rm -rf "$scratch"' EXIT; swift test --scratch-path "$scratch"
 
 test-filter PATTERN:
