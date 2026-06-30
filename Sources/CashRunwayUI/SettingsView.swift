@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 import UIKit
 #endif
 import CashRunwayCore
+import CashRunwayUIVM
 
 struct SettingsView: View {
     @Bindable var model: CashRunwayAppModel
@@ -17,8 +18,7 @@ struct SettingsView: View {
     @State private var isCSVExporterPresented = false
     @State private var exportFileURL: URL?
     @State private var isExporting = false
-    @State private var isBackupImporterPresented = false
-    @State private var isBackupImportViewPresented = false
+    @State private var backupImportFlow = BackupImportFlowState()
     @State private var isBackupExportWarningPresented = false
     @State private var isBackupExporterPresented = false
     @State private var backupExportFileURL: URL?
@@ -142,9 +142,9 @@ struct SettingsView: View {
                             }
                             .accessibilityIdentifier(CashRunwayAccessibilityID.settingsExportCSVRow)
                             rowDivider
-                            moreRow(icon: "externaldrive.fill", tint: "#4A80C1", title: "Import Full Backup", subtitle: L10n.string("Replace data from JSON")) {
-                                isBackupImportViewPresented = true
-                            }
+                        moreRow(icon: "externaldrive.fill", tint: "#4A80C1", title: "Import Full Backup", subtitle: L10n.string("Replace data from JSON")) {
+                            backupImportFlow.beginImport()
+                        }
                             .accessibilityIdentifier(CashRunwayAccessibilityID.settingsImportBackupRow)
                             rowDivider
                             moreRow(icon: "externaldrive.badge.plus", tint: "#7A6FF0", title: "Export Full Backup", subtitle: isBackupExporting ? L10n.string("Exporting…") : L10n.string("Share unencrypted backup JSON")) {
@@ -220,9 +220,15 @@ struct SettingsView: View {
             .sheet(isPresented: $isWalletsPresented) {
                 WalletManagementView(model: model)
             }
-            .sheet(isPresented: $isMonobankPresented) {
-                MonobankWizardView(model: model, viewModel: model.bankSyncViewModel)
-            }
+            .sheet(
+                isPresented: $isMonobankPresented,
+                onDismiss: {
+                    model.bankSyncViewModel.resetSensitiveWizardState()
+                },
+                content: {
+                    MonobankWizardView(model: model, viewModel: model.bankSyncViewModel)
+                }
+            )
             .sheet(isPresented: $isCSVImportViewPresented) {
                 CSVImportView(viewModel: model.importViewModel)
             }
@@ -259,7 +265,7 @@ struct SettingsView: View {
                 Text("Bank statement import is unavailable on this platform.")
                 #endif
             }
-            .sheet(isPresented: $isBackupImporterPresented) {
+            .sheet(isPresented: $backupImportFlow.isBackupImporterPresented) {
                 #if canImport(UIKit)
                 DocumentPicker(allowedContentTypes: [.json, .plainText]) { result in
                     handleBackupImporterResult(result)
@@ -268,7 +274,7 @@ struct SettingsView: View {
                 Text("Backup import is unavailable on this platform.")
                 #endif
             }
-            .sheet(isPresented: $isBackupImportViewPresented) {
+            .sheet(isPresented: $backupImportFlow.isBackupImportViewPresented) {
                 BackupView(viewModel: model.backupViewModel)
             }
             .sheet(isPresented: $isFeedbackReportPresented) {
@@ -335,11 +341,11 @@ struct SettingsView: View {
     }
 
     private func handleBackupImporterResult(_ result: Result<URL, any Error>) {
-        isBackupImporterPresented = false
+        backupImportFlow.reset()
         switch result {
         case let .success(url):
             model.backupViewModel.prepareImport(from: url)
-            isBackupImportViewPresented = true
+            backupImportFlow.presentBackupView()
         case let .failure(error):
             if let pickerError = error as? DocumentPickerError, pickerError == .cancelled {
                 return

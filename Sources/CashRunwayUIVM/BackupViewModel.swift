@@ -31,17 +31,29 @@ public final class BackupViewModel: Identifiable {
         importFileName = fileName
         importSummary = nil
         preparationError = nil
+        restoreMessage = nil
+        restoreError = nil
+        isRestoreConfirmationPresented = false
+        isRestoring = false
         importData = Data()
 
-        Task { @MainActor in
+        Task {
             do {
-                let data = try ImportFileReader.readData(from: url)
-                let backup = try backupService.decode(data: data)
-                let summary = try backupService.validate(backup)
-                importData = data
-                importSummary = summary
+                let result = try await Task.detached(priority: .userInitiated) { [backupService] in
+                    let data = try ImportFileReader.readData(from: url)
+                    let backup = try backupService.decode(data: data)
+                    let summary = try backupService.validate(backup)
+                    return (data, summary)
+                }.value
+
+                await MainActor.run {
+                    importData = result.0
+                    importSummary = result.1
+                }
             } catch {
-                preparationError = error.localizedDescription
+                await MainActor.run {
+                    preparationError = error.localizedDescription
+                }
             }
         }
     }
@@ -53,6 +65,7 @@ public final class BackupViewModel: Identifiable {
         restoreMessage = nil
         defer { isRestoring = false }
         onWillRestore?()
+
         do {
             let backup = try backupService.decode(data: importData)
             _ = try backupService.validate(backup)

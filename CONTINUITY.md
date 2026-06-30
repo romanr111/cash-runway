@@ -1,5 +1,16 @@
 # Continuity Ledger
 
+## Snapshot — Fix backup/import/bank sync regressions
+
+Branch: `codex/ui-feature-vm-phase-1`
+Worktree: `/private/var/folders/y1/44_6v5x1685fclqcclfn375w0000gn/T/opencode/cash-runway-feature-vm-phase-1`
+
+Goal: land the backup import picker flow, temp-file protection, Monobank sensitive-state reset, and stale backup-restore reset fixes.
+
+Current files: `Sources/CashRunwayUI/AppModel.swift` `Sources/CashRunwayUI/SettingsView.swift` `Sources/CashRunwayUIVM/BackupViewModel.swift` `Sources/CashRunwayUIVM/ImportFileReader.swift` `Sources/CashRunwayUIVM/ImportViewModel.swift` `Sources/CashRunwayUIVM/BackupImportFlowState.swift` `Sources/CashRunwayUIVM/BankSyncViewModel+Reset.swift` `Tests/CashRunwayUIVMTests/BackupImportFlowStateTests.swift` `Tests/CashRunwayUIVMTests/BackupViewModelRegressionTests.swift` `Tests/CashRunwayUIVMTests/BankSyncViewModelRegressionTests.swift` `Tests/CashRunwayUIVMTests/ImportFileReaderTests.swift`
+
+Validation: `just test-filter CashRunwayUIVMTests` passed, `just check-unit-parallel` passed, `just lint` passed, `just build` passed.
+
 ## Snapshot — Merge cash-runway-persistence-change into dev
 
 Branch: `dev`

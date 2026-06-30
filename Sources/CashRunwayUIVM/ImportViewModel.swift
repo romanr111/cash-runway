@@ -70,7 +70,6 @@ public final class ImportViewModel: Identifiable {
 
     public func prepareImport(from url: URL) {
         let fileName = url.lastPathComponent.isEmpty ? "import.csv" : url.lastPathComponent
-
         importData = Data()
         importFileName = fileName
         importPreview = CSVImportPreview(headers: [], sampleRows: [], totalRows: 0)
@@ -79,30 +78,43 @@ public final class ImportViewModel: Identifiable {
         importMapping = defaultMapping(headers: [], format: .genericBankCSV)
         importPreparationError = nil
         importPreparationProgress = 0.12
-        importPreparationStatus = "Opening selected file..."
+        importPreparationStatus = "Reading CSV rows..."
         isImportPreparing = true
         importResult = nil
         importError = nil
 
-        Task { @MainActor in
+        let defaultWalletID = walletsProvider().first?.id
+
+        Task {
             do {
-                importPreparationProgress = 0.55
-                importPreparationStatus = "Reading CSV rows..."
-                let (csvData, fileKind) = try ImportFileReader.readCSVData(from: url)
-                let preview = try csvService.preview(data: csvData)
-                let format = csvService.detectFormat(headers: preview.headers, fileKind: fileKind)
-                importData = csvData
-                importFormat = format
-                importPreview = preview
-                importMapping = defaultMapping(headers: preview.headers, format: format)
-                importPreparationProgress = 1.0
-                importPreparationStatus = "Ready to review."
-                isImportPreparing = false
+                let result = try await Task.detached(priority: .userInitiated) { [csvService, defaultWalletID] in
+                    let (csvData, fileKind) = try ImportFileReader.readCSVData(from: url)
+                    let preview = try csvService.preview(data: csvData)
+                    let format = csvService.detectFormat(headers: preview.headers, fileKind: fileKind)
+                    let mapping = csvService.defaultMapping(
+                        headers: preview.headers,
+                        format: format,
+                        walletID: defaultWalletID
+                    )
+                    return (csvData, preview, format, mapping)
+                }.value
+
+                await MainActor.run {
+                    importPreparationProgress = 0.55
+                    importData = result.0
+                    importPreview = result.1
+                    importFormat = result.2
+                    importMapping = result.3
+                    importPreparationProgress = 1.0
+                    importPreparationStatus = "Ready to review."
+                    isImportPreparing = false
+                }
             } catch {
-                importPreparationError = error.localizedDescription
-                importPreparationProgress = 0.0
-                importPreparationStatus = ""
-                isImportPreparing = false
+                await MainActor.run {
+                    importPreparationError = error.localizedDescription
+                    importPreparationProgress = 0.0
+                    isImportPreparing = false
+                }
             }
         }
     }
@@ -112,6 +124,7 @@ public final class ImportViewModel: Identifiable {
         importError = nil
         isImporting = true
         defer { isImporting = false }
+
         await Task.yield()
         do {
             importResult = try csvService.importStatement(

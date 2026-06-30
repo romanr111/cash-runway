@@ -191,6 +191,7 @@ public final class CashRunwayAppModel {
         backupViewModel.onSuccess = { [weak self] in
             await self?.reloadAll()
             self?.errorMessage = nil
+            self?.bankSyncMessage = nil
             self?.preRestoreState = nil
         }
         backupViewModel.onFailure = { [weak self] _ in
@@ -204,6 +205,7 @@ public final class CashRunwayAppModel {
         importViewModel.onSuccess = { [weak self] in
             await self?.reloadAll()
             self?.errorMessage = nil
+            self?.bankSyncMessage = nil
         }
         importViewModel.onFailure = { [weak self] error in
             self?.errorMessage = error
@@ -212,6 +214,7 @@ public final class CashRunwayAppModel {
         bankSyncViewModel.onSuccess = { [weak self] in
             await self?.reloadAll()
             self?.bankSyncMessage = nil
+            self?.bankSyncViewModel.resetSensitiveWizardState()
         }
         bankSyncViewModel.onFailure = { [weak self] error in
             self?.bankSyncMessage = error
