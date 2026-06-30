@@ -32,9 +32,9 @@ public struct FixtureGenerator {
         }
     }
 
-    public let repository: CashRunwayRepository
+    public let repository: any CashRunwayRepositorying
 
-    public init(repository: CashRunwayRepository) {
+    public init(repository: any CashRunwayRepositorying) {
         self.repository = repository
     }
 
@@ -83,7 +83,7 @@ public struct FixtureGenerator {
         try repository.refreshRecurringInstances()
     }
 
-    public static func seedFixtureWalletsIfNeeded(into repository: CashRunwayRepository) throws {
+    public static func seedFixtureWalletsIfNeeded(into repository: any CashRunwayRepositorying) throws {
         guard try repository.wallets().isEmpty else { return }
         let now = Date()
         try repository.saveWallet(Wallet(

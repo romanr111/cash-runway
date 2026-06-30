@@ -1,6 +1,9 @@
 import CashRunwayCore
 import PhotosUI
 import SwiftUI
+import OSLog
+
+private let logger = Logger(subsystem: "dev.roman.cashrunway", category: "feedback-screenshot")
 
 struct FeedbackReportScreenshotPicker: View {
     @Binding var screenshots: [ReportIssueScreenshot]
@@ -160,12 +163,8 @@ struct FeedbackReportScreenshotPicker: View {
     }
 
     private func logCompression(inputBytes: Int, outputBytes: Int, maxDimension: CGFloat, quality: CGFloat?) {
-        #if DEBUG
-        NSLog("[Screenshot] %dx%d JPEG: %d → %d bytes (%.1f:1 ratio)",
-              Int(maxDimension), Int(maxDimension),
-              inputBytes, outputBytes,
-              outputBytes > 0 ? Double(inputBytes) / Double(outputBytes) : 0)
-        #endif
+        let ratio = outputBytes > 0 ? Double(inputBytes) / Double(outputBytes) : 0
+        logger.debug("screenshot \(Int(maxDimension), privacy: .public)×\(Int(maxDimension), privacy: .public) JPEG: \(inputBytes, privacy: .public) → \(outputBytes, privacy: .public) bytes (\(ratio, format: .fixed(precision: 1), privacy: .public):1 ratio)")
     }
 
     private func generateFilename(mimeType: ReportIssueScreenshotMimeType) -> String {

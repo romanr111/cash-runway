@@ -9,9 +9,13 @@ public typealias CashRunwayLabel = CashRunwayCore.Label
 @MainActor
 @Observable
 public final class CashRunwayAppModel {
-    public var repository: CashRunwayRepository
-    public var csvService: CSVService
-    public var backupService: BackupService
+    // Narrowed from `public var` to `private let` for encapsulation: no external
+    // code reassigns the repository mid-session, and the static snapshot loaders
+    // receive it as a parameter. `csvService`/`backupService` remain `public var`
+    // until BackupServicing/CSVServicing protocols are introduced (Phase 3.6).
+    private let repository: any CashRunwayRepositorying
+    public var csvService: any CSVImportServicing
+    public var backupService: any BackupServicing
     public var bankTokenStore: any BankTokenStore
     private let bankSyncPerformer: any BankSyncPerforming
     private let monobankTokenValidator: any MonobankTokenValidating
@@ -107,13 +111,13 @@ public final class CashRunwayAppModel {
     }
 
     public init(
-        repository: CashRunwayRepository,
+        repository: any CashRunwayRepositorying,
         bankTokenStore: any BankTokenStore,
         bankSyncPerformer: any BankSyncPerforming,
-        monobankTokenValidator: any MonobankTokenValidating
+        monobankTokenValidator: any MonobankTokenValidating,
+        csvService: any CSVImportServicing,
+        backupService: any BackupServicing
     ) {
-        let csvService = CSVService(repository: repository)
-        let backupService = BackupService(repository: repository, bankTokenStore: bankTokenStore)
         let performer = BankSyncSerialPerformer(bankSyncPerformer)
         let backgroundWork = BackgroundWork(
             repository: repository,
@@ -383,6 +387,12 @@ public final class CashRunwayAppModel {
 
     public func saveTransaction(_ draft: TransactionDraft) {
         saveTransaction(draft, recurringTemplate: nil)
+    }
+
+    /// Loads a transaction draft for editing. Returns nil if the transaction
+    /// cannot be found or loaded.
+    public func loadTransactionDraft(id: UUID) -> TransactionDraft? {
+        try? repository.transactionDraft(id: id)
     }
 
     public func saveTransaction(_ draft: TransactionDraft, recurringTemplate: RecurringTemplate?) {
@@ -820,7 +830,7 @@ public func importStatement(
     }
 
     fileprivate nonisolated static func loadSnapshot(
-        repository: CashRunwayRepository,
+        repository: any CashRunwayRepositorying,
         selectedMonthKey: Int,
         selectedWalletID: UUID?,
         selectedTimelinePeriod: TimelinePeriod,
@@ -846,7 +856,7 @@ public func importStatement(
     }
 
     fileprivate nonisolated static func loadMutableSnapshots(
-        repository: CashRunwayRepository,
+        repository: any CashRunwayRepositorying,
         selectedMonthKey: Int,
         selectedWalletID: UUID?,
         selectedTimelinePeriod: TimelinePeriod,
@@ -909,15 +919,15 @@ public func importStatement(
 }
 
 private actor BackgroundWork {
-    private let repository: CashRunwayRepository
-    private let csvService: CSVService
-    private let backupService: BackupService
+    private let repository: any CashRunwayRepositorying
+    private let csvService: any CSVImportServicing
+    private let backupService: any BackupServicing
     private let bankSyncPerformer: any BankSyncPerforming
 
     init(
-        repository: CashRunwayRepository,
-        csvService: CSVService,
-        backupService: BackupService,
+        repository: any CashRunwayRepositorying,
+        csvService: any CSVImportServicing,
+        backupService: any BackupServicing,
         bankSyncPerformer: any BankSyncPerforming
     ) {
         self.repository = repository

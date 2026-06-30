@@ -243,7 +243,8 @@ public struct BankTransactionImport: Identifiable, Codable, Hashable, Sendable {
     public var counterIBAN: String?
     public var receiptID: String?
     public var hold: Bool?
-    public var rawJSON: String
+    public var rawJSON: String?
+    public var rawJSONExpiresAt: Date?
     public var cashRunwayTransactionID: UUID?
     public var importStatus: BankTransactionImportStatus
     public var createdAt: Date
@@ -268,7 +269,8 @@ public struct BankTransactionImport: Identifiable, Codable, Hashable, Sendable {
         counterIBAN: String?,
         receiptID: String?,
         hold: Bool?,
-        rawJSON: String,
+        rawJSON: String?,
+        rawJSONExpiresAt: Date?,
         cashRunwayTransactionID: UUID?,
         importStatus: BankTransactionImportStatus,
         createdAt: Date,
@@ -293,6 +295,7 @@ public struct BankTransactionImport: Identifiable, Codable, Hashable, Sendable {
         self.receiptID = receiptID
         self.hold = hold
         self.rawJSON = rawJSON
+        self.rawJSONExpiresAt = rawJSONExpiresAt
         self.cashRunwayTransactionID = cashRunwayTransactionID
         self.importStatus = importStatus
         self.createdAt = createdAt
@@ -1176,7 +1179,39 @@ public enum BackupError: LocalizedError, Equatable {
     }
 }
 
-public final class BackupService: @unchecked Sendable {
+public protocol BackupServicing: Sendable {
+    func exportFullBackup() throws -> CashRunwayBackup
+    func encode(_ backup: CashRunwayBackup) throws -> Data
+    func decode(data: Data) throws -> CashRunwayBackup
+    func validate(_ backup: CashRunwayBackup) throws -> BackupValidationSummary
+    func restore(_ backup: CashRunwayBackup) throws -> BackupRestoreResult
+}
+
+public protocol CSVImportServicing: Sendable {
+    func preview(data: Data) throws -> CSVImportPreview
+    func detectPreset(headers: [String]) -> CSVPreset
+    func detectFormat(headers: [String], fileKind: StatementFileKind) -> BankStatementFormat
+    func previewPreparedRows(
+        data: Data,
+        mapping: CSVImportMapping,
+        rowFilter: CSVImportRowFilter,
+        limit: Int
+    ) throws -> [PreparedImportRow]
+    func defaultMapping(headers: [String], format: BankStatementFormat, walletID: UUID?) -> CSVImportMapping
+    func exportCSV(query: TransactionQuery) throws -> String
+    func importStatement(
+        normalizedData: Data,
+        fileName: String,
+        format: BankStatementFormat,
+        mapping: CSVImportMapping,
+        rowFilter: CSVImportRowFilter
+    ) throws -> CSVImportResult
+}
+
+public final class BackupService: BackupServicing, @unchecked Sendable {
+    // @unchecked Sendable is justified: `repository` and `bankTokenStore` are
+    // immutable `let` references to Sendable types; backup operations delegate
+    // to `CashRunwayRepository` (GRDB-serialized).
     private let repository: CashRunwayRepository
     private let bankTokenStore: (any BankTokenStore)?
 
@@ -1218,13 +1253,14 @@ public final class BackupService: @unchecked Sendable {
         return BackupRestoreResult(summary: restore.result.summary, safetyBackupURL: safetyBackupURL)
     }
 
-    private func writeSafetyBackup() throws -> URL {
+    func writeSafetyBackup() throws -> URL {
         let currentBackup = try exportFullBackup()
         let data = try encode(currentBackup)
         let directoryURL = FileManager.default.temporaryDirectory.appendingPathComponent("CashRunwayBackups", isDirectory: true)
         try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
         let url = directoryURL.appendingPathComponent("pre-restore-cash-runway-backup-\(Self.fileTimestamp()).json")
         try data.write(to: url, options: .atomic)
+        FileProtectionService().protect(url)
         return url
     }
 
@@ -1495,6 +1531,7 @@ public struct TransactionQuery: Sendable, Equatable {
     public var startDate: Date?
     public var endDate: Date?
     public var kinds: Set<TransactionDraft.Kind>
+    public var offset: Int
 
     public init(
         walletID: UUID? = nil,
@@ -1503,7 +1540,8 @@ public struct TransactionQuery: Sendable, Equatable {
         searchText: String = "",
         startDate: Date? = nil,
         endDate: Date? = nil,
-        kinds: Set<TransactionDraft.Kind> = Set(TransactionDraft.Kind.allCases)
+        kinds: Set<TransactionDraft.Kind> = Set(TransactionDraft.Kind.allCases),
+        offset: Int = 0
     ) {
         self.walletID = walletID
         self.categoryID = categoryID
@@ -1512,6 +1550,7 @@ public struct TransactionQuery: Sendable, Equatable {
         self.startDate = startDate
         self.endDate = endDate
         self.kinds = kinds
+        self.offset = offset
     }
 }
 

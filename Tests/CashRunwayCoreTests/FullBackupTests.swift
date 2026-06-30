@@ -227,6 +227,19 @@ struct FullBackupTests {
         #expect(try countRows(target, table: "bank_integrations") == 0)
     }
 
+    @Test func fullBackupExportDoesNotIncludeBankTransactionImports() throws {
+        let repository = try makePopulatedRepository().0
+        try seedBankSyncState(in: repository)
+
+        let service = BackupService(repository: repository)
+        let backup = try service.exportFullBackup()
+        let json = String(data: try service.encode(backup), encoding: .utf8) ?? ""
+
+        // bank_transaction_imports are intentionally excluded from user-facing backups.
+        #expect(!json.localizedCaseInsensitiveContains("bank_transaction_imports"))
+        #expect(!json.localizedCaseInsensitiveContains("raw_json"))
+    }
+
     @Test func invalidFullBackupImportLeavesExistingBankSyncStateUnchanged() throws {
         let backup = try makePopulatedRepository().0.exportFullBackup()
         let target = try makePopulatedRepository().0
@@ -470,8 +483,8 @@ struct FullBackupTests {
                     provider_statement_item_id, statement_time, amount_minor_signed,
                     operation_amount_minor_signed, currency_code, mcc, original_mcc,
                     description, comment, counter_name, counter_iban, receipt_id, hold,
-                    raw_json, cash_runway_transaction_id, import_status, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    raw_json, raw_json_expires_at, cash_runway_transaction_id, import_status, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 arguments: [
                     UUID().uuidString,
@@ -493,6 +506,7 @@ struct FullBackupTests {
                     nil,
                     false,
                     "{}",
+                    now.addingTimeInterval(30 * 24 * 60 * 60),
                     nil,
                     BankTransactionImportStatus.imported.rawValue,
                     now,

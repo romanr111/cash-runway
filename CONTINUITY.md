@@ -1,168 +1,90 @@
-## Snapshot — Two-tap category detail navigation
+# Continuity Ledger
 
-Branch: `codex/two-tap-category-detail`
-Worktree: `/Users/roman/.codex/worktrees/cash-runway-two-tap-category-detail`
-PR: https://github.com/romanr111/cash-runway/pull/83 (draft, base `dev`)
+## Snapshot — `codex/arch-improvements` integration branch
 
-Goal: Overview category rows use a two-tap state machine. First user tap selects
-and arms a row; second tap on the same selected row opens
-`CategoryDetailOverviewView` for the active month and wallet filter.
+**Canonical integration PR:** https://github.com/romanr111/cash-runway/pull/86 (`codex/arch-improvements → dev`)
 
-## Current state
+All architecture phases are now stacked on this branch and pushed to origin.
 
-- `Sources/CashRunwayUI/DashboardView.swift`
-  - Adds item-driven `CategoryDetailRoute` navigation.
-  - Tracks `categoryDetailArmedCategoryID`.
-  - Keeps donut chart taps selection-only.
-  - Resets arming when category kind, month, wallet, category identity list, donut selection,
-    or Show More/Less context changes.
-- `Tests/CashRunwayUITests/TransactionOverviewUITests.swift`
-  - Existing Overview drilldown test taps Groceries once, asserts detail does not open,
-    then taps again and asserts detail opens with the created note.
+## Architecture improvements — all phases integrated
 
-## Latest update
+### Phase 1: cleanup & foundation — DONE
+- Branch: `codex/arch-phase-1-cleanup`
+- Split `Editors.swift` (2266→937) and `DashboardView.swift` (1658→638) into per-view files
+- Removed deprecated `appendImportedTransactions`/`finalizeImport` CSV APIs
+- Replaced DEBUG-gated `NSLog` with `OSLog Logger` + privacy annotations
+- Added `Scripts/check-no-ungated-logging.sh` CI gate
+- Documented migration-identifier permanence invariant; added `MigrationIntegrityTests.migrationIdentifierSetIsStable`
 
-- Merged `origin/dev` into this branch to resolve PR conflicts.
-  - `CONTINUITY.md` was the only manual conflict; auto-merged files:
-    `Sources/CashRunwayCore/CSVSupport.swift`,
-    `Sources/CashRunwayCore/CashRunwayRepository.swift`,
-    `Tests/CashRunwayCoreTests/CSVIdempotencyTests.swift`,
-    `Tests/CashRunwayCoreTests/MigrationIntegrityTests.swift`.
-  - No secrets, generated reporting secrets, project files, lock files, or entitlements were touched.
-- Fixed review issue: Show More/Less now clears the armed category before changing
-  the displayed category context.
-- Recreated this worktree because it was missing locally while the branch still existed.
-- Repaired partial `.codegraph` by removing the generated directory and rerunning bootstrap.
+### Phase 2: persistence/domain separation — DONE
+- Branch: `codex/arch-phase-2-extraction`
+- Split `CashRunwayRepository.swift` (4204→2263 lines, 46% reduction) into focused files
+- Introduced `protocol CashRunwayRepositorying` (57 methods)
+- `AppModel.repository`, `BackgroundWork`, `BankSyncService`, `MonobankConnectionService`, `BankSyncCoordinator` depend on `any CashRunwayRepositorying`
+- Added `CashRunwayRepositoryingTests` — mock conformance without `DatabaseManager`
 
-## Validation
+### Phase 3: privacy/security hardening — DONE
+- Branch: `codex/arch-phase-3-security-hardening`
+- Added `com.apple.developer.default-data-protection` entitlement with `NSFileProtectionComplete`
+- Added `FileProtectionService`, `ProtectedDataMonitor`, protected-data gating for DB/bank sync/CSV/backup operations
+- Added `v6_bank_raw_json_ttl` migration: nullable `raw_json`, redacted audit payload, 30-day TTL purge
+- Switched Monobank validator and `FeedbackReport` to ephemeral `URLSession`
+- Removed `AppLockStore`, updated `PLAN.md` reference
+- Added `DataProtectionTests` and `RawPayloadPurgeTests`
+- **Release gate:** physical-device rehearsal required before shipping Phase 3 security behavior
 
-- `git diff --check`: passed.
-- `Scripts/pre-flight.sh`: passed.
-- `just build`: passed on iPhone 17 simulator.
-  - Existing warnings only: duplicate `AppHost/uk.lproj/InfoPlist.strings` project reference,
-    signed SQLCipher binary not stripped, AppIntents metadata skipped.
-- `just graph-bootstrap`: passed after `.codegraph` repair.
-- `just graph-sync`: passed.
-- `just check-unit-parallel`: passed, 58 tests in 5 suites.
+### Phase 3.5: protocol cleanup — DONE
+- Branch: `codex/arch-phase-3.5-protocol-cleanup`
+- Added `CSVImportServicing` protocol; `CSVService: CSVImportServicing` and `BackupService: BackupServicing`
+- Updated `CashRunwayAppModel` and `BackgroundWork` to depend on `any CSVImportServicing` / `any BackupServicing`
+- Narrowed `AppModel.repository` from `public var` to `private let`
+- Extracted `ProtectedDataCache`, fixed cold-cache issue, added `@unchecked Sendable` guard checks
 
-## Skipped / blocked
+### Phase 4: performance — DONE
+- Branch: `codex/arch-phase-4-performance` (rebuilt on top of `codex/arch-improvements`, replacing the stale Phase-2-based branch)
+- Added wallet-scoped v7 aggregate migrations:
+  - `v7_monthly_category_spend_wallet_kind_income`
+  - `v7_monthly_label_spend_wallet`
+- Updated `overviewSnapshot` and dashboard top-categories to filter by `wallet_id`
+- Added `offset` to `TransactionQuery` for timeline pagination
+- Implemented per-row import fingerprint/semantic duplicate checks
+- Implemented chunked `rebuildFTS` and bulk `rebuildMonths`
+- Extracted `PersistenceHelpers.swift` for shared `tableExists`/`columnExists`
+- **Bug fix:** `rebuildMonths` now calls `recomputeWalletBalances(_:)` so backup restore preserves `current_balance_minor`
 
-- XCUITest not run locally per repo policy.
-- Physical-device rehearsal not run; this is not a release/SideStore task.
+## Validation on `codex/arch-improvements`
 
-## Git safety notes
+| Gate | Result |
+|---|---|
+| `Scripts/pre-flight.sh` | ✅ |
+| `just build` | ✅ BUILD SUCCEEDED |
+| `just check-unit-parallel` | ✅ 58/58 |
+| `just check-integration` | ✅ 434/434 |
+| `just lint` | ✅ 0 violations / 111 files |
+| `FullBackupTests` | ✅ 29/29 |
+| `just check-perf` | ⚠️ 13/14; `fixturePopulationTimingGate` is a known pre-existing bottleneck (fails locally on clean `dev` too) |
 
-- `dev` worktree was dirty but was not modified by this merge.
-- Only this isolated feature worktree was edited.
+## CI status
 
-## Snapshot - Dev build SQLCipher artifact repair (`dev`)
+PR #86 full `iOS CI` workflow is now green (run `28397532095`).
 
-Branch: `dev` @ `1860608` with pre-existing dirty files.
-Goal: investigate Xcode dev build failure showing missing `SQLCipher` package product / missing `SQLCipher.xcframework`.
-Status: fixed local Xcode package artifact state by resolving packages; no source patch required.
+Earlier run `28396573815` failed because `FileProtectionService.protect` called
+`setAttributes([.protectionKey: .complete])` on macOS SwiftPM tests, where
+`NSFileProtectionComplete` is unsupported and returns `EINVAL`; the DEBUG
+`assertionFailure` then crashed the test runner. Fixed in commit `b6c6cc7` by
+wrapping the attribute application in `#if canImport(UIKit)` and no-oping on
+non-UIKit platforms. iOS behavior and loud DEBUG failure are unchanged.
 
-## Validation
+## Next steps
 
-- `swift package resolve`: passed.
-- `xcodebuild -resolvePackageDependencies -project CashRunway.xcodeproj -scheme CashRunway`: passed; log `/tmp/cash-runway-agent-validation/xcode-resolve-packages-20260628-131144.log`.
-- `xcodebuild -scheme CashRunway -destination 'generic/platform=iOS' -configuration Debug CODE_SIGNING_ALLOWED=NO build`: passed; log `/tmp/cash-runway-agent-validation/xcode-generic-ios-build-20260628-131217.log`.
-- `just build`: attempted simulator build, stopped after idle/no final result; partial log `/tmp/cash-runway-agent-validation/dev-build-20260628-130556.log`.
-- Build regenerated `AppHost/AppReportingSecrets.generated.swift`; restored generated file to committed placeholder state.
+1. Merge PR #86 into `dev`.
+2. Close the superseded stacked PRs (#80, #82, #84) if not already closed.
+3. Schedule physical-device rehearsal before releasing Phase 3 security changes.
+4. Delete stale worktrees after merge:
+   - `/Users/roman/.codex/worktrees/cash-runway-arch-phase-1` (was `codex/arch-phase-3.5-protocol-cleanup`)
+   - `/Users/roman/.codex/worktrees/cash-runway-arch-phase-4` (now `backup/codex-arch-phase-4-performance-before-restack` exists; can be removed after merge)
+5. Begin Phase 5 (consent-gated LLM-agent access) design/scoping.
 
-## Snapshot - Delete All History icon review (`dev`)
+## Open questions for product/security
 
-Branch: `dev` @ `09a5190` with uncommitted review fixes.
-Goal: Detailed review of the all-history delete icon change and current dirty diff; fix important issues only.
-Status: one blocking issue fixed: `AppHost/AppReportingSecrets.generated.swift` was regenerated with `isPlaceholder = false`; restored it to the committed placeholder state and kept it out of the final diff.
-
-## Validation
-
-- `just build`: BUILD SUCCEEDED on 2026-06-27; local build regenerated reporting secrets from local config, then placeholder file was restored.
-- `just lint`: passed, 0 violations.
-- `python3 -m json.tool AppHost/Localizable.xcstrings`: passed.
-- `git diff --check -- Sources/CashRunwayUI/DeleteTransactionsView.swift AppHost/Localizable.xcstrings CONTINUITY.md`: passed.
-
-## Snapshot - Delete All History icon fallback (`dev`)
-
-Branch: `dev` @ `09a5190` with uncommitted UI fix.
-Goal: Restore the missing icon for the "All History" delete-period row.
-Status: implemented; build gate passed.
-
-## Changes
-
-- `Sources/CashRunwayUI/DeleteTransactionsView.swift` - changed `.allHistory` period icon from `skull.fill` to `trash.fill` because the skull SF Symbol rendered as a blank glyph on the target device.
-
-## Validation
-
-- `just build`: BUILD SUCCEEDED on 2026-06-27.
-
-## Skipped Gates
-
-- Interactive device/simulator visual verification was not exercised; XCUITest/E2E is disallowed locally unless explicitly requested.
-
-## Snapshot - Delete All History + UI polish (`dev`)
-
-Branch: `dev` @ `a07f25f` (audit commit).
-Goal: Add "All History" option to Delete Transactions sheet, plus UI polish.
-Status: implemented, all gates green, uncommitted.
-
-## Changes
-
-- `Sources/CashRunwayCore/DeletePeriod.swift`
-- `Sources/CashRunwayCore/CashRunwayRepository.swift` - `deletePeriodPredicate` handles `.allHistory` with `1 = 1`.
-- `Sources/CashRunwayCore/L10n.swift`
-- `Sources/CashRunwayUI/DeleteTransactionsView.swift`
-- `Sources/CashRunwayUI/AccessibilityIdentifiers.swift`
-- `AppHost/Localizable.xcstrings`
-- `Tests/CashRunwayCoreTests/BulkDeleteTransactionsTests.swift`
-
-## Validation
-
-- `swift build --target CashRunwayCore`: passed
-- `just test-filter BulkDeleteTransactionsTests`: 36/36 passed
-- `swiftlint --strict` on changed files: 0 violations
-- `just build`: BUILD SUCCEEDED
-
-## Skipped Gates
-
-- Interactive sheet navigation (open, select All History, type DELETE, success card, Done): manual gate, not exercised locally because XCUITest is disallowed per AGENTS.md unless explicitly requested.
-
-## Open / Performance
-
-- Row-by-row aggregate reversal for very large histories. Consider optimizing to drop/rebuild aggregate tables only if reported slow.
-
-## Snapshot - Bulk delete transactions feature
-
-Branch: `codex/bulk-delete-transactions` (merged via PR #75, squash commit `dd941fe`)
-Worktree: `~/.codex/worktrees/cash-runway-bulk-delete-transactions`
-Base: `dev` @ d903f61
-Status: MERGED into `dev`.
-
-Feature adds Delete Transactions counts plus total four-step destructive flow:
-open sheet, select period, backup prompt, type DELETE/VIDALYTY to enable the destructive CTA.
-
-Decisions:
-- Hard-deletes transaction rows for manual, Monobank, CSV, and recurring instances.
-- Recurring templates are preserved.
-- Transfer pairs delete only the in-period half.
-- Preview creates immutable `TransactionDeletionPlan` values.
-- `deleteTransactions(plan:)` awaits `reloadAll()` and returns `TransactionDeletionResult`.
-- `transactionDeletionSummary(for:)` uses SQL aggregate counts and sums.
-- `deletePeriodPredicate` excludes tombstoned rows with `is_deleted = 0`.
-
-## Previous Architecture Audit
-
-Branch: `dev` @ `fed7859`
-Goal: Deep architecture audit of Cash Runway covering maintainability, security/privacy, performance, and future LLM-agent integration.
-Status: complete. Deliverable saved to `docs/ARCHITECTURE_AUDIT.md`.
-
-Key findings:
-- `Sources/CashRunwayCore/CashRunwayRepository.swift` is a large repository/facade containing DAO, bank sync, resolver, backup, recurring, and aggregate responsibilities.
-- `AppHost/CashRunway.entitlements` was empty; no default data protection entitlement was present in the audit snapshot.
-- `bank_transaction_imports.raw_json` stores full Monobank payload data.
-
-Recommendations:
-- Split repository responsibilities behind focused internal services while preserving `CashRunwayRepository` compatibility.
-- Add file protection support and validate on device.
-- Redact or TTL-purge raw bank import payloads.
-- Keep migration identifiers stable and protect them with tests.
+See `docs/ARCHITECTURE_AUDIT.md`.

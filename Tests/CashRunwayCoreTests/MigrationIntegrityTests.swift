@@ -6,6 +6,28 @@ import Testing
 
 @Suite(.serialized)
 struct MigrationIntegrityTests {
+    /// Asserts the migration identifiers in the exact order GRDB will run them.
+    ///
+    /// GRDB runs migrations in registration order (not name order), so the
+    /// non-monotonic position of `v3_bank_sync` (registered after `v4_…`) is
+    /// intentional and must not be "fixed" by reordering — existing databases
+    /// would treat a reordered identifier as new and re-run it, corrupting data.
+    /// New migrations append only; never rename, reorder, or delete an entry.
+    @Test func migrationIdentifierSetMatchesRegistrationOrder() throws {
+        let identifiers = DatabaseManager.allMigrations().map(\.0)
+        #expect(identifiers == [
+            "v1_schema",
+            "v2_transaction_search_category_name",
+            "v3_import_idempotency",
+            "v4_import_job_source_format_id",
+            "v3_bank_sync",
+            "v5_custom_wallet_categories",
+            "v6_bank_raw_json_ttl",
+            "v7_monthly_category_spend_wallet_kind_income",
+            "v7_monthly_label_spend_wallet",
+        ])
+    }
+
     @Test func migrationFromPreviousEncryptedSchemaPreservesLedger() throws {
         let key = "aaaabbbbccccddddeeeeffffgggghhhhiiiijjjjkkkkllllmmmmnnnnoooopppp"
         let location = TestSupport.makeLocation()
@@ -117,6 +139,8 @@ struct MigrationIntegrityTests {
         }
         #expect(appliedVersions.contains("v3_bank_sync"))
         #expect(appliedVersions.contains("v5_custom_wallet_categories"))
+        #expect(appliedVersions.contains("v7_monthly_category_spend_wallet_kind_income"))
+        #expect(appliedVersions.contains("v7_monthly_label_spend_wallet"))
 
         let walletCategories = try repo.walletCategories()
         #expect(walletCategories.filter(\.isSystem).count == 4)

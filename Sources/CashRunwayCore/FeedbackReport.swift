@@ -335,10 +335,14 @@ public protocol ReportIssueTransport: Sendable {
 }
 
 public struct URLSessionReportIssueTransport: ReportIssueTransport {
-    public init() {}
+    private let session: URLSession
+
+    public init(session: URLSession = URLSession(configuration: .ephemeral)) {
+        self.session = session
+    }
 
     public func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await session.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw ReportIssueServiceError.invalidResponse
         }
