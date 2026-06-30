@@ -1,25 +1,26 @@
+import CashRunwayCore
+import CashRunwayUIVM
 import Foundation
 import SwiftUI
-import CashRunwayCore
 
 struct BackupView: View {
     @Environment(\.dismiss) private var dismiss
-    @Bindable var coordinator: BackupCoordinator
+    @Bindable var viewModel: BackupViewModel
 
     var body: some View {
         NavigationStack {
             Form {
                 EmptyView().accessibilityIdentifier(CashRunwayAccessibilityID.backupImportScreen)
                 Section("Source") {
-                    summaryRow("File", value: coordinator.backupImportFileName)
+                    summaryRow("File", value: viewModel.importFileName)
                 }
 
-                if let preparationError = coordinator.backupImportPreparationError {
+                if let preparationError = viewModel.preparationError {
                     Section("Import Error") {
                         Text(preparationError)
                             .foregroundStyle(CashRunwayTheme.negative)
                     }
-                } else if let summary = coordinator.backupImportSummary {
+                } else if let summary = viewModel.importSummary {
                     Section("Preview") {
                         summaryRow("Backup created", value: dateText(summary.createdAt))
                         summaryRow("Wallets", value: "\(summary.walletCount)")
@@ -34,18 +35,18 @@ struct BackupView: View {
                             .foregroundStyle(CashRunwayTheme.negative)
                     }
 
-                    if coordinator.isRestoring {
+                    if viewModel.isRestoring {
                         Section("Restoring") {
                             ProgressView("Restoring backup...")
                         }
                     }
 
-                    if let restoreMessage = coordinator.restoreMessage {
+                    if let restoreMessage = viewModel.restoreMessage {
                         Section("Result") {
                             Text(restoreMessage)
                                 .foregroundStyle(CashRunwayTheme.positive)
                         }
-                    } else if let restoreError = coordinator.restoreError {
+                    } else if let restoreError = viewModel.restoreError {
                         Section("Restore Error") {
                             Text(restoreError)
                                 .foregroundStyle(CashRunwayTheme.negative)
@@ -60,21 +61,21 @@ struct BackupView: View {
             .navigationTitle("Import Full Backup")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(coordinator.restoreMessage == nil && coordinator.backupImportPreparationError == nil ? L10n.string("Cancel") : L10n.string("Done")) { dismiss() }
+                    Button(viewModel.restoreMessage == nil && viewModel.preparationError == nil ? L10n.string("Cancel") : L10n.string("Done")) { dismiss() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    if coordinator.backupImportSummary != nil, coordinator.backupImportPreparationError == nil, coordinator.restoreMessage == nil {
+                    if viewModel.importSummary != nil, viewModel.preparationError == nil, viewModel.restoreMessage == nil {
                         Button("Restore", role: .destructive) {
-                            coordinator.isRestoreConfirmationPresented = true
+                            viewModel.isRestoreConfirmationPresented = true
                         }
-                        .disabled(coordinator.isRestoring)
+                        .disabled(viewModel.isRestoring)
                     }
                 }
             }
-            .alert("Replace Current Data?", isPresented: $coordinator.isRestoreConfirmationPresented) {
+            .alert("Replace Current Data?", isPresented: $viewModel.isRestoreConfirmationPresented) {
                 Button("Cancel", role: .cancel) {}
                 Button("Restore", role: .destructive) {
-                    coordinator.startRestore()
+                    Task { await viewModel.startRestore() }
                 }
             } message: {
                 Text("Restoring this backup will replace all current Cash Runway data on this device. This cannot be merged automatically.")

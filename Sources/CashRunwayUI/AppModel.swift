@@ -1,7 +1,8 @@
+import CashRunwayCore
+import CashRunwayUIVM
 import Foundation
 import Observation
 import SwiftUI
-import CashRunwayCore
 
 public typealias CashRunwayCategory = CashRunwayCore.Category
 public typealias CashRunwayLabel = CashRunwayCore.Label
@@ -18,8 +19,12 @@ public final class CashRunwayAppModel {
     public var backupService: any BackupServicing
     public var bankTokenStore: any BankTokenStore
     private let bankSyncPerformer: any BankSyncPerforming
-    private let monobankTokenValidator: any MonobankTokenValidating
+    private let monobankConnectionService: any MonobankConnectionServicing
     private let backgroundWork: BackgroundWork
+
+    public let backupViewModel: BackupViewModel
+    public let importViewModel: ImportViewModel
+    public let bankSyncViewModel: BankSyncViewModel
     // LEGACY_DISABLED_APP_LOCK:
     // App Lock is disabled for MVP. Do not wire into runtime without a new product decision.
     // public var lockStore: AppLockStore
@@ -71,6 +76,7 @@ public final class CashRunwayAppModel {
     private var overviewSnapshotCache: [String: OverviewSnapshot] = [:]
     private var overviewSnapshotCacheOrder: [String] = []
     private let overviewSnapshotCacheLimit = 12
+    private var preRestoreState: PreRestoreState?
 
     public var maxMonthKey: Int {
         max(DateKeys.monthKey(for: .now), latestTransactionMonthKey ?? 0)
@@ -94,6 +100,12 @@ public final class CashRunwayAppModel {
         let bankTokenStore = KeychainBankTokenStore(keychain: KeychainStore(service: "dev.roman.cash-runway"))
         let backupService = BackupService(repository: repository, bankTokenStore: bankTokenStore)
         let bankSyncPerformer = BankSyncSerialPerformer(BankSyncCoordinator(repository: repository, tokenStore: bankTokenStore))
+        let monobankConnectionService = MonobankConnectionService(
+            repository: repository,
+            tokenStore: bankTokenStore,
+            tokenValidator: MonobankDirectTokenValidator(),
+            syncPerformer: bankSyncPerformer
+        )
         let backgroundWork = BackgroundWork(
             repository: repository,
             csvService: csvService,
@@ -105,8 +117,20 @@ public final class CashRunwayAppModel {
         self.backupService = backupService
         self.bankTokenStore = bankTokenStore
         self.bankSyncPerformer = bankSyncPerformer
-        self.monobankTokenValidator = MonobankDirectTokenValidator()
+        self.monobankConnectionService = monobankConnectionService
         self.backgroundWork = backgroundWork
+        self.backupViewModel = BackupViewModel(backupService: backupService)
+        self.importViewModel = ImportViewModel(
+            csvService: csvService,
+            walletsProvider: { (try? repository.wallets()) ?? [] }
+        )
+        self.bankSyncViewModel = BankSyncViewModel(
+            repository: repository,
+            syncPerformer: bankSyncPerformer,
+            connectionService: monobankConnectionService,
+            walletsProvider: { (try? repository.wallets()) ?? [] }
+        )
+        bindViewModels()
         // self.lockStore = lockStore
     }
 
@@ -119,6 +143,12 @@ public final class CashRunwayAppModel {
         backupService: any BackupServicing
     ) {
         let performer = BankSyncSerialPerformer(bankSyncPerformer)
+        let monobankConnectionService: any MonobankConnectionServicing = MonobankConnectionService(
+            repository: repository,
+            tokenStore: bankTokenStore,
+            tokenValidator: monobankTokenValidator,
+            syncPerformer: performer
+        )
         let backgroundWork = BackgroundWork(
             repository: repository,
             csvService: csvService,
@@ -130,8 +160,65 @@ public final class CashRunwayAppModel {
         self.backupService = backupService
         self.bankTokenStore = bankTokenStore
         self.bankSyncPerformer = performer
-        self.monobankTokenValidator = monobankTokenValidator
+        self.monobankConnectionService = monobankConnectionService
         self.backgroundWork = backgroundWork
+        self.backupViewModel = BackupViewModel(backupService: backupService)
+        self.importViewModel = ImportViewModel(
+            csvService: csvService,
+            walletsProvider: { (try? repository.wallets()) ?? [] }
+        )
+        self.bankSyncViewModel = BankSyncViewModel(
+            repository: repository,
+            syncPerformer: performer,
+            connectionService: monobankConnectionService,
+            walletsProvider: { (try? repository.wallets()) ?? [] }
+        )
+        bindViewModels()
+    }
+
+    private func bindViewModels() {
+        backupViewModel.onWillRestore = { [weak self] in
+            guard let self else { return }
+            self.preRestoreState = PreRestoreState(
+                selectedWalletID: self.selectedWalletID,
+                overviewSnapshotCache: self.overviewSnapshotCache,
+                overviewSnapshotCacheOrder: self.overviewSnapshotCacheOrder
+            )
+            self.selectedWalletID = nil
+            self.overviewSnapshotCache.removeAll()
+            self.overviewSnapshotCacheOrder.removeAll()
+        }
+        backupViewModel.onSuccess = { [weak self] in
+            await self?.reloadAll()
+            self?.errorMessage = nil
+            self?.bankSyncMessage = nil
+            self?.preRestoreState = nil
+        }
+        backupViewModel.onFailure = { [weak self] _ in
+            guard let self, let state = self.preRestoreState else { return }
+            self.selectedWalletID = state.selectedWalletID
+            self.overviewSnapshotCache = state.overviewSnapshotCache
+            self.overviewSnapshotCacheOrder = state.overviewSnapshotCacheOrder
+            self.preRestoreState = nil
+        }
+
+        importViewModel.onSuccess = { [weak self] in
+            await self?.reloadAll()
+            self?.errorMessage = nil
+            self?.bankSyncMessage = nil
+        }
+        importViewModel.onFailure = { [weak self] error in
+            self?.errorMessage = error
+        }
+
+        bankSyncViewModel.onSuccess = { [weak self] in
+            await self?.reloadAll()
+            self?.bankSyncMessage = nil
+            self?.bankSyncViewModel.resetSensitiveWizardState()
+        }
+        bankSyncViewModel.onFailure = { [weak self] error in
+            self?.bankSyncMessage = error
+        }
     }
 
     public func bootstrap() async {
@@ -576,191 +663,8 @@ public final class CashRunwayAppModel {
         }
     }
 
-@discardableResult
-public func importStatement(
-    normalizedData: Data,
-    fileName: String,
-    format: BankStatementFormat,
-    mapping: CSVImportMapping,
-    rowFilter: CSVImportRowFilter = .allTransactions
-) async throws -> CSVImportResult {
-    do {
-        let result = try csvService.importStatement(
-            normalizedData: normalizedData,
-            fileName: fileName,
-            format: format,
-            mapping: mapping,
-            rowFilter: rowFilter
-        )
-            await reloadAll()
-            errorMessage = nil
-            return result
-        } catch {
-            errorMessage = error.localizedDescription
-            throw error
-        }
-    }
-
-    public func exportCSV() throws -> String {
-        try csvService.exportCSV(query: transactionQuery)
-    }
-
-    public func previewCSV(data: Data) throws -> CSVImportPreview {
-        try csvService.preview(data: data)
-    }
-
-    public func detectPreset(headers: [String]) -> CSVPreset {
-        csvService.detectPreset(headers: headers)
-    }
-
-    public func monobankConnectionStatus() -> BankConnectionStatusSnapshot {
-        (try? repository.bankConnectionStatus(provider: .monobank)) ?? BankConnectionStatusSnapshot(
-            integration: nil,
-            enabledAccountCount: 0,
-            syncStartAt: nil,
-            lastSuccessfulSyncAt: nil,
-            lastSyncError: nil,
-            importedExpenseCount: 0
-        )
-    }
-
-    public func monobankConnectedAccounts(integrationID: UUID) -> [BankAccount] {
-        (try? repository.bankAccounts(integrationID: integrationID)) ?? []
-    }
-
-    public func validateMonobankToken(_ token: String) async throws -> MonobankClientInfo {
-        do {
-            let service = MonobankConnectionService(
-                repository: repository,
-                tokenStore: bankTokenStore,
-                tokenValidator: monobankTokenValidator,
-                syncPerformer: bankSyncPerformer
-            )
-            let info = try await service.validateToken(token)
-            bankSyncMessage = nil
-            return info
-        } catch {
-            bankSyncMessage = error.localizedDescription
-            throw error
-        }
-    }
-
-    @discardableResult
-    public func connectMonobank(
-        token: String,
-        selections: [MonobankAccountConnectionSelection],
-        syncStartAt: Date = Date()
-    ) async throws -> BankIntegration {
-        do {
-            let service = MonobankConnectionService(
-                repository: repository,
-                tokenStore: bankTokenStore,
-                tokenValidator: monobankTokenValidator,
-                syncPerformer: bankSyncPerformer,
-                now: { syncStartAt }
-            )
-            let integration = try await service.connectMonobank(token: token, selections: selections)
-            await reloadAll()
-            bankSyncMessage = nil
-            return integration
-        } catch {
-            bankSyncMessage = error.localizedDescription
-            throw error
-        }
-    }
-
-    public func syncMonobankNow() async {
-        do {
-            _ = try await bankSyncPerformer.syncOnDemand()
-            await reloadAll()
-            bankSyncMessage = nil
-        } catch {
-            bankSyncMessage = error.localizedDescription
-        }
-    }
-
-    public func disconnectBankIntegration(_ integrationID: UUID) {
-        do {
-            let service = MonobankConnectionService(
-                repository: repository,
-                tokenStore: bankTokenStore,
-                tokenValidator: monobankTokenValidator,
-                syncPerformer: bankSyncPerformer
-            )
-            try service.disconnectIntegration(integrationID)
-            bankSyncMessage = nil
-            Task { @MainActor in await reloadAll() }
-        } catch {
-            bankSyncMessage = error.localizedDescription
-        }
-    }
-
-    public func learnBankCategoryRule(transactionID: UUID, categoryID: UUID) {
-        do {
-            try repository.learnBankMerchantCategoryRule(transactionID: transactionID, categoryID: categoryID)
-            bankSyncMessage = nil
-        } catch {
-            bankSyncMessage = error.localizedDescription
-        }
-    }
-
-    public func exportFullBackup() throws -> Data {
-        let backup = try backupService.exportFullBackup()
-        return try backupService.encode(backup)
-    }
-
     func exportCSV(query: TransactionQuery) async throws -> String {
         try await backgroundWork.exportCSV(query: query)
-    }
-
-    func exportFullBackupData() async throws -> Data {
-        try await backgroundWork.exportFullBackupData()
-    }
-
-    func prepareCSVImport(from url: URL) async throws -> CSVImportPreparation {
-        try await backgroundWork.prepareCSVImport(from: url)
-    }
-
-    func prepareBackupImport(from url: URL) async throws -> BackupImportPreparation {
-        try await backgroundWork.prepareBackupImport(from: url)
-    }
-
-    public func previewFullBackup(data: Data) throws -> BackupValidationSummary {
-        let backup = try backupService.decode(data: data)
-        return try backupService.validate(backup)
-    }
-
-    @discardableResult
-    public func restoreFullBackup(data: Data) async throws -> BackupRestoreResult {
-        let previousSelectedWalletID = selectedWalletID
-        let previousOverviewSnapshotCache = overviewSnapshotCache
-        let previousOverviewSnapshotCacheOrder = overviewSnapshotCacheOrder
-        var didPrepareForRestore = false
-
-        do {
-            let backup = try backupService.decode(data: data)
-            _ = try backupService.validate(backup)
-
-            foregroundRefreshTask?.cancel()
-            foregroundRefreshTask = nil
-            overviewSnapshotCache.removeAll()
-            overviewSnapshotCacheOrder.removeAll()
-            selectedWalletID = nil
-            didPrepareForRestore = true
-
-            let result = try backupService.restore(backup)
-            await reloadAll()
-            errorMessage = nil
-            return result
-        } catch {
-            if didPrepareForRestore {
-                selectedWalletID = previousSelectedWalletID
-                overviewSnapshotCache = previousOverviewSnapshotCache
-                overviewSnapshotCacheOrder = previousOverviewSnapshotCacheOrder
-            }
-            errorMessage = L10n.string("Backup could not be restored. Your current data was not changed.")
-            throw error
-        }
     }
 
     public func handleForegroundResume() {
@@ -1000,35 +904,6 @@ private actor BackgroundWork {
     func exportCSV(query: TransactionQuery) throws -> String {
         try csvService.exportCSV(query: query)
     }
-
-    func exportFullBackupData() throws -> Data {
-        let backup = try backupService.exportFullBackup()
-        return try backupService.encode(backup)
-    }
-
-    func prepareCSVImport(from url: URL) throws -> CSVImportPreparation {
-        let data = try CSVImportFileReader.readData(from: url)
-        let fileKind: StatementFileKind
-        let csvData: Data
-        if url.pathExtension.lowercased() == "xlsx" {
-            fileKind = .xlsx
-            let csvText = try XLSXConverter.convertToCSV(data: data)
-            csvData = Data(csvText.utf8)
-        } else {
-            fileKind = .csv
-            csvData = data
-        }
-        let preview = try csvService.preview(data: csvData)
-        let format = csvService.detectFormat(headers: preview.headers, fileKind: fileKind)
-        return CSVImportPreparation(data: csvData, preview: preview, format: format)
-    }
-
-    func prepareBackupImport(from url: URL) throws -> BackupImportPreparation {
-        let data = try CSVImportFileReader.readData(from: url)
-        let backup = try backupService.decode(data: data)
-        let summary = try backupService.validate(backup)
-        return BackupImportPreparation(data: data, summary: summary)
-    }
 }
 
 fileprivate struct AppModelSnapshot: Sendable {
@@ -1057,60 +932,8 @@ fileprivate struct MutableSnapshots: Sendable {
     var transactionQuery: TransactionQuery
 }
 
-struct CSVImportPreparation: Sendable {
-    let data: Data
-    let preview: CSVImportPreview
-    let format: BankStatementFormat
-}
-
-struct BackupImportPreparation: Sendable {
-    let data: Data
-    let summary: BackupValidationSummary
-}
-
-enum CSVImportFileReader {
-    static func readData(from url: URL) throws -> Data {
-        let copyURL = try temporaryAccessibleCopy(from: url)
-        defer { try? FileManager.default.removeItem(at: copyURL) }
-        return try Data(contentsOf: copyURL)
-    }
-
-    private static func temporaryAccessibleCopy(from url: URL) throws -> URL {
-        let fileManager = FileManager.default
-        let directoryURL = fileManager.temporaryDirectory.appendingPathComponent("CashRunwayCSVImports", isDirectory: true)
-        try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
-
-        let fileName = url.lastPathComponent.isEmpty ? "import.csv" : url.lastPathComponent
-        let destinationURL = directoryURL.appendingPathComponent("\(UUID().uuidString)-\(fileName)")
-        let didStartAccessing = url.startAccessingSecurityScopedResource()
-        defer {
-            if didStartAccessing {
-                url.stopAccessingSecurityScopedResource()
-            }
-        }
-
-        var coordinatedError: NSError?
-        var copyError: (any Error)?
-        NSFileCoordinator(filePresenter: nil).coordinate(readingItemAt: url, options: .withoutChanges, error: &coordinatedError) { coordinatedURL in
-            do {
-                if fileManager.fileExists(atPath: destinationURL.path) {
-                    try fileManager.removeItem(at: destinationURL)
-                }
-                try fileManager.copyItem(at: coordinatedURL, to: destinationURL)
-            } catch {
-                copyError = error
-            }
-        }
-
-        if let copyError {
-            throw copyError
-        }
-        if let coordinatedError {
-            throw coordinatedError
-        }
-        guard fileManager.fileExists(atPath: destinationURL.path) else {
-            throw CashRunwayError.validation(L10n.string("Imported CSV could not be copied into the app sandbox."))
-        }
-        return destinationURL
-    }
+fileprivate struct PreRestoreState {
+    let selectedWalletID: UUID?
+    let overviewSnapshotCache: [String: OverviewSnapshot]
+    let overviewSnapshotCacheOrder: [String]
 }

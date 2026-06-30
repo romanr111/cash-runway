@@ -1,16 +1,18 @@
+import CashRunwayCore
+import CashRunwayUIVM
 import Foundation
 import SwiftUI
 #if canImport(UIKit)
 import UIKit
 #endif
-import CashRunwayCore
 
 struct MonobankWizardView: View {
     @Environment(\.dismiss) private var dismiss
-    @Bindable var coordinator: MonobankCoordinator
+    @Bindable var model: CashRunwayAppModel
+    @Bindable var viewModel: BankSyncViewModel
 
     var body: some View {
-        if coordinator.isConnected || coordinator.completedStatus != nil {
+        if viewModel.isConnected || viewModel.completedStatus != nil {
             statusView
         } else {
             wizardView
@@ -20,35 +22,38 @@ struct MonobankWizardView: View {
     private var wizardView: some View {
         NavigationStack {
             Group {
-                switch coordinator.step {
+                switch viewModel.step {
                 case .intro:
                     MonobankTokenIntroView {
-                        coordinator.step = .token
+                        viewModel.step = .token
                     }
                 case .token:
                     MonobankTokenStepView(
-                        token: $coordinator.token,
-                        isValidating: coordinator.isValidating,
-                        error: coordinator.validationError,
-                        onValidate: coordinator.validateToken
+                        token: $viewModel.token,
+                        isValidating: viewModel.isValidating,
+                        error: viewModel.validationError,
+                        onValidate: viewModel.validateToken
                     )
                 case .accounts:
                     MonobankAccountSelectionView(
-                        model: coordinator.model,
-                        accounts: coordinator.clientInfo?.accounts ?? [],
-                        enabledAccountIDs: $coordinator.enabledAccountIDs,
-                        selectedWalletIDs: $coordinator.selectedWalletIDs,
+                        model: model,
+                        viewModel: viewModel,
+                        accounts: viewModel.clientInfo?.accounts ?? [],
+                        enabledAccountIDs: $viewModel.enabledAccountIDs,
+                        selectedWalletIDs: $viewModel.selectedWalletIDs,
                         onContinue: {
-                            coordinator.syncStartAt = Date()
-                            coordinator.step = .confirmation
+                            viewModel.syncStartAt = Date()
+                            viewModel.step = .confirmation
                         }
                     )
                 case .confirmation:
                     MonobankStartConfirmationView(
-                        syncStartAt: coordinator.syncStartAt,
-                        isConnecting: coordinator.isConnecting,
-                        error: coordinator.connectionError,
-                        onStart: coordinator.startSyncing
+                        syncStartAt: viewModel.syncStartAt,
+                        isConnecting: viewModel.isConnecting,
+                        error: viewModel.connectionError,
+                        onStart: {
+                            Task { await viewModel.startSyncing() }
+                        }
                     )
                 }
             }
@@ -62,7 +67,7 @@ struct MonobankWizardView: View {
     }
 
     private var statusView: some View {
-        let currentStatus = coordinator.model.monobankConnectionStatus()
+        let currentStatus = viewModel.connectionStatus()
         return NavigationStack {
             Form {
                 Section {
@@ -70,7 +75,7 @@ struct MonobankWizardView: View {
                     summaryRow("Sync starts from", value: dateText(currentStatus.syncStartAt))
                     summaryRow("Last successful sync", value: dateText(currentStatus.lastSuccessfulSyncAt))
                     summaryRow("Imported expenses", value: "\(currentStatus.importedExpenseCount)", valueIdentifier: CashRunwayAccessibilityID.monobankImportedExpensesValue)
-                    if let message = coordinator.model.bankSyncMessage ?? currentStatus.lastSyncError {
+                    if let message = currentStatus.lastSyncError {
                         summaryRow("Last result", value: message, valueIdentifier: CashRunwayAccessibilityID.monobankLastResultValue)
                     } else {
                         summaryRow("Last result", value: L10n.string("success"), valueIdentifier: CashRunwayAccessibilityID.monobankLastResultValue)
@@ -89,17 +94,17 @@ struct MonobankWizardView: View {
                 }
 
                 Section {
-                    Button(coordinator.isSyncing ? L10n.string("Syncing...") : L10n.string("Sync now")) {
-                        coordinator.syncNow()
+                    Button(viewModel.isSyncing ? L10n.string("Syncing...") : L10n.string("Sync now")) {
+                        Task { await viewModel.syncNow() }
                     }
-                    .disabled(coordinator.isSyncing)
+                    .disabled(viewModel.isSyncing)
                     .accessibilityIdentifier(CashRunwayAccessibilityID.monobankSyncNowButton)
                     Button("Manage accounts") {
-                        coordinator.isAccountManagementPresented = true
+                        viewModel.isAccountManagementPresented = true
                     }
                     .accessibilityIdentifier(CashRunwayAccessibilityID.monobankManageAccountsButton)
                     Button("Disconnect", role: .destructive) {
-                        coordinator.isDisconnectConfirmationPresented = true
+                        viewModel.isDisconnectConfirmationPresented = true
                     }
                     .accessibilityIdentifier(CashRunwayAccessibilityID.monobankDisconnectButton)
                 }
@@ -110,17 +115,17 @@ struct MonobankWizardView: View {
                     Button("Done") { dismiss() }
                 }
             }
-            .alert("Disconnect Monobank?", isPresented: $coordinator.isDisconnectConfirmationPresented) {
+            .alert("Disconnect Monobank?", isPresented: $viewModel.isDisconnectConfirmationPresented) {
                 Button("Cancel", role: .cancel) {}
                 Button("Disconnect", role: .destructive) {
-                    coordinator.disconnect()
+                    Task { await viewModel.disconnect() }
                 }
             } message: {
                 Text("Imported transactions stay in Cash Runway. Only future Monobank sync is disabled on this iPhone.")
             }
-            .sheet(isPresented: $coordinator.isAccountManagementPresented) {
+            .sheet(isPresented: $viewModel.isAccountManagementPresented) {
                 if let integration = currentStatus.integration {
-                    MonobankAccountManagementView(model: coordinator.model, integrationID: integration.id)
+                    MonobankAccountManagementView(viewModel: viewModel, integrationID: integration.id)
                 }
             }
         }
@@ -227,6 +232,7 @@ private struct MonobankTokenStepView: View {
 
 private struct MonobankAccountSelectionView: View {
     @Bindable var model: CashRunwayAppModel
+    @Bindable var viewModel: BankSyncViewModel
     let accounts: [MonobankAccount]
     @Binding var enabledAccountIDs: Set<String>
     @Binding var selectedWalletIDs: [String: UUID]
@@ -250,10 +256,10 @@ private struct MonobankAccountSelectionView: View {
                             ))
                             .accessibilityIdentifier(CashRunwayAccessibilityID.monobankAccountToggle(account.id))
                             Picker("Map to wallet", selection: Binding(
-                                get: { selectedWalletIDs[account.id] ?? model.wallets.first?.id ?? UUID() },
+                                get: { selectedWalletIDs[account.id] ?? viewModel.wallets.first?.id ?? UUID() },
                                 set: { selectedWalletIDs[account.id] = $0 }
                             )) {
-                                ForEach(model.wallets) { wallet in
+                                ForEach(viewModel.wallets) { wallet in
                                     Text(wallet.name).tag(wallet.id)
                                 }
                             }
@@ -309,7 +315,7 @@ private struct MonobankAccountSelectionView: View {
             startingBalanceMinor: 0,
             currentBalanceMinor: 0,
             isArchived: false,
-            sortOrder: model.wallets.count,
+            sortOrder: viewModel.wallets.count,
             createdAt: .now,
             updatedAt: .now
         )
@@ -378,14 +384,14 @@ private struct MonobankStartConfirmationView: View {
 
 private struct MonobankAccountManagementView: View {
     @Environment(\.dismiss) private var dismiss
-    @Bindable var model: CashRunwayAppModel
+    @Bindable var viewModel: BankSyncViewModel
     let integrationID: UUID
 
     var body: some View {
         NavigationStack {
             Form {
                 Section("Connected accounts") {
-                    ForEach(model.monobankConnectedAccounts(integrationID: integrationID)) { account in
+                    ForEach(viewModel.connectedAccounts(integrationID: integrationID)) { account in
                         VStack(alignment: .leading, spacing: 4) {
                             Text(account.displayName)
                             Text(accountSummary(account))
@@ -405,7 +411,7 @@ private struct MonobankAccountManagementView: View {
     }
 
     private func accountSummary(_ account: BankAccount) -> String {
-        let walletName = model.wallets.first(where: { $0.id == account.walletID })?.name ?? L10n.string("Unknown wallet")
+        let walletName = viewModel.wallets.first(where: { $0.id == account.walletID })?.name ?? L10n.string("Unknown wallet")
         let state = account.isEnabled ? L10n.string("Enabled") : L10n.string("Disabled")
         return "\(state) · \(walletName)"
     }

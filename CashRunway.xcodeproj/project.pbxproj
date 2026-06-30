@@ -34,11 +34,8 @@
 		A00100010001000100010017 /* Tests/CashRunwayUITests/MonobankConnectionUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0020001000100010001001A /* Tests/CashRunwayUITests/MonobankConnectionUITests.swift */; };
 		A00100010001000100010023 /* Tests/CashRunwayUITests/SettingsNavigationUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010023 /* Tests/CashRunwayUITests/SettingsNavigationUITests.swift */; };
 		A00100010001000100010024 /* AppHost/Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010024 /* AppHost/Assets.xcassets */; };
-		A0010001000100010001001B /* Sources/CashRunwayUI/MonobankCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0020001000100010001001B /* Sources/CashRunwayUI/MonobankCoordinator.swift */; };
 		A0010001000100010001001C /* Sources/CashRunwayUI/MonobankWizardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0020001000100010001001C /* Sources/CashRunwayUI/MonobankWizardView.swift */; };
-		A0010001000100010001001D /* Sources/CashRunwayUI/CSVImportCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0020001000100010001001D /* Sources/CashRunwayUI/CSVImportCoordinator.swift */; };
 		A0010001000100010001001E /* Sources/CashRunwayUI/CSVImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0020001000100010001001E /* Sources/CashRunwayUI/CSVImportView.swift */; };
-		A0010001000100010001001F /* Sources/CashRunwayUI/BackupCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0020001000100010001001F /* Sources/CashRunwayUI/BackupCoordinator.swift */; };
 		A00100010001000100010020 /* Sources/CashRunwayUI/BackupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010020 /* Sources/CashRunwayUI/BackupView.swift */; };
 			A00100010001000100010021 /* Sources/CashRunwayUI/LabelManagementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010021 /* Sources/CashRunwayUI/LabelManagementView.swift */; };
 			A00100010001000100010022 /* Sources/CashRunwayUI/WalletManagementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010022 /* Sources/CashRunwayUI/WalletManagementView.swift */; };
@@ -50,6 +47,7 @@
 			A00100010001000100010026 /* AppHost/Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010026 /* AppHost/Localizable.xcstrings */; };
 			A0010001000100010001002F /* AppHost/uk.lproj/InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = A0020001000100010001002E /* AppHost/uk.lproj/InfoPlist.strings */; };
 		A01300010001000100010003 /* CashRunwayCore in Frameworks */ = {isa = PBXBuildFile; productRef = A01300010001000100010002 /* CashRunwayCore */; };
+		A01400010001000100010002 /* CashRunwayUIVM in Frameworks */ = {isa = PBXBuildFile; productRef = A01400010001000100010001 /* CashRunwayUIVM */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -99,11 +97,8 @@
 		A00200010001000100010018 /* Tests/CashRunwayUITests/TransactionOverviewUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/CashRunwayUITests/TransactionOverviewUITests.swift; sourceTree = "<group>"; };
 		A00200010001000100010019 /* CashRunwayUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CashRunwayUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A0020001000100010001001A /* Tests/CashRunwayUITests/MonobankConnectionUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/CashRunwayUITests/MonobankConnectionUITests.swift; sourceTree = "<group>"; };
-		A0020001000100010001001B /* Sources/CashRunwayUI/MonobankCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayUI/MonobankCoordinator.swift; sourceTree = "<group>"; };
 		A0020001000100010001001C /* Sources/CashRunwayUI/MonobankWizardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayUI/MonobankWizardView.swift; sourceTree = "<group>"; };
-		A0020001000100010001001D /* Sources/CashRunwayUI/CSVImportCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayUI/CSVImportCoordinator.swift; sourceTree = "<group>"; };
 		A0020001000100010001001E /* Sources/CashRunwayUI/CSVImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayUI/CSVImportView.swift; sourceTree = "<group>"; };
-		A0020001000100010001001F /* Sources/CashRunwayUI/BackupCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayUI/BackupCoordinator.swift; sourceTree = "<group>"; };
 		A00200010001000100010020 /* Sources/CashRunwayUI/BackupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayUI/BackupView.swift; sourceTree = "<group>"; };
 		A00200010001000100010021 /* Sources/CashRunwayUI/LabelManagementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayUI/LabelManagementView.swift; sourceTree = "<group>"; };
 			A00200010001000100010022 /* Sources/CashRunwayUI/WalletManagementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayUI/WalletManagementView.swift; sourceTree = "<group>"; };
@@ -132,6 +127,7 @@
 			files = (
 				A00100010001000100010011 /* GRDB in Frameworks */,
 				A01300010001000100010003 /* CashRunwayCore in Frameworks */,
+				A01400010001000100010002 /* CashRunwayUIVM in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -194,11 +190,8 @@
 				A00200010001000100010056 /* Sources/CashRunwayUI/LabelEditorView.swift */,
 				A00200010001000100010057 /* Sources/CashRunwayUI/RecurringEditorView.swift */,
 				A00200010001000100010015 /* Sources/CashRunwayUI/AccessibilityIdentifiers.swift */,
-				A0020001000100010001001B /* Sources/CashRunwayUI/MonobankCoordinator.swift */,
 				A0020001000100010001001C /* Sources/CashRunwayUI/MonobankWizardView.swift */,
-				A0020001000100010001001D /* Sources/CashRunwayUI/CSVImportCoordinator.swift */,
 				A0020001000100010001001E /* Sources/CashRunwayUI/CSVImportView.swift */,
-				A0020001000100010001001F /* Sources/CashRunwayUI/BackupCoordinator.swift */,
 				A00200010001000100010020 /* Sources/CashRunwayUI/BackupView.swift */,
 				A00200010001000100010021 /* Sources/CashRunwayUI/LabelManagementView.swift */,
 				A00200010001000100010022 /* Sources/CashRunwayUI/WalletManagementView.swift */,
@@ -271,6 +264,7 @@
 			packageProductDependencies = (
 				A00A00010001000100010002 /* GRDB */,
 				A01300010001000100010002 /* CashRunwayCore */,
+				A01400010001000100010001 /* CashRunwayUIVM */,
 			);
 			productName = CashRunway;
 			productReference = A0020001000100010001000C /* CashRunway.app */;
@@ -407,11 +401,8 @@
 					A00100010001000100010051 /* AppHost/AppReportingSecrets.generated.swift in Sources */,
 				A00100010001000100010012 /* AppHost/UITestRuntime.swift in Sources */,
 				A00100010001000100010013 /* Sources/CashRunwayUI/AccessibilityIdentifiers.swift in Sources */,
-				A0010001000100010001001B /* Sources/CashRunwayUI/MonobankCoordinator.swift in Sources */,
 				A0010001000100010001001C /* Sources/CashRunwayUI/MonobankWizardView.swift in Sources */,
-				A0010001000100010001001D /* Sources/CashRunwayUI/CSVImportCoordinator.swift in Sources */,
 				A0010001000100010001001E /* Sources/CashRunwayUI/CSVImportView.swift in Sources */,
-				A0010001000100010001001F /* Sources/CashRunwayUI/BackupCoordinator.swift in Sources */,
 				A00100010001000100010020 /* Sources/CashRunwayUI/BackupView.swift in Sources */,
 					A00100010001000100010021 /* Sources/CashRunwayUI/LabelManagementView.swift in Sources */,
 					A00100010001000100010022 /* Sources/CashRunwayUI/WalletManagementView.swift in Sources */,
@@ -658,6 +649,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = A01300010001000100010001 /* XCLocalSwiftPackageReference "." */;
 			productName = CashRunwayCore;
+		};
+		A01400010001000100010001 /* CashRunwayUIVM */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A01300010001000100010001 /* XCLocalSwiftPackageReference "." */;
+			productName = CashRunwayUIVM;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
