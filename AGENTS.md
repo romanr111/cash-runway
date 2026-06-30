@@ -54,6 +54,12 @@ Swift/SwiftUI/GRDB iOS app with a Node/TypeScript reporting API.
   with `just test-isolated` or `just check-isolated`.
 - For PR handoff, use `just pr-status <PR>` for the status snapshot and
   `just pr-comment <PR> <markdown-file>` for multiline comments.
+- SwiftPM silent-hang stop rule: if a focused test goes quiet for roughly
+  60-90 seconds, inspect the process state and retry once with
+  `just test-isolated` instead of waiting indefinitely.
+- Test filter quoting: do not use `|` alternation with `just test-filter` or
+  `just test --filter`; run each filter separately or add a dedicated safe
+  recipe.
 
 ## Git Safety
 
@@ -120,8 +126,9 @@ Swift/SwiftUI/GRDB iOS app with a Node/TypeScript reporting API.
   `agent_docs/reference/token-efficiency.md`,
   `agent_docs/reference/verification-strategies.md`, and
   `agent_docs/reference/code-review.md`.
-- For files over 500 lines, locate the relevant symbol first and read a narrow
-  line range. Do not read the complete file unless necessary.
+- For files over 500 lines, use CodeGraph first and read narrow 20-40 line
+  windows around the relevant symbol before broader scans. Do not read the
+  complete file unless necessary.
 - Batch related reads in one response; emit multiple `Read` calls in parallel
   instead of reading one file per turn.
 - Always use existing `just` recipes for repository tasks. Do not run raw
@@ -193,3 +200,9 @@ Before editing matching areas, read:
   `agent_docs/instructions/worktrees.md`
 
 Historical and troubleshooting material is under `agent_docs/reference/`.
+
+### Persistence Changes
+- Before adding migrations, inspect the partial-schema migration tests and
+  guard optional legacy tables and columns.
+- Every new repository or protocol seam needs at least one direct behavioral
+  test that exercises the seam through public behavior.

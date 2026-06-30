@@ -1,5 +1,30 @@
 # Continuity Ledger
 
+## Snapshot — Merge cash-runway-persistence-change into dev
+
+Branch: `dev`
+Merge status: merged
+Worktree reason: dirty-primary
+
+Goal: bring the persistence guidance and skill updates from `codex/cash-runway-persistence-change` into `dev`.
+
+## Current state
+
+- `AGENTS.md` now includes the SwiftPM silent-hang fallback, safe test-filter quoting, CodeGraph narrow-window reads, and persistence-change notes.
+- `~/.codex/skills/cash-runway-validation/SKILL.md` updated with silent-hang fallback, filter guidance, and log-first routing.
+- `~/.codex/skills/self-review/SKILL.md` and `~/.codex/skills/code-review/SKILL.md` now flag new repository or protocol seams without direct behavioral tests.
+- New local skill `cash-runway-persistence-change` exists outside the repo.
+
+## Validation
+
+- `git merge --no-commit --no-ff codex/cash-runway-persistence-change`: reached a `CONTINUITY.md` conflict, then resolved manually.
+- `git diff --check`: passed.
+
+## Receipts
+
+- Primary checkout had unrelated untracked files before merge.
+- The merge touched `AGENTS.md` and `CONTINUITY.md` only.
+
 ## Snapshot — `codex/arch-improvements` integration branch
 
 **Canonical integration PR:** https://github.com/romanr111/cash-runway/pull/86 (`codex/arch-improvements → dev`)
