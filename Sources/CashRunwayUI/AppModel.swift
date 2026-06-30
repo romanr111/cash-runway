@@ -40,6 +40,12 @@ public final class CashRunwayAppModel {
     public var templates: [RecurringTemplate] = []
     public var instances: [RecurringInstance] = []
     public var dashboardSnapshot: DashboardSnapshot?
+    public var defaultCurrencyCode: CurrencyCode {
+        (try? repository.currencyPreferences().defaultCurrencyCode) ?? .uah
+    }
+    public var reportingCurrencyCode: CurrencyCode {
+        (try? repository.currencyPreferences().reportingCurrencyCode) ?? .uah
+    }
     public var timelineSnapshot: TimelineSnapshot?
     public var overviewSnapshot: OverviewSnapshot?
     public var allBars: [TimelineBarPoint] = []
@@ -603,6 +609,12 @@ public final class CashRunwayAppModel {
     public func saveBudget(_ budget: Budget) {
         runMutation {
             try repository.saveBudget(budget)
+        }
+    }
+
+    public func saveCurrencyPreferences(_ preferences: CurrencyPreferences) {
+        runMutation {
+            try repository.saveCurrencyPreferences(preferences)
         }
     }
 

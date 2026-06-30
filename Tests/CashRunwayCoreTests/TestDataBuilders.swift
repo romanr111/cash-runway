@@ -102,6 +102,7 @@ struct WalletBuilder {
     private var iconName: String? = "wallet.pass.fill"
     private var startingBalanceMinor: Int64 = 0
     private var currentBalanceMinor: Int64 = 0
+    private var currencyCode: CurrencyCode = .uah
     private var isArchived: Bool = false
     private var sortOrder: Int = 0
     private var createdAt: Date = .now
@@ -131,6 +132,10 @@ struct WalletBuilder {
         var copy = self; copy.currentBalanceMinor = currentBalanceMinor; return copy
     }
 
+    func with(currencyCode: CurrencyCode) -> Self {
+        var copy = self; copy.currencyCode = currencyCode; return copy
+    }
+
     func with(colorHex: String?) -> Self {
         var copy = self; copy.colorHex = colorHex; return copy
     }
@@ -157,6 +162,7 @@ struct WalletBuilder {
             iconName: iconName,
             startingBalanceMinor: startingBalanceMinor,
             currentBalanceMinor: currentBalanceMinor,
+            currencyCode: currencyCode,
             isArchived: isArchived,
             sortOrder: sortOrder,
             createdAt: createdAt,
