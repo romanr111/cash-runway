@@ -119,7 +119,8 @@ public protocol CurrencyRepositorying: Sendable {
     func cachedExchangeRate(
         from sourceCurrency: CurrencyCode,
         to targetCurrency: CurrencyCode,
-        on date: Date
+        on date: Date,
+        source: String?
     ) throws -> ExchangeRate?
     func saveExchangeRates(_ rates: [ExchangeRate]) throws
 }
@@ -134,6 +135,7 @@ public typealias CashRunwayRepositorying = BankSyncRepositorying &
     DashboardRepositorying &
     TransactionEditingRepositorying &
     SettingsRepositorying &
+    CurrencyRepositorying &
     MaintenanceRepositorying
 
 // MARK: - Default-argument convenience wrappers

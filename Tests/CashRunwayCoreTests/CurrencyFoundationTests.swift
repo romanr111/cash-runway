@@ -186,6 +186,13 @@ struct CurrencyFoundationTests {
         let encoded = try JSONEncoder().encode(CurrencyCode.eur)
         #expect(String(decoding: encoded, as: UTF8.self) == #""EUR""#)
 
+        #expect(CurrencyCode(rawValue: " usd ") == .usd)
+        #expect(CurrencyCode(rawValue: "US1") == nil)
+        #expect(CurrencyCode(rawValue: "USDT") == nil)
+        #expect(throws: MoneyError.self) {
+            _ = try CurrencyCode(validating: "US1")
+        }
+
         #expect(throws: DecodingError.self) {
             _ = try decoder.decode(CurrencyCode.self, from: Data(#""US1""#.utf8))
         }
@@ -384,6 +391,17 @@ struct CurrencyFoundationTests {
         _ = try repository.allBars(walletID: uahWallet.id)
     }
 
+    @Test func archivedMixedCurrencyWalletStillRejectsAllWalletSnapshots() throws {
+        let repository = try makeCurrencyRepository()
+        _ = try saveCurrencyWallet(repository, currencyCode: .uah)
+        _ = try saveCurrencyWallet(repository, currencyCode: .usd, isArchived: true)
+        let monthKey = DateKeys.monthKey(for: .now)
+
+        #expect(throws: CashRunwayError.self) {
+            _ = try repository.dashboard(monthKey: monthKey, walletID: nil)
+        }
+    }
+
     @Test func backupExportUsesV3AndStringCurrencyCodes() throws {
         let repository = try makeCurrencyRepository()
         _ = try saveCurrencyWallet(repository, currencyCode: .usd)
@@ -441,6 +459,154 @@ struct CurrencyFoundationTests {
         #expect(try target.recurringTemplates().first?.currencyCode == .usd)
     }
 
+    @Test func backupRestoreRejectsTransactionCurrencyMismatch() throws {
+        let source = try makeCurrencyRepository()
+        let wallet = try saveCurrencyWallet(source, currencyCode: .usd)
+        let category = try saveExpenseCategory(source)
+        try source.saveTransaction(TransactionDraft(
+            kind: .expense,
+            walletID: wallet.id,
+            amountMinor: 1_000,
+            currencyCode: .usd,
+            occurredAt: .now,
+            categoryID: category.id
+        ))
+
+        var backup = try source.exportFullBackup()
+        backup.transactions[0].currencyCode = .uah
+        let target = try makeCurrencyRepository()
+
+        #expect(throws: BackupError.self) {
+            _ = try BackupService(repository: target).restore(backup)
+        }
+    }
+
+    @Test func backupRestoreRejectsRecurringCounterpartyCurrencyMismatch() throws {
+        let source = try makeCurrencyRepository()
+        let wallet = try saveCurrencyWallet(source, currencyCode: .usd)
+        let counterparty = try saveCurrencyWallet(source, currencyCode: .usd)
+        try source.saveRecurringTemplate(RecurringTemplate(
+            id: UUID(),
+            kind: .transfer,
+            walletID: wallet.id,
+            counterpartyWalletID: counterparty.id,
+            amountMinor: 2_000,
+            currencyCode: .usd,
+            categoryID: nil,
+            merchant: "Savings",
+            note: nil,
+            ruleType: .monthly,
+            ruleInterval: 1,
+            dayOfMonth: 1,
+            weekday: nil,
+            startDate: .now,
+            endDate: nil,
+            isActive: true,
+            createdAt: .now,
+            updatedAt: .now
+        ))
+
+        var backup = try source.exportFullBackup()
+        let counterpartyIndex = try #require(backup.wallets.firstIndex { $0.id == counterparty.id })
+        backup.wallets[counterpartyIndex].currencyCode = .eur
+        let target = try makeCurrencyRepository()
+
+        #expect(throws: BackupError.self) {
+            _ = try BackupService(repository: target).restore(backup)
+        }
+    }
+
+    @Test func monobankImportRejectsUAHAccountMappedToNonUAHWallet() throws {
+        let repository = try makeCurrencyRepository()
+        let wallet = try saveCurrencyWallet(repository, currencyCode: .usd)
+        let integrationID = UUID()
+        let account = BankAccount(
+            id: UUID(),
+            integrationID: integrationID,
+            provider: .monobank,
+            providerAccountID: "uah-account",
+            walletID: wallet.id,
+            displayName: "Black",
+            accountType: "black",
+            currencyCode: ISO4217NumericCurrencyCode.uah,
+            maskedPAN: "1234",
+            iban: nil,
+            isEnabled: true,
+            syncStartAt: Date(timeIntervalSince1970: 1_800_000_000),
+            lastSuccessfulSyncAt: nil,
+            lastStatementItemTime: nil,
+            createdAt: .now,
+            updatedAt: .now
+        )
+        let integration = BankIntegration(
+            id: integrationID,
+            provider: .monobank,
+            displayName: "Monobank",
+            status: .active,
+            syncStartAt: Date(timeIntervalSince1970: 1_800_000_000),
+            tokenKeychainAccount: "token",
+            lastClientInfoSyncAt: nil,
+            lastSuccessfulSyncAt: nil,
+            lastSyncError: nil,
+            createdAt: .now,
+            updatedAt: .now
+        )
+        try repository.saveBankConnection(integration: integration, accounts: [account])
+
+        let item = MonobankStatementItem(
+            id: "uah-item",
+            time: Int(Date(timeIntervalSince1970: 1_800_000_100).timeIntervalSince1970),
+            description: "Shop",
+            mcc: 5411,
+            originalMcc: 5411,
+            amount: -1_000,
+            operationAmount: nil,
+            currencyCode: ISO4217NumericCurrencyCode.uah,
+            commissionRate: nil,
+            cashbackAmount: nil,
+            balance: nil,
+            hold: nil,
+            receiptId: nil,
+            comment: nil,
+            counterEdrpou: nil,
+            counterIban: nil,
+            counterName: "Shop"
+        )
+
+        #expect(throws: CashRunwayError.self) {
+            _ = try repository.importMonobankExpenseItems([item], account: account, integration: integration)
+        }
+    }
+
+    @Test func repositoryCachesExchangeRatesByRequestedSource() throws {
+        let repository = try makeCurrencyRepository()
+        let date = Date(timeIntervalSince1970: 1_800_000_000)
+        try repository.saveExchangeRates([
+            ExchangeRate(sourceCurrencyCode: .usd, targetCurrencyCode: .uah, rateDecimal: "41.2500", effectiveDate: date, source: "nbu"),
+            ExchangeRate(sourceCurrencyCode: .usd, targetCurrencyCode: .uah, rateDecimal: "40.9000", effectiveDate: date, source: "ecb"),
+        ])
+
+        let nbu = try #require(try repository.cachedExchangeRate(from: .usd, to: .uah, on: date, source: "nbu"))
+        let ecb = try #require(try repository.cachedExchangeRate(from: .usd, to: .uah, on: date, source: "ecb"))
+
+        #expect(nbu.rateDecimal == "41.2500")
+        #expect(ecb.rateDecimal == "40.9000")
+        #expect(try repository.cachedExchangeRate(from: .usd, to: .uah, on: date, source: "manual") == nil)
+    }
+
+    @Test func repositoryRejectsInvalidExchangeRateDecimalStrings() throws {
+        let repository = try makeCurrencyRepository()
+        let date = Date(timeIntervalSince1970: 1_800_000_000)
+
+        for invalid in ["", "0", "-1", "41,2500", "abc", " 41.25 "] {
+            #expect(throws: CashRunwayError.self) {
+                try repository.saveExchangeRates([
+                    ExchangeRate(sourceCurrencyCode: .usd, targetCurrencyCode: .uah, rateDecimal: invalid, effectiveDate: date, source: "test"),
+                ])
+            }
+        }
+    }
+
     private func makeCurrencyRepository() throws -> CashRunwayRepository {
         let location = TestSupport.makeLocation()
         return CashRunwayRepository(
@@ -453,7 +619,8 @@ struct CurrencyFoundationTests {
         _ repository: CashRunwayRepository,
         currencyCode: CurrencyCode,
         startingBalanceMinor: Int64 = 0,
-        currentBalanceMinor: Int64 = 0
+        currentBalanceMinor: Int64 = 0,
+        isArchived: Bool = false
     ) throws -> Wallet {
         let wallet = Wallet(
             id: UUID(),
@@ -464,7 +631,7 @@ struct CurrencyFoundationTests {
             startingBalanceMinor: startingBalanceMinor,
             currentBalanceMinor: currentBalanceMinor,
             currencyCode: currencyCode,
-            isArchived: false,
+            isArchived: isArchived,
             sortOrder: 0,
             createdAt: .now,
             updatedAt: .now

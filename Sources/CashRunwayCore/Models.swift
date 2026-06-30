@@ -1509,6 +1509,7 @@ enum BackupValidator {
         try validateTransactionLabels(backup.transactionLabels, transactionIDs: transactionIDs, labelIDs: labelIDs)
         try validateImportFingerprints(backup.transactions)
         try validateTransferPairs(backup.transactions)
+        try validateCurrencyInvariants(backup)
 
         return BackupValidationSummary(
             createdAt: backup.metadata.createdAt,
@@ -1630,6 +1631,29 @@ enum BackupValidator {
         }
     }
 
+    private static func validateCurrencyInvariants(_ backup: CashRunwayBackup) throws {
+        let walletCurrencies = Dictionary(uniqueKeysWithValues: backup.wallets.map { ($0.id, $0.currencyCode) })
+
+        for transaction in backup.transactions {
+            guard let walletCurrency = walletCurrencies[transaction.walletID] else { continue }
+            guard transaction.currencyCode == walletCurrency else {
+                throw BackupError.brokenReference("transaction \(transaction.id) currency does not match wallet \(transaction.walletID)")
+            }
+        }
+
+        for template in backup.recurringTemplates {
+            guard let walletCurrency = walletCurrencies[template.walletID] else { continue }
+            guard template.currencyCode == walletCurrency else {
+                throw BackupError.brokenReference("recurring template \(template.id) currency does not match wallet \(template.walletID)")
+            }
+            if let counterpartyWalletID = template.counterpartyWalletID,
+               let counterpartyCurrency = walletCurrencies[counterpartyWalletID],
+               counterpartyCurrency != template.currencyCode {
+                throw BackupError.brokenReference("recurring template \(template.id) currency does not match counterparty wallet \(counterpartyWalletID)")
+            }
+        }
+    }
+
     private static func validateTransferPairs(_ transactions: [BackupTransaction]) throws {
         let byID = Dictionary(uniqueKeysWithValues: transactions.map { ($0.id, $0) })
         for transaction in transactions where transaction.type == .transferOut || transaction.type == .transferIn {
@@ -1642,6 +1666,10 @@ enum BackupValidator {
             guard transaction.amountMinor == linked.amountMinor else {
                 throw BackupError.invalidTransferPair("transaction \(transaction.id) amount does not match")
             }
+            guard transaction.currencyCode == linked.currencyCode else {
+                throw BackupError.invalidTransferPair("transaction \(transaction.id) currency does not match")
+            }
+
             guard transaction.walletID != linked.walletID else {
                 throw BackupError.invalidTransferPair("transaction \(transaction.id) uses the same wallet on both sides")
             }
@@ -1751,6 +1779,7 @@ public struct TransactionListItem: Identifiable, Hashable, Sendable {
     public var id: UUID
     public var walletName: String
     public var amountMinor: Int64
+    public var currencyCode: CurrencyCode = .uah
     public var occurredAt: Date
     public var categoryName: String?
     public var categoryID: UUID?

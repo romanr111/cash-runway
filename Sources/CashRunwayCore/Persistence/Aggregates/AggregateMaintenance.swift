@@ -393,6 +393,7 @@ extension CashRunwayRepository {
                 id: transaction.id,
                 walletName: row["wallet_name"],
                 amountMinor: transaction.type == .expense || transaction.type == .transferOut ? -transaction.amountMinor : transaction.amountMinor,
+                currencyCode: transaction.currencyCode,
                 occurredAt: transaction.occurredAt,
                 categoryName: row["category_name"],
                 categoryID: row["category_id"],

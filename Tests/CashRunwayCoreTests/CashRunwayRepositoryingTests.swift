@@ -94,6 +94,15 @@ private final class MockRepository: CashRunwayRepositorying, @unchecked Sendable
     func refreshRecurringInstances() throws {}
     func postRecurringInstance(id: UUID, on date: Date) throws { postRecurringInstanceCalled = true }
     func skipRecurringInstance(id: UUID) throws {}
+    func currencyPreferences() throws -> CurrencyPreferences { .default }
+    func saveCurrencyPreferences(_ preferences: CurrencyPreferences) throws {}
+    func cachedExchangeRate(
+        from sourceCurrency: CurrencyCode,
+        to targetCurrency: CurrencyCode,
+        on date: Date,
+        source: String?
+    ) throws -> ExchangeRate? { nil }
+    func saveExchangeRates(_ rates: [ExchangeRate]) throws {}
     func exportFullBackup() throws -> CashRunwayBackup {
         CashRunwayBackup(
             metadata: CashRunwayBackupMetadata(format: "cash-runway-backup", version: 2, createdAt: Date(), appVersion: "test", currency: "UAH"),

@@ -1,7 +1,7 @@
 import Foundation
 import GRDB
 
-extension CashRunwayRepository: CurrencyRepositorying {
+extension CashRunwayRepository {
     public func currencyPreferences() throws -> CurrencyPreferences {
         try databaseManager.dbQueue.read { db in
             guard let row = try Row.fetchOne(
@@ -16,8 +16,8 @@ extension CashRunwayRepository: CurrencyRepositorying {
             }
 
             return CurrencyPreferences(
-                defaultCurrencyCode: CurrencyCode(rawValue: row["default_currency_code"]),
-                reportingCurrencyCode: CurrencyCode(rawValue: row["reporting_currency_code"])
+                defaultCurrencyCode: try CurrencyCode(validating: row["default_currency_code"]),
+                reportingCurrencyCode: try CurrencyCode(validating: row["reporting_currency_code"])
             )
         }
     }
@@ -45,7 +45,8 @@ extension CashRunwayRepository: CurrencyRepositorying {
     public func cachedExchangeRate(
         from sourceCurrency: CurrencyCode,
         to targetCurrency: CurrencyCode,
-        on date: Date
+        on date: Date,
+        source: String? = nil
     ) throws -> ExchangeRate? {
         let effectiveDate = DateKeys.calendar.startOfDay(for: date)
         return try databaseManager.dbQueue.read { db in
@@ -55,19 +56,20 @@ extension CashRunwayRepository: CurrencyRepositorying {
                 SELECT source, base_currency_code, quote_currency_code, rate_decimal, effective_date
                 FROM exchange_rates
                 WHERE base_currency_code = ?
-                  AND quote_currency_code = ?
-                  AND effective_date = ?
-                ORDER BY fetched_at DESC
+                AND quote_currency_code = ?
+                AND effective_date = ?
+                AND (? IS NULL OR source = ?)
+                ORDER BY source ASC, fetched_at DESC
                 LIMIT 1
                 """,
-                arguments: [sourceCurrency.rawValue, targetCurrency.rawValue, effectiveDate]
+                arguments: [sourceCurrency.rawValue, targetCurrency.rawValue, effectiveDate, source, source]
             ) else {
                 return nil
             }
 
             return ExchangeRate(
-                sourceCurrencyCode: CurrencyCode(rawValue: row["base_currency_code"]),
-                targetCurrencyCode: CurrencyCode(rawValue: row["quote_currency_code"]),
+                sourceCurrencyCode: try CurrencyCode(validating: row["base_currency_code"]),
+                targetCurrencyCode: try CurrencyCode(validating: row["quote_currency_code"]),
                 rateDecimal: row["rate_decimal"],
                 effectiveDate: row["effective_date"],
                 source: row["source"]
@@ -79,6 +81,9 @@ extension CashRunwayRepository: CurrencyRepositorying {
         try databaseManager.dbQueue.write { db in
             let fetchedAt = Date()
             for rate in rates {
+                guard ExchangeRate.isValidRateDecimal(rate.rateDecimal) else {
+                    throw CashRunwayError.validation(L10n.string("Exchange rate must be a positive decimal value."))
+                }
                 let effectiveDate = DateKeys.calendar.startOfDay(for: rate.effectiveDate)
                 try db.execute(
                     sql: """

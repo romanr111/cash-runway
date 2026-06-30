@@ -26,8 +26,8 @@ extension CashRunwayRepository {
             )
             let preferences = preferencesRow.map {
                 CurrencyPreferences(
-                    defaultCurrencyCode: CurrencyCode(rawValue: $0["default_currency_code"]),
-                    reportingCurrencyCode: CurrencyCode(rawValue: $0["reporting_currency_code"])
+                    defaultCurrencyCode: (try? CurrencyCode(validating: $0["default_currency_code"])) ?? .uah,
+                    reportingCurrencyCode: (try? CurrencyCode(validating: $0["reporting_currency_code"])) ?? .uah
                 )
             } ?? .default
 

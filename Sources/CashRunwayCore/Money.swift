@@ -2,6 +2,7 @@ import Foundation
 
 public enum MoneyError: Error, LocalizedError, Equatable {
     case invalidAmount(String)
+    case invalidCurrencyCode(String)
     case currencyMismatch(lhs: CurrencyCode, rhs: CurrencyCode)
     case missingExchangeRate(from: CurrencyCode, to: CurrencyCode)
 
@@ -9,6 +10,8 @@ public enum MoneyError: Error, LocalizedError, Equatable {
         switch self {
         case let .invalidAmount(value):
             "Invalid amount: \(value)"
+        case let .invalidCurrencyCode(value):
+            "Invalid currency code: \(value)."
         case let .currencyMismatch(lhs, rhs):
             "Currency mismatch: \(lhs.rawValue) cannot be combined with \(rhs.rawValue)."
         case let .missingExchangeRate(source, target):
@@ -20,8 +23,18 @@ public enum MoneyError: Error, LocalizedError, Equatable {
 public struct CurrencyCode: RawRepresentable, Codable, Hashable, Sendable {
     public let rawValue: String
 
-    public init(rawValue: String) {
-        self.rawValue = rawValue.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+    public init?(rawValue: String) {
+        let normalized = rawValue.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard Self.isValid(normalized) else { return nil }
+        self.rawValue = normalized
+    }
+
+    public init(validating rawValue: String) throws {
+        let normalized = rawValue.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard Self.isValid(normalized) else {
+            throw MoneyError.invalidCurrencyCode(rawValue)
+        }
+        self.rawValue = normalized
     }
 
     public init(from decoder: Decoder) throws {
@@ -50,9 +63,9 @@ public struct CurrencyCode: RawRepresentable, Codable, Hashable, Sendable {
 }
 
 public extension CurrencyCode {
-    static let uah = CurrencyCode(rawValue: "UAH")
-    static let usd = CurrencyCode(rawValue: "USD")
-    static let eur = CurrencyCode(rawValue: "EUR")
+    static let uah = CurrencyCode(rawValue: "UAH")!
+    static let usd = CurrencyCode(rawValue: "USD")!
+    static let eur = CurrencyCode(rawValue: "EUR")!
 }
 
 public struct MoneyAmount: Codable, Hashable, Sendable {
@@ -106,6 +119,26 @@ public struct ExchangeRate: Codable, Hashable, Sendable {
         self.rateDecimal = rateDecimal
         self.effectiveDate = effectiveDate
         self.source = source
+    }
+
+    public static func isValidRateDecimal(_ value: String) -> Bool {
+        guard value == value.trimmingCharacters(in: .whitespacesAndNewlines),
+              !value.isEmpty,
+              !value.contains(","),
+              !value.hasPrefix("-"),
+              !value.hasPrefix("+")
+        else {
+            return false
+        }
+
+        let parts = value.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count <= 2,
+              parts.allSatisfy({ !$0.isEmpty && $0.allSatisfy(\.isNumber) }),
+              let decimal = Decimal(string: value, locale: Locale(identifier: "en_US_POSIX"))
+        else {
+            return false
+        }
+        return decimal > 0
     }
 }
 

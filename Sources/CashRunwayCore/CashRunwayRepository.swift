@@ -498,6 +498,7 @@ extension CashRunwayRepository {
                 )
 
                 try validate(draft)
+                try validateTransactionCurrency(db, draft: draft)
                 try saveSingleTransaction(db, draft: draft)
                 try insertBankTransactionImport(
                     db,
@@ -2506,7 +2507,7 @@ extension CashRunwayRepository {
             return
         }
 
-        let existingCurrency = CurrencyCode(rawValue: row["currency_code"])
+        let existingCurrency = try CurrencyCode(validating: row["currency_code"])
         guard existingCurrency != wallet.currencyCode else { return }
 
         let existingStarting: Int64 = row["starting_balance_minor"]
@@ -2554,7 +2555,7 @@ extension CashRunwayRepository {
         ) else {
             throw CashRunwayError.notFound
         }
-        return CurrencyCode(rawValue: rawValue)
+        return try CurrencyCode(validating: rawValue)
     }
 
     private func rejectMixedCurrencyAllWalletSnapshot(_ db: Database, walletID: UUID?) throws {
@@ -2565,7 +2566,7 @@ extension CashRunwayRepository {
         }
         let activeCurrencyCount = try Int.fetchOne(
             db,
-            sql: "SELECT COUNT(DISTINCT currency_code) FROM wallets WHERE is_archived = 0"
+            sql: "SELECT COUNT(DISTINCT currency_code) FROM wallets"
         ) ?? 0
         guard activeCurrencyCount <= 1 else {
             throw CashRunwayError.validation(L10n.string("All-wallet totals require a single wallet currency until currency conversion is available."))
