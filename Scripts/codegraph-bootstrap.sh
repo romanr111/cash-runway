@@ -23,15 +23,24 @@ owner_marker="$git_root_real/.codegraph/worktree-root"
 
 if [[ -f "$git_root_real/.codegraph/codegraph.db" ]]; then
   if [[ ! -f "$owner_marker" ]]; then
-    fail "existing CodeGraph DB is missing worktree owner marker: $owner_marker"
-  fi
+    echo "codegraph-bootstrap: existing DB is missing worktree marker; reindexing for current worktree" >&2
+    codegraph index --force
+    printf '%s\n' "$git_root_real" > "$owner_marker"
+  else
+    owner_root="$(sed -n '1p' "$owner_marker")"
+    owner_root_real="$(cd "$owner_root" 2>/dev/null && pwd -P)" ||
+      {
+        echo "codegraph-bootstrap: marker points to missing path; reindexing for current worktree" >&2
+        codegraph index --force
+        printf '%s\n' "$git_root_real" > "$owner_marker"
+        owner_root_real="$git_root_real"
+      }
 
-  owner_root="$(sed -n '1p' "$owner_marker")"
-  owner_root_real="$(cd "$owner_root" 2>/dev/null && pwd -P)" ||
-    fail "CodeGraph owner marker points to missing path: $owner_root"
-
-  if [[ "$owner_root_real" != "$git_root_real" ]]; then
-    fail "CodeGraph DB belongs to another worktree: '$owner_root_real', not '$git_root_real'"
+    if [[ "$owner_root_real" != "$git_root_real" ]]; then
+      echo "codegraph-bootstrap: DB belongs to another worktree; reindexing for current worktree" >&2
+      codegraph index --force
+      printf '%s\n' "$git_root_real" > "$owner_marker"
+    fi
   fi
 else
   echo "codegraph-bootstrap: initializing CodeGraph index for $git_root_real"

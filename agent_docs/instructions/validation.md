@@ -38,11 +38,13 @@ Use repository entry points instead of rebuilding command lines:
 ```text
 just test <arguments> -> Swift package tests
 just test-filter <pattern> -> focused Swift package tests
-just check-unit-parallel -> fast unit-focused Swift package tests
-just check-integration -> non-performance integration/package tests
+just check-agent -> AgentAccess tests only (parallel)
+just check-unit-parallel -> fast unit-focused Swift package tests (parallel)
+just check-integration -> non-performance integration/package tests (parallel)
 just check-perf -> performance timing gates with stale perf-temp cleanup
 just test-isolated <arguments> -> Swift package tests with isolated scratch path
-just check-isolated -> full Swift package tests with isolated scratch path
+just check-isolated -> full Swift package tests with isolated scratch path (excludes performance timing gates)
+just check-isolated-with-perf -> full Swift package tests with isolated scratch path (includes performance timing gates)
 just ui-check -> UI-only validation
 just check -> git diff check, full Swift tests, simulator build
 just smoke -> deterministic simulator launch and log smoke
@@ -55,13 +57,18 @@ The scripts and `justfile` are the executable source of truth.
 
 ## Gates
 
-- Small Swift/UI changes: run focused package tests or a simulator build that
-  exercises the change, then run `just check` before handoff when feasible.
+- AgentAccess changes: run `just check-agent` for fast parallel feedback, then
+  `just check-isolated` before handoff.
 - Core logic changes: start with `just check-unit-parallel` or
   `just test-filter <pattern>`, run `just check-integration` for broader
   package coverage, and run `just check-perf` when performance-sensitive code
   changed or before final PR signoff. `just check-perf` removes stale
   Cash Runway perf-test temp data before running.
+- Small Swift/UI changes: run focused package tests or a simulator build that
+  exercises the change, then run `just check` before handoff when feasible.
+- `just check-isolated` excludes `CashRunwayPerformanceTests` by default to keep
+  the full local gate fast. Use `just check-isolated-with-perf` or `just check-perf`
+  for performance timing coverage.
 - Persistence or Keychain changes: run focused repository tests and `just check`.
 - If SwiftPM failures look like stale build state or lock contention, retry once
   with `just test-isolated` or `just check-isolated`.
