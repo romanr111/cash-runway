@@ -128,6 +128,12 @@ public enum BankProvider: String, Codable, Sendable {
     case privatBank
 }
 
+public enum ISO4217NumericCurrencyCode {
+    public static let uah = 980
+    public static let usd = 840
+    public static let eur = 978
+}
+
 public enum BankIntegrationStatus: String, Codable, Sendable {
     case active
     case disabled
@@ -603,6 +609,7 @@ public struct Wallet: Identifiable, Codable, Hashable, Sendable {
     public var iconName: String?
     public var startingBalanceMinor: Int64
     public var currentBalanceMinor: Int64
+    public var currencyCode: CurrencyCode
     public var isArchived: Bool
     public var sortOrder: Int
     public var createdAt: Date
@@ -617,6 +624,7 @@ public struct Wallet: Identifiable, Codable, Hashable, Sendable {
         iconName: String?,
         startingBalanceMinor: Int64,
         currentBalanceMinor: Int64,
+        currencyCode: CurrencyCode = .uah,
         isArchived: Bool,
         sortOrder: Int,
         createdAt: Date,
@@ -630,6 +638,7 @@ public struct Wallet: Identifiable, Codable, Hashable, Sendable {
         self.iconName = iconName
         self.startingBalanceMinor = startingBalanceMinor
         self.currentBalanceMinor = currentBalanceMinor
+        self.currencyCode = currencyCode
         self.isArchived = isArchived
         self.sortOrder = sortOrder
         self.createdAt = createdAt
@@ -687,6 +696,7 @@ public struct CashRunwayTransaction: Identifiable, Codable, Hashable, Sendable {
     public var type: TransactionKind
     public var linkedTransferID: UUID?
     public var amountMinor: Int64
+    public var currencyCode: CurrencyCode
     public var occurredAt: Date
     public var localDayKey: Int
     public var localMonthKey: Int
@@ -708,6 +718,7 @@ public struct CashRunwayTransaction: Identifiable, Codable, Hashable, Sendable {
         type: TransactionKind,
         linkedTransferID: UUID?,
         amountMinor: Int64,
+        currencyCode: CurrencyCode = .uah,
         occurredAt: Date,
         localDayKey: Int,
         localMonthKey: Int,
@@ -728,6 +739,7 @@ public struct CashRunwayTransaction: Identifiable, Codable, Hashable, Sendable {
         self.type = type
         self.linkedTransferID = linkedTransferID
         self.amountMinor = amountMinor
+        self.currencyCode = currencyCode
         self.occurredAt = occurredAt
         self.localDayKey = localDayKey
         self.localMonthKey = localMonthKey
@@ -772,6 +784,7 @@ public struct RecurringTemplate: Identifiable, Codable, Hashable, Sendable {
     public var walletID: UUID
     public var counterpartyWalletID: UUID?
     public var amountMinor: Int64
+    public var currencyCode: CurrencyCode
     public var categoryID: UUID?
     public var merchant: String?
     public var note: String?
@@ -791,6 +804,7 @@ public struct RecurringTemplate: Identifiable, Codable, Hashable, Sendable {
         walletID: UUID,
         counterpartyWalletID: UUID?,
         amountMinor: Int64,
+        currencyCode: CurrencyCode = .uah,
         categoryID: UUID?,
         merchant: String?,
         note: String?,
@@ -809,6 +823,7 @@ public struct RecurringTemplate: Identifiable, Codable, Hashable, Sendable {
         self.walletID = walletID
         self.counterpartyWalletID = counterpartyWalletID
         self.amountMinor = amountMinor
+        self.currencyCode = currencyCode
         self.categoryID = categoryID
         self.merchant = merchant
         self.note = note
@@ -881,6 +896,7 @@ public struct CashRunwayBackup: Codable, Sendable {
     public var recurringTemplates: [BackupRecurringTemplate]
     public var recurringInstances: [BackupRecurringInstance]
     public var importJobs: [BackupImportJob]
+    public var currencyPreferences: CurrencyPreferences?
 
     private enum CodingKeys: String, CodingKey {
         case metadata
@@ -894,6 +910,7 @@ public struct CashRunwayBackup: Codable, Sendable {
         case recurringTemplates
         case recurringInstances
         case importJobs
+        case currencyPreferences
     }
 
     public init(
@@ -907,7 +924,8 @@ public struct CashRunwayBackup: Codable, Sendable {
         budgets: [BackupBudget],
         recurringTemplates: [BackupRecurringTemplate],
         recurringInstances: [BackupRecurringInstance],
-        importJobs: [BackupImportJob]
+        importJobs: [BackupImportJob],
+        currencyPreferences: CurrencyPreferences? = nil
     ) {
         self.metadata = metadata
         self.wallets = wallets
@@ -920,6 +938,7 @@ public struct CashRunwayBackup: Codable, Sendable {
         self.recurringTemplates = recurringTemplates
         self.recurringInstances = recurringInstances
         self.importJobs = importJobs
+        self.currencyPreferences = currencyPreferences
     }
 
     public init(from decoder: Decoder) throws {
@@ -935,6 +954,7 @@ public struct CashRunwayBackup: Codable, Sendable {
         recurringTemplates = try container.decode([BackupRecurringTemplate].self, forKey: .recurringTemplates)
         recurringInstances = try container.decode([BackupRecurringInstance].self, forKey: .recurringInstances)
         importJobs = try container.decode([BackupImportJob].self, forKey: .importJobs)
+        currencyPreferences = try container.decodeIfPresent(CurrencyPreferences.self, forKey: .currencyPreferences)
     }
 }
 
@@ -955,6 +975,7 @@ public struct BackupWallet: Identifiable, Codable, Hashable, Sendable {
     public var iconName: String?
     public var startingBalanceMinor: Int64
     public var currentBalanceMinor: Int64
+    public var currencyCode: CurrencyCode = .uah
     public var isArchived: Bool
     public var sortOrder: Int
     public var createdAt: Date
@@ -969,6 +990,7 @@ public struct BackupWallet: Identifiable, Codable, Hashable, Sendable {
         iconName: String?,
         startingBalanceMinor: Int64,
         currentBalanceMinor: Int64,
+        currencyCode: CurrencyCode = .uah,
         isArchived: Bool,
         sortOrder: Int,
         createdAt: Date,
@@ -982,10 +1004,34 @@ public struct BackupWallet: Identifiable, Codable, Hashable, Sendable {
         self.iconName = iconName
         self.startingBalanceMinor = startingBalanceMinor
         self.currentBalanceMinor = currentBalanceMinor
+        self.currencyCode = currencyCode
         self.isArchived = isArchived
         self.sortOrder = sortOrder
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, kind, categoryID, colorHex, iconName, startingBalanceMinor, currentBalanceMinor, currencyCode, isArchived, sortOrder, createdAt, updatedAt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        try self.init(
+            id: container.decode(UUID.self, forKey: .id),
+            name: container.decode(String.self, forKey: .name),
+            kind: container.decode(WalletKind.self, forKey: .kind),
+            categoryID: container.decodeIfPresent(UUID.self, forKey: .categoryID),
+            colorHex: container.decodeIfPresent(String.self, forKey: .colorHex),
+            iconName: container.decodeIfPresent(String.self, forKey: .iconName),
+            startingBalanceMinor: container.decode(Int64.self, forKey: .startingBalanceMinor),
+            currentBalanceMinor: container.decode(Int64.self, forKey: .currentBalanceMinor),
+            currencyCode: container.decodeIfPresent(CurrencyCode.self, forKey: .currencyCode) ?? .uah,
+            isArchived: container.decode(Bool.self, forKey: .isArchived),
+            sortOrder: container.decode(Int.self, forKey: .sortOrder),
+            createdAt: container.decode(Date.self, forKey: .createdAt),
+            updatedAt: container.decode(Date.self, forKey: .updatedAt)
+        )
     }
 }
 
@@ -1042,6 +1088,7 @@ public struct BackupTransaction: Identifiable, Codable, Hashable, Sendable {
     public var type: TransactionKind
     public var linkedTransferID: UUID?
     public var amountMinor: Int64
+    public var currencyCode: CurrencyCode = .uah
     public var occurredAt: Date
     public var localDayKey: Int
     public var localMonthKey: Int
@@ -1056,6 +1103,80 @@ public struct BackupTransaction: Identifiable, Codable, Hashable, Sendable {
     public var importFingerprint: String?
     public var createdAt: Date
     public var updatedAt: Date
+
+    public init(
+        id: UUID,
+        walletID: UUID,
+        type: TransactionKind,
+        linkedTransferID: UUID?,
+        amountMinor: Int64,
+        currencyCode: CurrencyCode = .uah,
+        occurredAt: Date,
+        localDayKey: Int,
+        localMonthKey: Int,
+        categoryID: UUID?,
+        merchant: String?,
+        note: String?,
+        isDeleted: Bool,
+        source: TransactionSource,
+        recurringTemplateID: UUID?,
+        recurringInstanceID: UUID?,
+        importJobID: UUID?,
+        importFingerprint: String?,
+        createdAt: Date,
+        updatedAt: Date
+    ) {
+        self.id = id
+        self.walletID = walletID
+        self.type = type
+        self.linkedTransferID = linkedTransferID
+        self.amountMinor = amountMinor
+        self.currencyCode = currencyCode
+        self.occurredAt = occurredAt
+        self.localDayKey = localDayKey
+        self.localMonthKey = localMonthKey
+        self.categoryID = categoryID
+        self.merchant = merchant
+        self.note = note
+        self.isDeleted = isDeleted
+        self.source = source
+        self.recurringTemplateID = recurringTemplateID
+        self.recurringInstanceID = recurringInstanceID
+        self.importJobID = importJobID
+        self.importFingerprint = importFingerprint
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, walletID, type, linkedTransferID, amountMinor, currencyCode, occurredAt, localDayKey, localMonthKey, categoryID, merchant, note, isDeleted, source, recurringTemplateID, recurringInstanceID, importJobID, importFingerprint, createdAt, updatedAt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        try self.init(
+            id: container.decode(UUID.self, forKey: .id),
+            walletID: container.decode(UUID.self, forKey: .walletID),
+            type: container.decode(TransactionKind.self, forKey: .type),
+            linkedTransferID: container.decodeIfPresent(UUID.self, forKey: .linkedTransferID),
+            amountMinor: container.decode(Int64.self, forKey: .amountMinor),
+            currencyCode: container.decodeIfPresent(CurrencyCode.self, forKey: .currencyCode) ?? .uah,
+            occurredAt: container.decode(Date.self, forKey: .occurredAt),
+            localDayKey: container.decode(Int.self, forKey: .localDayKey),
+            localMonthKey: container.decode(Int.self, forKey: .localMonthKey),
+            categoryID: container.decodeIfPresent(UUID.self, forKey: .categoryID),
+            merchant: container.decodeIfPresent(String.self, forKey: .merchant),
+            note: container.decodeIfPresent(String.self, forKey: .note),
+            isDeleted: container.decode(Bool.self, forKey: .isDeleted),
+            source: container.decode(TransactionSource.self, forKey: .source),
+            recurringTemplateID: container.decodeIfPresent(UUID.self, forKey: .recurringTemplateID),
+            recurringInstanceID: container.decodeIfPresent(UUID.self, forKey: .recurringInstanceID),
+            importJobID: container.decodeIfPresent(UUID.self, forKey: .importJobID),
+            importFingerprint: container.decodeIfPresent(String.self, forKey: .importFingerprint),
+            createdAt: container.decode(Date.self, forKey: .createdAt),
+            updatedAt: container.decode(Date.self, forKey: .updatedAt)
+        )
+    }
 }
 
 public struct BackupTransactionLabel: Codable, Hashable, Sendable {
@@ -1079,6 +1200,7 @@ public struct BackupRecurringTemplate: Identifiable, Codable, Hashable, Sendable
     public var walletID: UUID
     public var counterpartyWalletID: UUID?
     public var amountMinor: Int64
+    public var currencyCode: CurrencyCode = .uah
     public var categoryID: UUID?
     public var merchant: String?
     public var note: String?
@@ -1091,6 +1213,74 @@ public struct BackupRecurringTemplate: Identifiable, Codable, Hashable, Sendable
     public var isActive: Bool
     public var createdAt: Date
     public var updatedAt: Date
+
+    public init(
+        id: UUID,
+        kind: RecurringTemplateKind,
+        walletID: UUID,
+        counterpartyWalletID: UUID?,
+        amountMinor: Int64,
+        currencyCode: CurrencyCode = .uah,
+        categoryID: UUID?,
+        merchant: String?,
+        note: String?,
+        ruleType: RecurrenceRuleType,
+        ruleInterval: Int,
+        dayOfMonth: Int?,
+        weekday: Int?,
+        startDate: Date,
+        endDate: Date?,
+        isActive: Bool,
+        createdAt: Date,
+        updatedAt: Date
+    ) {
+        self.id = id
+        self.kind = kind
+        self.walletID = walletID
+        self.counterpartyWalletID = counterpartyWalletID
+        self.amountMinor = amountMinor
+        self.currencyCode = currencyCode
+        self.categoryID = categoryID
+        self.merchant = merchant
+        self.note = note
+        self.ruleType = ruleType
+        self.ruleInterval = ruleInterval
+        self.dayOfMonth = dayOfMonth
+        self.weekday = weekday
+        self.startDate = startDate
+        self.endDate = endDate
+        self.isActive = isActive
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, kind, walletID, counterpartyWalletID, amountMinor, currencyCode, categoryID, merchant, note, ruleType, ruleInterval, dayOfMonth, weekday, startDate, endDate, isActive, createdAt, updatedAt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        try self.init(
+            id: container.decode(UUID.self, forKey: .id),
+            kind: container.decode(RecurringTemplateKind.self, forKey: .kind),
+            walletID: container.decode(UUID.self, forKey: .walletID),
+            counterpartyWalletID: container.decodeIfPresent(UUID.self, forKey: .counterpartyWalletID),
+            amountMinor: container.decode(Int64.self, forKey: .amountMinor),
+            currencyCode: container.decodeIfPresent(CurrencyCode.self, forKey: .currencyCode) ?? .uah,
+            categoryID: container.decodeIfPresent(UUID.self, forKey: .categoryID),
+            merchant: container.decodeIfPresent(String.self, forKey: .merchant),
+            note: container.decodeIfPresent(String.self, forKey: .note),
+            ruleType: container.decode(RecurrenceRuleType.self, forKey: .ruleType),
+            ruleInterval: container.decode(Int.self, forKey: .ruleInterval),
+            dayOfMonth: container.decodeIfPresent(Int.self, forKey: .dayOfMonth),
+            weekday: container.decodeIfPresent(Int.self, forKey: .weekday),
+            startDate: container.decode(Date.self, forKey: .startDate),
+            endDate: container.decodeIfPresent(Date.self, forKey: .endDate),
+            isActive: container.decode(Bool.self, forKey: .isActive),
+            createdAt: container.decode(Date.self, forKey: .createdAt),
+            updatedAt: container.decode(Date.self, forKey: .updatedAt)
+        )
+    }
 }
 
 public struct BackupRecurringInstance: Identifiable, Codable, Hashable, Sendable {
@@ -1296,7 +1486,7 @@ enum BackupValidator {
         guard backup.metadata.format == "cash-runway-backup" else {
             throw BackupError.unsupportedFormat
         }
-        guard backup.metadata.version == 1 || backup.metadata.version == 2 else {
+        guard backup.metadata.version == 1 || backup.metadata.version == 2 || backup.metadata.version == 3 else {
             throw BackupError.unsupportedVersion(backup.metadata.version)
         }
 
@@ -1319,6 +1509,7 @@ enum BackupValidator {
         try validateTransactionLabels(backup.transactionLabels, transactionIDs: transactionIDs, labelIDs: labelIDs)
         try validateImportFingerprints(backup.transactions)
         try validateTransferPairs(backup.transactions)
+        try validateCurrencyInvariants(backup)
 
         return BackupValidationSummary(
             createdAt: backup.metadata.createdAt,
@@ -1440,6 +1631,29 @@ enum BackupValidator {
         }
     }
 
+    private static func validateCurrencyInvariants(_ backup: CashRunwayBackup) throws {
+        let walletCurrencies = Dictionary(uniqueKeysWithValues: backup.wallets.map { ($0.id, $0.currencyCode) })
+
+        for transaction in backup.transactions {
+            guard let walletCurrency = walletCurrencies[transaction.walletID] else { continue }
+            guard transaction.currencyCode == walletCurrency else {
+                throw BackupError.brokenReference("transaction \(transaction.id) currency does not match wallet \(transaction.walletID)")
+            }
+        }
+
+        for template in backup.recurringTemplates {
+            guard let walletCurrency = walletCurrencies[template.walletID] else { continue }
+            guard template.currencyCode == walletCurrency else {
+                throw BackupError.brokenReference("recurring template \(template.id) currency does not match wallet \(template.walletID)")
+            }
+            if let counterpartyWalletID = template.counterpartyWalletID,
+               let counterpartyCurrency = walletCurrencies[counterpartyWalletID],
+               counterpartyCurrency != template.currencyCode {
+                throw BackupError.brokenReference("recurring template \(template.id) currency does not match counterparty wallet \(counterpartyWalletID)")
+            }
+        }
+    }
+
     private static func validateTransferPairs(_ transactions: [BackupTransaction]) throws {
         let byID = Dictionary(uniqueKeysWithValues: transactions.map { ($0.id, $0) })
         for transaction in transactions where transaction.type == .transferOut || transaction.type == .transferIn {
@@ -1452,6 +1666,10 @@ enum BackupValidator {
             guard transaction.amountMinor == linked.amountMinor else {
                 throw BackupError.invalidTransferPair("transaction \(transaction.id) amount does not match")
             }
+            guard transaction.currencyCode == linked.currencyCode else {
+                throw BackupError.invalidTransferPair("transaction \(transaction.id) currency does not match")
+            }
+
             guard transaction.walletID != linked.walletID else {
                 throw BackupError.invalidTransferPair("transaction \(transaction.id) uses the same wallet on both sides")
             }
@@ -1477,6 +1695,7 @@ public struct TransactionDraft: Identifiable, Codable, Hashable, Sendable {
     public var walletID: UUID
     public var destinationWalletID: UUID?
     public var amountMinor: Int64
+    public var currencyCode: CurrencyCode
     public var occurredAt: Date
     public var categoryID: UUID?
     public var labelIDs: [UUID]
@@ -1494,6 +1713,7 @@ public struct TransactionDraft: Identifiable, Codable, Hashable, Sendable {
         walletID: UUID,
         destinationWalletID: UUID? = nil,
         amountMinor: Int64,
+        currencyCode: CurrencyCode = .uah,
         occurredAt: Date,
         categoryID: UUID? = nil,
         labelIDs: [UUID] = [],
@@ -1510,6 +1730,7 @@ public struct TransactionDraft: Identifiable, Codable, Hashable, Sendable {
         self.walletID = walletID
         self.destinationWalletID = destinationWalletID
         self.amountMinor = amountMinor
+        self.currencyCode = currencyCode
         self.occurredAt = occurredAt
         self.categoryID = categoryID
         self.labelIDs = labelIDs
@@ -1558,6 +1779,7 @@ public struct TransactionListItem: Identifiable, Hashable, Sendable {
     public var id: UUID
     public var walletName: String
     public var amountMinor: Int64
+    public var currencyCode: CurrencyCode = .uah
     public var occurredAt: Date
     public var categoryName: String?
     public var categoryID: UUID?

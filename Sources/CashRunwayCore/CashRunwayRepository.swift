@@ -461,7 +461,7 @@ extension CashRunwayRepository {
 
             for item in items {
                 let occurredAt = Date(timeIntervalSince1970: TimeInterval(item.time))
-                guard occurredAt >= lowerBound, item.amount < 0, item.currencyCode == 980 else {
+                guard occurredAt >= lowerBound, item.amount < 0, item.currencyCode == ISO4217NumericCurrencyCode.uah else {
                     result.skippedCount += 1
                     continue
                 }
@@ -498,6 +498,7 @@ extension CashRunwayRepository {
                 )
 
                 try validate(draft)
+                try validateTransactionCurrency(db, draft: draft)
                 try saveSingleTransaction(db, draft: draft)
                 try insertBankTransactionImport(
                     db,
@@ -604,11 +605,12 @@ extension CashRunwayRepository {
 
     public func saveWallet(_ wallet: Wallet) throws {
         try databaseManager.dbQueue.write { db in
-            if try walletTableHasCategoryID(db) {
+            try validateWalletCurrencyChange(db, wallet: wallet)
+            if try walletTableHasCategoryID(db), try Self.tableHasColumn(db, table: "wallets", column: "currency_code") {
                 try db.execute(
                     sql: """
-                    INSERT INTO wallets (id, name, kind, category_id, color_hex, icon_name, starting_balance_minor, current_balance_minor, is_archived, sort_order, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO wallets (id, name, kind, category_id, color_hex, icon_name, starting_balance_minor, current_balance_minor, currency_code, is_archived, sort_order, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(id) DO UPDATE SET
                         name = excluded.name,
                         kind = excluded.kind,
@@ -617,6 +619,7 @@ extension CashRunwayRepository {
                         icon_name = excluded.icon_name,
                         starting_balance_minor = excluded.starting_balance_minor,
                         current_balance_minor = excluded.current_balance_minor,
+                        currency_code = excluded.currency_code,
                         is_archived = excluded.is_archived,
                         sort_order = excluded.sort_order,
                         updated_at = excluded.updated_at
@@ -624,7 +627,7 @@ extension CashRunwayRepository {
                     arguments: [
                         wallet.id.uuidString, wallet.name, wallet.kind.rawValue, wallet.categoryID.uuidString,
                         wallet.colorHex, wallet.iconName,
-                        wallet.startingBalanceMinor, wallet.currentBalanceMinor, wallet.isArchived, wallet.sortOrder,
+                        wallet.startingBalanceMinor, wallet.currentBalanceMinor, wallet.currencyCode.rawValue, wallet.isArchived, wallet.sortOrder,
                         wallet.createdAt, wallet.updatedAt,
                     ]
                 )
@@ -785,15 +788,51 @@ extension CashRunwayRepository {
 
     public func saveRecurringTemplate(_ template: RecurringTemplate) throws {
         try databaseManager.dbQueue.write { db in
+            try validateRecurringTemplateCurrency(db, template: template)
+            if try !Self.tableHasColumn(db, table: "recurring_templates", column: "currency_code") {
+                try db.execute(
+                    sql: """
+                    INSERT INTO recurring_templates (id, kind, wallet_id, counterparty_wallet_id, amount_minor, category_id, merchant, note, rule_type, rule_interval, day_of_month, weekday, start_date, end_date, is_active, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(id) DO UPDATE SET
+                        kind = excluded.kind,
+                        wallet_id = excluded.wallet_id,
+                        counterparty_wallet_id = excluded.counterparty_wallet_id,
+                        amount_minor = excluded.amount_minor,
+                        category_id = excluded.category_id,
+                        merchant = excluded.merchant,
+                        note = excluded.note,
+                        rule_type = excluded.rule_type,
+                        rule_interval = excluded.rule_interval,
+                        day_of_month = excluded.day_of_month,
+                        weekday = excluded.weekday,
+                        start_date = excluded.start_date,
+                        end_date = excluded.end_date,
+                        is_active = excluded.is_active,
+                        updated_at = excluded.updated_at
+                    """,
+                    arguments: [
+                        template.id.uuidString, template.kind.rawValue, template.walletID.uuidString,
+                        template.counterpartyWalletID?.uuidString, template.amountMinor, template.categoryID?.uuidString,
+                        template.merchant, template.note, template.ruleType.rawValue, template.ruleInterval,
+                        template.dayOfMonth, template.weekday, template.startDate, template.endDate, template.isActive,
+                        template.createdAt, template.updatedAt,
+                    ]
+                )
+                try refreshRecurringInstances(db)
+                return
+            }
+
             try db.execute(
                 sql: """
-                INSERT INTO recurring_templates (id, kind, wallet_id, counterparty_wallet_id, amount_minor, category_id, merchant, note, rule_type, rule_interval, day_of_month, weekday, start_date, end_date, is_active, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO recurring_templates (id, kind, wallet_id, counterparty_wallet_id, amount_minor, currency_code, category_id, merchant, note, rule_type, rule_interval, day_of_month, weekday, start_date, end_date, is_active, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     kind = excluded.kind,
                     wallet_id = excluded.wallet_id,
                     counterparty_wallet_id = excluded.counterparty_wallet_id,
                     amount_minor = excluded.amount_minor,
+                    currency_code = excluded.currency_code,
                     category_id = excluded.category_id,
                     merchant = excluded.merchant,
                     note = excluded.note,
@@ -808,7 +847,7 @@ extension CashRunwayRepository {
                 """,
                 arguments: [
                     template.id.uuidString, template.kind.rawValue, template.walletID.uuidString,
-                    template.counterpartyWalletID?.uuidString, template.amountMinor, template.categoryID?.uuidString,
+                    template.counterpartyWalletID?.uuidString, template.amountMinor, template.currencyCode.rawValue, template.categoryID?.uuidString,
                     template.merchant, template.note, template.ruleType.rawValue, template.ruleInterval,
                     template.dayOfMonth, template.weekday, template.startDate, template.endDate, template.isActive,
                     template.createdAt, template.updatedAt,
@@ -844,6 +883,7 @@ extension CashRunwayRepository {
 
     public func dashboard(monthKey: Int, walletID: UUID? = nil) throws -> DashboardSnapshot {
         try databaseManager.dbQueue.read { db in
+            try rejectMixedCurrencyAllWalletSnapshot(db, walletID: walletID)
             let totalBalanceMinor: Int64
             if let walletID {
                 totalBalanceMinor = try Int64.fetchOne(db, sql: "SELECT current_balance_minor FROM wallets WHERE id = ?", arguments: [walletID.uuidString]) ?? 0
@@ -932,6 +972,7 @@ extension CashRunwayRepository {
     public func timelineSnapshot(monthKey: Int, walletID: UUID? = nil, query: TransactionQuery = .init(), period: TimelinePeriod = .month) throws -> TimelineSnapshot {
         try databaseManager.dbQueue.read { db in
             let effectiveWalletID = walletID ?? query.walletID
+            try rejectMixedCurrencyAllWalletSnapshot(db, walletID: effectiveWalletID)
             let bars = try Self.loadBars(db, monthKey: monthKey, walletID: effectiveWalletID, period: period)
             let anchorPeriodKey = Self.anchorPeriodKey(monthKey: monthKey, period: period)
 
@@ -1061,6 +1102,7 @@ extension CashRunwayRepository {
 
     public func allBars(walletID: UUID? = nil, period: TimelinePeriod = .month) throws -> [TimelineBarPoint] {
         try databaseManager.dbQueue.read { db in
+            try rejectMixedCurrencyAllWalletSnapshot(db, walletID: walletID)
             switch period {
             case .month:
                 return try Self.loadAllMonthlyBars(db, walletID: walletID)
@@ -1240,6 +1282,7 @@ extension CashRunwayRepository {
     // swiftlint:disable:next function_body_length
     public func overviewSnapshot(monthKey: Int, walletID: UUID? = nil) throws -> OverviewSnapshot {
         try databaseManager.dbQueue.read { db in
+            try rejectMixedCurrencyAllWalletSnapshot(db, walletID: walletID)
             let months = Self.monthWindow(endingAt: monthKey, count: 6)
             let cashflowRows = try Row.fetchAll(
                 db,
@@ -1451,6 +1494,7 @@ extension CashRunwayRepository {
                     walletID: sourceWalletID,
                     destinationWalletID: destinationWalletID,
                     amountMinor: transaction.amountMinor,
+                    currencyCode: transaction.currencyCode,
                     occurredAt: transaction.occurredAt,
                     labelIDs: labelIDs,
                     merchant: transaction.merchant ?? "",
@@ -1466,6 +1510,7 @@ extension CashRunwayRepository {
                 kind: transaction.type == .expense ? .expense : .income,
                 walletID: transaction.walletID,
                 amountMinor: transaction.amountMinor,
+                currencyCode: transaction.currencyCode,
                 occurredAt: transaction.occurredAt,
                 categoryID: transaction.categoryID,
                 labelIDs: labelIDs,
@@ -1481,6 +1526,7 @@ extension CashRunwayRepository {
     public func saveTransaction(_ draft: TransactionDraft) throws {
         try validate(draft)
         try databaseManager.dbQueue.write { db in
+            try validateTransactionCurrency(db, draft: draft)
             if draft.kind == .transfer {
                 try saveTransfer(db, draft: draft)
             } else {
@@ -1896,6 +1942,7 @@ extension CashRunwayRepository {
                 let labelIDs = try row.rawLabelNames.map { try resolveOrCreateLabel(db, name: $0) }
 
                 var draft = row.draft
+                draft.currencyCode = try walletCurrencyCode(db, walletID: draft.walletID)
                 draft.categoryID = categoryID
                 draft.labelIDs = labelIDs
                 draft.importJobID = jobID
@@ -2155,6 +2202,7 @@ extension CashRunwayRepository {
                 walletID: template.walletID,
                 destinationWalletID: template.counterpartyWalletID,
                 amountMinor: instance.overrideAmountMinor ?? template.amountMinor,
+                currencyCode: template.currencyCode,
                 occurredAt: date,
                 categoryID: instance.overrideCategoryID ?? template.categoryID,
                 merchant: instance.overrideMerchant ?? template.merchant ?? "",
@@ -2198,6 +2246,7 @@ extension CashRunwayRepository {
             type: cashRunwayType,
             linkedTransferID: nil,
             amountMinor: draft.amountMinor,
+            currencyCode: draft.currencyCode,
             occurredAt: draft.occurredAt,
             localDayKey: DateKeys.dayKey(for: draft.occurredAt),
             localMonthKey: DateKeys.monthKey(for: draft.occurredAt),
@@ -2262,6 +2311,7 @@ extension CashRunwayRepository {
             type: .transferOut,
             linkedTransferID: targetID,
             amountMinor: draft.amountMinor,
+            currencyCode: draft.currencyCode,
             occurredAt: draft.occurredAt,
             localDayKey: DateKeys.dayKey(for: draft.occurredAt),
             localMonthKey: DateKeys.monthKey(for: draft.occurredAt),
@@ -2283,6 +2333,7 @@ extension CashRunwayRepository {
             type: .transferIn,
             linkedTransferID: sourceID,
             amountMinor: draft.amountMinor,
+            currencyCode: draft.currencyCode,
             occurredAt: draft.occurredAt,
             localDayKey: DateKeys.dayKey(for: draft.occurredAt),
             localMonthKey: DateKeys.monthKey(for: draft.occurredAt),
@@ -2339,15 +2390,55 @@ extension CashRunwayRepository {
     }
 
     private func upsertTransactionRow(_ db: Database, transaction: CashRunwayTransaction) throws {
+        guard try Self.tableHasColumn(db, table: "transactions", column: "currency_code") else {
+            try db.execute(
+                sql: """
+                INSERT INTO transactions (id, wallet_id, type, linked_transfer_id, amount_minor, occurred_at, local_day_key, local_month_key, category_id, merchant, note, is_deleted, source, recurring_template_id, recurring_instance_id, import_job_id, import_fingerprint, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    wallet_id = excluded.wallet_id,
+                    type = excluded.type,
+                    linked_transfer_id = excluded.linked_transfer_id,
+                    amount_minor = excluded.amount_minor,
+                    occurred_at = excluded.occurred_at,
+                    local_day_key = excluded.local_day_key,
+                    local_month_key = excluded.local_month_key,
+                    category_id = excluded.category_id,
+                    merchant = excluded.merchant,
+                    note = excluded.note,
+                    source = excluded.source,
+                    recurring_template_id = excluded.recurring_template_id,
+                    recurring_instance_id = excluded.recurring_instance_id,
+                    import_job_id = excluded.import_job_id,
+                    import_fingerprint = excluded.import_fingerprint,
+                    updated_at = excluded.updated_at
+                """,
+                arguments: [
+                    transaction.id.uuidString, transaction.walletID.uuidString, transaction.type.rawValue, transaction.linkedTransferID?.uuidString,
+                    transaction.amountMinor, transaction.occurredAt, transaction.localDayKey, transaction.localMonthKey,
+                    transaction.categoryID?.uuidString, transaction.merchant, transaction.note, transaction.isDeleted,
+                    transaction.source.rawValue, transaction.recurringTemplateID?.uuidString, transaction.recurringInstanceID?.uuidString,
+                    transaction.importJobID?.uuidString, transaction.importFingerprint,
+                    transaction.createdAt, transaction.updatedAt,
+                ]
+            )
+            return
+        }
+
         try db.execute(
             sql: """
-            INSERT INTO transactions (id, wallet_id, type, linked_transfer_id, amount_minor, occurred_at, local_day_key, local_month_key, category_id, merchant, note, is_deleted, source, recurring_template_id, recurring_instance_id, import_job_id, import_fingerprint, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO transactions (
+                id, wallet_id, type, linked_transfer_id, amount_minor, currency_code, occurred_at, local_day_key,
+                local_month_key, category_id, merchant, note, is_deleted, source, recurring_template_id,
+                recurring_instance_id, import_job_id, import_fingerprint, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 wallet_id = excluded.wallet_id,
                 type = excluded.type,
                 linked_transfer_id = excluded.linked_transfer_id,
                 amount_minor = excluded.amount_minor,
+                currency_code = excluded.currency_code,
                 occurred_at = excluded.occurred_at,
                 local_day_key = excluded.local_day_key,
                 local_month_key = excluded.local_month_key,
@@ -2363,7 +2454,7 @@ extension CashRunwayRepository {
             """,
             arguments: [
                 transaction.id.uuidString, transaction.walletID.uuidString, transaction.type.rawValue, transaction.linkedTransferID?.uuidString,
-                transaction.amountMinor, transaction.occurredAt, transaction.localDayKey, transaction.localMonthKey,
+                transaction.amountMinor, transaction.currencyCode.rawValue, transaction.occurredAt, transaction.localDayKey, transaction.localMonthKey,
                 transaction.categoryID?.uuidString, transaction.merchant, transaction.note, transaction.isDeleted,
                 transaction.source.rawValue, transaction.recurringTemplateID?.uuidString, transaction.recurringInstanceID?.uuidString,
                 transaction.importJobID?.uuidString, transaction.importFingerprint,
@@ -2378,6 +2469,108 @@ extension CashRunwayRepository {
         }
         if draft.kind != .transfer, draft.categoryID == nil {
             throw CashRunwayError.validation(L10n.string("Category is required for income and expense transactions."))
+        }
+    }
+
+    private func validateTransactionCurrency(_ db: Database, draft: TransactionDraft) throws {
+        let sourceCurrency = try walletCurrencyCode(db, walletID: draft.walletID)
+        if draft.kind == .transfer {
+            guard let destinationWalletID = draft.destinationWalletID else { return }
+            let destinationCurrency = try walletCurrencyCode(db, walletID: destinationWalletID)
+            guard sourceCurrency == destinationCurrency, sourceCurrency == draft.currencyCode else {
+                throw CashRunwayError.validation(L10n.string("Transfers require source wallet, destination wallet, and transaction currency to match."))
+            }
+        } else if sourceCurrency != draft.currencyCode {
+            throw CashRunwayError.validation(L10n.string("Transaction currency must match the selected wallet currency."))
+        }
+    }
+
+    private func validateRecurringTemplateCurrency(_ db: Database, template: RecurringTemplate) throws {
+        let sourceCurrency = try walletCurrencyCode(db, walletID: template.walletID)
+        if let counterpartyWalletID = template.counterpartyWalletID {
+            let counterpartyCurrency = try walletCurrencyCode(db, walletID: counterpartyWalletID)
+            guard sourceCurrency == counterpartyCurrency, sourceCurrency == template.currencyCode else {
+                throw CashRunwayError.validation(L10n.string("Recurring transfer currency must match both wallets."))
+            }
+        } else if sourceCurrency != template.currencyCode {
+            throw CashRunwayError.validation(L10n.string("Recurring template currency must match the selected wallet currency."))
+        }
+    }
+
+    private func validateWalletCurrencyChange(_ db: Database, wallet: Wallet) throws {
+        guard try Self.tableHasColumn(db, table: "wallets", column: "currency_code"),
+              let row = try Row.fetchOne(
+                  db,
+                  sql: "SELECT currency_code, starting_balance_minor, current_balance_minor FROM wallets WHERE id = ?",
+                  arguments: [wallet.id.uuidString]
+              )
+        else {
+            return
+        }
+
+        let existingCurrency = try CurrencyCode(validating: row["currency_code"])
+        guard existingCurrency != wallet.currencyCode else { return }
+
+        let existingStarting: Int64 = row["starting_balance_minor"]
+        let existingCurrent: Int64 = row["current_balance_minor"]
+        guard existingStarting == 0,
+              existingCurrent == 0,
+              wallet.startingBalanceMinor == 0,
+              wallet.currentBalanceMinor == 0,
+              try dependentCurrencyDataCount(db, walletID: wallet.id) == 0
+        else {
+            throw CashRunwayError.validation(L10n.string("Wallet currency cannot be changed after ledger or bank data exists."))
+        }
+    }
+
+    private func dependentCurrencyDataCount(_ db: Database, walletID: UUID) throws -> Int {
+        let walletID = walletID.uuidString
+        var count = try Int.fetchOne(
+            db,
+            sql: "SELECT COUNT(*) FROM transactions WHERE wallet_id = ?",
+            arguments: [walletID]
+        ) ?? 0
+        count += try Int.fetchOne(
+            db,
+            sql: "SELECT COUNT(*) FROM recurring_templates WHERE wallet_id = ? OR counterparty_wallet_id = ?",
+            arguments: [walletID, walletID]
+        ) ?? 0
+        if try tableExists(db, name: "bank_accounts") {
+            count += try Int.fetchOne(
+                db,
+                sql: "SELECT COUNT(*) FROM bank_accounts WHERE wallet_id = ?",
+                arguments: [walletID]
+            ) ?? 0
+        }
+        return count
+    }
+
+    private func walletCurrencyCode(_ db: Database, walletID: UUID) throws -> CurrencyCode {
+        guard try Self.tableHasColumn(db, table: "wallets", column: "currency_code") else {
+            return .uah
+        }
+        guard let rawValue = try String.fetchOne(
+            db,
+            sql: "SELECT currency_code FROM wallets WHERE id = ?",
+            arguments: [walletID.uuidString]
+        ) else {
+            throw CashRunwayError.notFound
+        }
+        return try CurrencyCode(validating: rawValue)
+    }
+
+    private func rejectMixedCurrencyAllWalletSnapshot(_ db: Database, walletID: UUID?) throws {
+        guard walletID == nil,
+              try Self.tableHasColumn(db, table: "wallets", column: "currency_code")
+        else {
+            return
+        }
+        let activeCurrencyCount = try Int.fetchOne(
+            db,
+            sql: "SELECT COUNT(DISTINCT currency_code) FROM wallets"
+        ) ?? 0
+        guard activeCurrencyCount <= 1 else {
+            throw CashRunwayError.validation(L10n.string("All-wallet totals require a single wallet currency until currency conversion is available."))
         }
     }
 

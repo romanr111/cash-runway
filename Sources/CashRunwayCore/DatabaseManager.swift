@@ -942,6 +942,51 @@ public final class DatabaseManager: @unchecked Sendable {
                     arguments: [Date()]
                 )
             }),
+            ("v8_currency_foundation", { db in
+                let walletsExist = try Bool.fetchOne(db, sql: "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'wallets'") != nil
+                let transactionsExist = try Bool.fetchOne(db, sql: "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'transactions'") != nil
+                let recurringTemplatesExist = try Bool.fetchOne(db, sql: "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'recurring_templates'") != nil
+                if walletsExist {
+                    try db.alter(table: "wallets") { table in
+                        table.add(column: "currency_code", .text).notNull().defaults(to: "UAH")
+                    }
+                }
+                if transactionsExist {
+                    try db.alter(table: "transactions") { table in
+                        table.add(column: "currency_code", .text).notNull().defaults(to: "UAH")
+                    }
+                }
+                if recurringTemplatesExist {
+                    try db.alter(table: "recurring_templates") { table in
+                        table.add(column: "currency_code", .text).notNull().defaults(to: "UAH")
+                    }
+                }
+                try db.create(table: "currency_preferences") { table in
+                    table.column("id", .text).primaryKey()
+                    table.column("default_currency_code", .text).notNull().defaults(to: "UAH")
+                    table.column("reporting_currency_code", .text).notNull().defaults(to: "UAH")
+                    table.column("updated_at", .datetime).notNull()
+                    table.check(sql: "id = 'default'")
+                }
+                try db.execute(
+                    sql: """
+                    INSERT INTO currency_preferences (id, default_currency_code, reporting_currency_code, updated_at)
+                    VALUES ('default', 'UAH', 'UAH', ?)
+                    """,
+                    arguments: [Date()]
+                )
+                try db.create(table: "exchange_rates") { table in
+                    table.column("id", .text).primaryKey()
+                    table.column("source", .text).notNull()
+                    table.column("base_currency_code", .text).notNull()
+                    table.column("quote_currency_code", .text).notNull()
+                    table.column("rate_decimal", .text).notNull()
+                    table.column("effective_date", .date).notNull()
+                    table.column("fetched_at", .datetime).notNull()
+                    table.column("expires_at", .datetime)
+                    table.uniqueKey(["source", "base_currency_code", "quote_currency_code", "effective_date"])
+                }
+            }),
         ]
     }
 

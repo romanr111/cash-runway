@@ -9,13 +9,32 @@ extension CashRunwayRepository {
         return try databaseManager.dbQueue.read { db in
             let metadata = CashRunwayBackupMetadata(
                 format: "cash-runway-backup",
-                version: 2,
+                version: 3,
                 createdAt: Date(),
                 appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0",
                 currency: "UAH"
             )
 
-            return CashRunwayBackup(
+            let preferencesRow = try Row.fetchOne(
+                db,
+                sql: """
+                SELECT default_currency_code, reporting_currency_code
+                FROM currency_preferences
+                WHERE id = 'default'
+                LIMIT 1
+                """
+            )
+            let preferences: CurrencyPreferences
+            if let preferencesRow {
+                preferences = try CurrencyPreferences(
+                    defaultCurrencyCode: CurrencyCode(validating: preferencesRow["default_currency_code"]),
+                    reportingCurrencyCode: CurrencyCode(validating: preferencesRow["reporting_currency_code"])
+                )
+            } else {
+                preferences = .default
+            }
+
+        return CashRunwayBackup(
                 metadata: metadata,
                 wallets: try Row.fetchAll(db, sql: "SELECT * FROM wallets ORDER BY sort_order, name").map(Self.backupWallet),
                 walletCategories: try Row.fetchAll(db, sql: "SELECT * FROM wallet_categories ORDER BY name").map(Self.backupWalletCategory),
@@ -26,7 +45,8 @@ extension CashRunwayRepository {
                 budgets: try Row.fetchAll(db, sql: "SELECT * FROM budgets ORDER BY month_key, category_id").map(Self.backupBudget),
                 recurringTemplates: try Row.fetchAll(db, sql: "SELECT * FROM recurring_templates ORDER BY created_at, id").map(Self.backupRecurringTemplate),
                 recurringInstances: try Row.fetchAll(db, sql: "SELECT * FROM recurring_instances ORDER BY due_date, id").map(Self.backupRecurringInstance),
-                importJobs: try Row.fetchAll(db, sql: "SELECT * FROM import_jobs ORDER BY started_at, id").map(Self.backupImportJob)
+                importJobs: try Row.fetchAll(db, sql: "SELECT * FROM import_jobs ORDER BY started_at, id").map(Self.backupImportJob),
+                currencyPreferences: preferences
             )
         }
     }
@@ -78,6 +98,8 @@ extension CashRunwayRepository {
         try db.execute(sql: "DELETE FROM categories")
         try db.execute(sql: "DELETE FROM wallets")
         try db.execute(sql: "DELETE FROM wallet_categories")
+        try db.execute(sql: "DELETE FROM currency_preferences")
+        try db.execute(sql: "DELETE FROM exchange_rates")
     }
 
     // swiftlint:disable:next function_body_length
@@ -94,6 +116,15 @@ extension CashRunwayRepository {
     }
 
     func insertBackupSourceData(_ backup: CashRunwayBackup, into db: Database) throws {
+        let preferences = backup.currencyPreferences ?? .default
+        try db.execute(
+            sql: """
+            INSERT INTO currency_preferences (id, default_currency_code, reporting_currency_code, updated_at)
+            VALUES ('default', ?, ?, ?)
+            """,
+            arguments: [preferences.defaultCurrencyCode.rawValue, preferences.reportingCurrencyCode.rawValue, Date()]
+        )
+
         let walletCategories = backup.walletCategories.isEmpty
             ? WalletCategory.allBuiltIn.map {
                 BackupWalletCategory(
@@ -124,13 +155,13 @@ extension CashRunwayRepository {
             let categoryID = wallet.categoryID ?? WalletCategory.builtIn(byKind: wallet.kind).id
             try db.execute(
                 sql: """
-                INSERT INTO wallets (id, name, kind, category_id, color_hex, icon_name, starting_balance_minor, current_balance_minor, is_archived, sort_order, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO wallets (id, name, kind, category_id, color_hex, icon_name, starting_balance_minor, current_balance_minor, currency_code, is_archived, sort_order, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 arguments: [
                     wallet.id.uuidString, wallet.name, wallet.kind.rawValue, categoryID.uuidString,
                     wallet.colorHex, wallet.iconName,
-                    wallet.startingBalanceMinor, wallet.startingBalanceMinor, wallet.isArchived, wallet.sortOrder,
+                    wallet.startingBalanceMinor, wallet.startingBalanceMinor, wallet.currencyCode.rawValue, wallet.isArchived, wallet.sortOrder,
                     wallet.createdAt, wallet.updatedAt,
                 ]
             )
@@ -184,12 +215,12 @@ extension CashRunwayRepository {
         for template in backup.recurringTemplates {
             try db.execute(
                 sql: """
-                INSERT INTO recurring_templates (id, kind, wallet_id, counterparty_wallet_id, amount_minor, category_id, merchant, note, rule_type, rule_interval, day_of_month, weekday, start_date, end_date, is_active, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO recurring_templates (id, kind, wallet_id, counterparty_wallet_id, amount_minor, currency_code, category_id, merchant, note, rule_type, rule_interval, day_of_month, weekday, start_date, end_date, is_active, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 arguments: [
                     template.id.uuidString, template.kind.rawValue, template.walletID.uuidString,
-                    template.counterpartyWalletID?.uuidString, template.amountMinor, template.categoryID?.uuidString,
+                    template.counterpartyWalletID?.uuidString, template.amountMinor, template.currencyCode.rawValue, template.categoryID?.uuidString,
                     template.merchant, template.note, template.ruleType.rawValue, template.ruleInterval,
                     template.dayOfMonth, template.weekday, template.startDate, template.endDate, template.isActive,
                     template.createdAt, template.updatedAt,
@@ -215,12 +246,12 @@ extension CashRunwayRepository {
         for transaction in backup.transactions {
             try db.execute(
                 sql: """
-                INSERT INTO transactions (id, wallet_id, type, linked_transfer_id, amount_minor, occurred_at, local_day_key, local_month_key, category_id, merchant, note, is_deleted, source, recurring_template_id, recurring_instance_id, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO transactions (id, wallet_id, type, linked_transfer_id, amount_minor, currency_code, occurred_at, local_day_key, local_month_key, category_id, merchant, note, is_deleted, source, recurring_template_id, recurring_instance_id, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 arguments: [
                     transaction.id.uuidString, transaction.walletID.uuidString, transaction.type.rawValue,
-                    transaction.linkedTransferID?.uuidString, transaction.amountMinor, transaction.occurredAt,
+                    transaction.linkedTransferID?.uuidString, transaction.amountMinor, transaction.currencyCode.rawValue, transaction.occurredAt,
                     transaction.localDayKey, transaction.localMonthKey, transaction.categoryID?.uuidString,
                     transaction.merchant, transaction.note, transaction.isDeleted, transaction.source.rawValue,
                     transaction.recurringTemplateID?.uuidString, transaction.recurringInstanceID?.uuidString,

@@ -62,6 +62,7 @@ extension CashRunwayRepository {
             walletID: UUID(uuidString: row["wallet_id"])!,
             counterpartyWalletID: (row["counterparty_wallet_id"] as String?).flatMap(UUID.init(uuidString:)),
             amountMinor: row["amount_minor"],
+            currencyCode: try CashRunwayRepository.rowCurrencyCode(row),
             categoryID: (row["category_id"] as String?).flatMap(UUID.init(uuidString:)),
             merchant: row["merchant"],
             note: row["note"],

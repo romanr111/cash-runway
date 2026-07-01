@@ -113,6 +113,18 @@ public protocol MaintenanceRepositorying: Sendable {
     ) throws -> CSVImportResult
 }
 
+public protocol CurrencyRepositorying: Sendable {
+    func currencyPreferences() throws -> CurrencyPreferences
+    func saveCurrencyPreferences(_ preferences: CurrencyPreferences) throws
+    func cachedExchangeRate(
+        from sourceCurrency: CurrencyCode,
+        to targetCurrency: CurrencyCode,
+        on date: Date,
+        source: String?
+    ) throws -> ExchangeRate?
+    func saveExchangeRates(_ rates: [ExchangeRate]) throws
+}
+
 // MARK: - Composed repository abstraction
 //
 // Preserved for the god-consumer `AppModel` (which genuinely calls ~34 methods)
@@ -123,6 +135,7 @@ public typealias CashRunwayRepositorying = BankSyncRepositorying &
     DashboardRepositorying &
     TransactionEditingRepositorying &
     SettingsRepositorying &
+    CurrencyRepositorying &
     MaintenanceRepositorying
 
 // MARK: - Default-argument convenience wrappers

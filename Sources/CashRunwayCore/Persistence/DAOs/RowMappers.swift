@@ -2,6 +2,11 @@ import Foundation
 import GRDB
 
 extension CashRunwayRepository {
+    static func rowCurrencyCode(_ row: Row) throws -> CurrencyCode {
+        guard row.hasColumn("currency_code") else { return .uah }
+        return try CurrencyCode(validating: row["currency_code"])
+    }
+
     static func wallet(_ row: Row) throws -> Wallet {
         let kind: WalletKind = WalletKind(rawValue: row["kind"]) ?? .other
         let categoryID = (row["category_id"] as String?).flatMap(UUID.init(uuidString:))
@@ -15,6 +20,7 @@ extension CashRunwayRepository {
             iconName: row["icon_name"],
             startingBalanceMinor: row["starting_balance_minor"],
             currentBalanceMinor: row["current_balance_minor"],
+            currencyCode: try rowCurrencyCode(row),
             isArchived: row["is_archived"],
             sortOrder: row["sort_order"],
             createdAt: row["created_at"],
@@ -45,6 +51,7 @@ extension CashRunwayRepository {
             iconName: row["icon_name"],
             startingBalanceMinor: row["starting_balance_minor"],
             currentBalanceMinor: row["current_balance_minor"],
+            currencyCode: try rowCurrencyCode(row),
             isArchived: row["is_archived"],
             sortOrder: row["sort_order"],
             createdAt: row["created_at"],
@@ -286,6 +293,7 @@ extension CashRunwayRepository {
             type: TransactionKind(rawValue: row["type"]) ?? .expense,
             linkedTransferID: (row["linked_transfer_id"] as String?).flatMap(UUID.init(uuidString:)),
             amountMinor: row["amount_minor"],
+            currencyCode: try rowCurrencyCode(row),
             occurredAt: row["occurred_at"],
             localDayKey: row["local_day_key"],
             localMonthKey: row["local_month_key"],
@@ -310,6 +318,7 @@ extension CashRunwayRepository {
             type: TransactionKind(rawValue: row["type"]) ?? .expense,
             linkedTransferID: (row["linked_transfer_id"] as String?).flatMap(UUID.init(uuidString:)),
             amountMinor: row["amount_minor"],
+            currencyCode: try rowCurrencyCode(row),
             occurredAt: row["occurred_at"],
             localDayKey: row["local_day_key"],
             localMonthKey: row["local_month_key"],
@@ -365,6 +374,7 @@ extension CashRunwayRepository {
             walletID: UUID(uuidString: row["wallet_id"])!,
             counterpartyWalletID: (row["counterparty_wallet_id"] as String?).flatMap(UUID.init(uuidString:)),
             amountMinor: row["amount_minor"],
+            currencyCode: try rowCurrencyCode(row),
             categoryID: (row["category_id"] as String?).flatMap(UUID.init(uuidString:)),
             merchant: row["merchant"],
             note: row["note"],
