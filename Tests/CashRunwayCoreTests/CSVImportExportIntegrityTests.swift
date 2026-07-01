@@ -84,7 +84,7 @@ struct CSVImportExportIntegrityTests {
 
         let csvText = """
         Date,Wallet,Type,Category name,Merchant,Amount,Currency,Note,Labels,Author
-        2025-01-02,USD Wallet,Expense,Groceries,CSV Shop,50.00,UAH,CSV note,,
+        2025-01-02,USD Wallet,Expense,Groceries,CSV Shop,50.00,USD,CSV note,,
         """
 
         let service = CSVService(repository: repository)

@@ -19,6 +19,20 @@ struct WalletValueProjectionServiceTests {
         #expect(projection.rate == nil)
         #expect(!projection.isFallback)
         #expect(!projection.isApproximate)
+        #expect(projection.basis == .identity)
+        #expect(projection.providerLabel == WalletValueProjectionProvider.nativeCurrencyLabel)
+    }
+
+    @Test func exchangeRateBasisMapsFromSource() {
+        let date = Date()
+        func rate(_ source: String) -> ExchangeRate {
+            ExchangeRate(sourceCurrencyCode: .usd, targetCurrencyCode: .uah, rateDecimal: "1", effectiveDate: date, source: source)
+        }
+        #expect(rate("identity").basis == .identity)
+        #expect(rate("nbu-official").basis == .official)
+        #expect(rate("monobank-midpoint").basis == .bankMidpoint)
+        #expect(rate("privatbank-midpoint").basis == .bankMidpoint)
+        #expect(rate("bank_public_composite").basis == .bankCompositeMidpoint)
     }
 
     @Test func uahToUsdDividesByMidpointRate() async throws {

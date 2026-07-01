@@ -1,6 +1,7 @@
 import Foundation
 
 public enum ExchangeRateBasis: String, Codable, Hashable, Sendable {
+    case identity
     case official
     case bankBuy
     case bankSell
@@ -61,4 +62,25 @@ public enum WalletValueProjectionProvider {
     public static let monobankLabel = "Monobank midpoint"
     public static let privatBankLabel = "PrivatBank midpoint"
     public static let nbuFallbackLabel = "NBU official fallback"
+    public static let nativeCurrencyLabel = "Native currency"
+}
+
+public extension ExchangeRate {
+    /// Centralized mapping from a rate's `source` string to its `ExchangeRateBasis`.
+    /// This is the single source of truth so callers do not pattern-match on
+    /// provider-specific source strings (`monobank-midpoint`, `nbu-official`, …).
+    var basis: ExchangeRateBasis {
+        switch source {
+        case "identity":
+            return .identity
+        case "nbu-official":
+            return .official
+        case "monobank-midpoint", "privatbank-midpoint":
+            return .bankMidpoint
+        case "bank_public_composite":
+            return .bankCompositeMidpoint
+        default:
+            return .bankMidpoint
+        }
+    }
 }

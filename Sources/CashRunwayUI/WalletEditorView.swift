@@ -98,8 +98,9 @@ struct WalletEditorView: View {
                         wallet.startingBalanceMinor = balance
                         wallet.currentBalanceMinor = balance
                         wallet.updatedAt = .now
-                        model.saveWallet(wallet)
-                        dismiss()
+                        if model.saveWallet(wallet) {
+                            dismiss()
+                        }
                     }
                 }
             }

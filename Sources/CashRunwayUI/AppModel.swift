@@ -598,7 +598,8 @@ public final class CashRunwayAppModel {
         }
     }
 
-    public func saveWallet(_ wallet: Wallet) {
+    @discardableResult
+    public func saveWallet(_ wallet: Wallet) -> Bool {
         runMutation {
             try repository.saveWallet(wallet)
         }

@@ -31,8 +31,8 @@ public final class WalletValueProjectionService {
                 nativeAmount: nativeAmount,
                 projectedAmount: nativeAmount,
                 rate: nil,
-                basis: .bankCompositeMidpoint,
-                providerLabel: WalletValueProjectionProvider.publicBankCompositeLabel,
+                basis: .identity,
+                providerLabel: WalletValueProjectionProvider.nativeCurrencyLabel,
                 isFallback: false,
                 isApproximate: false
             )
@@ -54,9 +54,9 @@ public final class WalletValueProjectionService {
         let projectedMinor = try Self.minorUnits(from: converted)
 
         let projectedAmount = MoneyAmount(minorUnits: projectedMinor, currencyCode: targetCurrency)
-        let isFallback = crossRate.source == "nbu-official"
+        let basis = crossRate.basis
+        let isFallback = basis == .official
         let providerLabel = isFallback ? WalletValueProjectionProvider.nbuFallbackLabel : WalletValueProjectionProvider.publicBankCompositeLabel
-        let basis: ExchangeRateBasis = isFallback ? .official : .bankCompositeMidpoint
         return WalletValueProjection(
             nativeAmount: nativeAmount,
             projectedAmount: projectedAmount,

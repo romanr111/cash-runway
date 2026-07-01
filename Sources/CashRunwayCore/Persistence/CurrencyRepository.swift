@@ -71,7 +71,7 @@ extension CashRunwayRepository {
                 AND effective_date = ?
                 AND (? IS NULL OR source = ?)
                 AND fetched_at >= ?
-                ORDER BY source ASC, fetched_at DESC
+                ORDER BY fetched_at DESC
                 LIMIT 1
                 """,
                 arguments: [sourceCurrency.rawValue, targetCurrency.rawValue, effectiveDate, source, source, staleThreshold]
