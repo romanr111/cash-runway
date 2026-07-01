@@ -23,8 +23,18 @@ struct TimelineOverviewView: View {
                 filters
                 monthStrip
                 metricPicker
-                categoriesCard
-                overviewChart
+                if model.wallets.count > 1, model.aggregateCurrencyCode == nil {
+                    ContentUnavailableView(
+                        "Mixed-currency overview unavailable",
+                        systemImage: "chart.bar",
+                        description: Text("Select a single wallet to view spending charts.")
+                    )
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 18)
+                } else {
+                    categoriesCard
+                    overviewChart
+                }
                 labelsCard
             }
             .padding(.horizontal, 20)

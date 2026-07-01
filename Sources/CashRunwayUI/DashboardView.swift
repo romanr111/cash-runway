@@ -222,7 +222,14 @@ struct DashboardView: View {
         }
 
         return VStack(alignment: .leading, spacing: 16) {
-            if bars.isEmpty {
+            if model.wallets.count > 1, model.aggregateCurrencyCode == nil {
+                ContentUnavailableView(
+                    "Mixed-currency cash flow unavailable",
+                    systemImage: "chart.bar",
+                    description: Text("Select a single wallet to view the timeline chart.")
+                )
+                .frame(height: 210)
+            } else if bars.isEmpty {
                 ContentUnavailableView("No Data", systemImage: "chart.bar")
                     .frame(height: 210)
             } else {

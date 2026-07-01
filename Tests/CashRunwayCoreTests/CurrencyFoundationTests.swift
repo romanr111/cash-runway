@@ -407,6 +407,41 @@ struct CurrencyFoundationTests {
         }
     }
 
+    @Test func aggregateCurrencyCodeRespectsSelectedWallet() {
+        let uahWallet = Wallet(
+            id: UUID(),
+            name: "UAH",
+            kind: .cash,
+            colorHex: nil,
+            iconName: nil,
+            startingBalanceMinor: 0,
+            currentBalanceMinor: 0,
+            currencyCode: .uah,
+            isArchived: false,
+            sortOrder: 0,
+            createdAt: .now,
+            updatedAt: .now
+        )
+        let usdWallet = Wallet(
+            id: UUID(),
+            name: "USD",
+            kind: .cash,
+            colorHex: nil,
+            iconName: nil,
+            startingBalanceMinor: 0,
+            currentBalanceMinor: 0,
+            currencyCode: .usd,
+            isArchived: false,
+            sortOrder: 1,
+            createdAt: .now,
+            updatedAt: .now
+        )
+
+        #expect([uahWallet, usdWallet].aggregateCurrencyCode(selectedWalletID: uahWallet.id) == .uah)
+        #expect([uahWallet, usdWallet].aggregateCurrencyCode(selectedWalletID: usdWallet.id) == .usd)
+        #expect([uahWallet, usdWallet].aggregateCurrencyCode(selectedWalletID: nil) == nil)
+    }
+
     @Test func backupExportUsesV3AndStringCurrencyCodes() throws {
         let repository = try makeCurrencyRepository()
         _ = try saveCurrencyWallet(repository, currencyCode: .usd)
