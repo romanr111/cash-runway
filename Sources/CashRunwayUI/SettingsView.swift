@@ -569,13 +569,14 @@ private struct ScheduledTransactionsView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
-                        guard let firstWalletID = model.wallets.first?.id else { return }
+                        guard let firstWallet = model.wallets.first else { return }
                         templateDraft = RecurringTemplate(
                             id: UUID(),
                             kind: .expense,
-                            walletID: firstWalletID,
+                            walletID: firstWallet.id,
                             counterpartyWalletID: model.wallets.dropFirst().first?.id,
                             amountMinor: 0,
+                            currencyCode: firstWallet.currencyCode,
                             categoryID: model.expenseCategories.first?.id,
                             merchant: nil,
                             note: nil,
@@ -762,7 +763,7 @@ private struct CurrencySettingsView: View {
                     Button("Save") {
                         var preferences = CurrencyPreferences()
                         preferences.defaultCurrencyCode = selectedCurrency
-                        preferences.reportingCurrencyCode = selectedCurrency
+                        preferences.reportingCurrencyCode = model.reportingCurrencyCode
                         model.saveCurrencyPreferences(preferences)
                         dismiss()
                     }

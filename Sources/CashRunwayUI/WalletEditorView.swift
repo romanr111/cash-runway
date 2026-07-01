@@ -145,7 +145,7 @@ struct WalletEditorView: View {
     }
 
     private var canChangeCurrency: Bool {
-        wallet.startingBalanceMinor == 0 && wallet.currentBalanceMinor == 0
+        model.canChangeWalletCurrency(wallet.id)
     }
 }
 

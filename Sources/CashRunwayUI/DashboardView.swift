@@ -43,14 +43,15 @@ struct DashboardView: View {
             .overlay(alignment: .bottomTrailing) {
                 if !model.wallets.isEmpty {
                     Button {
-                        if let walletID = model.wallets.first?.id {
-                            draft = TransactionDraft(
-                                kind: .expense,
-                                walletID: walletID,
-                                amountMinor: 0,
-                                occurredAt: .now,
-                                categoryID: model.expenseCategories.first?.id
-                            )
+                if let walletID = model.wallets.first?.id {
+                    draft = TransactionDraft(
+                        kind: .expense,
+                        walletID: walletID,
+                        amountMinor: 0,
+                        currencyCode: model.wallets.first?.currencyCode ?? model.defaultCurrencyCode,
+                        occurredAt: .now,
+                        categoryID: model.expenseCategories.first?.id
+                    )
                             isComposerPresented = true
                         }
                     } label: {
@@ -104,6 +105,7 @@ struct DashboardView: View {
                     iconName: "wallet.pass.fill",
                     startingBalanceMinor: 0,
                     currentBalanceMinor: 0,
+                    currencyCode: model.defaultCurrencyCode,
                     isArchived: false,
                     sortOrder: 0,
                     createdAt: .now,
@@ -145,19 +147,28 @@ struct DashboardView: View {
 
             VStack(spacing: 6) {
                 Group {
-                    if model.isTimelineLoading {
-                        ProgressView()
-                            .controlSize(.regular)
-                            .accessibilityLabel("Loading cash flow")
-                    } else {
-                        Text(MoneyFormatter.string(from: model.currentCashFlowMinor))
+                if model.isTimelineLoading {
+                    ProgressView()
+                        .controlSize(.regular)
+                        .accessibilityLabel("Loading cash flow")
+                } else {
+                    if let cashFlowText = model.aggregateMoneyString(from: model.currentCashFlowMinor) {
+                        Text(cashFlowText)
                             .font(.system(size: 42, weight: .bold, design: .rounded))
                             .foregroundStyle(CashRunwayTheme.textPrimary)
                             .multilineTextAlignment(.center)
                             .lineLimit(1)
                             .minimumScaleFactor(0.72)
                             .accessibilityIdentifier(CashRunwayAccessibilityID.timelineCashFlowValue)
+                    } else {
+                        Text("Mixed-currency cash flow unavailable")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(CashRunwayTheme.textMuted)
+                            .multilineTextAlignment(.center)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.85)
                     }
+                }
                 }
                 .frame(height: 52)
                 .frame(maxWidth: .infinity)
@@ -293,9 +304,15 @@ struct DashboardView: View {
                                 .font(.system(size: 16, weight: .bold))
                                 .foregroundStyle(CashRunwayTheme.textPrimary)
                             Spacer()
-                            Text(MoneyFormatter.string(from: section.totalMinor))
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(CashRunwayTheme.amountColor(section.totalMinor))
+                            if let sectionTotalText = model.aggregateMoneyString(from: section.totalMinor) {
+                                Text(sectionTotalText)
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(CashRunwayTheme.amountColor(section.totalMinor))
+                            } else {
+                                Text("Mixed-currency totals unavailable")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(CashRunwayTheme.textMuted)
+                            }
                         }
                         ForEach(section.items) { item in
                             Button {
@@ -612,6 +629,14 @@ struct CategoryDonutChart: View {
     private func signedAmount(_ amountMinor: Int64) -> Int64 {
         kind == .expense ? -amountMinor : amountMinor
     }
+
+private func aggregateValue(for minorUnits: Int64, currencyCode: CurrencyCode?) -> String {
+    guard let currencyCode else {
+        return L10n.string("Mixed-currency totals unavailable")
+    }
+
+    return MoneyFormatter.string(from: minorUnits, currencyCode: currencyCode)
+}
 }
 
 private struct CategoryDonutBadge: View {

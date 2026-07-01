@@ -2,11 +2,21 @@ import Foundation
 
 public final class WalletValueProjectionService {
     private let repository: any CashRunwayRepositorying
-    private let rateProvider: ExchangeRateProviding
+    private let marketRateProvider: ExchangeRateProviding
+    private let officialRateProvider: ExchangeRateProviding?
 
-    public init(repository: any CashRunwayRepositorying, rateProvider: ExchangeRateProviding) {
+    public convenience init(repository: any CashRunwayRepositorying, rateProvider: ExchangeRateProviding) {
+        self.init(repository: repository, marketRateProvider: rateProvider, officialRateProvider: nil)
+    }
+
+    public init(
+        repository: any CashRunwayRepositorying,
+        marketRateProvider: ExchangeRateProviding,
+        officialRateProvider: ExchangeRateProviding?
+    ) {
         self.repository = repository
-        self.rateProvider = rateProvider
+        self.marketRateProvider = marketRateProvider
+        self.officialRateProvider = officialRateProvider
     }
 
     public func projectedValue(
@@ -35,13 +45,13 @@ public final class WalletValueProjectionService {
             date: date,
             policy: policy
         )
-        guard let decimalRate = Decimal(string: crossRate.rateDecimal) else {
+        guard let decimalRate = Decimal(string: crossRate.rateDecimal, locale: Locale(identifier: "en_US_POSIX")) else {
             throw MoneyError.missingExchangeRate(from: wallet.currencyCode, to: targetCurrency)
         }
 
         let decimalAmount = Decimal(wallet.currentBalanceMinor) / 100
         let converted = decimalAmount * decimalRate
-        let projectedMinor = Self.minorUnits(from: converted)
+        let projectedMinor = try Self.minorUnits(from: converted)
 
         let projectedAmount = MoneyAmount(minorUnits: projectedMinor, currencyCode: targetCurrency)
         let isFallback = crossRate.source == "nbu-official"
@@ -98,11 +108,31 @@ public final class WalletValueProjectionService {
         guard currency != .uah else {
             return identityRate(for: .uah, date: date)
         }
-        let rate = try await rateProvider.rate(from: currency, to: .uah, on: date)
-        guard Decimal(string: rate.rateDecimal) != nil else {
-            throw MoneyError.missingExchangeRate(from: currency, to: .uah)
+
+        let preferredOfficial = policy.preferredBasis == .official
+        if preferredOfficial, let officialRateProvider {
+            if let rate = try? await officialRateProvider.rate(from: currency, to: .uah, on: date),
+               Decimal(string: rate.rateDecimal, locale: Locale(identifier: "en_US_POSIX")) != nil {
+                return rate
+            }
         }
-        return rate
+
+        do {
+            let rate = try await marketRateProvider.rate(from: currency, to: .uah, on: date)
+            guard Decimal(string: rate.rateDecimal, locale: Locale(identifier: "en_US_POSIX")) != nil else {
+                throw MoneyError.missingExchangeRate(from: currency, to: .uah)
+            }
+            return rate
+        } catch {
+            guard policy.allowFallbackToOfficial, let officialRateProvider else {
+                throw error
+            }
+            let rate = try await officialRateProvider.rate(from: currency, to: .uah, on: date)
+            guard Decimal(string: rate.rateDecimal, locale: Locale(identifier: "en_US_POSIX")) != nil else {
+                throw MoneyError.missingExchangeRate(from: currency, to: .uah)
+            }
+            return rate
+        }
     }
 
     private func identityRate(for currency: CurrencyCode, date: Date) -> ExchangeRate {
@@ -116,7 +146,7 @@ public final class WalletValueProjectionService {
     }
 
     private func inverted(_ rate: ExchangeRate) -> ExchangeRate {
-        guard let decimal = Decimal(string: rate.rateDecimal), decimal != 0 else {
+        guard let decimal = Decimal(string: rate.rateDecimal, locale: Locale(identifier: "en_US_POSIX")), decimal != 0 else {
             return ExchangeRate(
                 sourceCurrencyCode: rate.targetCurrencyCode,
                 targetCurrencyCode: rate.sourceCurrencyCode,
@@ -135,8 +165,8 @@ public final class WalletValueProjectionService {
     }
 
     private func cross(from sourceToUAH: ExchangeRate, to targetToUAH: ExchangeRate) -> ExchangeRate {
-        guard let sourceRate = Decimal(string: sourceToUAH.rateDecimal),
-              let targetRate = Decimal(string: targetToUAH.rateDecimal),
+        guard let sourceRate = Decimal(string: sourceToUAH.rateDecimal, locale: Locale(identifier: "en_US_POSIX")),
+              let targetRate = Decimal(string: targetToUAH.rateDecimal, locale: Locale(identifier: "en_US_POSIX")),
               targetRate != 0 else {
             return ExchangeRate(
                 sourceCurrencyCode: sourceToUAH.sourceCurrencyCode,
@@ -156,7 +186,7 @@ public final class WalletValueProjectionService {
         )
     }
 
-    private static func minorUnits(from decimal: Decimal) -> Int64 {
+    private static func minorUnits(from decimal: Decimal) throws -> Int64 {
         var scaled = decimal * 100
         var rounded = Decimal()
         NSDecimalRound(&rounded, &scaled, 0, .plain)
@@ -165,7 +195,7 @@ public final class WalletValueProjectionService {
               let result = nsNumber.int64Value as Int64?,
               Decimal(result) == rounded
         else {
-            return 0
+            throw MoneyError.invalidAmount(decimal.description)
         }
         return result
     }

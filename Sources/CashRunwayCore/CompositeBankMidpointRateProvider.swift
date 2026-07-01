@@ -2,9 +2,14 @@ import Foundation
 
 public final class CompositeBankMidpointRateProvider: ExchangeRateProviding {
     private let clients: [any PublicExchangeRateClient]
+    private let officialClient: (any PublicExchangeRateClient)?
 
-    public init(clients: [any PublicExchangeRateClient]) {
+    public init(
+        clients: [any PublicExchangeRateClient],
+        officialClient: (any PublicExchangeRateClient)? = nil
+    ) {
         self.clients = clients
+        self.officialClient = officialClient
     }
 
     public func rate(
@@ -52,21 +57,23 @@ public final class CompositeBankMidpointRateProvider: ExchangeRateProviding {
             return composite
         }
 
-        let official = allRates.first {
-            $0.sourceCurrencyCode == sourceCurrency &&
-            $0.targetCurrencyCode == targetCurrency &&
-            $0.source == "nbu-official" &&
-            DateKeys.calendar.startOfDay(for: $0.effectiveDate) == effectiveDate
-        }
-        if let official {
-            return official
+        if let officialClient {
+            let officialRates = (try? await officialClient.fetchRates(baseCurrency: sourceCurrency, date: date)) ?? []
+            if let official = officialRates.first(where: {
+                $0.sourceCurrencyCode == sourceCurrency &&
+                $0.targetCurrencyCode == targetCurrency &&
+                $0.source == "nbu-official" &&
+                DateKeys.calendar.startOfDay(for: $0.effectiveDate) == effectiveDate
+            }) {
+                return official
+            }
         }
 
         throw MoneyError.missingExchangeRate(from: sourceCurrency, to: targetCurrency)
     }
 
     private func averageRate(_ rates: [ExchangeRate], source: String, effectiveDate: Date) -> ExchangeRate? {
-        let decimals = rates.compactMap { Decimal(string: $0.rateDecimal) }
+        let decimals = rates.compactMap { Decimal(string: $0.rateDecimal, locale: Locale(identifier: "en_US_POSIX")) }
         guard !decimals.isEmpty else { return nil }
         let sum = decimals.reduce(Decimal(0), +)
         let average = sum / Decimal(decimals.count)
