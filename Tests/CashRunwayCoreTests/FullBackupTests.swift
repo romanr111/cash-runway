@@ -289,6 +289,28 @@ struct FullBackupTests {
         #expect(try countRows(target, table: "bank_integrations") == 0)
     }
 
+    @Test func fullBackupImportClearsExchangeRates() throws {
+        let backup = try makePopulatedRepository().0.exportFullBackup()
+        let target = try TestSupport.makeRepository()
+        let date = Date(timeIntervalSince1970: 1_800_000_000)
+
+        try target.saveExchangeRates([
+            ExchangeRate(
+                sourceCurrencyCode: .usd,
+                targetCurrencyCode: .uah,
+                rateDecimal: "41.2500",
+                effectiveDate: date,
+                source: "test"
+            )
+        ])
+
+        #expect(try countRows(target, table: "exchange_rates") == 1)
+
+        try target.restoreFullBackup(backup)
+
+        #expect(try countRows(target, table: "exchange_rates") == 0)
+    }
+
     @Test func fullBackupExportDoesNotIncludeBankTransactionImports() throws {
         let repository = try makePopulatedRepository().0
         try seedBankSyncState(in: repository)

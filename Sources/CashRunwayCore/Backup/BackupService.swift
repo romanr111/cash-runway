@@ -24,14 +24,17 @@ extension CashRunwayRepository {
                 LIMIT 1
                 """
             )
-            let preferences = preferencesRow.map {
-                CurrencyPreferences(
-                    defaultCurrencyCode: (try? CurrencyCode(validating: $0["default_currency_code"])) ?? .uah,
-                    reportingCurrencyCode: (try? CurrencyCode(validating: $0["reporting_currency_code"])) ?? .uah
+            let preferences: CurrencyPreferences
+            if let preferencesRow {
+                preferences = try CurrencyPreferences(
+                    defaultCurrencyCode: CurrencyCode(validating: preferencesRow["default_currency_code"]),
+                    reportingCurrencyCode: CurrencyCode(validating: preferencesRow["reporting_currency_code"])
                 )
-            } ?? .default
+            } else {
+                preferences = .default
+            }
 
-            return CashRunwayBackup(
+        return CashRunwayBackup(
                 metadata: metadata,
                 wallets: try Row.fetchAll(db, sql: "SELECT * FROM wallets ORDER BY sort_order, name").map(Self.backupWallet),
                 walletCategories: try Row.fetchAll(db, sql: "SELECT * FROM wallet_categories ORDER BY name").map(Self.backupWalletCategory),
@@ -96,6 +99,7 @@ extension CashRunwayRepository {
         try db.execute(sql: "DELETE FROM wallets")
         try db.execute(sql: "DELETE FROM wallet_categories")
         try db.execute(sql: "DELETE FROM currency_preferences")
+        try db.execute(sql: "DELETE FROM exchange_rates")
     }
 
     // swiftlint:disable:next function_body_length

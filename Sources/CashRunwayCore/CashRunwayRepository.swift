@@ -1942,6 +1942,7 @@ extension CashRunwayRepository {
                 let labelIDs = try row.rawLabelNames.map { try resolveOrCreateLabel(db, name: $0) }
 
                 var draft = row.draft
+                draft.currencyCode = try walletCurrencyCode(db, walletID: draft.walletID)
                 draft.categoryID = categoryID
                 draft.labelIDs = labelIDs
                 draft.importJobID = jobID

@@ -415,7 +415,62 @@ struct CurrencyFoundationTests {
         #expect(firstWallet["currencyCode"] as? String == "USD")
     }
 
-    @Test func backupV3RestoresCurrencyPreferencesAndEntityCurrencyCodes() throws {
+    @Test func backupExportRejectsInvalidStoredWalletCurrencyCodes() throws {
+        let repository = try makeCurrencyRepository()
+        let wallet = try saveCurrencyWallet(repository, currencyCode: .usd)
+
+        try repository.databaseManager.dbQueue.write { db in
+            try db.execute(
+                sql: "UPDATE wallets SET currency_code = ? WHERE id = ?",
+                arguments: ["US1", wallet.id.uuidString]
+            )
+        }
+
+        #expect(throws: MoneyError.self) { _ = try repository.wallets() }
+        #expect(throws: MoneyError.self) { _ = try repository.exportFullBackup() }
+    }
+
+    @Test func backupExportRejectsInvalidStoredTransactionCurrencyCodes() throws {
+        let repository = try makeCurrencyRepository()
+        let wallet = try saveCurrencyWallet(repository, currencyCode: .usd)
+        let category = try saveExpenseCategory(repository)
+
+        try repository.saveTransaction(TransactionDraft(
+            kind: .expense,
+            walletID: wallet.id,
+            amountMinor: 1_000,
+            currencyCode: .usd,
+            occurredAt: .now,
+            categoryID: category.id
+        ))
+
+        let transactionID = try #require(try repository.exportFullBackup().transactions.first).id
+
+        try repository.databaseManager.dbQueue.write { db in
+            try db.execute(
+                sql: "UPDATE transactions SET currency_code = ? WHERE id = ?",
+                arguments: ["US1", transactionID.uuidString]
+            )
+        }
+
+        #expect(throws: MoneyError.self) { _ = try repository.transactionDraft(id: transactionID) }
+        #expect(throws: MoneyError.self) { _ = try repository.exportFullBackup() }
+    }
+
+    @Test func backupExportRejectsInvalidCurrencyPreferences() throws {
+        let repository = try makeCurrencyRepository()
+
+        try repository.databaseManager.dbQueue.write { db in
+            try db.execute(
+                sql: "UPDATE currency_preferences SET default_currency_code = ?, reporting_currency_code = ? WHERE id = 'default'",
+                arguments: ["US1", "USD"]
+            )
+        }
+
+        #expect(throws: MoneyError.self) { _ = try repository.exportFullBackup() }
+    }
+
+@Test func backupV3RestoresCurrencyPreferencesAndEntityCurrencyCodes() throws {
         let source = try makeCurrencyRepository()
         let wallet = try saveCurrencyWallet(source, currencyCode: .usd)
         let category = try saveExpenseCategory(source)
