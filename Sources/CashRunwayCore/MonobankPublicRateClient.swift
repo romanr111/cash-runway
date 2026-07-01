@@ -11,53 +11,57 @@ public final class MonobankPublicRateClient: PublicExchangeRateClient {
 
     public func fetchRates(baseCurrency: CurrencyCode, date: Date?) async throws -> [ExchangeRate] {
         let url = URL(string: "https://api.monobank.ua/bank/currency")!
-        let (data, _) = try await urlSession.data(from: url)
+        let (data, response) = try await urlSession.data(from: url)
+        try validateHTTPStatus(response)
         let items = try JSONDecoder().decode([MonobankRateItem].self, from: data)
         let now = date ?? dateProvider()
         return items.compactMap { item -> [ExchangeRate]? in
             guard let sourceCurrency = currencyCode(fromNumeric: item.currencyCodeA),
-                  let targetCurrency = currencyCode(fromNumeric: item.currencyCodeB),
-                  Decimal(string: item.rateBuy) != nil,
-                  Decimal(string: item.rateSell) != nil else { return nil }
-            return [
-                ExchangeRate(
-                    sourceCurrencyCode: sourceCurrency,
-                    targetCurrencyCode: targetCurrency,
-                    rateDecimal: item.rateBuy,
-                    effectiveDate: now,
-                    source: "monobank-buy"
-                ),
-                ExchangeRate(
-                    sourceCurrencyCode: sourceCurrency,
-                    targetCurrencyCode: targetCurrency,
-                    rateDecimal: item.rateSell,
-                    effectiveDate: now,
-                    source: "monobank-sell"
-                ),
-                ExchangeRate(
-                    sourceCurrencyCode: sourceCurrency,
-                    targetCurrencyCode: targetCurrency,
-                    rateDecimal: midpoint(item.rateBuy, item.rateSell),
-                    effectiveDate: now,
-                    source: "monobank-midpoint"
-                ),
-            ]
+                  let targetCurrency = currencyCode(fromNumeric: item.currencyCodeB) else { return nil }
+            var rates: [ExchangeRate] = []
+            if let buy = item.rateBuy?.decimalValue, let sell = item.rateSell?.decimalValue {
+                rates.append(exchangeRate(
+                    source: sourceCurrency,
+                    target: targetCurrency,
+                    value: buy,
+                    date: now,
+                    sourceLabel: "monobank-buy"
+                ))
+                rates.append(exchangeRate(
+                    source: sourceCurrency,
+                    target: targetCurrency,
+                    value: sell,
+                    date: now,
+                    sourceLabel: "monobank-sell"
+                ))
+                let midpoint = (buy + sell) / 2
+                rates.append(exchangeRate(
+                    source: sourceCurrency,
+                    target: targetCurrency,
+                    value: midpoint,
+                    date: now,
+                    sourceLabel: "monobank-midpoint"
+                ))
+            } else if let cross = item.rateCross?.decimalValue {
+                rates.append(exchangeRate(
+                    source: sourceCurrency,
+                    target: targetCurrency,
+                    value: cross,
+                    date: now,
+                    sourceLabel: "monobank-cross"
+                ))
+            }
+            return rates.isEmpty ? nil : rates
         }.flatMap { $0 }
     }
 }
 
-private struct MonobankRateItem: Codable {
+private struct MonobankRateItem: Decodable {
     var currencyCodeA: Int
     var currencyCodeB: Int
-    var rateBuy: String
-    var rateSell: String
-}
-
-private func midpoint(_ buy: String, _ sell: String) -> String {
-    guard let buyDecimal = Decimal(string: buy),
-          let sellDecimal = Decimal(string: sell) else { return "0" }
-    let average = (buyDecimal + sellDecimal) / 2
-    return average.description
+    var rateBuy: FlexibleDecimal?
+    var rateSell: FlexibleDecimal?
+    var rateCross: FlexibleDecimal?
 }
 
 private func currencyCode(fromNumeric code: Int) -> CurrencyCode? {

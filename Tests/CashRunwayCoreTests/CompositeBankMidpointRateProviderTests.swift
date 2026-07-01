@@ -24,7 +24,7 @@ struct CompositeBankMidpointRateProviderTests {
         let nbu = StaticPublicRateClient(rates: [
             ExchangeRate(sourceCurrencyCode: .usd, targetCurrencyCode: .uah, rateDecimal: "44.70", effectiveDate: .now, source: "nbu-official")
         ])
-        let provider = CompositeBankMidpointRateProvider(clients: [monobank, privatbank, nbu])
+        let provider = CompositeBankMidpointRateProvider(clients: [monobank, privatbank], officialClient: nbu)
         let rate = try await provider.rate(from: .usd, to: .uah, on: .now)
         #expect(rate.source == "nbu-official")
     }

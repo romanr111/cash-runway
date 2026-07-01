@@ -1,5 +1,40 @@
 # Continuity Ledger
 
+## Current Snapshot
+
+- Branch: `codex/market-rate-projection`
+- Worktree: `/Users/roman/.codex/worktrees/cash-runway-currency-foundation-dev`
+- Focus: market-rate foundation and currency-display cleanup for PR #90.
+- Local changes this turn:
+  - Fixed the remaining failing fallback test to pass `officialClient: nbu`.
+  - Added live-shape coverage for Monobank, NBU, and PrivatBank public rate clients.
+  - Added a repository seam and UI checks for wallet-currency editability.
+  - Wired transaction draft and wallet creation flows to carry the correct default currency.
+
+## Validation
+
+- `just test-filter PublicExchangeRateClientTests` ✅
+- `just test-filter CurrencyFoundationTests` ✅
+- `just check-unit-parallel` ✅
+- `just check-integration` ✅
+- `just build` ✅
+- `just check` ⚠️ still known-fails on `CashRunwayPerformanceTests.fixturePopulationTimingGate` from the pre-existing >30s benchmark
+
+## Current Snapshot
+
+- Branch: `codex/market-rate-projection`
+- Worktree: `/Users/roman/.codex/worktrees/cash-runway-currency-foundation-dev`
+- Focus: finish the market-rate foundation work with the explicit official-client fallback test contract.
+- Local change made in this turn: `CompositeBankMidpointRateProviderTests.missingPublicBankRatesFallBackToNbuOfficial` now passes `officialClient: nbu`.
+
+## Validation
+
+- `just test-filter CompositeBankMidpointRateProviderTests` ✅
+- `just check-unit-parallel` ✅
+- `just check-integration` ✅ on rerun after one transient failure
+- `just check` ⚠️ failed only on `CashRunwayPerformanceTests.fixturePopulationTimingGate` because elapsed time exceeded 30 seconds
+- `just check` simulator build fallback ✅
+
 ## Snapshot — `codex/market-rate-projection` branch
 
 **Base:** `codex/currency-foundation-dev` (PR #87, stashed uncommitted worktree edits preserved).  

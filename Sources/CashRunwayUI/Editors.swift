@@ -646,6 +646,7 @@ struct TransactionEditorView: View {
             walletID: draft.walletID,
             counterpartyWalletID: draft.destinationWalletID,
             amountMinor: draft.amountMinor,
+            currencyCode: draft.currencyCode,
             categoryID: composerState.selectedCategoryID,
             merchant: draft.merchant.isEmpty ? nil : draft.merchant,
             note: draft.note.isEmpty ? nil : draft.note,

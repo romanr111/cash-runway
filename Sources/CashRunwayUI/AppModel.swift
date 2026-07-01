@@ -72,6 +72,27 @@ public final class CashRunwayAppModel {
         })
         return selectedBar.map { $0.incomeMinor - $0.expenseMinor } ?? 0
     }
+    var aggregateCurrencyCode: CurrencyCode? {
+        let walletCurrencies = Set(wallets.map(\.currencyCode))
+        guard let first = walletCurrencies.first else {
+            return defaultCurrencyCode
+        }
+
+        return walletCurrencies.count == 1 ? first : nil
+    }
+
+    func canChangeWalletCurrency(_ walletID: UUID) -> Bool {
+        (try? repository.canChangeWalletCurrency(id: walletID)) ?? true
+    }
+
+    func aggregateMoneyString(from minorUnits: Int64) -> String? {
+        guard let currencyCode = aggregateCurrencyCode else {
+            return nil
+        }
+
+        return MoneyFormatter.string(from: minorUnits, currencyCode: currencyCode)
+    }
+
     private var lastForegroundRefreshAt: Date?
     private let foregroundRefreshMinimumInterval: TimeInterval = 10
     private var overviewSnapshotCache: [String: OverviewSnapshot] = [:]

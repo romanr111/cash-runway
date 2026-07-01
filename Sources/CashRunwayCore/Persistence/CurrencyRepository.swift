@@ -48,21 +48,33 @@ extension CashRunwayRepository {
         on date: Date,
         source: String? = nil
     ) throws -> ExchangeRate? {
+        try cachedExchangeRate(from: sourceCurrency, to: targetCurrency, on: date, source: source, maxStaleness: .infinity)
+    }
+
+    public func cachedExchangeRate(
+        from sourceCurrency: CurrencyCode,
+        to targetCurrency: CurrencyCode,
+        on date: Date,
+        source: String?,
+        maxStaleness: TimeInterval
+    ) throws -> ExchangeRate? {
         let effectiveDate = DateKeys.calendar.startOfDay(for: date)
+        let staleThreshold = Date().addingTimeInterval(-maxStaleness)
         return try databaseManager.dbQueue.read { db in
             guard let row = try Row.fetchOne(
                 db,
                 sql: """
-                SELECT source, base_currency_code, quote_currency_code, rate_decimal, effective_date
+                SELECT source, base_currency_code, quote_currency_code, rate_decimal, effective_date, fetched_at
                 FROM exchange_rates
                 WHERE base_currency_code = ?
                 AND quote_currency_code = ?
                 AND effective_date = ?
                 AND (? IS NULL OR source = ?)
+                AND fetched_at >= ?
                 ORDER BY source ASC, fetched_at DESC
                 LIMIT 1
                 """,
-                arguments: [sourceCurrency.rawValue, targetCurrency.rawValue, effectiveDate, source, source]
+                arguments: [sourceCurrency.rawValue, targetCurrency.rawValue, effectiveDate, source, source, staleThreshold]
             ) else {
                 return nil
             }
