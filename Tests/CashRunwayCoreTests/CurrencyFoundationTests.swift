@@ -462,6 +462,29 @@ struct CurrencyFoundationTests {
         #expect([uahWallet, usdWallet].aggregateCurrencyCode(selectedWalletID: nil) == nil)
     }
 
+    @Test func repositoryUsesFreshWalletsForAggregateNormalization() throws {
+        let repository = try makeCurrencyRepository()
+        _ = try saveCurrencyWallet(repository, currencyCode: .uah)
+        let staleWallets = try repository.wallets()
+        _ = try saveCurrencyWallet(repository, currencyCode: .usd)
+
+        #expect(staleWallets.aggregateCurrencyCode(selectedWalletID: nil) == .uah)
+
+        let effectiveWalletID = try repository.normalizedWalletIDForAggregates(selectedWalletID: nil)
+        #expect(effectiveWalletID != nil)
+
+        let monthKey = DateKeys.monthKey(for: .now)
+        #expect(throws: Never.self) {
+            _ = try repository.dashboard(monthKey: monthKey, walletID: effectiveWalletID)
+        }
+        #expect(throws: Never.self) {
+            _ = try repository.timelineSnapshot(monthKey: monthKey, walletID: effectiveWalletID, query: .init(), period: .month)
+        }
+        #expect(throws: Never.self) {
+            _ = try repository.allBars(walletID: effectiveWalletID, period: .month)
+        }
+    }
+
     @Test func backupExportUsesV3AndStringCurrencyCodes() throws {
         let repository = try makeCurrencyRepository()
         _ = try saveCurrencyWallet(repository, currencyCode: .usd)

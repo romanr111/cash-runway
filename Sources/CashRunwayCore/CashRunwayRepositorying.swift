@@ -158,6 +158,17 @@ public typealias CashRunwayRepositorying = BankSyncRepositorying &
     CurrencyRepositorying &
     MaintenanceRepositorying
 
+public extension DashboardRepositorying {
+    /// Returns a wallet ID that is safe to use for aggregate queries.
+    /// Mixed-currency all-wallet scopes fall back to a concrete active wallet.
+    func normalizedWalletIDForAggregates(selectedWalletID: UUID?) throws -> UUID? {
+        let wallets = try wallets()
+        return wallets.aggregateCurrencyCode(selectedWalletID: selectedWalletID) != nil
+            ? selectedWalletID
+            : wallets.first(where: { !$0.isArchived })?.id ?? wallets.first?.id
+    }
+}
+
 // MARK: - Default-argument convenience wrappers
 //
 // Protocol requirements cannot have default arguments; these extension methods

@@ -268,7 +268,8 @@ public final class CashRunwayAppModel {
             let repository = self.repository
             let selectedMonthKey = self.selectedMonthKey
             let selectedTimelinePeriod = self.selectedTimelinePeriod
-            let effectiveWalletID = normalizeWalletScopeForAggregates()
+            let requestedWalletID = self.selectedWalletID
+            let effectiveWalletID = try repository.normalizedWalletIDForAggregates(selectedWalletID: requestedWalletID)
             var query = self.transactionQuery
             query.walletID = effectiveWalletID
 
@@ -279,9 +280,11 @@ public final class CashRunwayAppModel {
                 transactionQuery: query
             )
 
-            guard currentRefreshScopeMatches(monthKey: selectedMonthKey, walletID: effectiveWalletID, period: selectedTimelinePeriod, query: query) else {
+            guard currentRefreshScopeMatches(monthKey: selectedMonthKey, walletID: requestedWalletID, period: selectedTimelinePeriod, query: query) else {
                 return false
             }
+            self.selectedWalletID = effectiveWalletID
+            self.transactionQuery.walletID = effectiveWalletID
             self.allBars = bars
             self.apply(snapshot)
             self.latestTransactionMonthKey = try? repository.latestTransactionMonthKey()
@@ -917,11 +920,12 @@ private actor BackgroundWork {
         selectedTimelinePeriod: TimelinePeriod,
         transactionQuery: TransactionQuery
     ) throws -> (bars: [TimelineBarPoint], snapshot: AppModelSnapshot) {
-        let bars = try repository.allBars(walletID: selectedWalletID, period: selectedTimelinePeriod)
+        let effectiveWalletID = try repository.normalizedWalletIDForAggregates(selectedWalletID: selectedWalletID)
+        let bars = try repository.allBars(walletID: effectiveWalletID, period: selectedTimelinePeriod)
         let snapshot = try CashRunwayAppModel.loadSnapshot(
             repository: repository,
             selectedMonthKey: selectedMonthKey,
-            selectedWalletID: selectedWalletID,
+            selectedWalletID: effectiveWalletID,
             selectedTimelinePeriod: selectedTimelinePeriod,
             transactionQuery: transactionQuery
         )
