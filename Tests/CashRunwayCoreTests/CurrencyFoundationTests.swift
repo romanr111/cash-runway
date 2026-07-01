@@ -205,6 +205,8 @@ struct CurrencyFoundationTests {
         let repository = try makeCurrencyRepository()
         let wallet = try saveCurrencyWallet(repository, currencyCode: .usd)
         let category = try saveExpenseCategory(repository)
+        #expect(try repository.canChangeWalletCurrency(id: wallet.id))
+        #expect(try repository.canChangeWalletCurrency(id: wallet.id))
 
         #expect(throws: CashRunwayError.self) {
             try repository.saveTransaction(TransactionDraft(
@@ -302,6 +304,7 @@ struct CurrencyFoundationTests {
     @Test func repositoryRejectsWalletCurrencyChangeAfterTransactionsExist() throws {
         let repository = try makeCurrencyRepository()
         var wallet = try saveCurrencyWallet(repository, currencyCode: .uah)
+        #expect(try repository.canChangeWalletCurrency(id: wallet.id))
         let category = try saveExpenseCategory(repository)
         try repository.saveTransaction(TransactionDraft(
             kind: .expense,
@@ -313,6 +316,8 @@ struct CurrencyFoundationTests {
         ))
 
         wallet.currencyCode = .usd
+        #expect(!(try repository.canChangeWalletCurrency(id: wallet.id)))
+        #expect(!(try repository.canChangeWalletCurrency(id: wallet.id)))
 
         #expect(throws: CashRunwayError.self) {
             try repository.saveWallet(wallet)
