@@ -2592,7 +2592,7 @@ extension CashRunwayRepository {
         }
         let activeCurrencyCount = try Int.fetchOne(
             db,
-            sql: "SELECT COUNT(DISTINCT currency_code) FROM wallets"
+            sql: "SELECT COUNT(DISTINCT currency_code) FROM wallets WHERE is_archived = 0"
         ) ?? 0
         guard activeCurrencyCount <= 1 else {
             throw CashRunwayError.validation(L10n.string("All-wallet totals require a single wallet currency until currency conversion is available."))

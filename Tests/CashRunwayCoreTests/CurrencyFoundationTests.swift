@@ -396,14 +396,34 @@ struct CurrencyFoundationTests {
         _ = try repository.allBars(walletID: uahWallet.id)
     }
 
-    @Test func archivedMixedCurrencyWalletStillRejectsAllWalletSnapshots() throws {
+    @Test func archivedMixedCurrencyWalletDoesNotBlockActiveAllWalletSnapshots() throws {
         let repository = try makeCurrencyRepository()
         _ = try saveCurrencyWallet(repository, currencyCode: .uah)
         _ = try saveCurrencyWallet(repository, currencyCode: .usd, isArchived: true)
         let monthKey = DateKeys.monthKey(for: .now)
 
-        #expect(throws: CashRunwayError.self) {
+        #expect(throws: Never.self) {
             _ = try repository.dashboard(monthKey: monthKey, walletID: nil)
+        }
+    }
+
+    @Test func archivedOnlyMixedCurrencyWalletsDoNotBlockAllWalletSnapshots() throws {
+        let repository = try makeCurrencyRepository()
+        _ = try saveCurrencyWallet(repository, currencyCode: .uah, isArchived: true)
+        _ = try saveCurrencyWallet(repository, currencyCode: .usd, isArchived: true)
+        let monthKey = DateKeys.monthKey(for: .now)
+
+        #expect(throws: Never.self) {
+            _ = try repository.dashboard(monthKey: monthKey, walletID: nil)
+        }
+        #expect(throws: Never.self) {
+            _ = try repository.overviewSnapshot(monthKey: monthKey, walletID: nil)
+        }
+        #expect(throws: Never.self) {
+            _ = try repository.timelineSnapshot(monthKey: monthKey, walletID: nil)
+        }
+        #expect(throws: Never.self) {
+            _ = try repository.allBars(walletID: nil)
         }
     }
 

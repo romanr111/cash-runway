@@ -267,19 +267,19 @@ public final class CashRunwayAppModel {
         do {
             let repository = self.repository
             let selectedMonthKey = self.selectedMonthKey
-            let selectedWalletID = self.selectedWalletID
             let selectedTimelinePeriod = self.selectedTimelinePeriod
+            let effectiveWalletID = normalizeWalletScopeForAggregates()
             var query = self.transactionQuery
-            query.walletID = selectedWalletID
+            query.walletID = effectiveWalletID
 
             let (bars, snapshot) = try await backgroundWork.loadAllBarsAndSnapshot(
                 selectedMonthKey: selectedMonthKey,
-                selectedWalletID: selectedWalletID,
+                selectedWalletID: effectiveWalletID,
                 selectedTimelinePeriod: selectedTimelinePeriod,
                 transactionQuery: query
             )
 
-            guard currentRefreshScopeMatches(monthKey: selectedMonthKey, walletID: selectedWalletID, period: selectedTimelinePeriod, query: query) else {
+            guard currentRefreshScopeMatches(monthKey: selectedMonthKey, walletID: effectiveWalletID, period: selectedTimelinePeriod, query: query) else {
                 return false
             }
             self.allBars = bars
@@ -309,14 +309,15 @@ public final class CashRunwayAppModel {
 
     /// Loads only the overview snapshot asynchronously. Used for Overview page month navigation.
     public func reloadOverview() async {
+        let effectiveWalletID = normalizeWalletScopeForAggregates()
         let wallets = self.wallets
-        guard Self.shouldLoadOverviewSnapshot(wallets: wallets, selectedWalletID: selectedWalletID) else {
+        guard Self.shouldLoadOverviewSnapshot(wallets: wallets, selectedWalletID: effectiveWalletID) else {
             overviewSnapshot = nil
             preloadAdjacentOverviewSnapshots()
             return
         }
 
-        let cacheKey = overviewCacheKey(monthKey: selectedMonthKey, walletID: selectedWalletID)
+        let cacheKey = overviewCacheKey(monthKey: selectedMonthKey, walletID: effectiveWalletID)
         if let cached = overviewSnapshotCache[cacheKey] {
             overviewSnapshot = cached
             preloadAdjacentOverviewSnapshots()
@@ -329,14 +330,13 @@ public final class CashRunwayAppModel {
         }
         do {
             let selectedMonthKey = self.selectedMonthKey
-            let selectedWalletID = self.selectedWalletID
             let overview = try await backgroundWork.loadOverviewSnapshot(
                 monthKey: selectedMonthKey,
-                walletID: selectedWalletID
+                walletID: effectiveWalletID
             )
             overviewSnapshot = overview
             latestTransactionMonthKey = try? repository.latestTransactionMonthKey()
-            setCachedOverview(overview, monthKey: selectedMonthKey, walletID: selectedWalletID)
+            setCachedOverview(overview, monthKey: selectedMonthKey, walletID: effectiveWalletID)
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
@@ -383,15 +383,15 @@ public final class CashRunwayAppModel {
 
     private func reloadSnapshotsAsync(reloadID: Int) async {
         let targetMonthKey = self.selectedMonthKey
-        let targetWalletID = self.selectedWalletID
         let targetPeriod = self.selectedTimelinePeriod
+        let effectiveWalletID = normalizeWalletScopeForAggregates()
         var targetQuery = self.transactionQuery
-        targetQuery.walletID = targetWalletID
+        targetQuery.walletID = effectiveWalletID
         defer {
             finishTimelineReload(reloadID: reloadID)
         }
 
-        let cacheKey = overviewCacheKey(monthKey: targetMonthKey, walletID: targetWalletID)
+        let cacheKey = overviewCacheKey(monthKey: targetMonthKey, walletID: effectiveWalletID)
         if let cached = overviewSnapshotCache[cacheKey] {
             overviewSnapshot = cached
         }
@@ -399,13 +399,12 @@ public final class CashRunwayAppModel {
         do {
             let mutable = try await backgroundWork.loadMutableSnapshots(
                 selectedMonthKey: targetMonthKey,
-                selectedWalletID: targetWalletID,
+                selectedWalletID: effectiveWalletID,
                 selectedTimelinePeriod: targetPeriod,
                 transactionQuery: targetQuery
             )
 
             guard selectedMonthKey == targetMonthKey,
-                  selectedWalletID == targetWalletID,
                   selectedTimelinePeriod == targetPeriod,
                   timelineReloadState.canApply(reloadID: reloadID) else { return }
 
@@ -418,7 +417,7 @@ public final class CashRunwayAppModel {
             transactionQuery = mutable.transactionQuery
             latestTransactionMonthKey = try? repository.latestTransactionMonthKey()
             if let overview = mutable.overviewSnapshot {
-                setCachedOverview(overview, monthKey: targetMonthKey, walletID: targetWalletID)
+                setCachedOverview(overview, monthKey: targetMonthKey, walletID: effectiveWalletID)
             }
             errorMessage = nil
         } catch {
@@ -450,28 +449,28 @@ public final class CashRunwayAppModel {
 
     private func preloadAdjacentOverviewSnapshots() {
         let wallets = self.wallets
-        guard Self.shouldLoadOverviewSnapshot(wallets: wallets, selectedWalletID: selectedWalletID) else {
+        let effectiveWalletID = Self.normalizedWalletIDForAggregates(wallets: wallets, selectedWalletID: selectedWalletID)
+        guard Self.shouldLoadOverviewSnapshot(wallets: wallets, selectedWalletID: effectiveWalletID) else {
             return
         }
 
         let selectedMonthKey = self.selectedMonthKey
-        let selectedWalletID = self.selectedWalletID
         let maxMonthKey = self.maxMonthKey
         let backgroundWork = self.backgroundWork
-        Task { [selectedMonthKey, selectedWalletID, maxMonthKey, backgroundWork] in
+        Task { [selectedMonthKey, effectiveWalletID, maxMonthKey, backgroundWork] in
             for offset in [-1, 1] {
                 guard let date = DateKeys.calendar.date(byAdding: .month, value: offset, to: DateKeys.startOfMonth(for: selectedMonthKey)) else { continue }
                 let monthKey = DateKeys.monthKey(for: date)
                 guard monthKey <= maxMonthKey else { continue }
-                let key = "\(monthKey)-\(selectedWalletID?.uuidString ?? "all")"
+                let key = "\(monthKey)-\(effectiveWalletID?.uuidString ?? "all")"
                 let shouldLoad = await MainActor.run { [weak self] in
                     guard let self else { return false }
                     return self.overviewSnapshotCache[key] == nil
                 }
                 guard shouldLoad else { continue }
-                guard let snapshot = try? await backgroundWork.loadOverviewSnapshot(monthKey: monthKey, walletID: selectedWalletID) else { continue }
+                guard let snapshot = try? await backgroundWork.loadOverviewSnapshot(monthKey: monthKey, walletID: effectiveWalletID) else { continue }
                 await MainActor.run { [weak self] in
-                    self?.setCachedOverview(snapshot, monthKey: monthKey, walletID: selectedWalletID)
+                    self?.setCachedOverview(snapshot, monthKey: monthKey, walletID: effectiveWalletID)
                 }
             }
         }
@@ -781,10 +780,11 @@ public final class CashRunwayAppModel {
         selectedTimelinePeriod: TimelinePeriod,
         transactionQuery: TransactionQuery
     ) throws -> AppModelSnapshot {
-        var query = transactionQuery
-        query.walletID = selectedWalletID
         let wallets = try repository.wallets()
-        let shouldLoadOverview = shouldLoadOverviewSnapshot(wallets: wallets, selectedWalletID: selectedWalletID)
+        let effectiveWalletID = normalizedWalletIDForAggregates(wallets: wallets, selectedWalletID: selectedWalletID)
+        var query = transactionQuery
+        query.walletID = effectiveWalletID
+        let shouldLoadOverview = shouldLoadOverviewSnapshot(wallets: wallets, selectedWalletID: effectiveWalletID)
         return AppModelSnapshot(
             wallets: wallets,
             walletCategories: try repository.walletCategories(),
@@ -795,9 +795,9 @@ public final class CashRunwayAppModel {
             instances: try repository.recurringInstances(),
             budgets: try repository.budgets(monthKey: selectedMonthKey),
             transactions: try repository.transactions(query: query),
-            dashboardSnapshot: try repository.dashboard(monthKey: selectedMonthKey, walletID: selectedWalletID),
-            timelineSnapshot: try repository.timelineSnapshot(monthKey: selectedMonthKey, walletID: selectedWalletID, query: query, period: selectedTimelinePeriod),
-            overviewSnapshot: shouldLoadOverview ? try repository.overviewSnapshot(monthKey: selectedMonthKey, walletID: selectedWalletID) : nil,
+            dashboardSnapshot: try repository.dashboard(monthKey: selectedMonthKey, walletID: effectiveWalletID),
+            timelineSnapshot: try repository.timelineSnapshot(monthKey: selectedMonthKey, walletID: effectiveWalletID, query: query, period: selectedTimelinePeriod),
+            overviewSnapshot: shouldLoadOverview ? try repository.overviewSnapshot(monthKey: selectedMonthKey, walletID: effectiveWalletID) : nil,
             transactionQuery: query
         )
     }
@@ -809,23 +809,45 @@ public final class CashRunwayAppModel {
         selectedTimelinePeriod: TimelinePeriod,
         transactionQuery: TransactionQuery
     ) throws -> MutableSnapshots {
-        var query = transactionQuery
-        query.walletID = selectedWalletID
         let wallets = try repository.wallets()
-        let shouldLoadOverview = shouldLoadOverviewSnapshot(wallets: wallets, selectedWalletID: selectedWalletID)
+        let effectiveWalletID = normalizedWalletIDForAggregates(wallets: wallets, selectedWalletID: selectedWalletID)
+        var query = transactionQuery
+        query.walletID = effectiveWalletID
+        let shouldLoadOverview = shouldLoadOverviewSnapshot(wallets: wallets, selectedWalletID: effectiveWalletID)
         return MutableSnapshots(
             budgets: try repository.budgets(monthKey: selectedMonthKey),
             walletCategories: try repository.walletCategories(),
             transactions: try repository.transactions(query: query),
-            dashboardSnapshot: try repository.dashboard(monthKey: selectedMonthKey, walletID: selectedWalletID),
-            timelineSnapshot: try repository.timelineSnapshot(monthKey: selectedMonthKey, walletID: selectedWalletID, query: query, period: selectedTimelinePeriod),
-            overviewSnapshot: shouldLoadOverview ? try repository.overviewSnapshot(monthKey: selectedMonthKey, walletID: selectedWalletID) : nil,
+            dashboardSnapshot: try repository.dashboard(monthKey: selectedMonthKey, walletID: effectiveWalletID),
+            timelineSnapshot: try repository.timelineSnapshot(monthKey: selectedMonthKey, walletID: effectiveWalletID, query: query, period: selectedTimelinePeriod),
+            overviewSnapshot: shouldLoadOverview ? try repository.overviewSnapshot(monthKey: selectedMonthKey, walletID: effectiveWalletID) : nil,
             transactionQuery: query
         )
     }
 
+    /// Returns a wallet ID that is safe to use for aggregate queries.
+    ///
+    /// If the selected wallet already produces a single aggregate currency, it is returned.
+    /// Otherwise the first active wallet is used, so mixed-currency all-wallet scopes never
+    /// reach repository methods that throw.
+    fileprivate nonisolated static func normalizedWalletIDForAggregates(wallets: [Wallet], selectedWalletID: UUID?) -> UUID? {
+        if wallets.aggregateCurrencyCode(selectedWalletID: selectedWalletID) != nil {
+            return selectedWalletID
+        }
+        return wallets.first { !$0.isArchived }?.id
+    }
+
+    @discardableResult
+    private func normalizeWalletScopeForAggregates() -> UUID? {
+        let effectiveWalletID = Self.normalizedWalletIDForAggregates(wallets: wallets, selectedWalletID: selectedWalletID)
+        selectedWalletID = effectiveWalletID
+        transactionQuery.walletID = effectiveWalletID
+        return effectiveWalletID
+    }
+
     private nonisolated static func shouldLoadOverviewSnapshot(wallets: [Wallet], selectedWalletID: UUID?) -> Bool {
-        wallets.count <= 1 || wallets.aggregateCurrencyCode(selectedWalletID: selectedWalletID) != nil
+        let activeWallets = wallets.filter { !$0.isArchived }
+        return activeWallets.count <= 1 || activeWallets.aggregateCurrencyCode(selectedWalletID: selectedWalletID) != nil
     }
 
     private func overviewCacheKey(monthKey: Int, walletID: UUID?) -> String {

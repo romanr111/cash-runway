@@ -23,7 +23,7 @@ struct TimelineOverviewView: View {
                 filters
                 monthStrip
                 metricPicker
-                if model.wallets.count > 1, model.aggregateCurrencyCode == nil {
+                if model.wallets.filter({ !$0.isArchived }).count > 1, model.wallets.aggregateCurrencyCode(selectedWalletID: nil) == nil {
                     ContentUnavailableView(
                         "Mixed-currency overview unavailable",
                         systemImage: "chart.bar",
@@ -87,9 +87,11 @@ struct TimelineOverviewView: View {
     private var filters: some View {
         HStack(spacing: 12) {
             Menu {
-                Button("All Wallets") {
-                    model.selectedWalletID = nil
-                    Task { await model.reloadAll() }
+                if model.wallets.aggregateCurrencyCode(selectedWalletID: nil) != nil {
+                    Button("All Wallets") {
+                        model.selectedWalletID = nil
+                        Task { await model.reloadAll() }
+                    }
                 }
                 ForEach(model.wallets) { wallet in
                     Button(wallet.name) {

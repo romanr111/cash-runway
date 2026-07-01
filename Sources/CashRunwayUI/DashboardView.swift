@@ -184,10 +184,12 @@ struct DashboardView: View {
     private var filters: some View {
         HStack(spacing: 12) {
             Menu {
-                Button("All Wallets") {
-                    Task { await model.selectWallet(nil) }
+                if model.wallets.aggregateCurrencyCode(selectedWalletID: nil) != nil {
+                    Button("All Wallets") {
+                        Task { await model.selectWallet(nil) }
+                    }
+                    .accessibilityIdentifier(CashRunwayAccessibilityID.timelineWallet("All Wallets"))
                 }
-                .accessibilityIdentifier(CashRunwayAccessibilityID.timelineWallet("All Wallets"))
                 ForEach(model.wallets) { wallet in
                     Button(wallet.name) {
                         Task { await model.selectWallet(wallet.id) }
@@ -222,7 +224,7 @@ struct DashboardView: View {
         }
 
         return VStack(alignment: .leading, spacing: 16) {
-            if model.wallets.count > 1, model.aggregateCurrencyCode == nil {
+            if model.wallets.filter({ !$0.isArchived }).count > 1, model.wallets.aggregateCurrencyCode(selectedWalletID: nil) == nil {
                 ContentUnavailableView(
                     "Mixed-currency cash flow unavailable",
                     systemImage: "chart.bar",
