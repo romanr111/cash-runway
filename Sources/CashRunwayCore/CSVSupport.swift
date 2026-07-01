@@ -422,7 +422,6 @@ public final class CSVService: CSVImportServicing, @unchecked Sendable {
     continue
 }
 let date = try parseDate(from: cell(row, mapping.dateColumn, headerIndex))
-try validateCurrency(row: row, mapping: mapping, headerIndex: headerIndex)
 let parsedAmount = try parseAmount(row: row, mapping: mapping, headerIndex: headerIndex)
 let signedAmount = parsedAmount.signedMinor
 let kind = parseKind(
@@ -465,6 +464,15 @@ guard rowFilter.includes(kind) else {
                 let resolvedCategoryName = resolvedCategory?.categoryName ?? rawCategoryName
                 let appearance = resolvedCategoryName.flatMap { importedCategoryAppearance(for: $0, kind: kind) }
 
+                guard let wallet = wallets.first(where: { $0.id == walletID }) else {
+                    throw CashRunwayError.validation(L10n.string("Wallet not found for CSV row."))
+                }
+                let walletCurrency = try resolvedWalletCurrency(
+                    row: row,
+                    mapping: mapping,
+                    headerIndex: headerIndex,
+                    wallet: wallet
+                )
                 let fingerprint = importFingerprint(
                         .init(
                             sourceName: fingerprintSourceName,
@@ -481,6 +489,7 @@ guard rowFilter.includes(kind) else {
                     kind: kind,
                     walletID: walletID,
                     amountMinor: abs(signedAmount),
+                    currencyCode: walletCurrency,
                     occurredAt: date,
                     merchant: merchant,
                     note: note,
@@ -549,7 +558,6 @@ do {
         continue
     }
     let date = try parseDate(from: cell(row, mapping.dateColumn, headerIndex))
-    try validateCurrency(row: row, mapping: mapping, headerIndex: headerIndex)
     let parsedAmount = try parseAmount(row: row, mapping: mapping, headerIndex: headerIndex)
     let signedAmount = parsedAmount.signedMinor
     let kind = parseKind(
@@ -604,6 +612,15 @@ do {
                         currency: currency
                     )
                 )
+                guard let wallet = wallets.first(where: { $0.id == walletID }) else {
+                    throw CashRunwayError.validation(L10n.string("Wallet not found for CSV row."))
+                }
+                let walletCurrency = try resolvedWalletCurrency(
+                    row: row,
+                    mapping: mapping,
+                    headerIndex: headerIndex,
+                    wallet: wallet
+                )
                 let legacyFingerprint: String?
                 switch format.role {
                 case .genericBankStatement where rawCategoryName == nil:
@@ -626,6 +643,7 @@ do {
                     kind: kind,
                     walletID: walletID,
                     amountMinor: abs(signedAmount),
+                    currencyCode: walletCurrency,
                     occurredAt: date,
                     merchant: merchant,
                     note: note,
@@ -745,7 +763,7 @@ do {
                 item.categoryName ?? "",
                 item.merchant,
                 MoneyFormatter.plainString(from: item.amountMinor),
-                "UAH",
+                item.currencyCode.rawValue,
                 item.note,
                 item.labels.map(\.name).joined(separator: "|"),
                 ""
@@ -956,13 +974,28 @@ do {
         return wallets.first(where: { $0.name.caseInsensitiveCompare(raw) == .orderedSame })?.id ?? mapping.walletID
     }
 
-    private func validateCurrency(row: [String], mapping: CSVImportMapping, headerIndex: [String: Int]) throws {
+    private func resolvedWalletCurrency(
+        row: [String],
+        mapping: CSVImportMapping,
+        headerIndex: [String: Int],
+        wallet: Wallet
+    ) throws -> CurrencyCode {
         let raw = cell(row, mapping.currencyColumn, headerIndex)
-        guard !raw.isEmpty else { return }
-        let normalized = raw.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        guard normalized == "UAH" || normalized == "₴" || normalized == "ГРН" else {
-            throw CashRunwayError.validation(L10n.string("Unsupported currency."))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !raw.isEmpty else {
+            return wallet.currencyCode
         }
+        let normalized = raw.uppercased()
+        let canonical = (normalized == "₴" || normalized == "ГРН" || normalized == "ГРН.") ? "UAH" : normalized
+        guard let rowCurrency = CurrencyCode(rawValue: canonical) else {
+            throw CashRunwayError.validation(L10n.string("Unsupported currency: \(raw)."))
+        }
+        guard rowCurrency == wallet.currencyCode else {
+            throw CashRunwayError.validation(L10n.string(
+                "Row currency \(rowCurrency.rawValue) does not match wallet currency \(wallet.currencyCode.rawValue)."
+            ))
+        }
+        return wallet.currencyCode
     }
 
     private func parsedMCC(_ raw: String) -> Int? {

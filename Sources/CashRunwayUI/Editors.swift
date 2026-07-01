@@ -137,11 +137,13 @@ struct TransactionEditorView: View {
                     draft.categoryID = availableCategories.first?.id
                     composerState.selectedCategoryID = draft.categoryID
                 }
-                if draft.walletID == UUID(), let firstWalletID = model.wallets.first?.id {
-                    draft.walletID = firstWalletID
+                if draft.walletID == UUID(), let firstWallet = model.wallets.first {
+                    draft.walletID = firstWallet.id
+                    draft.currencyCode = firstWallet.currencyCode
                 }
-                if !model.wallets.isEmpty, !model.wallets.contains(where: { $0.id == draft.walletID }), let firstWalletID = model.wallets.first?.id {
-                    draft.walletID = firstWalletID
+                if !model.wallets.isEmpty, !model.wallets.contains(where: { $0.id == draft.walletID }), let firstWallet = model.wallets.first {
+                    draft.walletID = firstWallet.id
+                    draft.currencyCode = firstWallet.currencyCode
                 }
                 if draft.id == nil {
                     composerModal = .category
@@ -225,7 +227,7 @@ struct TransactionEditorView: View {
                                 }
                             }
                             .accessibilityIdentifier(CashRunwayAccessibilityID.transactionAmountField)
-                        Text("UAH")
+                        Text(draft.currencyCode.rawValue)
                             .font(.system(size: 14, weight: .bold))
                             .foregroundStyle(CashRunwayTheme.textPrimary)
                             .padding(.horizontal, 12)
@@ -329,11 +331,12 @@ struct TransactionEditorView: View {
                                         .font(.system(size: 17, weight: .semibold))
                                         .foregroundStyle(CashRunwayTheme.textPrimary)
                                     Spacer()
-                                    Menu {
-                                        ForEach(model.wallets.filter { $0.id != draft.walletID }) { wallet in
-                                            Button(wallet.name) { draft.destinationWalletID = wallet.id }
-                                        }
-                                    } label: {
+                            Menu {
+                                ForEach(model.wallets.filter { $0.id != draft.walletID && $0.currencyCode == draft.currencyCode }) { wallet in
+                                    Button(wallet.name) { draft.destinationWalletID = wallet.id }
+                                }
+                            } label: {
+
                                         HStack(spacing: 8) {
                                             Text(transferDestinationName)
                                                 .font(.system(size: 16))
@@ -643,6 +646,7 @@ struct TransactionEditorView: View {
             walletID: draft.walletID,
             counterpartyWalletID: draft.destinationWalletID,
             amountMinor: draft.amountMinor,
+            currencyCode: draft.currencyCode,
             categoryID: composerState.selectedCategoryID,
             merchant: draft.merchant.isEmpty ? nil : draft.merchant,
             note: draft.note.isEmpty ? nil : draft.note,
@@ -755,8 +759,15 @@ struct TransactionEditorView: View {
 
     private func selectWallet(_ wallet: Wallet) {
         draft.walletID = wallet.id
-        if draft.kind == .transfer, draft.destinationWalletID == wallet.id {
-            draft.destinationWalletID = nil
+        draft.currencyCode = wallet.currencyCode
+        if draft.kind == .transfer {
+            if draft.destinationWalletID == wallet.id {
+                draft.destinationWalletID = nil
+            } else if let destinationID = draft.destinationWalletID,
+                      let destination = model.wallets.first(where: { $0.id == destinationID }),
+                      destination.currencyCode != wallet.currencyCode {
+                draft.destinationWalletID = nil
+            }
         }
     }
 
@@ -853,7 +864,7 @@ private struct TransactionCategorySheet: View {
                         draft.destinationWalletID = nil
                     case .transfer:
                         composerState.selectedCategoryID = nil
-                        draft.destinationWalletID = model.wallets.first(where: { $0.id != draft.walletID })?.id
+                        draft.destinationWalletID = model.wallets.first(where: { $0.id != draft.walletID && $0.currencyCode == draft.currencyCode })?.id
                     }
                 }
 

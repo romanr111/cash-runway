@@ -53,6 +53,17 @@ struct WalletEditorView: View {
                                     wallet.kind = category.kind
                                 }
                             }
+                            Picker(L10n.string("Currency"), selection: $wallet.currencyCode) {
+                                ForEach(SupportedCurrency.allCases, id: \.currencyCode) { currency in
+                                    Text(currency.displayName).tag(currency.currencyCode)
+                                }
+                            }
+                            .disabled(!canChangeCurrency)
+                            if !canChangeCurrency {
+                                Text(L10n.string("Currency cannot be changed after ledger or bank data exists."))
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundStyle(CashRunwayTheme.textMuted)
+                            }
                             TextField(L10n.string("Starting Balance"), text: $balanceText)
                                 .keyboardType(.decimalPad)
                                 .textFieldStyle(.roundedBorder)
@@ -87,8 +98,9 @@ struct WalletEditorView: View {
                         wallet.startingBalanceMinor = balance
                         wallet.currentBalanceMinor = balance
                         wallet.updatedAt = .now
-                        model.saveWallet(wallet)
-                        dismiss()
+                        if model.saveWallet(wallet) {
+                            dismiss()
+                        }
                     }
                 }
             }
@@ -131,6 +143,10 @@ struct WalletEditorView: View {
     private var walletCategoryDisplayName: String {
         model.walletCategories.first { $0.id == wallet.categoryID }?.displayName
             ?? L10n.walletKind(wallet.kind)
+    }
+
+    private var canChangeCurrency: Bool {
+        model.canChangeWalletCurrency(wallet.id)
     }
 }
 

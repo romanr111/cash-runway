@@ -81,6 +81,7 @@ public protocol SettingsRepositorying: Sendable {
     func seedIfNeeded() throws
     func saveWalletCategory(_ category: WalletCategory) throws
     func saveWallet(_ wallet: Wallet) throws
+    func canChangeWalletCurrency(id: UUID) throws -> Bool
     func deleteWallet(id: UUID) throws
     func deleteLabel(id: UUID) throws
     func saveCategory(_ category: Category) throws
@@ -122,7 +123,26 @@ public protocol CurrencyRepositorying: Sendable {
         on date: Date,
         source: String?
     ) throws -> ExchangeRate?
+    func cachedExchangeRate(
+        from sourceCurrency: CurrencyCode,
+        to targetCurrency: CurrencyCode,
+        on date: Date,
+        source: String?,
+        maxStaleness: TimeInterval
+    ) throws -> ExchangeRate?
     func saveExchangeRates(_ rates: [ExchangeRate]) throws
+}
+
+public extension CurrencyRepositorying {
+    func cachedExchangeRate(
+        from sourceCurrency: CurrencyCode,
+        to targetCurrency: CurrencyCode,
+        on date: Date,
+        source: String?,
+        maxStaleness: TimeInterval
+    ) throws -> ExchangeRate? {
+        try cachedExchangeRate(from: sourceCurrency, to: targetCurrency, on: date, source: source)
+    }
 }
 
 // MARK: - Composed repository abstraction
@@ -137,6 +157,17 @@ public typealias CashRunwayRepositorying = BankSyncRepositorying &
     SettingsRepositorying &
     CurrencyRepositorying &
     MaintenanceRepositorying
+
+public extension DashboardRepositorying {
+    /// Returns a wallet ID that is safe to use for aggregate queries.
+    /// Mixed-currency all-wallet scopes fall back to a concrete active wallet.
+    func normalizedWalletIDForAggregates(selectedWalletID: UUID?) throws -> UUID? {
+        let wallets = try wallets()
+        return wallets.aggregateCurrencyCode(selectedWalletID: selectedWalletID) != nil
+            ? selectedWalletID
+            : wallets.first(where: { !$0.isArchived })?.id ?? wallets.first?.id
+    }
+}
 
 // MARK: - Default-argument convenience wrappers
 //

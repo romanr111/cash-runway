@@ -28,6 +28,7 @@ struct SettingsView: View {
     @State private var isFeedbackReportPresented = false
     @State private var isDiagnosticsPresented = false
     @State private var isLanguageSettingsPresented = false
+    @State private var isCurrencySettingsPresented = false
     @AppStorage(AppLanguagePreference.storageKey) private var languagePreferenceRaw = AppLanguagePreference.system.rawValue
 
     var body: some View {
@@ -82,7 +83,9 @@ struct SettingsView: View {
                             }
                             .accessibilityIdentifier(CashRunwayAccessibilityID.settingsScheduledTransactionsRow)
                             rowDivider
-                            staticRow(icon: "banknote.fill", tint: "#4A80C1", title: "Main Currency", value: "UAH")
+                            moreRow(icon: "banknote.fill", tint: "#4A80C1", title: "Main Currency", subtitle: model.defaultCurrencyCode.rawValue) {
+                                isCurrencySettingsPresented = true
+                            }
                             .accessibilityIdentifier(CashRunwayAccessibilityID.settingsMainCurrencyRow)
                             rowDivider
                             moreRow(icon: "globe", tint: "#2AAAD2", title: "Language", subtitle: languagePreference.displayName) {
@@ -237,6 +240,9 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $isLanguageSettingsPresented) {
                 LanguageSettingsView(selection: $languagePreferenceRaw)
+            }
+            .sheet(isPresented: $isCurrencySettingsPresented) {
+                CurrencySettingsView(model: model)
             }
             .sheet(isPresented: $isCSVExporterPresented) {
                 if let url = exportFileURL {
@@ -563,13 +569,14 @@ private struct ScheduledTransactionsView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
-                        guard let firstWalletID = model.wallets.first?.id else { return }
+                        guard let firstWallet = model.wallets.first else { return }
                         templateDraft = RecurringTemplate(
                             id: UUID(),
                             kind: .expense,
-                            walletID: firstWalletID,
+                            walletID: firstWallet.id,
                             counterpartyWalletID: model.wallets.dropFirst().first?.id,
                             amountMinor: 0,
+                            currencyCode: firstWallet.currencyCode,
                             categoryID: model.expenseCategories.first?.id,
                             merchant: nil,
                             note: nil,
@@ -683,6 +690,87 @@ private struct LanguageSettingsView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }
                 }
+            }
+        }
+    }
+}
+
+private struct CurrencySettingsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Bindable var model: CashRunwayAppModel
+    @State private var selectedCurrency: CurrencyCode = .uah
+
+    var body: some View {
+        NavigationStack {
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 22) {
+                    ScreenTitle(title: "Main Currency")
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Choose the default currency for new wallets.")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(CashRunwayTheme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, 4)
+
+                        VStack(spacing: 0) {
+                            ForEach(SupportedCurrency.allCases, id: \.currencyCode) { currency in
+                                Button {
+                                    selectedCurrency = currency.currencyCode
+                                } label: {
+                                    HStack(spacing: 14) {
+                                        CategoryGlyph(iconName: "banknote.fill", colorHex: "#4A80C1", size: 44)
+                                        VStack(alignment: .leading, spacing: 3) {
+                                            Text(currency.displayName)
+                                                .font(.system(size: 17, weight: .semibold))
+                                                .foregroundStyle(CashRunwayTheme.textPrimary)
+                                            Text(currency.rawValue)
+                                                .font(.system(size: 14, weight: .medium))
+                                                .foregroundStyle(CashRunwayTheme.textSecondary)
+                                                .lineLimit(1)
+                                        }
+                                        Spacer()
+                                        if selectedCurrency == currency.currencyCode {
+                                            Image(systemName: "checkmark.circle.fill")
+                                                .font(.system(size: 20, weight: .semibold))
+                                                .foregroundStyle(CashRunwayTheme.accent)
+                                        }
+                                    }
+                                    .padding(.horizontal, 18)
+                                    .padding(.vertical, 16)
+                                }
+                                .buttonStyle(.plain)
+
+                                if currency != SupportedCurrency.allCases.last {
+                                    Divider().overlay(CashRunwayTheme.line).padding(.leading, 72)
+                                }
+                            }
+                        }
+                        .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+                .padding(.bottom, 36)
+            }
+            .background(CashRunwayTheme.background)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Save") {
+                        var preferences = CurrencyPreferences()
+                        preferences.defaultCurrencyCode = selectedCurrency
+                        preferences.reportingCurrencyCode = model.reportingCurrencyCode
+                        model.saveCurrencyPreferences(preferences)
+                        dismiss()
+                    }
+                }
+            }
+            .onAppear {
+                selectedCurrency = model.defaultCurrencyCode
             }
         }
     }

@@ -23,8 +23,18 @@ struct TimelineOverviewView: View {
                 filters
                 monthStrip
                 metricPicker
-                categoriesCard
-                overviewChart
+                if model.wallets.filter({ !$0.isArchived }).count > 1, model.wallets.aggregateCurrencyCode(selectedWalletID: nil) == nil {
+                    ContentUnavailableView(
+                        "Mixed-currency overview unavailable",
+                        systemImage: "chart.bar",
+                        description: Text("Select a single wallet to view spending charts.")
+                    )
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 18)
+                } else {
+                    categoriesCard
+                    overviewChart
+                }
                 labelsCard
             }
             .padding(.horizontal, 20)
@@ -77,9 +87,11 @@ struct TimelineOverviewView: View {
     private var filters: some View {
         HStack(spacing: 12) {
             Menu {
-                Button("All Wallets") {
-                    model.selectedWalletID = nil
-                    Task { await model.reloadAll() }
+                if model.wallets.aggregateCurrencyCode(selectedWalletID: nil) != nil {
+                    Button("All Wallets") {
+                        model.selectedWalletID = nil
+                        Task { await model.reloadAll() }
+                    }
                 }
                 ForEach(model.wallets) { wallet in
                     Button(wallet.name) {
@@ -181,11 +193,11 @@ struct TimelineOverviewView: View {
             }
 
             HStack(spacing: 8) {
-                kindCard(title: L10n.string("Expenses"), value: MoneyFormatter.string(from: -(model.overviewSnapshot?.monthExpenseMinor ?? 0)), kind: .expense, isSelected: categoryKind == .expense) {
+                kindCard(title: L10n.string("Expenses"), value: aggregateValue(for: -(model.overviewSnapshot?.monthExpenseMinor ?? 0), currencyCode: model.aggregateCurrencyCode), kind: .expense, isSelected: categoryKind == .expense) {
                     categoryKind = .expense
                 }
                 .accessibilityIdentifier(CashRunwayAccessibilityID.overviewExpensesCard)
-                kindCard(title: L10n.string("Income"), value: MoneyFormatter.string(from: model.overviewSnapshot?.monthIncomeMinor ?? 0), kind: .income, isSelected: categoryKind == .income) {
+                kindCard(title: L10n.string("Income"), value: aggregateValue(for: model.overviewSnapshot?.monthIncomeMinor ?? 0, currencyCode: model.aggregateCurrencyCode), kind: .income, isSelected: categoryKind == .income) {
                     categoryKind = .income
                 }
                 .accessibilityIdentifier(CashRunwayAccessibilityID.overviewIncomeCard)
@@ -428,7 +440,7 @@ struct TimelineOverviewView: View {
                     .foregroundStyle(CashRunwayTheme.textSecondary)
             }
             Spacer()
-            Text(MoneyFormatter.string(from: signedAmount(item.amountMinor)))
+            Text(aggregateValue(for: signedAmount(item.amountMinor), currencyCode: model.aggregateCurrencyCode))
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(categoryKind == .expense ? CashRunwayTheme.negative : CashRunwayTheme.positive)
                 .lineLimit(1)
@@ -468,7 +480,7 @@ struct TimelineOverviewView: View {
                     .foregroundStyle(CashRunwayTheme.textSecondary)
             }
             Spacer()
-            Text(MoneyFormatter.string(from: signedAmount(item.amountMinor)))
+            Text(aggregateValue(for: signedAmount(item.amountMinor), currencyCode: model.aggregateCurrencyCode))
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(categoryKind == .expense ? CashRunwayTheme.negative : CashRunwayTheme.positive)
         }
@@ -517,9 +529,9 @@ struct TimelineOverviewView: View {
     private func chartValue(for metric: OverviewChartMetric) -> String {
         switch metric {
         case .wealth:
-            MoneyFormatter.string(from: model.overviewSnapshot?.totalWealthMinor ?? 0)
+            aggregateValue(for: model.overviewSnapshot?.totalWealthMinor ?? 0, currencyCode: model.aggregateCurrencyCode)
         case .cashFlow:
-            MoneyFormatter.string(from: model.overviewSnapshot?.monthCashFlowMinor ?? 0)
+            aggregateValue(for: model.overviewSnapshot?.monthCashFlowMinor ?? 0, currencyCode: model.aggregateCurrencyCode)
         }
     }
 
@@ -530,6 +542,14 @@ struct TimelineOverviewView: View {
         case .cashFlow:
             point.cashFlowMinor
         }
+    }
+
+    private func aggregateValue(for minorUnits: Int64, currencyCode: CurrencyCode?) -> String {
+        guard let currencyCode else {
+            return L10n.string("Mixed-currency totals unavailable")
+        }
+
+        return MoneyFormatter.string(from: minorUnits, currencyCode: currencyCode)
     }
 
     private func metricCard(title: String, value: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
@@ -594,4 +614,3 @@ struct TimelineOverviewView: View {
         model.wallets.first(where: { $0.id == id })?.name
     }
 }
-

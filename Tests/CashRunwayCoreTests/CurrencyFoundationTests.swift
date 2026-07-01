@@ -205,6 +205,8 @@ struct CurrencyFoundationTests {
         let repository = try makeCurrencyRepository()
         let wallet = try saveCurrencyWallet(repository, currencyCode: .usd)
         let category = try saveExpenseCategory(repository)
+        #expect(try repository.canChangeWalletCurrency(id: wallet.id))
+        #expect(try repository.canChangeWalletCurrency(id: wallet.id))
 
         #expect(throws: CashRunwayError.self) {
             try repository.saveTransaction(TransactionDraft(
@@ -302,6 +304,7 @@ struct CurrencyFoundationTests {
     @Test func repositoryRejectsWalletCurrencyChangeAfterTransactionsExist() throws {
         let repository = try makeCurrencyRepository()
         var wallet = try saveCurrencyWallet(repository, currencyCode: .uah)
+        #expect(try repository.canChangeWalletCurrency(id: wallet.id))
         let category = try saveExpenseCategory(repository)
         try repository.saveTransaction(TransactionDraft(
             kind: .expense,
@@ -313,6 +316,8 @@ struct CurrencyFoundationTests {
         ))
 
         wallet.currencyCode = .usd
+        #expect(!(try repository.canChangeWalletCurrency(id: wallet.id)))
+        #expect(!(try repository.canChangeWalletCurrency(id: wallet.id)))
 
         #expect(throws: CashRunwayError.self) {
             try repository.saveWallet(wallet)
@@ -391,14 +396,92 @@ struct CurrencyFoundationTests {
         _ = try repository.allBars(walletID: uahWallet.id)
     }
 
-    @Test func archivedMixedCurrencyWalletStillRejectsAllWalletSnapshots() throws {
+    @Test func archivedMixedCurrencyWalletDoesNotBlockActiveAllWalletSnapshots() throws {
         let repository = try makeCurrencyRepository()
         _ = try saveCurrencyWallet(repository, currencyCode: .uah)
         _ = try saveCurrencyWallet(repository, currencyCode: .usd, isArchived: true)
         let monthKey = DateKeys.monthKey(for: .now)
 
-        #expect(throws: CashRunwayError.self) {
+        #expect(throws: Never.self) {
             _ = try repository.dashboard(monthKey: monthKey, walletID: nil)
+        }
+    }
+
+    @Test func archivedOnlyMixedCurrencyWalletsDoNotBlockAllWalletSnapshots() throws {
+        let repository = try makeCurrencyRepository()
+        _ = try saveCurrencyWallet(repository, currencyCode: .uah, isArchived: true)
+        _ = try saveCurrencyWallet(repository, currencyCode: .usd, isArchived: true)
+        let monthKey = DateKeys.monthKey(for: .now)
+
+        #expect(throws: Never.self) {
+            _ = try repository.dashboard(monthKey: monthKey, walletID: nil)
+        }
+        #expect(throws: Never.self) {
+            _ = try repository.overviewSnapshot(monthKey: monthKey, walletID: nil)
+        }
+        #expect(throws: Never.self) {
+            _ = try repository.timelineSnapshot(monthKey: monthKey, walletID: nil)
+        }
+        #expect(throws: Never.self) {
+            _ = try repository.allBars(walletID: nil)
+        }
+    }
+
+    @Test func aggregateCurrencyCodeRespectsSelectedWallet() {
+        let uahWallet = Wallet(
+            id: UUID(),
+            name: "UAH",
+            kind: .cash,
+            colorHex: nil,
+            iconName: nil,
+            startingBalanceMinor: 0,
+            currentBalanceMinor: 0,
+            currencyCode: .uah,
+            isArchived: false,
+            sortOrder: 0,
+            createdAt: .now,
+            updatedAt: .now
+        )
+        let usdWallet = Wallet(
+            id: UUID(),
+            name: "USD",
+            kind: .cash,
+            colorHex: nil,
+            iconName: nil,
+            startingBalanceMinor: 0,
+            currentBalanceMinor: 0,
+            currencyCode: .usd,
+            isArchived: false,
+            sortOrder: 1,
+            createdAt: .now,
+            updatedAt: .now
+        )
+
+        #expect([uahWallet, usdWallet].aggregateCurrencyCode(selectedWalletID: uahWallet.id) == .uah)
+        #expect([uahWallet, usdWallet].aggregateCurrencyCode(selectedWalletID: usdWallet.id) == .usd)
+        #expect([uahWallet, usdWallet].aggregateCurrencyCode(selectedWalletID: nil) == nil)
+    }
+
+    @Test func repositoryUsesFreshWalletsForAggregateNormalization() throws {
+        let repository = try makeCurrencyRepository()
+        _ = try saveCurrencyWallet(repository, currencyCode: .uah)
+        let staleWallets = try repository.wallets()
+        _ = try saveCurrencyWallet(repository, currencyCode: .usd)
+
+        #expect(staleWallets.aggregateCurrencyCode(selectedWalletID: nil) == .uah)
+
+        let effectiveWalletID = try repository.normalizedWalletIDForAggregates(selectedWalletID: nil)
+        #expect(effectiveWalletID != nil)
+
+        let monthKey = DateKeys.monthKey(for: .now)
+        #expect(throws: Never.self) {
+            _ = try repository.dashboard(monthKey: monthKey, walletID: effectiveWalletID)
+        }
+        #expect(throws: Never.self) {
+            _ = try repository.timelineSnapshot(monthKey: monthKey, walletID: effectiveWalletID, query: .init(), period: .month)
+        }
+        #expect(throws: Never.self) {
+            _ = try repository.allBars(walletID: effectiveWalletID, period: .month)
         }
     }
 

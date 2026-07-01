@@ -35,7 +35,20 @@ struct WalletManagementView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
-                        walletDraft = Wallet(id: UUID(), name: "", kind: .cash, colorHex: "#60788A", iconName: "wallet.pass.fill", startingBalanceMinor: 0, currentBalanceMinor: 0, isArchived: false, sortOrder: model.wallets.count, createdAt: .now, updatedAt: .now)
+                        walletDraft = Wallet(
+                            id: UUID(),
+                            name: "",
+                            kind: .cash,
+                            colorHex: "#60788A",
+                            iconName: "wallet.pass.fill",
+                            startingBalanceMinor: 0,
+                            currentBalanceMinor: 0,
+                            currencyCode: model.defaultCurrencyCode,
+                            isArchived: false,
+                            sortOrder: model.wallets.count,
+                            createdAt: .now,
+                            updatedAt: .now
+                        )
                         isEditorPresented = true
                     } label: {
                         Image(systemName: "plus")

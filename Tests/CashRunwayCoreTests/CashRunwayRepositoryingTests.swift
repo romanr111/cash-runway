@@ -50,6 +50,7 @@ private final class MockRepository: CashRunwayRepositorying, @unchecked Sendable
     func latestTransactionMonthKey() throws -> Int? { nil }
     func saveWalletCategory(_ category: WalletCategory) throws {}
     func saveWallet(_ wallet: Wallet) throws {}
+    func canChangeWalletCurrency(id: UUID) throws -> Bool { true }
     func deleteWallet(id: UUID) throws {}
     func deleteLabel(id: UUID) throws {}
     func saveCategory(_ category: CashRunwayCore.Category) throws {}
@@ -101,6 +102,13 @@ private final class MockRepository: CashRunwayRepositorying, @unchecked Sendable
         to targetCurrency: CurrencyCode,
         on date: Date,
         source: String?
+    ) throws -> ExchangeRate? { nil }
+    func cachedExchangeRate(
+        from sourceCurrency: CurrencyCode,
+        to targetCurrency: CurrencyCode,
+        on date: Date,
+        source: String?,
+        maxStaleness: TimeInterval
     ) throws -> ExchangeRate? { nil }
     func saveExchangeRates(_ rates: [ExchangeRate]) throws {}
     func exportFullBackup() throws -> CashRunwayBackup {

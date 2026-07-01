@@ -657,6 +657,31 @@ extension CashRunwayRepository {
         }
     }
 
+    public func canChangeWalletCurrency(id: UUID) throws -> Bool {
+        try databaseManager.dbQueue.read { db in
+            guard try Self.tableHasColumn(db, table: "wallets", column: "currency_code"),
+                  let row = try Row.fetchOne(
+                    db,
+                    sql: "SELECT starting_balance_minor, current_balance_minor FROM wallets WHERE id = ?",
+                    arguments: [id.uuidString]
+                  )
+            else {
+                return true
+            }
+
+            let existingStarting: Int64 = row["starting_balance_minor"]
+            let existingCurrent: Int64 = row["current_balance_minor"]
+            guard existingStarting == 0,
+                  existingCurrent == 0,
+                  try dependentCurrencyDataCount(db, walletID: id) == 0
+            else {
+                return false
+            }
+
+            return true
+        }
+    }
+
     public func deleteWallet(id: UUID) throws {
         let activeCount = try databaseManager.dbQueue.read { db in
             try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM wallets WHERE is_archived = 0") ?? 0
@@ -2567,7 +2592,7 @@ extension CashRunwayRepository {
         }
         let activeCurrencyCount = try Int.fetchOne(
             db,
-            sql: "SELECT COUNT(DISTINCT currency_code) FROM wallets"
+            sql: "SELECT COUNT(DISTINCT currency_code) FROM wallets WHERE is_archived = 0"
         ) ?? 0
         guard activeCurrencyCount <= 1 else {
             throw CashRunwayError.validation(L10n.string("All-wallet totals require a single wallet currency until currency conversion is available."))
