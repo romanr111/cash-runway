@@ -198,6 +198,26 @@ struct BulkDeleteTransactionsTests {
         #expect(summary.incomeMinor == 2_000)
     }
 
+    @Test func transactionDeletionSummaryPreservesSignedIncomeAmounts() throws {
+        let repository = try makeRepository()
+        let wallet = try makeWallet(repository: repository, name: "Cash", balanceMinor: 1_000_000)
+
+        try insertRawTransaction(
+            repository: repository,
+            id: UUID(),
+            walletID: wallet.id,
+            type: "income",
+            linkedTransferID: nil,
+            amountMinor: -2_000,
+            occurredAt: Self.date(2026, 6, 15)
+        )
+
+        let summary = try repository.transactionDeletionSummary(for: .thisMonth, now: now)
+        #expect(summary.incomeMinor == -2_000)
+        #expect(summary.hasIncomeImpact)
+        #expect(summary.hasFinancialImpact)
+    }
+
     // MARK: - Day
 
     @Test func deleteTodayRemovesOnlyTodayAndPreservesOthers() throws {

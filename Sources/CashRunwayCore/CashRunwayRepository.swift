@@ -1613,7 +1613,7 @@ extension CashRunwayRepository {
                     COUNT(*) AS count,
                     COALESCE(SUM(CASE WHEN type != 'transfer_in' THEN 1 ELSE 0 END), 0) AS display_count,
                     COALESCE(SUM(CASE WHEN type = 'expense' THEN ABS(amount_minor) ELSE 0 END), 0) AS expense_minor,
-                    COALESCE(SUM(CASE WHEN type = 'income' THEN ABS(amount_minor) ELSE 0 END), 0) AS income_minor
+                    COALESCE(SUM(CASE WHEN type = 'income' THEN amount_minor ELSE 0 END), 0) AS income_minor
                 FROM transactions
                 WHERE \(predicate)
                 """,

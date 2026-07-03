@@ -100,7 +100,7 @@ public final class AgentAccessService: AgentAccessServicing, Sendable {
                 handle: walletHandle($0),
                 name: redactionService.redactAccountLikePatterns($0.name),
                 kind: $0.kind,
-                currentBalance: uahMoney($0.currentBalanceMinor)
+                currentBalance: money($0.currentBalanceMinor, currencyCode: $0.currencyCode)
             )
         }
 
@@ -138,7 +138,7 @@ public final class AgentAccessService: AgentAccessServicing, Sendable {
                 handle: walletHandle($0),
                 name: redactionService.redactAccountLikePatterns($0.name),
                 kind: $0.kind,
-                currentBalance: uahMoney($0.currentBalanceMinor)
+                currentBalance: money($0.currentBalanceMinor, currencyCode: $0.currencyCode)
             )
         }
         let response = AgentWalletsResponse(wallets: dtos)
@@ -240,7 +240,7 @@ public final class AgentAccessService: AgentAccessServicing, Sendable {
                 occurredAt: item.occurredAt,
                 walletDisplayName: redactionService.redactAccountLikePatterns(item.walletName),
                 kind: item.kind.asTransactionKind,
-                amount: uahMoney(item.amountMinor),
+                amount: money(item.amountMinor, currencyCode: item.currencyCode),
                 categoryName: item.categoryName.map(redactionService.redactAccountLikePatterns),
                 merchantPreview: merchant,
                 notePreview: note,
@@ -446,13 +446,10 @@ public final class AgentAccessService: AgentAccessServicing, Sendable {
               let startDate = calendar.date(from: startComponents) else {
             return false
         }
-        guard let endDate = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: startDate) else {
-            return false
-        }
-        // The requested month must overlap the approved date scope.
-        // This lets a "last 30 days" session ask about the current month without
-        // silently broadening access to months entirely outside the scope.
-        return interval.start <= endDate && startDate <= interval.end
+        // Monthly overview aggregates are month-grained. Require the requested
+        // month to begin inside the approved scope rather than accepting any
+        // overlap with an older partially covered month.
+        return interval.start <= startDate && startDate <= interval.end
     }
 
     private func monthKeyComponents(_ monthKey: Int) -> DateComponents? {
@@ -498,6 +495,10 @@ public final class AgentAccessService: AgentAccessServicing, Sendable {
 
     private func uahMoney(_ amountMinor: Int64) -> AgentMoneyDTO {
         AgentMoneyDTO(amountMinor: amountMinor, currencyCode: "UAH", scale: 2)
+    }
+
+    private func money(_ amountMinor: Int64, currencyCode: CurrencyCode) -> AgentMoneyDTO {
+        AgentMoneyDTO(amountMinor: amountMinor, currencyCode: currencyCode.rawValue, scale: 2)
     }
 
     // MARK: - Egress validation

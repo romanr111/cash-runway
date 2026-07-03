@@ -188,4 +188,55 @@ struct AgentPermissionBoundaryTests {
         #expect(entries[0].decision == .allowed)
         #expect(entries[0].resultCount == 3)
     }
+
+    @Test func moneyResponsesPreserveSourceCurrencyCodes() async throws {
+        let clock = TestClock()
+        let (service, _, _, dashboard, _) = AgentTestMocks.makeService(clock: clock)
+        let walletID = UUID()
+        dashboard.set(wallets: [
+            Wallet(
+                id: walletID,
+                name: "USD Card",
+                kind: .card,
+                colorHex: nil,
+                iconName: nil,
+                startingBalanceMinor: 0,
+                currentBalanceMinor: 12_345,
+                currencyCode: .usd,
+                isArchived: false,
+                sortOrder: 0,
+                createdAt: clock.now,
+                updatedAt: clock.now
+            )
+        ])
+        dashboard.set(transactions: [
+            TransactionListItem(
+                id: UUID(),
+                walletName: "USD Card",
+                amountMinor: 1_234,
+                currencyCode: .usd,
+                occurredAt: clock.now,
+                categoryName: nil,
+                categoryColorHex: nil,
+                categoryIconName: nil,
+                merchant: "Store",
+                note: "",
+                kind: .expense,
+                source: .manual,
+                labels: [],
+                dayKey: 0
+            )
+        ])
+        let session = try await AgentTestMocks.makeSession(
+            service: service,
+            capabilities: [.readWallets, .readTransactions],
+            scope: AgentScope(walletScope: .selectedWallets([walletID]), includeMerchantNames: true)
+        )
+
+        let wallets = try await service.readWallets(sessionID: session.id)
+        let transactions = try await service.readTransactions(sessionID: session.id, request: .init())
+
+        #expect(wallets.wallets.first?.currentBalance.currencyCode == "USD")
+        #expect(transactions.transactions.first?.amount.currencyCode == "USD")
+    }
 }

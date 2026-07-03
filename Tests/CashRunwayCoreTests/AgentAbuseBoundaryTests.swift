@@ -152,6 +152,32 @@ struct AgentAbuseBoundaryTests {
         #expect(entries[0].denialReason == .dateRangeOutOfScope)
     }
 
+    @Test func overviewRejectsPartiallyCoveredMonthKey() async throws {
+        let calendar = Calendar.current
+        let start = calendar.date(from: DateComponents(year: 2026, month: 6, day: 5))!
+        let end = calendar.date(from: DateComponents(year: 2026, month: 6, day: 20))!
+        let clock = TestClock(now: end)
+        let (service, _, audit, dashboard, _) = AgentTestMocks.makeService(clock: clock)
+        let walletID = UUID()
+        dashboard.set(wallets: [
+            Wallet(id: walletID, name: "Cash", kind: .cash, colorHex: nil, iconName: nil, startingBalanceMinor: 0, currentBalanceMinor: 0, isArchived: false, sortOrder: 0, createdAt: clock.now, updatedAt: clock.now)
+        ])
+        let session = try await AgentTestMocks.makeSession(
+            service: service,
+            capabilities: [.readOverview],
+            scope: AgentScope(dateScope: .closedRange(DateInterval(start: start, end: end)))
+        )
+
+        await #expect(throws: AgentAccessError.dateRangeOutOfScope) {
+            try await service.readOverview(sessionID: session.id, request: .init(monthKey: 202606))
+        }
+
+        let entries = try await audit.entries(forSessionID: session.id)
+        #expect(entries.count == 1)
+        #expect(entries[0].decision == .denied)
+        #expect(entries[0].denialReason == .dateRangeOutOfScope)
+    }
+
     // MARK: - Universal egress redaction
 
     @Test func walletResponseWithForbiddenSubstringIsDenied() async throws {

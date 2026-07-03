@@ -280,12 +280,12 @@ struct DeleteTransactionsView: View {
                 }
                 Spacer()
             }
-            if plan.expenseMinor > 0 || plan.incomeMinor > 0 {
+            if plan.hasFinancialImpact {
                 HStack(spacing: CashRunwayTheme.spaceM) {
-                    if plan.expenseMinor > 0 {
+                    if plan.hasExpenseImpact {
                         amountStat(label: "Expenses", value: plan.expenseMinor)
                     }
-                    if plan.incomeMinor > 0 {
+                    if plan.hasIncomeImpact {
                         amountStat(label: "Income", value: plan.incomeMinor)
                     }
                 }
@@ -360,10 +360,10 @@ struct DeleteTransactionsView: View {
             return L10n.transactionCount(0)
         }
         var parts: [String] = [L10n.transactionCount(summary.displayCount)]
-        if summary.expenseMinor > 0 {
+        if summary.hasExpenseImpact {
             parts.append("\(L10n.string("Expenses")) \(MoneyFormatter.string(from: summary.expenseMinor))")
         }
-        if summary.incomeMinor > 0 {
+        if summary.hasIncomeImpact {
             parts.append("\(L10n.string("Income")) \(MoneyFormatter.string(from: summary.incomeMinor))")
         }
         return parts.joined(separator: " · ")
