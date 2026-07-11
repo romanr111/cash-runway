@@ -38,12 +38,13 @@ struct MaskedCardSearchIndexTests {
             )
             return (persisted, indexed)
         }
+        let hiddenPrefixMatches = try repository.transactions(query: .init(searchText: "537552"))
 
         #expect(storedValues.0 == rawTitle)
         #expect(storedValues.1 == "5375 6627")
         #expect(try repository.transactions(query: .init(searchText: "5375")).map(\.id).contains(transactionID))
         #expect(try repository.transactions(query: .init(searchText: "6627")).map(\.id).contains(transactionID))
-        #expect(!repository.transactions(query: .init(searchText: "537552")).map(\.id).contains(transactionID))
+        #expect(!hiddenPrefixMatches.map(\.id).contains(transactionID))
     }
 
     @Test func migrationSanitizesLegacyFTSWithoutChangingPersistedMerchant() throws {
@@ -101,11 +102,12 @@ struct MaskedCardSearchIndexTests {
             )
             return (persisted, indexed)
         }
+        let hiddenPrefixMatches = try repository.transactions(query: .init(searchText: "537552"))
 
         #expect(storedValues.0 == rawTitle)
         #expect(storedValues.1 == "5375 6627")
         #expect(try repository.transactions(query: .init(searchText: "5375")).map(\.id).contains(transactionID))
         #expect(try repository.transactions(query: .init(searchText: "6627")).map(\.id).contains(transactionID))
-        #expect(!repository.transactions(query: .init(searchText: "537552")).map(\.id).contains(transactionID))
+        #expect(!hiddenPrefixMatches.map(\.id).contains(transactionID))
     }
 }
