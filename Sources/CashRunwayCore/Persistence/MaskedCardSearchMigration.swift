@@ -2,6 +2,12 @@ import GRDB
 
 extension DatabaseManager {
     static func migrateMaskedCardSearchPrivacy(_ db: Database) throws {
+        let searchTableExists = try Bool.fetchOne(
+            db,
+            sql: "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'transaction_search'"
+        ) != nil
+        guard searchTableExists else { return }
+
         let rows = try Row.fetchAll(
             db,
             sql: "SELECT rowid, merchant FROM transaction_search"
