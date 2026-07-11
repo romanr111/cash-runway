@@ -360,6 +360,9 @@ struct DeleteTransactionsView: View {
             return L10n.transactionCount(0)
         }
         var parts: [String] = [L10n.transactionCount(summary.displayCount)]
+        if summary.isMixedCurrency {
+            return parts.joined(separator: " · ")
+        }
         if summary.hasExpenseImpact {
             parts.append("\(L10n.string("Expenses")) \(MoneyFormatter.string(from: summary.expenseMinor))")
         }

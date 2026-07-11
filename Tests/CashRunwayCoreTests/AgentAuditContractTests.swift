@@ -6,7 +6,7 @@ import Testing
 struct AgentAuditContractTests {
 
     @Test func allowedRequestRecordsAuditEntryWithResultCountAndNoRawContents() async throws {
-        let clock = TestClock()
+        let clock = TestClock(now: Self.lastDayOfMonth(year: 2026, month: 6))
         let (service, _, audit, dashboard, _) = AgentTestMocks.makeService(clock: clock)
         let walletID = UUID()
         dashboard.set(wallets: [
@@ -49,7 +49,7 @@ struct AgentAuditContractTests {
         let session = try await AgentTestMocks.makeSession(
             service: service,
             capabilities: [.readOverview],
-            scope: AgentScope(walletScope: .selectedWallets([walletID]))
+            scope: AgentScope(walletScope: .selectedWallets([walletID]), dateScope: .lastDays(365))
         )
 
         let response = try await service.readOverview(sessionID: session.id, request: .init(monthKey: currentMonthKey(clock: clock)))
@@ -198,5 +198,11 @@ struct AgentAuditContractTests {
         #expect(!json.contains("masked_pan"))
         #expect(!json.contains("keychain"))
         #expect(!json.contains("file://"))
+    }
+
+    private static func lastDayOfMonth(year: Int, month: Int) -> Date {
+        let calendar = Calendar.current
+        let firstOfNextMonth = calendar.date(from: DateComponents(year: month == 12 ? year + 1 : year, month: month == 12 ? 1 : month + 1, day: 1))!
+        return calendar.date(byAdding: .second, value: -1, to: firstOfNextMonth)!
     }
 }

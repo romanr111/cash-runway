@@ -47,7 +47,7 @@ struct AgentAbuseBoundaryTests {
     // MARK: - Overview scope
 
     @Test func overviewRespectsSelectedWalletsAndDoesNotReturnAllWalletAggregate() async throws {
-        let clock = TestClock()
+        let clock = TestClock(now: Self.lastDayOfMonth(year: 2026, month: 6))
         let (service, _, _, dashboard, _) = AgentTestMocks.makeService(clock: clock)
         let walletA = UUID()
         let walletB = UUID()
@@ -63,7 +63,7 @@ struct AgentAbuseBoundaryTests {
         let session = try await AgentTestMocks.makeSession(
             service: service,
             capabilities: [.readOverview],
-            scope: AgentScope(walletScope: .selectedWallets([walletA, walletB]))
+            scope: AgentScope(walletScope: .selectedWallets([walletA, walletB]), dateScope: .lastDays(365))
         )
 
         let response = try await service.readOverview(sessionID: session.id, request: .init(monthKey: currentMonthKey(clock: clock)))
@@ -73,7 +73,7 @@ struct AgentAbuseBoundaryTests {
     }
 
     @Test func multiWalletOverviewAggregatesCategoriesWithoutDoubleCounting() async throws {
-        let clock = TestClock()
+        let clock = TestClock(now: Self.lastDayOfMonth(year: 2026, month: 6))
         let (service, _, _, dashboard, _) = AgentTestMocks.makeService(clock: clock)
         let walletA = UUID()
         let walletB = UUID()
@@ -115,7 +115,7 @@ struct AgentAbuseBoundaryTests {
         let session = try await AgentTestMocks.makeSession(
             service: service,
             capabilities: [.readOverview],
-            scope: AgentScope(walletScope: .selectedWallets([walletA, walletB]))
+            scope: AgentScope(walletScope: .selectedWallets([walletA, walletB]), dateScope: .lastDays(365))
         )
 
         let response = try await service.readOverview(sessionID: session.id, request: .init(monthKey: monthKey))
@@ -178,6 +178,91 @@ struct AgentAbuseBoundaryTests {
         #expect(entries[0].denialReason == .dateRangeOutOfScope)
     }
 
+    @Test func overviewRejectsCurrentMonthWhenScopeDoesNotCoverFullMonth() async throws {
+        let clock = TestClock()
+        let (service, _, audit, dashboard, _) = AgentTestMocks.makeService(clock: clock)
+        let walletID = UUID()
+        dashboard.set(wallets: [
+            Wallet(id: walletID, name: "Cash", kind: .cash, colorHex: nil, iconName: nil, startingBalanceMinor: 0, currentBalanceMinor: 0, isArchived: false, sortOrder: 0, createdAt: clock.now, updatedAt: clock.now)
+        ])
+        let session = try await AgentTestMocks.makeSession(
+            service: service,
+            capabilities: [.readOverview],
+            scope: AgentScope(dateScope: .lastDays(7))
+        )
+
+        // .lastDays(7) from Jan 12 1970 = Dec 6 1969 – Jan 12 1970.
+        // Current month (January 1970) spans Jan 1-31, which does not fit
+        // entirely within the 7-day scope.
+        await #expect(throws: AgentAccessError.dateRangeOutOfScope) {
+            try await service.readOverview(sessionID: session.id, request: .init(monthKey: currentMonthKey(clock: clock)))
+        }
+
+        let entries = try await audit.entries(forSessionID: session.id)
+        #expect(entries.count == 1)
+        #expect(entries[0].decision == .denied)
+        #expect(entries[0].denialReason == .dateRangeOutOfScope)
+    }
+
+    @Test func overviewAllowsCurrentMonthWhenScopeCoversFullMonth() async throws {
+        let clock = TestClock(now: Self.lastDayOfMonth(year: 2026, month: 6))
+        let (service, _, _, dashboard, _) = AgentTestMocks.makeService(clock: clock)
+        let walletID = UUID()
+        dashboard.set(wallets: [
+            Wallet(id: walletID, name: "Cash", kind: .cash, colorHex: nil, iconName: nil, startingBalanceMinor: 0, currentBalanceMinor: 0, isArchived: false, sortOrder: 0, createdAt: clock.now, updatedAt: clock.now)
+        ])
+        dashboard.set(overview: OverviewSnapshot(
+            selectedMonthKey: currentMonthKey(clock: clock),
+            walletFilterID: walletID,
+            months: [],
+            totalWealthMinor: 0,
+            monthCashFlowMinor: 0,
+            monthIncomeMinor: 0,
+            monthExpenseMinor: 0,
+            categories: [],
+            labels: []
+        ))
+        let session = try await AgentTestMocks.makeSession(
+            service: service,
+            capabilities: [.readOverview],
+            scope: AgentScope(dateScope: .lastDays(365))
+        )
+
+        let response = try await service.readOverview(sessionID: session.id, request: .init(monthKey: currentMonthKey(clock: clock)))
+        #expect(response.totalBalance.amountMinor == 0)
+    }
+
+    @Test func overviewPreservesWalletCurrencyInMoneyDTOs() async throws {
+        let clock = TestClock(now: Self.lastDayOfMonth(year: 2026, month: 6))
+        let (service, _, _, dashboard, _) = AgentTestMocks.makeService(clock: clock)
+        let walletID = UUID()
+        dashboard.set(wallets: [
+            Wallet(id: walletID, name: "USD Wallet", kind: .cash, colorHex: nil, iconName: nil, startingBalanceMinor: 0, currentBalanceMinor: 5000, currencyCode: .usd, isArchived: false, sortOrder: 0, createdAt: clock.now, updatedAt: clock.now)
+        ])
+        let monthKey = currentMonthKey(clock: clock)
+        dashboard.set(overview: OverviewSnapshot(
+            selectedMonthKey: monthKey,
+            walletFilterID: walletID,
+            months: [],
+            totalWealthMinor: 5000,
+            monthCashFlowMinor: 0,
+            monthIncomeMinor: 0,
+            monthExpenseMinor: 0,
+            categories: [],
+            labels: []
+        ))
+        let session = try await AgentTestMocks.makeSession(
+            service: service,
+            capabilities: [.readOverview],
+            scope: AgentScope(walletScope: .selectedWallets([walletID]), dateScope: .lastDays(365))
+        )
+
+        let response = try await service.readOverview(sessionID: session.id, request: .init(monthKey: monthKey))
+        #expect(response.totalBalance.currencyCode == "USD")
+        #expect(response.totalBalance.amountMinor == 5000)
+        #expect(response.walletSummaries.first?.currentBalance.currencyCode == "USD")
+    }
+
     // MARK: - Universal egress redaction
 
     @Test func walletResponseWithForbiddenSubstringIsDenied() async throws {
@@ -217,8 +302,8 @@ struct AgentAbuseBoundaryTests {
     }
 
     @Test func overviewResponseWithForbiddenSubstringIsDenied() async throws {
-        let clock = TestClock()
-        let (service, _, audit, dashboard, _) = AgentTestMocks.makeService(clock: clock)
+        let clock = TestClock(now: Self.lastDayOfMonth(year: 2026, month: 6))
+        let (service, _, _, dashboard, _) = AgentTestMocks.makeService(clock: clock)
         let walletID = UUID()
         dashboard.set(wallets: [
             Wallet(id: walletID, name: "Cash", kind: .cash, colorHex: nil, iconName: nil, startingBalanceMinor: 0, currentBalanceMinor: 0, isArchived: false, sortOrder: 0, createdAt: clock.now, updatedAt: clock.now)
@@ -248,7 +333,7 @@ struct AgentAbuseBoundaryTests {
         let session = try await AgentTestMocks.makeSession(
             service: service,
             capabilities: [.readOverview],
-            scope: AgentScope(walletScope: .selectedWallets([walletID]))
+            scope: AgentScope(walletScope: .selectedWallets([walletID]), dateScope: .lastDays(365))
         )
 
         await #expect(throws: AgentAccessError.redactionFailed) {
@@ -583,5 +668,11 @@ struct AgentAbuseBoundaryTests {
         let year = calendar.component(.year, from: date)
         let month = calendar.component(.month, from: date)
         return year * 100 + month
+    }
+
+    private static func lastDayOfMonth(year: Int, month: Int) -> Date {
+        let calendar = Calendar.current
+        let firstOfNextMonth = calendar.date(from: DateComponents(year: month == 12 ? year + 1 : year, month: month == 12 ? 1 : month + 1, day: 1))!
+        return calendar.date(byAdding: .second, value: -1, to: firstOfNextMonth)!
     }
 }

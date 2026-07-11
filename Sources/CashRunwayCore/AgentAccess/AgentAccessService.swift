@@ -95,6 +95,7 @@ public final class AgentAccessService: AgentAccessServicing, Sendable {
         }
 
         let wallets = try repository { try scopedWallets(session: session) }
+        let overviewCurrency = wallets.aggregateCurrencyCode(selectedWalletID: nil) ?? .uah
         let walletSummaries = wallets.map {
             AgentWalletSummaryDTO(
                 handle: walletHandle($0),
@@ -108,16 +109,16 @@ public final class AgentAccessService: AgentAccessServicing, Sendable {
             AgentCategoryRowDTO(
                 name: redactionService.redactAccountLikePatterns($0.name),
                 kind: $0.kind,
-                amount: uahMoney($0.amountMinor),
+                amount: money($0.amountMinor, currencyCode: overviewCurrency),
                 transactionCount: $0.transactionCount
             )
         }
 
         let response = AgentOverviewResponse(
-            totalBalance: uahMoney(snapshot.totalWealthMinor),
-            monthIncome: uahMoney(snapshot.monthIncomeMinor),
-            monthExpense: uahMoney(snapshot.monthExpenseMinor),
-            monthNet: uahMoney(snapshot.monthCashFlowMinor),
+            totalBalance: money(snapshot.totalWealthMinor, currencyCode: overviewCurrency),
+            monthIncome: money(snapshot.monthIncomeMinor, currencyCode: overviewCurrency),
+            monthExpense: money(snapshot.monthExpenseMinor, currencyCode: overviewCurrency),
+            monthNet: money(snapshot.monthCashFlowMinor, currencyCode: overviewCurrency),
             categoryRows: categoryRows,
             walletSummaries: walletSummaries
         )
@@ -443,13 +444,14 @@ public final class AgentAccessService: AgentAccessServicing, Sendable {
         let interval = dateScope.dateInterval(now: now)
         let calendar = Calendar.current
         guard let startComponents = monthKeyComponents(monthKey),
-              let startDate = calendar.date(from: startComponents) else {
+              let startDate = calendar.date(from: startComponents),
+              let monthEnd = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: startDate) else {
             return false
         }
-        // Monthly overview aggregates are month-grained. Require the requested
-        // month to begin inside the approved scope rather than accepting any
-        // overlap with an older partially covered month.
-        return interval.start <= startDate && startDate <= interval.end
+        // Monthly overview aggregates are month-grained and cannot be
+        // date-bounded at the repository level. Require the entire month
+        // to fit within the approved scope so no out-of-scope data leaks.
+        return interval.start <= startDate && monthEnd <= interval.end
     }
 
     private func monthKeyComponents(_ monthKey: Int) -> DateComponents? {

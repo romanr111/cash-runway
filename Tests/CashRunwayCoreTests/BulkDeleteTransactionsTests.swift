@@ -98,23 +98,42 @@ struct BulkDeleteTransactionsTests {
         linkedTransferID: UUID?,
         amountMinor: Int64,
         occurredAt: Date,
-        isDeleted: Bool = false
+        isDeleted: Bool = false,
+        currencyCode: String = "UAH"
     ) throws -> UUID {
         try repository.databaseManager.dbQueue.write { db in
-            try db.execute(
-                sql: """
-                INSERT INTO transactions
-                (id, wallet_id, type, linked_transfer_id, amount_minor, occurred_at, local_day_key, local_month_key,
-                 category_id, merchant, note, is_deleted, source, recurring_template_id, recurring_instance_id,
-                 import_job_id, import_fingerprint, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, '', '', ?, 'manual', NULL, NULL, NULL, NULL, ?, ?)
-                """,
-                arguments: [
-                    id.uuidString, walletID.uuidString, type, linkedTransferID?.uuidString,
-                    amountMinor, occurredAt, DateKeys.dayKey(for: occurredAt), DateKeys.monthKey(for: occurredAt),
-                    isDeleted ? 1 : 0, Date(), Date()
-                ]
-            )
+            let hasCurrencyColumn = try CashRunwayRepository.tableHasColumn(db, table: "transactions", column: "currency_code")
+            if hasCurrencyColumn {
+                try db.execute(
+                    sql: """
+                    INSERT INTO transactions
+                    (id, wallet_id, type, linked_transfer_id, amount_minor, currency_code, occurred_at, local_day_key, local_month_key,
+                     category_id, merchant, note, is_deleted, source, recurring_template_id, recurring_instance_id,
+                     import_job_id, import_fingerprint, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, '', '', ?, 'manual', NULL, NULL, NULL, NULL, ?, ?)
+                    """,
+                    arguments: [
+                        id.uuidString, walletID.uuidString, type, linkedTransferID?.uuidString,
+                        amountMinor, currencyCode, occurredAt, DateKeys.dayKey(for: occurredAt), DateKeys.monthKey(for: occurredAt),
+                        isDeleted ? 1 : 0, Date(), Date()
+                    ]
+                )
+            } else {
+                try db.execute(
+                    sql: """
+                    INSERT INTO transactions
+                    (id, wallet_id, type, linked_transfer_id, amount_minor, occurred_at, local_day_key, local_month_key,
+                     category_id, merchant, note, is_deleted, source, recurring_template_id, recurring_instance_id,
+                     import_job_id, import_fingerprint, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, '', '', ?, 'manual', NULL, NULL, NULL, NULL, ?, ?)
+                    """,
+                    arguments: [
+                        id.uuidString, walletID.uuidString, type, linkedTransferID?.uuidString,
+                        amountMinor, occurredAt, DateKeys.dayKey(for: occurredAt), DateKeys.monthKey(for: occurredAt),
+                        isDeleted ? 1 : 0, Date(), Date()
+                    ]
+                )
+            }
         }
         return id
     }
@@ -216,6 +235,66 @@ struct BulkDeleteTransactionsTests {
         #expect(summary.incomeMinor == -2_000)
         #expect(summary.hasIncomeImpact)
         #expect(summary.hasFinancialImpact)
+    }
+
+    @Test func transactionDeletionSummaryZeroesAmountsForMixedCurrencies() throws {
+        let repository = try makeRepository()
+        let uahWallet = try makeWallet(repository: repository, name: "UAH Cash", balanceMinor: 1_000_000)
+        let usdWallet = WalletBuilder()
+            .with(name: "USD Cash")
+            .with(kind: .cash)
+            .with(startingBalanceMinor: 1_000)
+            .with(currentBalanceMinor: 1_000)
+            .with(currencyCode: .usd)
+            .build()
+        try repository.saveWallet(usdWallet)
+
+        try insertRawTransaction(
+            repository: repository,
+            id: UUID(),
+            walletID: uahWallet.id,
+            type: "expense",
+            linkedTransferID: nil,
+            amountMinor: 1_000,
+            occurredAt: Self.date(2026, 6, 15),
+            currencyCode: "UAH"
+        )
+        try insertRawTransaction(
+            repository: repository,
+            id: UUID(),
+            walletID: usdWallet.id,
+            type: "expense",
+            linkedTransferID: nil,
+            amountMinor: 2_000,
+            occurredAt: Self.date(2026, 6, 15),
+            currencyCode: "USD"
+        )
+
+        let summary = try repository.transactionDeletionSummary(for: .thisMonth, now: now)
+        #expect(summary.count == 2)
+        #expect(summary.isMixedCurrency)
+        #expect(summary.currencyCodes.contains("UAH"))
+        #expect(summary.currencyCodes.contains("USD"))
+        // Amounts must be zeroed out to avoid misleading cross-currency sums.
+        #expect(summary.expenseMinor == 0)
+        #expect(summary.incomeMinor == 0)
+        #expect(!summary.hasFinancialImpact)
+
+        let plan = try repository.transactionDeletionPlan(for: .thisMonth, now: now)
+        #expect(plan.summary == summary)
+    }
+
+    @Test func transactionDeletionSummaryReportsAmountsForSingleCurrency() throws {
+        let repository = try makeRepository()
+        let wallet = try makeWallet(repository: repository, name: "Cash", balanceMinor: 1_000_000)
+        let expense = try makeExpenseCategory(repository: repository)
+
+        try saveTransaction(repository: repository, kind: .expense, walletID: wallet.id, categoryID: expense.id, amountMinor: 1_000, at: Self.date(2026, 6, 15))
+
+        let summary = try repository.transactionDeletionSummary(for: .thisMonth, now: now)
+        #expect(!summary.isMixedCurrency)
+        #expect(summary.currencyCodes == ["UAH"])
+        #expect(summary.expenseMinor == 1_000)
     }
 
     // MARK: - Day

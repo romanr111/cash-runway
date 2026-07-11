@@ -1606,6 +1606,10 @@ extension CashRunwayRepository {
     public func transactionDeletionSummary(for period: DeletePeriod, now: Date = Date()) throws -> TransactionDeletionSummary {
         try databaseManager.dbQueue.read { db in
             let (predicate, arguments) = Self.deletePeriodPredicate(period, now: now)
+            let hasCurrencyColumn = try Self.tableHasColumn(db, table: "transactions", column: "currency_code")
+            let currencySelect = hasCurrencyColumn
+                ? "COALESCE(GROUP_CONCAT(DISTINCT currency_code), '') AS currency_codes"
+                : "'UAH' AS currency_codes"
             let row = try Row.fetchOne(
                 db,
                 sql: """
@@ -1613,17 +1617,22 @@ extension CashRunwayRepository {
                     COUNT(*) AS count,
                     COALESCE(SUM(CASE WHEN type != 'transfer_in' THEN 1 ELSE 0 END), 0) AS display_count,
                     COALESCE(SUM(CASE WHEN type = 'expense' THEN ABS(amount_minor) ELSE 0 END), 0) AS expense_minor,
-                    COALESCE(SUM(CASE WHEN type = 'income' THEN amount_minor ELSE 0 END), 0) AS income_minor
+                    COALESCE(SUM(CASE WHEN type = 'income' THEN amount_minor ELSE 0 END), 0) AS income_minor,
+                    \(currencySelect)
                 FROM transactions
                 WHERE \(predicate)
                 """,
                 arguments: arguments
             )!
+            let currencyCodesString: String = row["currency_codes"]
+            let currencyCodes = Set(currencyCodesString.split(separator: ",").map(String.init))
+            let isMixedCurrency = currencyCodes.count > 1
             return TransactionDeletionSummary(
                 count: row["count"],
                 displayCount: row["display_count"],
-                expenseMinor: row["expense_minor"],
-                incomeMinor: row["income_minor"]
+                expenseMinor: isMixedCurrency ? 0 : row["expense_minor"],
+                incomeMinor: isMixedCurrency ? 0 : row["income_minor"],
+                currencyCodes: currencyCodes
             )
         }
     }
@@ -1739,10 +1748,12 @@ extension CashRunwayRepository {
 
     private static func deletionImpactRows(_ db: Database, period: DeletePeriod, now: Date) throws -> DeletionImpact {
         let (sql, arguments) = Self.deletePeriodPredicate(period, now: now)
+        let hasCurrencyColumn = try tableHasColumn(db, table: "transactions", column: "currency_code")
+        let currencySelect = hasCurrencyColumn ? ", currency_code" : ""
         let rows = try Row.fetchAll(
             db,
             sql: """
-            SELECT id, type, amount_minor, updated_at
+            SELECT id, type, amount_minor, updated_at\(currencySelect)
             FROM transactions
             WHERE \(sql)
             ORDER BY id
@@ -1752,6 +1763,7 @@ extension CashRunwayRepository {
         var expenseMinor: Int64 = 0
         var incomeMinor: Int64 = 0
         var displayCount = 0
+        var currencyCodes: Set<String> = []
         var items: [TransactionDeletionItem] = []
         items.reserveCapacity(rows.count)
         for row in rows {
@@ -1760,6 +1772,10 @@ extension CashRunwayRepository {
             items.append(TransactionDeletionItem(id: id, updatedAt: updatedAt))
             let type: String = row["type"]
             let amount: Int64 = row["amount_minor"]
+            if hasCurrencyColumn {
+                let code: String = row["currency_code"]
+                if !code.isEmpty { currencyCodes.insert(code) }
+            }
             switch type {
             case "expense":
                 expenseMinor += abs(amount)
@@ -1773,13 +1789,16 @@ extension CashRunwayRepository {
                 displayCount += 1
             }
         }
+        if currencyCodes.isEmpty { currencyCodes = ["UAH"] }
+        let isMixedCurrency = currencyCodes.count > 1
         return DeletionImpact(
             items: items,
             summary: TransactionDeletionSummary(
                 count: items.count,
                 displayCount: displayCount,
-                expenseMinor: expenseMinor,
-                incomeMinor: incomeMinor
+                expenseMinor: isMixedCurrency ? 0 : expenseMinor,
+                incomeMinor: isMixedCurrency ? 0 : incomeMinor,
+                currencyCodes: currencyCodes
             )
         )
     }
