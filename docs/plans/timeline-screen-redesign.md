@@ -2,81 +2,71 @@
 
 ## Status
 
-**Scope:** planning only. This document does not implement UI, data-model, repository, localization, or test changes.
+**Scope:** planning only. This document does not implement UI, repository, model, localization, or test changes.
 
-**Target screen:** the existing Timeline tab implemented by `DashboardView`.
+**Target:** redesign the existing Timeline tab implemented by `DashboardView`. Do not add a parallel screen or change the root tab structure.
 
-**Reference design:** a mobile cash-flow screen with:
+**Reference outcome:**
 
-- a top-level **Cash Flow** title and search action;
-- a unified cash-flow summary card;
-- income and expense totals;
-- a matched-period expense comparison;
-- a compact grouped income/expense bar chart;
-- an embedded **Spending Overview** action;
-- wallet, month, and filter controls;
+- top-level **Cash Flow** title with a compact search action;
+- one unified summary card;
+- net cash flow, income, expenses, and a matched-period expense comparison;
+- compact grouped income/expense bars;
+- embedded **Spending Overview** action;
+- wallet, period, and advanced-filter controls;
 - grouped daily transaction cards;
-- the existing floating add-transaction action.
+- existing floating add-transaction action.
 
 ## Executive recommendation
 
-Implement the design as a focused redesign of the existing Timeline screen, not as a parallel screen or new navigation flow.
+Implement the redesign by extending the existing Timeline pipeline and preserving current navigation, editing, filtering, async reload protection, and mixed-currency safeguards.
 
-Reuse the current:
+The only new financial capability should be a repository-backed expense comparison against the correct previous comparable period.
 
-- `DashboardView` route and tab position;
-- Timeline snapshot and monthly/yearly bar data;
-- transaction sections and rows;
-- transaction editor flow;
-- search sheet;
-- wallet filter;
-- Spending Overview navigation;
-- asynchronous stale-result protection;
-- mixed-currency safeguards.
-
-The only meaningful new financial capability should be a repository-backed comparison of expenses against the correct previous comparable period.
-
-Do not add a database migration initially. The existing transaction day/month indexes should be sufficient for two bounded expense-sum queries. Add a daily gross cash-flow aggregate only if physical-device profiling demonstrates a real performance problem.
+Do **not** add a database migration initially. Use existing monthly aggregates for completed periods and bounded transaction sums for partial periods. Add a new daily aggregate only after physical-device profiling proves it necessary.
 
 ---
 
-# 1. Current architecture and change boundary
+# 1. Verified current architecture
 
-The Timeline tab currently routes to `DashboardView`, which owns:
+The existing Timeline screen already owns:
 
-1. the search action;
-2. cash-flow hero value;
-3. wallet and period filters;
-4. the monthly/yearly grouped bar chart;
+1. search;
+2. wallet and month/year scope;
+3. headline cash flow;
+4. grouped income/expense chart;
 5. Spending Overview navigation;
-6. the grouped transaction feed;
-7. the floating add button.
+6. grouped transaction sections;
+7. transaction editing;
+8. floating add action.
 
-The current screen structure is approximately:
+The current screen is approximately:
 
 ```text
 hero
 filters
-chartCard
-overviewButton
-transactionFeed
+chart card
+Spending Overview button
+transaction feed
 floating add button
 ```
 
-The redesigned hierarchy should become:
+The target hierarchy should be:
 
 ```text
-Timeline header
+Header
   ├─ Cash Flow title
   └─ Search button
 
-Cash-flow summary card
-  ├─ Net cash flow
-  ├─ Expense comparison
-  ├─ Income / expense legend
-  ├─ Income summary
-  ├─ Expense summary
-  ├─ Grouped monthly/yearly chart
+Summary card
+  ├─ Top row
+  │  ├─ Net cash flow
+  │  ├─ Expense comparison
+  │  └─ Income / expense legend
+  ├─ Body
+  │  ├─ Income and expense cards
+  │  ├─ subtle vertical divider
+  │  └─ grouped bar chart
   └─ Spending Overview action
 
 Filter bar
@@ -85,32 +75,50 @@ Filter bar
   └─ Filters + active-count badge
 
 Transaction feed
-  └─ Collapsible day cards
-      ├─ Day total
+  └─ Day cards
+      ├─ Day header and total
       └─ Transaction rows
 
 Floating add button
 ```
 
-No changes should be required in `CashRunwayRootView` or the tab configuration.
+No root-navigation change should be required.
+
+## Important current-data distinction
+
+The current chart is driven by `model.allBars`, not only by the six-period `TimelineSnapshot.bars` window.
+
+The implementation should preserve this distinction:
+
+- `TimelineSnapshot` supplies the selected-period snapshot, comparison, and transaction sections;
+- `model.allBars` remains the source for horizontally navigable historical chart data;
+- the chart derives a four-period visible viewport around the selected period while retaining access to older bars.
+
+Do not unintentionally replace the current historical chart with a fixed six-period-only chart unless that product change is explicitly approved.
 
 ---
 
-# 2. Product rules to decide before implementation
+# 2. Product semantics to lock before coding
 
-The visual design contains financial semantics that must be explicit and tested rather than inferred inside SwiftUI views.
+## 2.1 Expense comparison
 
-## 2.1 Expense-comparison meaning
+The comparison measures **expenses only**.
 
-Recommended definition for the current month:
+### Current month
 
-> Compare expenses from the first day of the selected month through the current day against the same ordinal day range in the previous month.
+Compare:
+
+```text
+first day of selected/current month → today
+vs
+first day of previous month → same ordinal day, clamped when needed
+```
 
 Example on July 11:
 
 ```text
-Current range:  July 1–11
-Baseline range: June 1–11
+Current:  July 1–11
+Baseline: June 1–11
 ```
 
 Formula:
@@ -119,44 +127,38 @@ Formula:
 percentageChange = (currentExpense - baselineExpense) / baselineExpense
 ```
 
-Presentation rules:
+Presentation:
 
-| Condition | Direction | Presentation |
+| Condition | First line | Second line |
 |---|---|---|
-| Current > baseline | Higher | Red upward arrow and “Expenses are higher than …” |
-| Current < baseline | Lower | Green downward arrow and “Expenses are lower than …” |
-| Current = baseline | Unchanged | Neutral indicator and “Expenses are unchanged from …” |
-| Baseline = 0, current > 0 | Unavailable percentage | “New spending compared with …” |
-| Baseline = 0, current = 0 | Unchanged/no data | “No spending in either period” |
-| Range cannot be formed | Unavailable | Hide percentage and show neutral explanatory text |
+| Current > baseline | `↗ +18%` in red | `Expenses are higher than June 1–11` |
+| Current < baseline | `↘ −18%` in green | `Expenses are lower than June 1–11` |
+| Equal | neutral indicator | `Expenses are unchanged from June 1–11` |
+| Baseline = 0, current > 0 | no percentage | `New spending compared with June 1–11` |
+| Both zero | no percentage | `No spending in either period` |
+| No valid baseline | no percentage | `No comparable period` |
 
-Never display infinity, NaN, or a fabricated percentage when the baseline is zero.
+The percentage appears **only once**, on the first line. Do not repeat it inside the explanatory sentence.
+
+Never display infinity, NaN, or a fabricated percentage.
 
 ## 2.2 Historical months
 
-For a completed historical month, compare the selected full month with the previous full month.
-
-Example:
+For a completed historical month, compare the full selected month with the full previous month.
 
 ```text
 June 1–30 vs May 1–31
 ```
 
-Do not compare a historical month only through today’s day number.
+Do not truncate a historical month to today’s ordinal day.
 
 ## 2.3 Year mode
 
-The app already supports month and year Timeline periods.
-
-Recommended behavior:
-
 - current year: year-to-date versus the same date range in the previous year;
-- completed historical year: full year versus the previous full year;
-- leap-day ranges: clamp safely when the previous year does not contain February 29.
+- completed historical year: full year versus previous full year;
+- February 29: clamp safely in a non-leap baseline year.
 
 ## 2.4 Filter scope
-
-Recommended scope separation:
 
 | Control | Summary/chart | Transaction feed |
 |---|---:|---:|
@@ -165,55 +167,39 @@ Recommended scope separation:
 | Text search | No | Yes |
 | Category | No | Yes |
 | Label | No | Yes |
-| Transaction kind | Prefer no | Yes |
+| Transaction kind | No | Yes |
+| Custom date range | No | Yes |
 
-A text search such as “Bolt” should not silently redefine the top-level cash-flow KPI. Wallet and selected period are global financial scope. Search, category, label, and kind are feed-exploration filters.
+Wallet and period are global financial scope. Search, category, label, kind, and custom date range are feed-exploration filters.
 
-This distinction should be represented explicitly instead of relying on incidental `TransactionQuery` behavior.
+Searching for “Bolt” must not redefine the headline cash-flow KPI.
 
----
+## 2.5 All-wallet scope prerequisite
 
-# 3. Existing data that should be reused
+Before implementation, verify whether selecting **All Wallets** currently returns a true same-currency aggregate or is normalized to the first active wallet.
 
-The current Timeline data model already contains most required values:
+If current behavior falls back to one wallet:
 
-- `TimelineBarPoint`
-  - period key;
-  - income amount;
-  - expense amount;
-  - chart label.
-- `TimelineSection`
-  - day key;
-  - localized period label;
-  - day total;
-  - transactions.
-- `TimelineSnapshot`
-  - selected anchor period;
-  - wallet scope;
-  - hero cash flow;
-  - bars;
-  - sections;
-  - selected Timeline period.
+- either fix true same-currency all-wallet aggregation as a separate prerequisite;
+- or explicitly preserve and document that limitation.
 
-The repository already:
-
-1. normalizes wallet scope;
-2. rejects invalid mixed-currency aggregate scopes;
-3. loads monthly or yearly bars;
-4. applies period scope to the transaction query;
-5. loads transactions;
-6. groups transactions by local day;
-7. computes income minus expenses for the selected period.
-
-The redesign should extend this snapshot rather than introduce a separate UI-only calculation path.
+Do not present an “All Wallets” label while silently showing only one wallet’s totals.
 
 ---
 
-# 4. Target data model
+# 3. Minimal data-model change
 
-## 4.1 Add `TimelineComparison`
+Reuse existing:
 
-Add a Core model similar to:
+- `TimelineBarPoint`;
+- `TimelineSection`;
+- `TimelineSnapshot.heroCashFlowMinor`;
+- `model.allBars`;
+- existing transaction rows.
+
+Do **not** add a separate `TimelinePeriodSummary` model. It would duplicate income, expenses, cash flow, and selected-period data already represented by the snapshot and selected bar.
+
+Add only the new comparison facts:
 
 ```swift
 public struct TimelineComparison: Hashable, Sendable {
@@ -234,76 +220,44 @@ public struct TimelineComparison: Hashable, Sendable {
 }
 ```
 
-Use local day keys for ranges to remain consistent with the database and existing date-key utilities.
-
-Extend `TimelineSnapshot` with:
+Extend `TimelineSnapshot`:
 
 ```swift
 public var comparison: TimelineComparison?
 ```
 
-Do not place localized strings in Core. Core should return facts; the UI/presentation layer should construct localized sentences.
+Keep localized strings out of Core.
 
-## 4.2 Add an explicit selected-period summary
+## Presentation layer
 
-The current UI can locate the selected bar and derive values, but a normalized summary reduces duplicate logic:
-
-```swift
-public struct TimelinePeriodSummary: Hashable, Sendable {
-    public var periodKey: Int
-    public var incomeMinor: Int64
-    public var expenseMinor: Int64
-    public var cashFlowMinor: Int64
-}
-```
-
-Add it to `TimelineSnapshot`:
-
-```swift
-public var selectedPeriodSummary: TimelinePeriodSummary
-```
-
-This should become the single source for:
-
-- main cash-flow amount;
-- income card;
-- expense card;
-- comparison context;
-- accessibility summary.
-
-## 4.3 Add a narrow presentation model
-
-Prefer a pure Timeline presentation type in `CashRunwayUIVM` or the UI module:
+Add a narrow pure formatter/presentation type in `CashRunwayUIVM` or the UI module:
 
 ```swift
 struct TimelineScreenPresentation {
     let cashFlowText: String
     let incomeText: String
     let expenseText: String
-    let amountStyle: AmountStyle
     let comparison: TimelineComparisonPresentation?
-    let chartPoints: [TimelineChartPointPresentation]
     let activeFilterCount: Int
 }
 ```
 
-This layer may handle:
+Resolve the selected `TimelineBarPoint` once and reuse it for:
 
-- signed amount display;
-- compact chart labels;
-- comparison direction and icon;
-- active filter count;
-- accessibility summaries.
+- income card;
+- expense card;
+- selected chart state;
+- accessibility summary.
 
-It should not perform repository access or own mutable app state.
+Do not introduce another mutable source of financial truth.
 
 ---
 
-# 5. Repository implementation
+# 4. Repository implementation
 
-## 5.1 Add a comparison-window helper
+## 4.1 Deterministic comparison window
 
-Create a deterministic pure helper:
+Add a pure helper:
 
 ```swift
 struct TimelineComparisonWindow {
@@ -320,37 +274,63 @@ static func comparisonWindow(
 ) -> TimelineComparisonWindow?
 ```
 
-Inject `now` rather than calling `Date()` deep inside repository logic so tests remain deterministic.
-
 Required edge cases:
 
-- January to December year boundary;
-- February and leap years;
-- day 29–31 when the previous month is shorter;
-- selected future month;
-- selected completed month;
+- January/December boundary;
+- month lengths 28–31;
+- leap years;
+- February 29 baseline;
+- future selected period;
+- current partial month;
+- completed historical month;
 - current year YTD;
-- historical full year;
-- February 29 comparison against a non-leap year;
+- completed historical year;
 - local timezone/calendar boundaries.
 
-When the comparable period is shorter, clamp to its final valid day.
+Clamp the baseline end date to the final valid day when the previous period is shorter.
 
-## 5.2 Add the expense-sum query
+## 4.2 Inject `now` through the repository contract
 
-Add a private repository method similar to:
+The existing protocol has no clock input. Make deterministic testing explicit:
 
 ```swift
-private static func loadExpenseComparison(
-    _ db: Database,
+func timelineSnapshot(
     monthKey: Int,
     walletID: UUID?,
+    query: TransactionQuery,
     period: TimelinePeriod,
     now: Date
-) throws -> TimelineComparison?
+) throws -> TimelineSnapshot
 ```
 
-Use two bounded sums over `transactions`:
+Provide a production convenience wrapper:
+
+```swift
+public extension DashboardRepositorying {
+    func timelineSnapshot(
+        monthKey: Int,
+        walletID: UUID?,
+        query: TransactionQuery,
+        period: TimelinePeriod
+    ) throws -> TimelineSnapshot {
+        try timelineSnapshot(
+            monthKey: monthKey,
+            walletID: walletID,
+            query: query,
+            period: period,
+            now: Date()
+        )
+    }
+}
+```
+
+This keeps callers simple while allowing deterministic tests without introducing a full clock abstraction.
+
+## 4.3 Hybrid comparison calculation
+
+### Partial current period
+
+Use bounded transaction sums because monthly aggregates include the entire month and may include future-dated manual transactions.
 
 ```sql
 SELECT COALESCE(SUM(amount_minor), 0)
@@ -361,46 +341,102 @@ WHERE is_deleted = 0
   AND (? IS NULL OR wallet_id = ?)
 ```
 
-Rules:
+Run once for the current range and once for the baseline range.
 
-- include expense transactions only;
+### Completed historical period
+
+Use the same aggregate source as the chart:
+
+- `monthly_wallet_cashflow` for months;
+- yearly totals derived from monthly aggregates for years.
+
+This keeps the comparison consistent with the displayed bars and avoids unnecessary full transaction scans.
+
+Use a bounded direct-query fallback only when an expected aggregate is missing.
+
+### Invariants
+
+- include expenses only;
 - exclude income;
 - exclude both transfer directions;
-- exclude soft-deleted transactions;
-- respect the normalized selected wallet;
-- preserve mixed-currency aggregate rejection;
-- compute the percentage from integer money values only after both sums are available.
+- exclude soft-deleted rows;
+- respect normalized wallet scope;
+- preserve mixed-currency rejection;
+- build summary, comparison, bars, and feed within one consistent database read where practical.
 
-## 5.3 Avoid a migration initially
+## 4.4 No migration initially
 
-The schema already indexes transaction day and month/wallet access. Start with direct bounded queries.
+Do not add `daily_wallet_cashflow` in the first implementation.
 
-Do not introduce `daily_wallet_cashflow` unless profiling on a representative physical device shows a material regression, for example a p95 comparison-query duration above roughly 20–30 ms on a large fixture.
+Consider a daily aggregate only if a representative physical-device fixture demonstrates a material regression, for example p95 comparison-query time above roughly 20–30 ms.
 
-A new aggregate table would require:
-
-- a permanent append-only migration;
-- historical backfill;
-- transaction mutation updates;
-- CSV/import updates;
-- bank-sync updates;
-- backup/restore implications;
-- migration-integrity tests;
-- aggregate consistency tests.
-
-That cost is not justified before measurement.
-
-## 5.4 Keep one consistent database read
-
-The selected summary, comparison, bars, and transaction sections should be constructed in the same repository read transaction where practical. This prevents the UI from showing values from different moments during sync/import/mutation activity.
+A new aggregate would require migration, backfill, mutation-path updates, import/bank-sync updates, restore handling, and integrity tests.
 
 ---
 
-# 6. SwiftUI decomposition
+# 5. Chart behavior
 
-`DashboardView.swift` is already large. Do not continue expanding it indefinitely.
+Retain a custom SwiftUI grouped-bar chart for predictable placement of:
 
-Recommended final component structure:
+- paired income/expense bars;
+- compact values above bars;
+- zero placeholders;
+- two-line month/year labels;
+- selected-period emphasis.
+
+Proposed API:
+
+```swift
+struct TimelineGroupedBarChart: View {
+    let points: [TimelineBarPoint]       // from model.allBars
+    let selectedPeriodKey: Int
+    let currencyCode: CurrencyCode
+    let onSelect: (Int) -> Void
+}
+```
+
+## Visible viewport
+
+- show approximately four period groups at normal iPhone width;
+- retain horizontal access to the full `allBars` history;
+- initially center or trailing-align the selected period;
+- recenter after a period selection;
+- calculate scale from the visible viewport, not from a distant historical outlier.
+
+## Scaling
+
+```text
+maximum = max visible income/expense magnitude
+usableHeight = chart height - value-label reserve - period-label reserve
+barHeight = value / maximum × usableHeight
+```
+
+Rules:
+
+- zero → dash, no colored bar;
+- tiny non-zero → minimum visible height around 3–4 points;
+- reserve space above bars for labels;
+- prevent adjacent label collisions;
+- use locale-aware compact formatting;
+- expose complete values through accessibility.
+
+## Interaction
+
+Preserve current behavior:
+
+- light haptic feedback;
+- update selected period;
+- reload Timeline;
+- scroll selection into view;
+- retain request-ID stale-result protection.
+
+---
+
+# 6. SwiftUI composition
+
+`DashboardView` should remain the orchestration view, not become a larger rendering monolith.
+
+Recommended final files:
 
 ```text
 DashboardView.swift
@@ -412,112 +448,79 @@ TimelineDayCard.swift
 TimelinePresentation.swift
 ```
 
-Optional:
+Optional after the first stable iteration:
 
 ```text
-TimelineTransactionRow.swift
 TimelinePeriodPickerSheet.swift
+TimelineTransactionRow.swift
 ```
 
-## Safe extraction sequence
+## Safe extraction order
 
-Because the Xcode project uses explicit source-file references:
+1. Build the first visual iteration as private subviews in `DashboardView.swift`.
+2. Validate geometry and interaction.
+3. Extract only stable components.
+4. Add files through Xcode/project tooling.
+5. Verify `project.pbxproj` immediately.
+6. Keep `.bak` files untracked.
+7. Run CodeGraph sync after extraction.
 
-1. build the first visual iteration using private subviews in `DashboardView.swift`;
-2. validate composition and behavior;
-3. extract stable components into separate files;
-4. add files through Xcode/project tooling;
-5. verify `project.pbxproj` immediately;
-6. remove any temporary project backup from staged changes;
-7. run CodeGraph sync after symbol/file extraction.
+## Responsive summary card
 
-This minimizes risky project-file churn while the layout is still changing.
-
----
-
-# 7. Header design
-
-Replace the current centered search/hero arrangement with a conventional title row:
-
-```swift
-HStack(alignment: .center) {
-    Text(L10n.string("Cash Flow"))
-        .font(.system(size: 32, weight: .bold, design: .rounded))
-
-    Spacer()
-
-    TimelineSearchButton(...)
-}
-```
-
-Search button requirements:
-
-- visual size around 40–44 points;
-- interaction area at least 44 × 44 points;
-- subtle rounded-rectangle surface;
-- subdued secondary icon color;
-- light border;
-- reuse the current search sheet;
-- preserve `timelineSearchButton` accessibility identifier.
-
----
-
-# 8. Cash-flow summary card
-
-## 8.1 Hierarchy
+Primary normal-width layout:
 
 ```text
-TimelineSummaryCard
-├─ summary header
-│  ├─ net cash flow
-│  ├─ comparison
-│  └─ legend
-├─ summary body
-│  ├─ income card
-│  ├─ expense card
-│  └─ grouped bar chart
-└─ Spending Overview button
+Top:
+[ net cash flow ] [ comparison ] [ legend ]
+
+Body:
+[ income + expense cards ] | [ grouped chart ]
+
+Bottom:
+[ Spending Overview ]
 ```
 
-## 8.2 Responsive behavior
-
-Normal iPhone widths may use a two-column card body:
+For accessibility Dynamic Type or insufficient width, switch to:
 
 ```text
-metrics: approximately 35%
-chart:   approximately 65%
-```
-
-For accessibility Dynamic Type or insufficient width, switch to a vertical layout:
-
-```text
-cash flow
+net cash flow
 comparison
 legend
 income / expense cards
 full-width chart
-overview button
+Spending Overview
 ```
 
 Use `ViewThatFits`, an adaptive custom `Layout`, or an explicit `dynamicTypeSize` branch.
 
-Do not solve layout pressure primarily with aggressive `.minimumScaleFactor`; financial values must remain readable.
+Do not solve pressure primarily with aggressive `.minimumScaleFactor`.
 
-## 8.3 Net amount
+---
 
-Rules:
+# 7. Header and summary details
 
-- negative cash flow → negative semantic color;
-- positive cash flow → positive semantic color;
-- zero → primary/neutral text;
-- use `.monospacedDigit()`;
-- use the selected wallet/aggregate currency formatter;
-- never hardcode the hryvnia sign;
-- allow a controlled fallback layout for very large values.
+## Header
 
-## 8.4 Income and expense cards
+- large leading **Cash Flow** title;
+- compact search button in the upper-right;
+- visual size approximately 40–44 points;
+- interaction target at least 44 × 44;
+- subdued icon and light border;
+- preserve the existing search accessibility identifier.
 
-Each card should contain:
+## Net amount
+
+- negative → semantic negative color;
+- positive → semantic positive color;
+- zero → neutral primary text;
+- monospaced digits;
+- wallet/aggregate currency formatter;
+- no hardcoded `₴`;
+- controlled fallback layout for very large values.
+
+## Income and expense cards
+
+Each card contains:
 
 ```text
 colored vertical indicator
@@ -525,143 +528,42 @@ label
 formatted amount
 ```
 
-Recommended styling:
+Keep explicit that aggregate `expenseMinor` is a positive magnitude while the displayed expense value may use a negative sign.
 
-- white or lightly tinted surface;
-- green income indicator;
-- red expense indicator;
-- restrained border;
-- clear trailing amount alignment;
-- monospaced digits;
-- no strong gradients.
+## Comparison block
 
-Keep the distinction explicit between:
-
-- aggregate `expenseMinor` as a positive magnitude;
-- displayed expense amount as a negative signed value where required by UI convention.
-
-## 8.5 Comparison block
-
-Use complete localized sentences rather than concatenating fragments.
-
-Required localization forms:
-
-- `Expenses are %d%% higher than %@`
-- `Expenses are %d%% lower than %@`
-- `Expenses are unchanged from %@`
-- `New spending compared with %@`
-- `No spending in either period`
-- `No comparable period`
-
-Display:
-
-- arrow and percentage on the first line;
-- comparison sentence below;
-- red for higher spending;
-- green for lower spending;
-- neutral treatment for unchanged/unavailable.
-
-Color must not be the only indicator; direction must also be conveyed by icon and text.
-
----
-
-# 9. Grouped bar chart
-
-Retain a custom SwiftUI grouped-bar implementation for the initial redesign. The target requires predictable placement of:
-
-- paired income/expense bars;
-- exact compact values above each bar;
-- zero placeholders;
-- two-line period labels;
-- selected-period emphasis.
-
-Proposed API:
-
-```swift
-struct TimelineGroupedBarChart: View {
-    let points: [TimelineBarPoint]
-    let selectedPeriodKey: Int
-    let currencyCode: CurrencyCode
-    let onSelect: (Int) -> Void
-}
-```
-
-## 9.1 Visible range
-
-Recommended behavior:
-
-- normal phone width: show approximately four period groups;
-- retain up to six bars from existing repository data;
-- horizontal scrolling when needed;
-- center the selected period on appearance and after selection.
-
-No data-layer change is needed for this range because the repository already supplies a six-period monthly/yearly window.
-
-## 9.2 Scaling
+Use complete localized sentences without percentage duplication:
 
 ```text
-maximum = maximum visible income/expense magnitude
-usableHeight = total height - value-label reserve - period-label reserve
-barHeight = value / maximum × usableHeight
+Expenses are higher than %@
+Expenses are lower than %@
+Expenses are unchanged from %@
+New spending compared with %@
+No spending in either period
+No comparable period
 ```
 
-Rules:
+Ukrainian forms must also be complete sentences rather than concatenated fragments.
 
-- zero value: show a dash and no colored bar;
-- non-zero tiny value: minimum visible bar height around 3–4 points;
-- reserve vertical space for amount labels;
-- prevent labels from overlapping adjacent groups;
-- compact values using locale-aware formatting;
-- expose full values through accessibility.
+Color must not be the only directional signal; use arrow and text.
 
-## 9.3 Interaction
+## Spending Overview
 
-Preserve current behavior:
+Move the current action into the bottom of the summary card.
 
-- light haptic feedback;
-- update `selectedMonthKey`;
-- reload Timeline data;
-- scroll selected bar into view;
-- maintain the existing request-ID guard against stale asynchronous results.
+Preserve existing navigation and accessibility identifier. Do not duplicate Overview logic in Timeline.
 
 ---
 
-# 10. Spending Overview action
+# 8. Period and advanced filters
 
-Move the existing separate action into the bottom of the summary card.
+## Wallet chip
 
-Recommended appearance:
+Reuse current selection and async reload behavior.
 
-- full card width;
-- 48–52-point height;
-- subtle border;
-- small green analytics icon;
-- centered label;
-- trailing chevron.
+Do not sum unlike currencies without conversion.
 
-Preserve:
-
-- current navigation to `TimelineOverviewView`;
-- `overviewOpenButton` accessibility identifier;
-- no duplication of Overview logic in the Timeline screen.
-
----
-
-# 11. Filter bar
-
-The target filter bar contains:
-
-1. wallet scope;
-2. explicit selected month/year;
-3. advanced filters with a count badge.
-
-## 11.1 Wallet chip
-
-Reuse current wallet selection and asynchronous reload behavior.
-
-Preserve mixed-currency rules: when an all-wallet aggregate cannot be represented in one currency, require selection of a single wallet rather than summing incompatible currencies.
-
-## 11.2 Period chip
+## Period chip
 
 Display an explicit label such as:
 
@@ -669,19 +571,39 @@ Display an explicit label such as:
 July 2026
 ```
 
-Recommended MVP interaction: a sheet with:
+For the first implementation, restyle the existing control and use a `Menu` or compact selection sheet. A full month-grid navigator is optional and should not block the redesign.
 
-- previous/next month controls;
-- year selector;
-- month grid;
-- current-period shortcut;
-- month/year Timeline mode control where appropriate.
+## Existing search sheet
 
-A menu-based implementation is acceptable for the first iteration but scales poorly for long history.
+The app already has one shared draft query with:
 
-## 11.3 Filters chip and badge
+- search text;
+- type;
+- category;
+- label;
+- date range;
+- apply/reset.
 
-The badge should count only advanced feed filters:
+Do not rebuild this system. Extend it with an entry mode:
+
+```swift
+enum TimelineSearchEntryMode {
+    case search
+    case filters
+}
+```
+
+- header search opens the existing sheet and focuses the search field;
+- Filters chip opens the same sheet in its normal state;
+- both edit the same `TransactionQuery`;
+- Apply performs one reload;
+- Reset clears advanced feed filters.
+
+Use `@FocusState` for search focus.
+
+## Filter badge
+
+Count only advanced feed filters:
 
 ```swift
 extension TransactionQuery {
@@ -697,39 +619,26 @@ extension TransactionQuery {
 }
 ```
 
-Do not count wallet or selected Timeline period because they have dedicated controls.
+Do not count wallet or the visible Timeline period.
 
-## 11.4 Search and Filters integration
+## Date-range correctness fix
 
-Use one shared query state and one shared sheet.
+The current end-date filter should be changed to a half-open interval:
 
-- Header search button: open the sheet focused on the text field.
-- Filters chip: open the same sheet in its default filter state.
-- Apply: perform one feed reload.
-- Reset: clear all advanced feed filters.
+```text
+occurred_at >= startOfStartDay
+occurred_at < startOfDayAfterEndDate
+```
 
-Do not create independent search and filter query states.
+Do not use `occurred_at <= selectedDateAtMidnight`, which can omit transactions later on the chosen end date.
 
 ---
 
-# 12. Transaction day cards
+# 9. Transaction day cards
 
-Wrap each `TimelineSection` in a visual card.
+Wrap each existing `TimelineSection` in a card.
 
-Proposed component:
-
-```swift
-TimelineDayCard(
-    section: section,
-    isCollapsed: ...,
-    onToggle: ...,
-    onOpenTransaction: ...
-)
-```
-
-## 12.1 Header
-
-Contents:
+Header:
 
 ```text
 calendar icon
@@ -739,7 +648,7 @@ day total
 expand/collapse chevron
 ```
 
-The entire header should be one accessible button with a full-width content shape and minimum 44–48-point height.
+The whole header should be one accessible full-width button with minimum 44–48-point height.
 
 Suggested local state:
 
@@ -747,36 +656,49 @@ Suggested local state:
 @State private var collapsedDayKeys: Set<Int> = []
 ```
 
-Recommended behavior:
+Behavior:
 
-- all sections expanded by default;
-- preserve collapsed state while remaining on the screen;
-- reset collapsed state when wallet or selected period changes.
+- expanded by default;
+- preserve collapsed state while the user remains on the screen;
+- reset on wallet or selected-period change.
 
-## 12.2 Transaction rows
-
-Reuse the existing `TransactionRow` behavior and model.
+Reuse the existing transaction row and editor flow.
 
 Refinements:
 
-- category glyph around 44–48 points where density requires;
+- glyph approximately 44–48 points;
 - merchant and amount on one line;
 - secondary metadata on one line;
 - fixed trailing amount column;
 - trailing chevron;
-- inset separators beginning after the glyph;
-- keep existing row tap → load draft → open editor;
-- preserve transaction-row accessibility identifiers.
-
-Do not invent card-network or bank logos when the model does not provide them. Use existing category, wallet, source, label, and merchant data.
+- inset separators;
+- preserve transaction-row accessibility identifiers;
+- do not invent card-network or bank logos absent from the model.
 
 ---
 
-# 13. Theme and visual tokens
+# 10. Year-mode performance
+
+The current Timeline snapshot can load a full year of transactions with no explicit limit.
+
+For the first implementation:
+
+1. preserve existing year behavior;
+2. test with a fixture containing roughly 5,000–10,000 transactions;
+3. measure repository load time and scroll responsiveness on a physical device;
+4. introduce pagination or month-grouped lazy expansion only if measured performance is unacceptable.
+
+Do not add pagination speculatively without profiling, but do not mark year mode complete without this large-data gate.
+
+---
+
+# 11. Theme, localization, and accessibility
+
+## Theme
 
 Reuse `CashRunwayTheme` semantic colors and typography.
 
-Potential Timeline-specific layout tokens:
+Potential layout tokens:
 
 ```swift
 static let timelinePageHorizontalPadding: CGFloat = 16
@@ -787,54 +709,94 @@ static let timelineCardPadding: CGFloat = 16
 static let minimumTouchTarget: CGFloat = 44
 ```
 
-Visual principles:
+Use subtle borders/shadows, consistent radii, neutral body text, and trailing-aligned monospaced money values.
 
-- near-white page background and white surfaces;
-- very subtle card border and shadow;
-- green reserved for income, positive direction, selected state, and key actions;
-- red reserved for expenses and negative direction;
-- normal body text remains neutral;
-- consistent radius family;
-- trailing-aligned monospaced money values;
-- avoid heavy gradients, thick borders, and multiple competing accent colors.
+## Localization
+
+Add complete English and Ukrainian entries for:
+
+- Cash Flow;
+- Income;
+- Expenses;
+- Spending Overview;
+- All Wallets;
+- Filters;
+- current-period labels;
+- comparison sentences;
+- unavailable states;
+- chart accessibility summaries;
+- expand/collapse labels.
+
+Modify `AppHost/Localizable.xcstrings` through the repository localization script.
+
+## Accessibility
+
+Add identifiers for:
+
+```swift
+timelineSummaryCard
+timelineIncomeValue
+timelineExpenseValue
+timelineComparison
+timelineMonthPicker
+timelineFilterButton
+timelineFilterBadge
+timelineDayHeader(_ dayKey: Int)
+timelineDayToggle(_ dayKey: Int)
+timelineChartPoint(_ periodKey: Int)
+```
+
+Preserve existing search, wallet, cash-flow, Overview, add, and transaction-row identifiers.
+
+VoiceOver order:
+
+1. selected period and wallet;
+2. net cash flow;
+3. income;
+4. expenses;
+5. comparison;
+6. chart summary;
+7. Spending Overview.
+
+Also validate:
+
+- 44 × 44 minimum targets;
+- Bold Text;
+- Reduce Motion;
+- accessibility Dynamic Type;
+- light/dark appearance;
+- meaning understandable without color.
 
 ---
 
-# 14. Loading, empty, and error states
+# 12. Loading and edge states
 
-## 14.1 Loading
+## Loading
 
-Initial implementation may preserve the current loading behavior, but the desired follow-up behavior is:
+Initial implementation may preserve current behavior. Preferred follow-up:
 
-- initial load: redacted/skeleton summary and feed;
-- wallet/period change: preserve previous content while loading;
-- show a small progress indicator within the summary area;
-- avoid blanketing the entire screen for every period tap.
+- initial redacted/skeleton state;
+- keep previous content during wallet/period reload;
+- small progress indicator inside summary area;
+- no full-screen loading blanket for every chart tap.
 
-## 14.2 Empty selected period
+## Empty period
 
-Keep the summary structure visible:
+Keep the summary visible with:
 
-- zero net amount;
-- zero income and expense values;
-- empty chart bars;
+- zero net;
+- zero income/expenses;
+- empty bars;
 - unavailable comparison;
-- clear empty transaction-feed state.
+- clear empty-feed state.
 
-The selected wallet and period still provide useful context even when no transactions exist.
+## Mixed currencies
 
-## 14.3 Mixed currencies
+Either require one wallet or show aggregate-unavailable state. Never add unlike currencies.
 
-Never add unlike currencies without conversion.
+## Large values
 
-Continue to either:
-
-- require a single wallet;
-- or show the existing mixed-currency unavailable state.
-
-## 14.4 Large-number cases
-
-At minimum, verify:
+Verify at least:
 
 ```text
 ₴0.00
@@ -845,281 +807,153 @@ At minimum, verify:
 €1,234,567.89
 ```
 
-The main amount should avoid wrapping where possible. Chart values should compact safely.
-
 ---
 
-# 15. Localization
+# 13. Test strategy
 
-The app supports system language, English, and Ukrainian.
+## Pure date-window tests
 
-Add complete localization entries for:
+- current partial month;
+- completed historical month;
+- January/December boundary;
+- March 31 versus February;
+- leap-year February;
+- February 29 versus non-leap baseline;
+- current year YTD;
+- completed historical year;
+- future selected period;
+- timezone/calendar boundaries.
 
-- Cash Flow;
-- Income;
-- Expenses;
-- Spending Overview;
-- All Wallets;
-- Filters;
-- Current Month;
-- comparison sentences;
-- no-comparison states;
-- chart accessibility labels;
-- day expand/collapse labels.
+## Repository integration tests
 
-Use the repository localization script to modify `AppHost/Localizable.xcstrings`; do not manually rewrite the complete catalog.
-
-Avoid composing grammatically dependent sentences from separately localized fragments.
-
----
-
-# 16. Accessibility
-
-Add identifiers for new elements, for example:
-
-```swift
-static let timelineSummaryCard = "timeline.summaryCard"
-static let timelineIncomeValue = "timeline.incomeValue"
-static let timelineExpenseValue = "timeline.expenseValue"
-static let timelineComparison = "timeline.comparison"
-static let timelineMonthPicker = "timeline.monthPicker"
-static let timelineFilterButton = "timeline.filterButton"
-static let timelineFilterBadge = "timeline.filterBadge"
-```
-
-Add helpers for:
-
-```swift
-timelineDayHeader(_ dayKey: Int)
-timelineDayToggle(_ dayKey: Int)
-timelineChartPoint(_ periodKey: Int)
-```
-
-Preserve existing identifiers for:
-
-- search;
-- wallet menu;
-- cash-flow value;
-- Spending Overview;
-- transaction rows;
-- add transaction.
-
-Recommended VoiceOver order in the summary card:
-
-1. selected period and wallet;
-2. net cash flow;
-3. income;
-4. expenses;
-5. comparison;
-6. chart summary;
-7. Spending Overview action.
-
-Each chart point should announce a complete summary, for example:
-
-```text
-April 2026. Income 52,800 hryvnias. Expenses 45,700 hryvnias.
-```
-
-Also verify:
-
-- minimum 44 × 44-point controls;
-- Bold Text;
-- Reduce Motion;
-- accessibility Dynamic Type;
-- light and dark appearance;
-- status understandable without color.
-
----
-
-# 17. Test strategy
-
-## 17.1 Pure comparison-window tests
-
-Cover:
-
-1. current partial month;
-2. completed historical month;
-3. January/December boundary;
-4. March 31 compared with February;
-5. leap-year February;
-6. current year YTD;
-7. historical full year;
-8. future selected period;
-9. baseline zero/current positive;
-10. both periods zero;
-11. timezone/calendar boundary behavior.
-
-## 17.2 Repository integration tests
-
-Verify:
-
-- expenses included;
+- expense included;
 - income excluded;
 - transfers excluded;
-- deleted transactions excluded;
+- deleted rows excluded;
 - wallet scope respected;
-- single-currency all-wallet scope supported;
+- true same-currency all-wallet behavior verified or limitation documented;
 - mixed currencies rejected;
 - current/baseline amounts correct;
-- percentage direction correct;
-- existing section grouping unchanged;
-- summary, comparison, bars, and sections remain internally consistent.
+- zero baseline safe;
+- historical aggregate path consistent with chart values;
+- partial-period bounded-query path excludes future-dated transactions;
+- snapshot fields internally consistent.
 
-## 17.3 Presentation tests
+## Presentation tests
 
-Verify:
+- positive/negative/zero cash-flow style;
+- higher/lower/unchanged/unavailable states;
+- percentage appears only once;
+- no infinity/NaN;
+- signed expense display;
+- active-filter count;
+- localized compact chart labels;
+- selected chart state;
+- localized date-range text.
 
-- negative/positive/zero cash-flow style;
-- higher/lower/unchanged/unavailable comparison presentation;
-- zero baseline never produces infinity/NaN;
-- active filter count;
-- compact chart formatting;
-- selected chart point state;
-- localized date-range labels;
-- signed expense display.
-
-## 17.4 Visual QA matrix
+## Visual QA matrix
 
 | Dimension | Cases |
 |---|---|
 | Language | Ukrainian, English |
 | Appearance | Light, dark |
 | Width | Small, standard, large iPhone |
-| Dynamic Type | Default, XL, accessibility sizes |
+| Dynamic Type | Default, XL, accessibility |
 | Cash flow | Positive, negative, zero |
-| Data density | Empty, one day, many days |
+| Data density | Empty, one day, many days, 5k–10k year fixture |
 | Currency | UAH, USD, EUR, mixed |
-| Chart | Zero income, zero expense, large values |
+| Chart | Zero income, zero expense, large outlier, long history |
 | Text | Long merchant/category/wallet names |
-
-Existing UI-test identifiers and flows should be preserved even if XCUITest changes are deferred according to repository policy.
 
 ---
 
-# 18. File-by-file implementation map
+# 14. Exact file map
 
 | File | Planned change |
 |---|---|
-| `Sources/CashRunwayCore/Models.swift` | Add Timeline comparison and selected-period summary models |
-| `Sources/CashRunwayCore/CashRunwayRepository.swift` | Add comparison-window query and enrich Timeline snapshot |
-| Repository protocol declarations | Update snapshot contract where required |
-| `Sources/CashRunwayUI/AppModel.swift` | Consume enriched snapshot without duplicating calculations |
-| `Sources/CashRunwayUI/DashboardView.swift` | Replace current hero/chart/feed hierarchy |
-| `Sources/CashRunwayUI/Theme.swift` | Add reusable Timeline layout/formatting tokens |
-| `Sources/CashRunwayUI/AccessibilityIdentifiers.swift` | Add summary, filter, chart, and day identifiers |
-| `Sources/CashRunwayUI/TimelineSearchSheet.swift` | Support search-focused and filter-focused entry modes |
-| `AppHost/Localizable.xcstrings` | Add English/Ukrainian strings through approved script |
-| Core test files | Date-window and repository comparison tests |
-| UIVM/presentation test files | Formatting, trend, badge, and chart tests |
-| `CashRunway.xcodeproj/project.pbxproj` | Update only when stable new Swift files are extracted |
+| `Sources/CashRunwayCore/Models.swift` | Add `TimelineComparison`; extend `TimelineSnapshot` |
+| `Sources/CashRunwayCore/CashRunwayRepositorying.swift` | Add `now`-aware `DashboardRepositorying.timelineSnapshot` requirement and convenience wrapper |
+| Timeline repository implementation file | Add comparison-window and hybrid comparison calculation |
+| `Sources/CashRunwayUI/AppModel.swift` | Consume enriched snapshot without new duplicate financial state |
+| `Sources/CashRunwayUI/DashboardView.swift` | Replace current visual hierarchy; preserve orchestration |
+| `Sources/CashRunwayUI/TimelineSearchSheet.swift` | Add search/filter entry mode, focus handling, and date-range boundary fix |
+| `Sources/CashRunwayUI/Theme.swift` | Add reusable Timeline layout tokens if needed |
+| `Sources/CashRunwayUI/AccessibilityIdentifiers.swift` | Add summary/filter/chart/day identifiers |
+| `AppHost/Localizable.xcstrings` | Add English/Ukrainian strings via approved script |
+| `Tests/CashRunwayCoreTests/TimelineComparisonTests.swift` | Pure comparison-window and percentage tests |
+| `Tests/CashRunwayCoreTests/TimelineSnapshotTests.swift` | Repository comparison/snapshot integration tests |
+| `Tests/CashRunwayUIVMTests/TimelinePresentationTests.swift` | Formatting, trend, filter badge, and localization tests |
+| `CashRunway.xcodeproj/project.pbxproj` | Update only after stable new Swift files are extracted |
 
 ---
 
-# 19. Implementation phases
+# 15. Implementation phases
 
-## Phase 0 — Specification lock
+## Phase 0 — Specification and prerequisite verification
 
 Confirm:
 
-- partial-month comparison semantics;
-- historical-month semantics;
-- year-mode semantics;
+- comparison semantics;
+- year semantics;
 - filter scope;
 - zero-baseline wording;
-- collapsible day behavior;
-- number of visible chart periods.
+- All Wallets behavior;
+- four-period chart viewport;
+- collapse behavior.
 
-**Exit criterion:** no unresolved financial rule remains inside visual-design comments.
+## Phase 1 — Core comparison logic
 
-## Phase 1 — Core models and date logic
-
-Implement:
-
-- `TimelineComparison`;
-- selected-period summary;
-- comparison-window helper;
-- percentage calculation;
-- pure unit tests.
-
-**Exit criterion:** all date and zero-baseline edge cases pass without database access.
+- add `TimelineComparison`;
+- add comparison-window helper;
+- add deterministic `now` contract;
+- add pure unit tests.
 
 ## Phase 2 — Repository integration
 
-Implement:
-
-- bounded expense queries;
-- wallet/mixed-currency behavior;
-- enriched `TimelineSnapshot`;
-- repository integration tests.
-
-**Exit criterion:** one snapshot returns summary, comparison, bars, and transaction sections consistently.
+- implement partial-period bounded queries;
+- implement historical aggregate comparison;
+- preserve mixed-currency behavior;
+- enrich `TimelineSnapshot`;
+- add integration tests.
 
 ## Phase 3 — Summary card and chart
 
-Implement:
-
 - new header;
-- cash-flow summary card;
-- income/expense cards;
-- comparison block;
-- grouped chart;
-- embedded Spending Overview action.
+- exact top/body/bottom card geometry;
+- net, income, expense, comparison;
+- four-period viewport over `allBars`;
+- embedded Spending Overview.
 
-Keep early subviews private in `DashboardView.swift` until the design stabilizes.
-
-**Exit criterion:** normal-size Ukrainian light-mode screen matches the intended hierarchy and information density.
+Keep early subviews private until stable.
 
 ## Phase 4 — Period and filters
 
-Implement:
-
-- wallet chip restyle;
-- explicit period picker;
-- filter badge;
-- unified search/filter sheet;
-- filter-scope separation.
-
-**Exit criterion:** global summary scope and feed exploration filters behave predictably.
+- restyle wallet and period chips;
+- add filter badge;
+- extend existing search sheet with entry mode and focus;
+- correct date-range end semantics.
 
 ## Phase 5 — Day-card feed
 
-Implement:
-
-- daily card containers;
+- day card containers;
 - collapse/expand;
 - row chevrons and inset separators;
-- preservation of transaction-editor navigation.
+- preserve editor/add flows.
 
-**Exit criterion:** all existing transaction open/edit/add flows remain functional.
+## Phase 6 — Extraction and QA
 
-## Phase 6 — Component extraction
-
-After visual stability:
-
-- extract subviews;
-- add files safely to the Xcode project;
+- extract stable components;
 - verify project integrity;
-- run CodeGraph sync.
-
-**Exit criterion:** `DashboardView` is an orchestration layer rather than a large rendering monolith.
-
-## Phase 7 — Localization, accessibility, and QA
-
-Complete:
-
-- English and Ukrainian localization;
-- dark mode;
-- Dynamic Type;
-- VoiceOver;
-- empty/mixed-currency/large-value states;
-- visual screenshot matrix;
+- localization;
+- Dynamic Type, VoiceOver, dark mode;
+- large-data year fixture;
 - full validation.
 
 ---
 
-# 20. Validation gates
+# 16. Validation gates
 
-Use existing repository workflows:
+Use repository workflows:
 
 ```bash
 just session-start
@@ -1133,49 +967,52 @@ just smoke
 just graph-sync
 ```
 
-Additional requirements:
+Additionally:
 
-- use the isolated SwiftPM gate when multiple worktrees are active;
-- run performance tests if comparison-query performance or chart rendering is changed materially;
-- verify `project.pbxproj` immediately after any project-file edit;
-- report every skipped gate and the reason;
-- treat build, unit tests, smoke launch, and physical-device readiness as separate status categories.
+- use isolated SwiftPM validation when multiple worktrees are active;
+- run performance checks when query or large-feed behavior changes;
+- verify `project.pbxproj` immediately after editing it;
+- report skipped gates and reasons;
+- keep unit, build, smoke, and physical-device readiness as separate status categories.
 
 ---
 
-# 21. Acceptance criteria
+# 17. Acceptance criteria
 
 The redesign is complete when:
 
-1. The existing Timeline tab adopts the supplied visual hierarchy.
-2. Net cash flow, income, expenses, and chart values come from one selected-period snapshot.
-3. Expense comparison follows a documented matched-period algorithm.
-4. Zero-baseline cases never display infinity, NaN, or a misleading percentage.
-5. Wallet and period controls affect both summary and feed.
-6. Search/category/label filters affect the feed without silently redefining the headline KPI.
-7. Mixed currencies are never summed without conversion.
-8. Chart labels do not collide on supported phone widths.
-9. Accessibility Dynamic Type switches layout rather than shrinking values excessively.
-10. Day cards display correct signed totals and support the approved collapse behavior.
-11. Transaction rows still open the current editor.
-12. Search, wallet selection, Spending Overview, and add-transaction flows remain intact.
-13. Ukrainian and English wording is grammatically correct.
-14. VoiceOver communicates values and comparison direction without relying on color.
-15. Focused tests, full isolated tests, lint, UI validation, build, and smoke checks pass.
+1. The existing Timeline tab adopts the approved hierarchy.
+2. Net, income, expenses, and comparison use one consistent selected-period snapshot.
+3. The chart preserves historical `allBars` navigation with a four-period visible viewport.
+4. Comparison follows documented partial/historical month and year rules.
+5. The percentage appears once and is never infinity/NaN.
+6. Wallet and period affect summary and feed.
+7. Advanced filters affect the feed only.
+8. All Wallets behavior is truthful and tested.
+9. Mixed currencies are never summed without conversion.
+10. Date-range end dates include the complete selected day.
+11. Chart labels do not collide on supported widths.
+12. Dynamic Type switches layout instead of shrinking values excessively.
+13. Day totals and signed transaction amounts remain correct.
+14. Existing search, wallet, Overview, transaction editing, and add flows remain intact.
+15. Ukrainian and English text is grammatically correct.
+16. VoiceOver communicates values and direction without relying on color.
+17. Year mode passes the large-data performance gate.
+18. Focused tests, isolated tests, lint, UI validation, build, and smoke checks pass.
 
 ---
 
-# 22. Estimated effort
+# 18. Estimated effort
 
 | Work | Estimate |
 |---|---:|
-| Product/data-rule decisions | 0.5 day |
-| Core models, date logic, unit tests | 1–1.5 days |
-| Repository query and integration tests | 0.5–1 day |
-| Summary card and grouped chart | 1.5–2 days |
-| Period picker and filters | 0.75–1 day |
-| Day-card transaction feed | 0.5–1 day |
-| Localization, accessibility, visual QA | 1–1.5 days |
-| **Total** | **5–8 engineering days** |
+| Specification and All Wallets verification | 0.5 day |
+| Core comparison/date logic and tests | 1 day |
+| Repository integration and tests | 0.75–1 day |
+| Summary card and chart | 1.5–2 days |
+| Period/filter refinements | 0.5–0.75 day |
+| Day-card feed | 0.5–1 day |
+| Localization, accessibility, large-data and visual QA | 1–1.5 days |
+| **Total** | **5–7.5 engineering days** |
 
-A shorter implementation can reproduce the static appearance, but production quality requires explicit comparison semantics, mixed-currency safety, responsive layout, accessibility, localization, and regression validation.
+A faster implementation can reproduce the static appearance, but production quality requires explicit comparison semantics, truthful wallet scope, responsive layout, localization, accessibility, and measured year-mode performance.
