@@ -183,9 +183,16 @@ struct TransactionRow: View {
         item.merchant.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? item.displayTitle : item.merchant
     }
 
+    private var localizedCategoryName: String? {
+        guard let categoryName = item.categoryName, !categoryName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+        return item.categoryID.map { BuiltInCategoryDisplayName.name(id: $0, fallback: categoryName) } ?? categoryName
+    }
+
     private var secondaryTitle: String {
-        if let categoryName = item.categoryName, !categoryName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            let localized = item.categoryID.map { BuiltInCategoryDisplayName.name(id: $0, fallback: categoryName) } ?? categoryName
+        let merchantIsEmpty = item.merchant.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if let localized = localizedCategoryName, !(merchantIsEmpty && localized == primaryTitle) {
             return "\(localized) · \(item.walletName)"
         }
         return item.walletName
