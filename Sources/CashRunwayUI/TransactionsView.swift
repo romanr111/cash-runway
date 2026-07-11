@@ -146,6 +146,13 @@ struct TransactionRow: View {
                     .font(CashRunwayTheme.captionFont)
                     .foregroundStyle(CashRunwayTheme.textSecondary)
                     .lineLimit(1)
+                if !note.isEmpty {
+                    Text(note)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(CashRunwayTheme.textSecondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
                 HStack(spacing: 6) {
                     ForEach(Array(metadataParts.enumerated()), id: \.offset) { index, part in
                         if index > 0 {
@@ -184,12 +191,12 @@ struct TransactionRow: View {
         return item.walletName
     }
 
+    private var note: String {
+        item.note.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private var metadataParts: [String] {
         var parts: [String] = []
-        let note = item.note.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !note.isEmpty {
-            parts.append(note)
-        }
         parts.append(item.occurredAt.formatted(date: .abbreviated, time: .omitted))
         parts.append(item.source.displayName)
         if !item.labels.isEmpty {
@@ -199,7 +206,12 @@ struct TransactionRow: View {
     }
 
     private var accessibilitySummary: String {
-        ([item.displayTitle, MoneyFormatter.string(from: item.amountMinor, currencyCode: item.currencyCode), item.walletName] + metadataParts).joined(separator: ", ")
+        var components = [item.displayTitle, MoneyFormatter.string(from: item.amountMinor, currencyCode: item.currencyCode), item.walletName]
+        if !note.isEmpty {
+            components.append(note)
+        }
+        components.append(contentsOf: metadataParts)
+        return components.joined(separator: ", ")
     }
 
     private var fallbackColor: String {
