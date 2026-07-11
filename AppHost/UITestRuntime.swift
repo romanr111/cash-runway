@@ -125,7 +125,9 @@ private struct UITestLaunchConfiguration {
             repository: repository,
             bankTokenStore: KeychainBankTokenStore(keychain: keychain),
             bankSyncPerformer: UITestBankSyncPerformer(repository: repository, mode: monobankMode),
-            monobankTokenValidator: UITestMonobankTokenValidator(mode: monobankMode)
+            monobankTokenValidator: UITestMonobankTokenValidator(mode: monobankMode),
+            csvService: CSVService(repository: repository),
+            backupService: BackupService(repository: repository, bankTokenStore: KeychainBankTokenStore(keychain: keychain))
         )
         return CashRunwayAppRuntime(
             model: model,
@@ -166,6 +168,8 @@ private struct UITestLaunchConfiguration {
 }
 
 private final class UITestKeychainStore: KeychainStoring, @unchecked Sendable {
+    // @unchecked Sendable is justified: mutable `items` is guarded by `lock`
+    // (NSLock); all read/write access goes through lock.lock()/unlock().
     private let lock = NSLock()
     private var items: [String: Data] = [:]
 
@@ -196,6 +200,7 @@ private enum UITestMonobankMode: String {
 }
 
 private final class UITestMonobankTokenValidator: MonobankTokenValidating, @unchecked Sendable {
+    // @unchecked Sendable is justified: `mode` is an immutable `let` value type.
     private let mode: UITestMonobankMode
 
     init(mode: UITestMonobankMode) {
@@ -223,6 +228,8 @@ private final class UITestMonobankTokenValidator: MonobankTokenValidating, @unch
 }
 
 private final class UITestBankSyncPerformer: BankSyncPerforming, @unchecked Sendable {
+    // @unchecked Sendable is justified: `repository` and `mode` are immutable
+    // `let`; mutable `syncAttemptCount` is guarded by `lock` (NSLock).
     private let repository: CashRunwayRepository
     private let mode: UITestMonobankMode
     private let lock = NSLock()

@@ -292,7 +292,7 @@ struct WalletCategoryTests {
         try repository.saveWallet(wallet)
 
         let backup = try repository.exportFullBackup()
-        #expect(backup.metadata.version == 2)
+        #expect(backup.metadata.version == 3)
         #expect(backup.walletCategories.contains { $0.id == category.id })
         #expect(backup.wallets.contains { $0.categoryID == category.id })
 

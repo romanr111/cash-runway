@@ -25,12 +25,19 @@ public struct TransactionDeletionSummary: Equatable, Sendable {
     public let displayCount: Int
     public let expenseMinor: Int64
     public let incomeMinor: Int64
+    public let currencyCodes: Set<String>
 
-    public init(count: Int, displayCount: Int, expenseMinor: Int64 = 0, incomeMinor: Int64 = 0) {
+    public var hasExpenseImpact: Bool { expenseMinor > 0 }
+    public var hasIncomeImpact: Bool { incomeMinor != 0 }
+    public var hasFinancialImpact: Bool { hasExpenseImpact || hasIncomeImpact }
+    public var isMixedCurrency: Bool { currencyCodes.count > 1 }
+
+    public init(count: Int, displayCount: Int, expenseMinor: Int64 = 0, incomeMinor: Int64 = 0, currencyCodes: Set<String> = []) {
         self.count = count
         self.displayCount = displayCount
         self.expenseMinor = expenseMinor
         self.incomeMinor = incomeMinor
+        self.currencyCodes = currencyCodes
     }
 }
 
@@ -79,6 +86,9 @@ public struct TransactionDeletionPlan: Equatable, Sendable, Identifiable {
     public var displayCount: Int { summary.displayCount }
     public var expenseMinor: Int64 { summary.expenseMinor }
     public var incomeMinor: Int64 { summary.incomeMinor }
+    public var hasExpenseImpact: Bool { summary.hasExpenseImpact }
+    public var hasIncomeImpact: Bool { summary.hasIncomeImpact }
+    public var hasFinancialImpact: Bool { summary.hasFinancialImpact }
 
     public init(
         id: UUID = UUID(),

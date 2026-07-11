@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 import UIKit
 #endif
 import CashRunwayCore
+import CashRunwayUIVM
 
 struct SettingsView: View {
     @Bindable var model: CashRunwayAppModel
@@ -12,22 +13,22 @@ struct SettingsView: View {
     @State private var isLabelsPresented = false
     @State private var isTemplatesPresented = false
     @State private var isWalletsPresented = false
-    @State private var monobankCoordinator: MonobankCoordinator? = nil
-    @State private var csvImportCoordinator: CSVImportCoordinator? = nil
     @State private var isCSVImporterPresented = false
+    @State private var isCSVImportViewPresented = false
     @State private var isCSVExporterPresented = false
     @State private var exportFileURL: URL?
     @State private var isExporting = false
-    @State private var backupCoordinator: BackupCoordinator? = nil
-    @State private var isBackupImporterPresented = false
+    @State private var backupImportFlow = BackupImportFlowState()
     @State private var isBackupExportWarningPresented = false
     @State private var isBackupExporterPresented = false
     @State private var backupExportFileURL: URL?
     @State private var isBackupExporting = false
+    @State private var isMonobankPresented = false
     @State private var isDeleteTransactionsPresented = false
     @State private var isFeedbackReportPresented = false
     @State private var isDiagnosticsPresented = false
     @State private var isLanguageSettingsPresented = false
+    @State private var isCurrencySettingsPresented = false
     @AppStorage(AppLanguagePreference.storageKey) private var languagePreferenceRaw = AppLanguagePreference.system.rawValue
 
     var body: some View {
@@ -82,7 +83,9 @@ struct SettingsView: View {
                             }
                             .accessibilityIdentifier(CashRunwayAccessibilityID.settingsScheduledTransactionsRow)
                             rowDivider
-                            staticRow(icon: "banknote.fill", tint: "#4A80C1", title: "Main Currency", value: "UAH")
+                            moreRow(icon: "banknote.fill", tint: "#4A80C1", title: "Main Currency", subtitle: model.defaultCurrencyCode.rawValue) {
+                                isCurrencySettingsPresented = true
+                            }
                             .accessibilityIdentifier(CashRunwayAccessibilityID.settingsMainCurrencyRow)
                             rowDivider
                             moreRow(icon: "globe", tint: "#2AAAD2", title: "Language", subtitle: languagePreference.displayName) {
@@ -142,9 +145,9 @@ struct SettingsView: View {
                             }
                             .accessibilityIdentifier(CashRunwayAccessibilityID.settingsExportCSVRow)
                             rowDivider
-                            moreRow(icon: "externaldrive.fill", tint: "#4A80C1", title: "Import Full Backup", subtitle: L10n.string("Replace data from JSON")) {
-                                isBackupImporterPresented = true
-                            }
+                        moreRow(icon: "externaldrive.fill", tint: "#4A80C1", title: "Import Full Backup", subtitle: L10n.string("Replace data from JSON")) {
+                            backupImportFlow.beginImport()
+                        }
                             .accessibilityIdentifier(CashRunwayAccessibilityID.settingsImportBackupRow)
                             rowDivider
                             moreRow(icon: "externaldrive.badge.plus", tint: "#7A6FF0", title: "Export Full Backup", subtitle: isBackupExporting ? L10n.string("Exporting…") : L10n.string("Share unencrypted backup JSON")) {
@@ -172,7 +175,9 @@ struct SettingsView: View {
 
                         VStack(spacing: 0) {
                             moreRow(icon: "creditcard.fill", tint: "#1CC389", title: "Monobank", subtitle: monobankSubtitle) {
-                                monobankCoordinator = MonobankCoordinator(model: model)
+                                model.bankSyncViewModel.step = .intro
+                                model.bankSyncViewModel.completedStatus = nil
+                                isMonobankPresented = true
                             }
                             .accessibilityIdentifier(CashRunwayAccessibilityID.settingsMonobankRow)
                         }
@@ -218,17 +223,26 @@ struct SettingsView: View {
             .sheet(isPresented: $isWalletsPresented) {
                 WalletManagementView(model: model)
             }
-            .sheet(item: $monobankCoordinator) { coordinator in
-                MonobankWizardView(coordinator: coordinator)
-            }
-            .sheet(item: $csvImportCoordinator) { coordinator in
-                CSVImportView(coordinator: coordinator)
+            .sheet(
+                isPresented: $isMonobankPresented,
+                onDismiss: {
+                    model.bankSyncViewModel.resetSensitiveWizardState()
+                },
+                content: {
+                    MonobankWizardView(model: model, viewModel: model.bankSyncViewModel)
+                }
+            )
+            .sheet(isPresented: $isCSVImportViewPresented) {
+                CSVImportView(viewModel: model.importViewModel)
             }
             .sheet(isPresented: $isDiagnosticsPresented) {
                 DiagnosticsView(model: model)
             }
             .sheet(isPresented: $isLanguageSettingsPresented) {
                 LanguageSettingsView(selection: $languagePreferenceRaw)
+            }
+            .sheet(isPresented: $isCurrencySettingsPresented) {
+                CurrencySettingsView(model: model)
             }
             .sheet(isPresented: $isCSVExporterPresented) {
                 if let url = exportFileURL {
@@ -257,7 +271,7 @@ struct SettingsView: View {
                 Text("Bank statement import is unavailable on this platform.")
                 #endif
             }
-            .sheet(isPresented: $isBackupImporterPresented) {
+            .sheet(isPresented: $backupImportFlow.isBackupImporterPresented) {
                 #if canImport(UIKit)
                 DocumentPicker(allowedContentTypes: [.json, .plainText]) { result in
                     handleBackupImporterResult(result)
@@ -266,8 +280,8 @@ struct SettingsView: View {
                 Text("Backup import is unavailable on this platform.")
                 #endif
             }
-            .sheet(item: $backupCoordinator) { coordinator in
-                BackupView(coordinator: coordinator)
+            .sheet(isPresented: $backupImportFlow.isBackupImportViewPresented) {
+                BackupView(viewModel: model.backupViewModel)
             }
             .sheet(isPresented: $isFeedbackReportPresented) {
                 FeedbackReportView(service: ConfiguredFeedbackReportService())
@@ -299,9 +313,8 @@ struct SettingsView: View {
         isCSVImporterPresented = false
         switch result {
         case let .success(url):
-            let coordinator = CSVImportCoordinator(model: model)
-            csvImportCoordinator = coordinator
-            coordinator.prepareImport(from: url)
+            model.importViewModel.prepareImport(from: url)
+            isCSVImportViewPresented = true
         case let .failure(error):
             if let pickerError = error as? DocumentPickerError, pickerError == .cancelled {
                 return
@@ -314,9 +327,10 @@ struct SettingsView: View {
         isBackupExporting = true
         Task {
             do {
-                let data = try await model.exportFullBackupData()
+                let data = try await model.backupViewModel.exportFullBackupData()
                 let url = FileManager.default.temporaryDirectory.appendingPathComponent("cash-runway-backup-\(backupFileTimestamp()).json")
                 try data.write(to: url, options: .atomic)
+                FileProtectionService().protect(url)
                 await MainActor.run {
                     backupExportFileURL = url
                     isBackupExporterPresented = true
@@ -333,12 +347,11 @@ struct SettingsView: View {
     }
 
     private func handleBackupImporterResult(_ result: Result<URL, any Error>) {
-        isBackupImporterPresented = false
+        backupImportFlow.reset()
         switch result {
         case let .success(url):
-            let coordinator = BackupCoordinator(model: model)
-            backupCoordinator = coordinator
-            coordinator.prepareImport(from: url)
+            model.backupViewModel.prepareImport(from: url)
+            backupImportFlow.presentBackupView()
         case let .failure(error):
             if let pickerError = error as? DocumentPickerError, pickerError == .cancelled {
                 return
@@ -359,7 +372,7 @@ struct SettingsView: View {
     }
 
     private var monobankSubtitle: String {
-        let status = model.monobankConnectionStatus()
+        let status = model.bankSyncViewModel.connectionStatus()
         guard let integration = status.integration, integration.status != .disabled else {
             return L10n.string("Connect cards and import new expenses automatically")
         }
@@ -556,13 +569,14 @@ private struct ScheduledTransactionsView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
-                        guard let firstWalletID = model.wallets.first?.id else { return }
+                        guard let firstWallet = model.wallets.first else { return }
                         templateDraft = RecurringTemplate(
                             id: UUID(),
                             kind: .expense,
-                            walletID: firstWalletID,
+                            walletID: firstWallet.id,
                             counterpartyWalletID: model.wallets.dropFirst().first?.id,
                             amountMinor: 0,
+                            currencyCode: firstWallet.currencyCode,
                             categoryID: model.expenseCategories.first?.id,
                             merchant: nil,
                             note: nil,
@@ -676,6 +690,87 @@ private struct LanguageSettingsView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }
                 }
+            }
+        }
+    }
+}
+
+private struct CurrencySettingsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Bindable var model: CashRunwayAppModel
+    @State private var selectedCurrency: CurrencyCode = .uah
+
+    var body: some View {
+        NavigationStack {
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 22) {
+                    ScreenTitle(title: "Main Currency")
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Choose the default currency for new wallets.")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(CashRunwayTheme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, 4)
+
+                        VStack(spacing: 0) {
+                            ForEach(SupportedCurrency.allCases, id: \.currencyCode) { currency in
+                                Button {
+                                    selectedCurrency = currency.currencyCode
+                                } label: {
+                                    HStack(spacing: 14) {
+                                        CategoryGlyph(iconName: "banknote.fill", colorHex: "#4A80C1", size: 44)
+                                        VStack(alignment: .leading, spacing: 3) {
+                                            Text(currency.displayName)
+                                                .font(.system(size: 17, weight: .semibold))
+                                                .foregroundStyle(CashRunwayTheme.textPrimary)
+                                            Text(currency.rawValue)
+                                                .font(.system(size: 14, weight: .medium))
+                                                .foregroundStyle(CashRunwayTheme.textSecondary)
+                                                .lineLimit(1)
+                                        }
+                                        Spacer()
+                                        if selectedCurrency == currency.currencyCode {
+                                            Image(systemName: "checkmark.circle.fill")
+                                                .font(.system(size: 20, weight: .semibold))
+                                                .foregroundStyle(CashRunwayTheme.accent)
+                                        }
+                                    }
+                                    .padding(.horizontal, 18)
+                                    .padding(.vertical, 16)
+                                }
+                                .buttonStyle(.plain)
+
+                                if currency != SupportedCurrency.allCases.last {
+                                    Divider().overlay(CashRunwayTheme.line).padding(.leading, 72)
+                                }
+                            }
+                        }
+                        .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+                .padding(.bottom, 36)
+            }
+            .background(CashRunwayTheme.background)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Save") {
+                        var preferences = CurrencyPreferences()
+                        preferences.defaultCurrencyCode = selectedCurrency
+                        preferences.reportingCurrencyCode = model.reportingCurrencyCode
+                        model.saveCurrencyPreferences(preferences)
+                        dismiss()
+                    }
+                }
+            }
+            .onAppear {
+                selectedCurrency = model.defaultCurrencyCode
             }
         }
     }

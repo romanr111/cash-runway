@@ -1,52 +1,53 @@
+import CashRunwayCore
+import CashRunwayUIVM
 import Foundation
 import SwiftUI
-import CashRunwayCore
 
 struct CSVImportView: View {
     @Environment(\.dismiss) private var dismiss
-    @Bindable var coordinator: CSVImportCoordinator
+    @Bindable var viewModel: ImportViewModel
 
     var body: some View {
         NavigationStack {
             Form {
                 EmptyView().accessibilityIdentifier(CashRunwayAccessibilityID.csvImportScreen)
                 Section("Source") {
-                    summaryRow("File", value: coordinator.importFileName)
-                    if !coordinator.isImportPreparing, coordinator.importPreparationError == nil {
+                    summaryRow("File", value: viewModel.importFileName)
+                    if !viewModel.isImportPreparing, viewModel.importPreparationError == nil {
                         summaryRow("Format", value: presetDisplayName)
-                        summaryRow("Rows", value: "\(coordinator.importPreview.totalRows)")
+                        summaryRow("Rows", value: "\(viewModel.importPreview.totalRows)")
                     }
                 }
 
-                if coordinator.isImportPreparing {
+                if viewModel.isImportPreparing {
                     loadingSection
-                } else if let preparationError = coordinator.importPreparationError {
+                } else if let preparationError = viewModel.importPreparationError {
                     Section("Import Error") {
                         Text(preparationError)
                             .foregroundStyle(CashRunwayTheme.negative)
                     }
                 } else {
-                    if let importResult = coordinator.importResult {
+                    if let importResult = viewModel.importResult {
                         resultSection(importResult)
-                    } else if let importError = coordinator.importError {
+                    } else if let importError = viewModel.importError {
                         Section("Import Error") {
                             Text(importError)
                                 .foregroundStyle(CashRunwayTheme.negative)
                         }
                     }
 
-                    if coordinator.isImporting {
+                    if viewModel.isImporting {
                         Section("Importing") {
                             ProgressView("Importing transactions...")
                         }
                     }
 
-        if coordinator.importFormat == .cashRunwayCSV {
+        if viewModel.importFormat == .cashRunwayCSV {
                         Section("Detected") {
                             summaryRow("Income / Expense", value: typeSummary)
                             summaryRow("Wallet", value: walletSummary)
-                            summaryRow("Categories", value: coordinator.importMapping.categoryColumn == nil ? L10n.string("Fallback category") : L10n.string("Matched or created from CSV names"))
-                            summaryRow("Labels", value: coordinator.importMapping.labelsColumn == nil ? L10n.string("Not imported") : L10n.string("Matched to existing names"))
+                            summaryRow("Categories", value: viewModel.importMapping.categoryColumn == nil ? L10n.string("Fallback category") : L10n.string("Matched or created from CSV names"))
+                            summaryRow("Labels", value: viewModel.importMapping.labelsColumn == nil ? L10n.string("Not imported") : L10n.string("Matched to existing names"))
                         }
 
                     Section {
@@ -61,30 +62,30 @@ struct CSVImportView: View {
                             Text(requiredMappingMessage)
                                 .font(.footnote)
                                 .foregroundStyle(hasRequiredMapping ? CashRunwayTheme.textSecondary : CashRunwayTheme.negative)
-                            requiredPicker("Date", selection: $coordinator.importMapping.dateColumn)
+                            requiredPicker("Date", selection: $viewModel.importMapping.dateColumn)
                             amountPickers
                         }
 
                         Section {
-                            DisclosureGroup("Advanced Mapping", isExpanded: $coordinator.isAdvancedMappingExpanded) {
+                            DisclosureGroup("Advanced Mapping", isExpanded: $viewModel.isAdvancedMappingExpanded) {
                                 walletPicker(title: "Fallback Wallet")
-                                Picker("Default Kind", selection: $coordinator.importMapping.defaultKind) {
+                                Picker("Default Kind", selection: $viewModel.importMapping.defaultKind) {
                                     Text("Expense").tag(TransactionDraft.Kind.expense)
                                     Text("Income").tag(TransactionDraft.Kind.income)
                                 }
-                                optionalPicker("Type", selection: $coordinator.importMapping.typeColumn)
-                                optionalPicker("Wallet", selection: $coordinator.importMapping.walletColumn)
-                        optionalPicker("Currency", selection: $coordinator.importMapping.currencyColumn)
-                        optionalPicker("Merchant", selection: $coordinator.importMapping.merchantColumn)
-                        optionalPicker("Note", selection: $coordinator.importMapping.noteColumn)
+                                optionalPicker("Type", selection: $viewModel.importMapping.typeColumn)
+                                optionalPicker("Wallet", selection: $viewModel.importMapping.walletColumn)
+                        optionalPicker("Currency", selection: $viewModel.importMapping.currencyColumn)
+                        optionalPicker("Merchant", selection: $viewModel.importMapping.merchantColumn)
+                        optionalPicker("Note", selection: $viewModel.importMapping.noteColumn)
                         categoryMappingRow
-                        optionalPicker("Labels", selection: $coordinator.importMapping.labelsColumn)
+                        optionalPicker("Labels", selection: $viewModel.importMapping.labelsColumn)
                     }
                 }
             }
 
                     Section("Import Scope") {
-                        Toggle("Import expenses only", isOn: $coordinator.importExpensesOnly)
+                        Toggle("Import expenses only", isOn: $viewModel.importExpensesOnly)
 
                         Text(importScopeMessage)
                             .font(.footnote)
@@ -98,7 +99,7 @@ struct CSVImportView: View {
                                     .padding(.vertical, 4)
                             }
                         }
-                    } else if coordinator.importExpensesOnly {
+                    } else if viewModel.importExpensesOnly {
                         Section("Preview") {
                             Text(L10n.string("No expense rows found in the preview."))
                                 .foregroundStyle(CashRunwayTheme.textSecondary)
@@ -109,14 +110,14 @@ struct CSVImportView: View {
             .navigationTitle(L10n.string("Import Bank Statement"))
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(coordinator.importResult == nil && coordinator.importPreparationError == nil ? L10n.string("Cancel") : L10n.string("Done")) { dismiss() }
+                    Button(viewModel.importResult == nil && viewModel.importPreparationError == nil ? L10n.string("Cancel") : L10n.string("Done")) { dismiss() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    if !coordinator.isImportPreparing, coordinator.importPreparationError == nil, coordinator.importResult == nil {
+                    if !viewModel.isImportPreparing, viewModel.importPreparationError == nil, viewModel.importResult == nil {
                         Button("Import") {
-                            coordinator.startImport()
+                            Task { await viewModel.startImport() }
                         }
-                        .disabled(!hasRequiredMapping || coordinator.isImporting)
+                        .disabled(!hasRequiredMapping || viewModel.isImporting)
                     }
                 }
             }
@@ -124,11 +125,11 @@ struct CSVImportView: View {
     }
 
     private var presetDisplayName: String {
-        coordinator.importFormat.displayName
+        viewModel.importFormat.displayName
     }
 
     private var hasRequiredMapping: Bool {
-        !coordinator.importMapping.dateColumn.isEmpty && (coordinator.importMapping.amountColumn != nil || coordinator.importMapping.debitColumn != nil || coordinator.importMapping.creditColumn != nil)
+        !viewModel.importMapping.dateColumn.isEmpty && (viewModel.importMapping.amountColumn != nil || viewModel.importMapping.debitColumn != nil || viewModel.importMapping.creditColumn != nil)
     }
 
     private var requiredMappingTitle: LocalizedStringKey {
@@ -140,11 +141,11 @@ struct CSVImportView: View {
     }
 
     private var defaultKindName: String {
-        L10n.transactionKind(coordinator.importMapping.defaultKind)
+        L10n.transactionKind(viewModel.importMapping.defaultKind)
     }
 
     private var typeSummary: String {
-        if let typeColumn = coordinator.importMapping.typeColumn {
+        if let typeColumn = viewModel.importMapping.typeColumn {
             L10n.string("From %@ column", typeColumn)
         } else {
             L10n.string("Default %@", defaultKindName)
@@ -152,11 +153,11 @@ struct CSVImportView: View {
     }
 
     private var selectedWalletName: String {
-        coordinator.model.wallets.first(where: { $0.id == coordinator.importMapping.walletID })?.name ?? L10n.string("Selected wallet")
+        viewModel.wallets.first(where: { $0.id == viewModel.importMapping.walletID })?.name ?? L10n.string("Selected wallet")
     }
 
     private var walletSummary: String {
-        if coordinator.importMapping.walletColumn != nil {
+        if viewModel.importMapping.walletColumn != nil {
             L10n.string("CSV names; unmatched use %@", selectedWalletName)
         } else {
             L10n.string("All rows use %@", selectedWalletName)
@@ -164,39 +165,39 @@ struct CSVImportView: View {
     }
 
     private var importScopeMessage: String {
-        coordinator.importExpensesOnly
+        viewModel.importExpensesOnly
             ? L10n.string("Income rows will be skipped.")
             : L10n.string("All supported transactions will be imported.")
     }
 
     private var boundedPreparationProgress: Double {
-        min(max(coordinator.importPreparationProgress, 0.0), 1.0)
+        min(max(viewModel.importPreparationProgress, 0.0), 1.0)
     }
 
     private var amountPickers: some View {
         Group {
             optionalPicker("Amount", selection: Binding(
-                get: { coordinator.importMapping.amountColumn },
+                get: { viewModel.importMapping.amountColumn },
                 set: {
-                    coordinator.importMapping.amountColumn = $0
+                    viewModel.importMapping.amountColumn = $0
                     if $0 != nil {
-                        coordinator.importMapping.debitColumn = nil
-                        coordinator.importMapping.creditColumn = nil
+                        viewModel.importMapping.debitColumn = nil
+                        viewModel.importMapping.creditColumn = nil
                     }
                 }
             ))
             optionalPicker("Debit", selection: Binding(
-                get: { coordinator.importMapping.debitColumn },
+                get: { viewModel.importMapping.debitColumn },
                 set: {
-                    coordinator.importMapping.debitColumn = $0
-                    if $0 != nil { coordinator.importMapping.amountColumn = nil }
+                    viewModel.importMapping.debitColumn = $0
+                    if $0 != nil { viewModel.importMapping.amountColumn = nil }
                 }
             ))
             optionalPicker("Credit", selection: Binding(
-                get: { coordinator.importMapping.creditColumn },
+                get: { viewModel.importMapping.creditColumn },
                 set: {
-                    coordinator.importMapping.creditColumn = $0
-                    if $0 != nil { coordinator.importMapping.amountColumn = nil }
+                    viewModel.importMapping.creditColumn = $0
+                    if $0 != nil { viewModel.importMapping.amountColumn = nil }
                 }
             ))
         }
@@ -204,24 +205,23 @@ struct CSVImportView: View {
 
     @ViewBuilder
     private var categoryMappingRow: some View {
-        switch coordinator.importMapping.categoryMappingDisplayMode(for: coordinator.importFormat) {
+        switch viewModel.importMapping.categoryMappingDisplayMode(for: viewModel.importFormat) {
         case .autoBankRules:
             summaryRow("Category", value: L10n.string("Auto: MCC / bank rules"))
         case .sourceColumn:
-            optionalPicker("Category", selection: $coordinator.importMapping.categoryColumn)
+            optionalPicker("Category", selection: $viewModel.importMapping.categoryColumn)
         }
     }
 
     private var reviewRows: [CSVImportReviewRow] {
-        if let preparedRows = try? coordinator.model.csvService.previewPreparedRows(
-            data: coordinator.importData,
-                format: coordinator.importFormat,
-            mapping: coordinator.importMapping,
-            rowFilter: coordinator.rowFilter,
+        if let preparedRows = try? viewModel.previewPreparedRows(
+            data: viewModel.importData,
+            mapping: viewModel.importMapping,
+            rowFilter: viewModel.rowFilter,
             limit: 3
         ) {
             guard !preparedRows.isEmpty else {
-                return coordinator.importExpensesOnly ? [] : fallbackPreviewRows
+                return viewModel.importExpensesOnly ? [] : fallbackPreviewRows
             }
 
             return preparedRows.enumerated().map { offset, row in
@@ -247,19 +247,19 @@ struct CSVImportView: View {
     }
 
     private var fallbackPreviewRows: [CSVImportReviewRow] {
-        let headerIndex = Dictionary(uniqueKeysWithValues: coordinator.importPreview.headers.enumerated().map { ($1, $0) })
-        return coordinator.importPreview.sampleRows.prefix(3).enumerated().map { offset, row in
+        let headerIndex = Dictionary(uniqueKeysWithValues: viewModel.importPreview.headers.enumerated().map { ($1, $0) })
+        return viewModel.importPreview.sampleRows.prefix(3).enumerated().map { offset, row in
             let signedAmount = previewAmount(row: row, headerIndex: headerIndex)
             let kind = previewKind(row: row, headerIndex: headerIndex, signedAmount: signedAmount)
             let displayMinor = previewDisplayAmount(signedAmount: signedAmount, kind: kind)
-            let rawAmount = firstNonEmptyCell(row, columns: [coordinator.importMapping.amountColumn, coordinator.importMapping.debitColumn, coordinator.importMapping.creditColumn], headerIndex: headerIndex)
+            let rawAmount = firstNonEmptyCell(row, columns: [viewModel.importMapping.amountColumn, viewModel.importMapping.debitColumn, viewModel.importMapping.creditColumn], headerIndex: headerIndex)
             return CSVImportReviewRow(
                 id: offset,
-                date: cell(row, coordinator.importMapping.dateColumn, headerIndex),
+                date: cell(row, viewModel.importMapping.dateColumn, headerIndex),
                 amount: displayMinor.map(MoneyFormatter.string(from:)) ?? rawAmount,
                 amountColor: displayMinor.map(CashRunwayTheme.amountColor) ?? (kind == .income ? CashRunwayTheme.positive : CashRunwayTheme.negative),
-                title: firstNonEmptyCell(row, columns: [coordinator.importMapping.categoryColumn, coordinator.importMapping.noteColumn, coordinator.importMapping.merchantColumn], headerIndex: headerIndex).ifEmpty(L10n.string("Uncategorized")),
-                subtitle: cell(row, coordinator.importMapping.walletColumn, headerIndex).ifEmpty(selectedWalletName)
+                title: firstNonEmptyCell(row, columns: [viewModel.importMapping.categoryColumn, viewModel.importMapping.noteColumn, viewModel.importMapping.merchantColumn], headerIndex: headerIndex).ifEmpty(L10n.string("Uncategorized")),
+                subtitle: cell(row, viewModel.importMapping.walletColumn, headerIndex).ifEmpty(selectedWalletName)
             )
         }
     }
@@ -301,7 +301,7 @@ struct CSVImportView: View {
             VStack(alignment: .leading, spacing: 10) {
                 ProgressView(value: boundedPreparationProgress)
                     .progressViewStyle(.linear)
-                Text(coordinator.importPreparationStatus.ifEmpty(L10n.string("Reading CSV...")))
+                Text(viewModel.importPreparationStatus.ifEmpty(L10n.string("Reading CSV...")))
                     .font(.footnote)
                     .foregroundStyle(CashRunwayTheme.textSecondary)
             }
@@ -321,8 +321,8 @@ struct CSVImportView: View {
     }
 
     private func walletPicker(title: LocalizedStringKey) -> some View {
-        Picker(selection: $coordinator.importMapping.walletID) {
-            ForEach(coordinator.model.wallets) { wallet in
+        Picker(selection: $viewModel.importMapping.walletID) {
+            ForEach(viewModel.wallets) { wallet in
                 Text(wallet.name).tag(wallet.id)
             }
         } label: {
@@ -332,7 +332,7 @@ struct CSVImportView: View {
 
     private func requiredPicker(_ title: LocalizedStringKey, selection: Binding<String>) -> some View {
         Picker(selection: selection) {
-            ForEach(coordinator.importPreview.headers, id: \.self) { header in
+            ForEach(viewModel.importPreview.headers, id: \.self) { header in
                 Text(header).tag(header)
             }
         } label: {
@@ -343,7 +343,7 @@ struct CSVImportView: View {
     private func optionalPicker(_ title: LocalizedStringKey, selection: Binding<String?>) -> some View {
         Picker(selection: selection) {
             Text(L10n.string("None")).tag(String?.none)
-            ForEach(coordinator.importPreview.headers, id: \.self) { header in
+            ForEach(viewModel.importPreview.headers, id: \.self) { header in
                 Text(header).tag(String?.some(header))
             }
         } label: {
@@ -361,18 +361,18 @@ struct CSVImportView: View {
     }
 
     private func previewAmount(row: [String], headerIndex: [String: Int]) -> Int64? {
-        if let amountColumn = coordinator.importMapping.amountColumn {
+        if let amountColumn = viewModel.importMapping.amountColumn {
             return try? MoneyFormatter.parseMinorUnits(cell(row, amountColumn, headerIndex))
         }
-        let debit = try? MoneyFormatter.parseMinorUnits(cell(row, coordinator.importMapping.debitColumn, headerIndex))
-        let credit = try? MoneyFormatter.parseMinorUnits(cell(row, coordinator.importMapping.creditColumn, headerIndex))
+        let debit = try? MoneyFormatter.parseMinorUnits(cell(row, viewModel.importMapping.debitColumn, headerIndex))
+        let credit = try? MoneyFormatter.parseMinorUnits(cell(row, viewModel.importMapping.creditColumn, headerIndex))
         if let debit, debit != 0 { return -abs(debit) }
         if let credit, credit != 0 { return abs(credit) }
         return nil
     }
 
     private func previewKind(row: [String], headerIndex: [String: Int], signedAmount: Int64?) -> TransactionDraft.Kind {
-        let raw = cell(row, coordinator.importMapping.typeColumn, headerIndex).lowercased()
+        let raw = cell(row, viewModel.importMapping.typeColumn, headerIndex).lowercased()
         if raw == "income" || raw == "inflow" || raw == "credit" {
             return .income
         }
@@ -382,10 +382,10 @@ struct CSVImportView: View {
         if let signedAmount, signedAmount < 0 {
             return .expense
         }
-        if let signedAmount, signedAmount > 0, coordinator.importMapping.typeColumn != nil {
+        if let signedAmount, signedAmount > 0, viewModel.importMapping.typeColumn != nil {
             return .income
         }
-        return coordinator.importMapping.defaultKind
+        return viewModel.importMapping.defaultKind
     }
 
     private func previewDisplayAmount(signedAmount: Int64?, kind: TransactionDraft.Kind) -> Int64? {

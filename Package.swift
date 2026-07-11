@@ -14,6 +14,10 @@ let package = Package(
             name: "CashRunwayCore",
             targets: ["CashRunwayCore"]
         ),
+        .library(
+            name: "CashRunwayUIVM",
+            targets: ["CashRunwayUIVM"]
+        ),
     ],
     dependencies: [
         .package(path: "Vendor/GRDB.swift"),
@@ -28,11 +32,21 @@ let package = Package(
             ],
             path: "Sources/CashRunwayCore"
         ),
+        .target(
+            name: "CashRunwayUIVM",
+            dependencies: ["CashRunwayCore"],
+            path: "Sources/CashRunwayUIVM"
+        ),
         .testTarget(
             name: "CashRunwayCoreTests",
             dependencies: ["CashRunwayCore"],
             path: "Tests/CashRunwayCoreTests",
             exclude: ["Fixtures"]
+        ),
+        .testTarget(
+            name: "CashRunwayUIVMTests",
+            dependencies: ["CashRunwayUIVM", "CashRunwayCore"],
+            path: "Tests/CashRunwayUIVMTests"
         ),
     ]
 )

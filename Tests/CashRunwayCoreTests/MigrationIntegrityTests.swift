@@ -6,6 +6,102 @@ import Testing
 
 @Suite(.serialized)
 struct MigrationIntegrityTests {
+    /// Asserts the migration identifiers in the exact order GRDB will run them.
+    ///
+    /// GRDB runs migrations in registration order (not name order), so the
+    /// non-monotonic position of `v3_bank_sync` (registered after `v4_…`) is
+    /// intentional and must not be "fixed" by reordering — existing databases
+    /// would treat a reordered identifier as new and re-run it, corrupting data.
+    /// New migrations append only; never rename, reorder, or delete an entry.
+    @Test func migrationIdentifierSetMatchesRegistrationOrder() throws {
+        let identifiers = DatabaseManager.allMigrations().map(\.0)
+        #expect(identifiers == [
+            "v1_schema",
+            "v2_transaction_search_category_name",
+            "v3_import_idempotency",
+            "v4_import_job_source_format_id",
+            "v3_bank_sync",
+            "v5_custom_wallet_categories",
+            "v6_bank_raw_json_ttl",
+            "v7_monthly_category_spend_wallet_kind_income",
+            "v7_monthly_label_spend_wallet",
+            "v8_currency_foundation",
+        ])
+    }
+
+    @Test func currencyFoundationMigrationDefaultsLegacyLedgerToUAH() throws {
+        let location = TestSupport.makeLocation()
+        let dbURL = try location.databaseURL()
+        let key = "currency-foundation-key"
+        let keychain = TestKeychainStore(items: ["database-key": Data(key.utf8)])
+        let partialMigrator = DatabaseManager.makeMigrator(upTo: "v7_monthly_label_spend_wallet")
+        var fixtureManager: DatabaseManager? = try DatabaseManager(
+            locationProvider: location,
+            keychain: keychain,
+            migrator: partialMigrator
+        )
+        let fixtureRepo = CashRunwayRepository(databaseManager: fixtureManager!)
+        try fixtureRepo.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: fixtureRepo)
+        let wallet = try #require(try fixtureRepo.wallets().first)
+        let category = try #require(try fixtureRepo.categories(kind: .expense).first)
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+        try fixtureRepo.saveTransaction(TransactionDraft(
+            kind: .expense,
+            walletID: wallet.id,
+            amountMinor: 12_34,
+            occurredAt: now,
+            categoryID: category.id,
+            merchant: "Legacy Currency",
+            source: .manual
+        ))
+        try fixtureRepo.saveRecurringTemplate(RecurringTemplate(
+            id: UUID(),
+            kind: .expense,
+            walletID: wallet.id,
+            counterpartyWalletID: nil,
+            amountMinor: 12_34,
+            categoryID: category.id,
+            merchant: "Legacy Currency",
+            note: nil,
+            ruleType: .monthly,
+            ruleInterval: 1,
+            dayOfMonth: 1,
+            weekday: nil,
+            startDate: now,
+            endDate: nil,
+            isActive: true,
+            createdAt: now,
+            updatedAt: now
+        ))
+        try fixtureManager?.checkpointWal()
+        fixtureManager = nil
+
+        let fullManager = try DatabaseManager(locationProvider: location, keychain: keychain)
+
+        try fullManager.dbQueue.read { db in
+            let walletCurrency = try String.fetchOne(db, sql: "SELECT currency_code FROM wallets LIMIT 1")
+            let transactionCurrency = try String.fetchOne(db, sql: "SELECT currency_code FROM transactions LIMIT 1")
+            let recurringTemplateCurrency = try String.fetchOne(db, sql: "SELECT currency_code FROM recurring_templates LIMIT 1")
+            let preferences = try String.fetchOne(
+                db,
+                sql: """
+                SELECT default_currency_code || ':' || reporting_currency_code
+                FROM currency_preferences
+                WHERE id = 'default'
+                """
+            )
+
+            #expect(walletCurrency == "UAH")
+            #expect(transactionCurrency == "UAH")
+            #expect(recurringTemplateCurrency == "UAH")
+            #expect(preferences == "UAH:UAH")
+        }
+
+        #expect(FileManager.default.fileExists(atPath: dbURL.path))
+    }
+
     @Test func migrationFromPreviousEncryptedSchemaPreservesLedger() throws {
         let key = "aaaabbbbccccddddeeeeffffgggghhhhiiiijjjjkkkkllllmmmmnnnnoooopppp"
         let location = TestSupport.makeLocation()
@@ -117,6 +213,8 @@ struct MigrationIntegrityTests {
         }
         #expect(appliedVersions.contains("v3_bank_sync"))
         #expect(appliedVersions.contains("v5_custom_wallet_categories"))
+        #expect(appliedVersions.contains("v7_monthly_category_spend_wallet_kind_income"))
+        #expect(appliedVersions.contains("v7_monthly_label_spend_wallet"))
 
         let walletCategories = try repo.walletCategories()
         #expect(walletCategories.filter(\.isSystem).count == 4)

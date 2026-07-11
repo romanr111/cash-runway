@@ -61,6 +61,58 @@ struct CSVImportExportIntegrityTests {
         #expect(balanceAfter == balanceBefore - 5_000)
     }
 
+    @Test func csvImportPreservesWalletCurrencyOnCommit() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        try TestSupport.seedFixtureWallets(into: repository)
+        let category = try #require(try repository.categories(kind: .expense).first { $0.name == "Groceries" })
+        let usdWallet = Wallet(
+            id: UUID(),
+            name: "USD Wallet",
+            kind: .cash,
+            colorHex: nil,
+            iconName: nil,
+            startingBalanceMinor: 0,
+            currentBalanceMinor: 0,
+            currencyCode: .usd,
+            isArchived: false,
+            sortOrder: 100,
+            createdAt: .now,
+            updatedAt: .now
+        )
+        try repository.saveWallet(usdWallet)
+
+        let csvText = """
+        Date,Wallet,Type,Category name,Merchant,Amount,Currency,Note,Labels,Author
+        2025-01-02,USD Wallet,Expense,Groceries,CSV Shop,50.00,USD,CSV note,,
+        """
+
+        let service = CSVService(repository: repository)
+        let mapping = CSVImportMapping(
+            dateColumn: "Date",
+            amountColumn: "Amount",
+            debitColumn: nil,
+            creditColumn: nil,
+            merchantColumn: "Merchant",
+            noteColumn: "Note",
+            categoryColumn: "Category name",
+            labelsColumn: "Labels",
+            walletID: usdWallet.id,
+            defaultKind: .expense,
+            typeColumn: "Type",
+            walletColumn: "Wallet",
+            currencyColumn: "Currency"
+        )
+
+        let result = try service.importCSV(data: Data(csvText.utf8), fileName: "usd-wallet.csv", mapping: mapping)
+        #expect(result.insertedTransactions == 1)
+
+        let imported = try #require(try repository.transactions(query: .init()).first { $0.merchant == "CSV Shop" })
+        let importedDraft = try repository.transactionDraft(id: imported.id)
+        #expect(importedDraft.categoryID == category.id)
+        #expect(importedDraft.currencyCode == .usd)
+    }
+
     @Test func csvImportDoesNotMutateExistingBankSyncTransactions() throws {
         let repository = try TestSupport.makeRepository()
         try repository.seedIfNeeded()

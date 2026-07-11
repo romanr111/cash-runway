@@ -1977,7 +1977,53 @@ enum TestSupport {
         #expect(actual == expected)
     }
 
+    static func assertAggregateTruth(_ repository: CashRunwayRepository) throws {
+        try assertCategoryTruth(repository)
+        try assertLabelTruth(repository)
+    }
+
     static func assertCategoryTruth(_ repository: CashRunwayRepository) throws {
+        let hasWalletScope = try repository.databaseManager.dbQueue.read { db in
+            try columnExists(db, table: "monthly_category_spend", column: "wallet_id")
+        }
+        if hasWalletScope {
+            try assertCategoryTruthWithWalletScope(repository)
+        } else {
+            try assertCategoryTruthLegacy(repository)
+        }
+    }
+
+    private static func assertCategoryTruthWithWalletScope(_ repository: CashRunwayRepository) throws {
+        let expected = try repository.databaseManager.dbQueue.read { db in
+            try Row.fetchAll(
+                db,
+                sql: """
+                SELECT category_id, local_month_key, wallet_id, type,
+                       SUM(amount_minor) AS total,
+                       COUNT(*) AS txn_count
+                FROM transactions
+                WHERE is_deleted = 0 AND type IN ('expense', 'income') AND category_id IS NOT NULL
+                GROUP BY category_id, local_month_key, wallet_id, type
+                """
+            )
+        }
+        let actual = try repository.databaseManager.dbQueue.read { db in
+            try Row.fetchAll(db, sql: "SELECT category_id, month_key, wallet_id, kind, expense_minor, income_minor, txn_count FROM monthly_category_spend")
+        }
+        let expectedMap = Dictionary(uniqueKeysWithValues: expected.map { row in
+            let kind: String = row["type"]
+            let amount: Int64 = row["total"]
+            return ("\(row["category_id"] as String)-\(row["local_month_key"] as Int)-\(row["wallet_id"] as String)-\(kind)", "\(amount)-\(row["txn_count"] as Int)")
+        })
+        let actualMap = Dictionary(uniqueKeysWithValues: actual.map { row in
+            let kind: String = row["kind"]
+            let amount: Int64 = kind == "income" ? (row["income_minor"] as Int64) : (row["expense_minor"] as Int64)
+            return ("\(row["category_id"] as String)-\(row["month_key"] as Int)-\(row["wallet_id"] as String)-\(kind)", "\(amount)-\(row["txn_count"] as Int)")
+        })
+        #expect(actualMap == expectedMap)
+    }
+
+    private static func assertCategoryTruthLegacy(_ repository: CashRunwayRepository) throws {
         let expected = try repository.databaseManager.dbQueue.read { db in
             try Row.fetchAll(
                 db,
@@ -1994,6 +2040,40 @@ enum TestSupport {
         }
         let expectedMap = Dictionary(uniqueKeysWithValues: expected.map { ("\($0["category_id"] as String)-\($0["local_month_key"] as Int)", $0["total"] as Int64) })
         let actualMap = Dictionary(uniqueKeysWithValues: actual.map { ("\($0["category_id"] as String)-\($0["month_key"] as Int)", $0["expense_minor"] as Int64) })
+        #expect(actualMap == expectedMap)
+    }
+
+    static func assertLabelTruth(_ repository: CashRunwayRepository) throws {
+        let labelTableExists: Bool = try repository.databaseManager.dbQueue.read { db in
+            try tableExists(db, name: "monthly_label_spend")
+        }
+        guard labelTableExists else { return }
+        let expected = try repository.databaseManager.dbQueue.read { db in
+            try Row.fetchAll(
+                db,
+                sql: """
+                SELECT tl.label_id, t.local_month_key, t.wallet_id,
+                       CASE t.type WHEN 'income' THEN 'income' ELSE 'expense' END AS kind,
+                       SUM(t.amount_minor) AS total,
+                       COUNT(DISTINCT t.id) AS txn_count
+                FROM transaction_labels tl
+                JOIN transactions t ON t.id = tl.transaction_id
+                WHERE t.is_deleted = 0 AND t.type IN ('expense', 'income')
+                GROUP BY tl.label_id, t.local_month_key, t.wallet_id, kind
+                """
+            )
+        }
+        let actual = try repository.databaseManager.dbQueue.read { db in
+            try Row.fetchAll(db, sql: "SELECT label_id, month_key, wallet_id, kind, amount_minor, txn_count FROM monthly_label_spend")
+        }
+        let expectedMap = Dictionary(uniqueKeysWithValues: expected.map { row in
+            let kind: String = row["kind"]
+            return ("\(row["label_id"] as String)-\(row["local_month_key"] as Int)-\(row["wallet_id"] as String)-\(kind)", "\(row["total"] as Int64)-\(row["txn_count"] as Int)")
+        })
+        let actualMap = Dictionary(uniqueKeysWithValues: actual.map { row in
+            let kind: String = row["kind"]
+            return ("\(row["label_id"] as String)-\(row["month_key"] as Int)-\(row["wallet_id"] as String)-\(kind)", "\(row["amount_minor"] as Int64)-\(row["txn_count"] as Int)")
+        })
         #expect(actualMap == expectedMap)
     }
 

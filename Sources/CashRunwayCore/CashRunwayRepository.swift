@@ -2,734 +2,6 @@
 import Foundation
 import GRDB
 
-private struct AggregateContribution {
-    let walletID: UUID
-    let monthKey: Int
-    let dayKey: Int
-    let type: TransactionKind
-    let amountMinor: Int64
-    let categoryID: UUID?
-}
-
-private struct CategorySpendDelta {
-    let monthKey: Int
-    let expenseMinor: Int64
-    let transactionCount: Int
-}
-
-public protocol MonobankClient: Sendable {
-    func clientInfo() async throws -> MonobankClientInfo
-    func statement(accountID: String, from: Date, to: Date) async throws -> [MonobankStatementItem]
-}
-
-public protocol MonobankTokenValidating: Sendable {
-    func clientInfo(token: String) async throws -> MonobankClientInfo
-}
-
-public protocol BankSyncPerforming: Sendable {
-    func syncOnDemand() async throws -> BankSyncResult
-    func syncOnForeground() async throws -> BankSyncResult
-    func syncIntegration(_ integrationID: UUID) async throws -> BankSyncResult
-}
-
-public final class BankSyncSerialPerformer: BankSyncPerforming, @unchecked Sendable {
-    private let base: any BankSyncPerforming
-    private let gate = BankSyncSerialGate()
-
-    public init(_ base: any BankSyncPerforming) {
-        self.base = base
-    }
-
-    public func syncOnDemand() async throws -> BankSyncResult {
-        try await gate.perform {
-            try await self.base.syncOnDemand()
-        }
-    }
-
-    public func syncOnForeground() async throws -> BankSyncResult {
-        try await gate.perform {
-            try await self.base.syncOnForeground()
-        }
-    }
-
-    public func syncIntegration(_ integrationID: UUID) async throws -> BankSyncResult {
-        try await gate.perform {
-            try await self.base.syncIntegration(integrationID)
-        }
-    }
-}
-
-private actor BankSyncSerialGate {
-    private var tail: Task<BankSyncResult, Error>?
-    private var tailID = 0
-
-    func perform(_ operation: @escaping @Sendable () async throws -> BankSyncResult) async throws -> BankSyncResult {
-        let previous = tail
-        tailID += 1
-        let currentID = tailID
-        let task = Task {
-            do {
-                _ = try await previous?.value
-            } catch {
-                // A failed previous sync should not prevent the queued sync from trying.
-            }
-            return try await operation()
-        }
-        tail = task
-        do {
-            let result = try await task.value
-            if tailID == currentID {
-                tail = nil
-            }
-            return result
-        } catch {
-            if tailID == currentID {
-                tail = nil
-            }
-            throw error
-        }
-    }
-}
-
-public func statementWindows(from: Date, to: Date) -> [DateInterval] {
-    guard from < to else { return [] }
-    let maxDuration = 31.0 * 24.0 * 60.0 * 60.0
-    var windows: [DateInterval] = []
-    var start = from
-    while start < to {
-        let end = min(start.addingTimeInterval(maxDuration), to)
-        windows.append(DateInterval(start: start, end: end))
-        start = end
-    }
-    return windows
-}
-
-public final class MonobankDirectTokenValidator: MonobankTokenValidating, @unchecked Sendable {
-    private let baseURL: URL
-    private let session: URLSession
-    private let decoder = JSONDecoder()
-
-    public init(
-        baseURL: URL = URL(string: "https://api.monobank.ua")!,
-        session: URLSession = .shared
-    ) {
-        self.baseURL = baseURL
-        self.session = session
-    }
-
-    public func clientInfo(token: String) async throws -> MonobankClientInfo {
-        let trimmedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedToken.isEmpty else { throw BankSyncError.tokenInvalid }
-        var request = URLRequest(url: baseURL.appendingPathComponent("personal").appendingPathComponent("client-info"))
-        request.httpMethod = "GET"
-        request.setValue(trimmedToken, forHTTPHeaderField: "X-Token")
-
-        let data: Data
-        let response: URLResponse
-        do {
-            (data, response) = try await session.data(for: request)
-        } catch {
-            throw BankSyncError.transient(error.localizedDescription)
-        }
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw BankSyncError.invalidResponse
-        }
-        switch httpResponse.statusCode {
-        case 200..<300:
-            do {
-                return try decoder.decode(MonobankClientInfo.self, from: data)
-            } catch {
-                throw BankSyncError.invalidResponse
-            }
-        case 401, 403:
-            throw BankSyncError.tokenInvalid
-        case 429:
-            throw BankSyncError.rateLimited
-        case 500..<600:
-            throw BankSyncError.transient(L10n.string("Monobank API temporarily unavailable."))
-        default:
-            throw BankSyncError.invalidResponse
-        }
-    }
-}
-
-public final class MonobankPersonalAPIClient: MonobankClient, @unchecked Sendable {
-    private let tokenStore: any BankTokenStore
-    private let tokenAccount: String
-    private let baseURL: URL
-    private let session: URLSession
-    private let decoder: JSONDecoder
-
-    public init(
-        tokenStore: any BankTokenStore,
-        tokenAccount: String,
-        baseURL: URL = URL(string: "https://api.monobank.ua")!,
-        session: URLSession = .shared
-    ) {
-        self.tokenStore = tokenStore
-        self.tokenAccount = tokenAccount
-        self.baseURL = baseURL
-        self.session = session
-        decoder = JSONDecoder()
-    }
-
-    public func clientInfo() async throws -> MonobankClientInfo {
-        try await get(baseURL.appendingPathComponent("personal").appendingPathComponent("client-info"))
-    }
-
-    public func statement(accountID: String, from: Date, to: Date) async throws -> [MonobankStatementItem] {
-        guard to.timeIntervalSince(from) <= 31 * 24 * 60 * 60 else {
-            throw CashRunwayError.validation(L10n.string("Monobank statement window must not exceed 31 days."))
-        }
-        let accountPath = accountID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? accountID
-        let url = baseURL
-            .appendingPathComponent("personal")
-            .appendingPathComponent("statement")
-            .appendingPathComponent(accountPath)
-            .appendingPathComponent(String(Int(from.timeIntervalSince1970)))
-            .appendingPathComponent(String(Int(to.timeIntervalSince1970)))
-        return try await get(url)
-    }
-
-    private func get<T: Decodable>(_ url: URL) async throws -> T {
-        guard let token = try tokenStore.readToken(account: tokenAccount), !token.isEmpty else {
-            throw BankSyncError.tokenInvalid
-        }
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        request.setValue(token, forHTTPHeaderField: "X-Token")
-
-        let data: Data
-        let response: URLResponse
-        do {
-            (data, response) = try await session.data(for: request)
-        } catch {
-            throw BankSyncError.transient(error.localizedDescription)
-        }
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw BankSyncError.invalidResponse
-        }
-        switch httpResponse.statusCode {
-        case 200..<300:
-            do {
-                return try decoder.decode(T.self, from: data)
-            } catch {
-                throw BankSyncError.invalidResponse
-            }
-        case 401, 403:
-            throw BankSyncError.tokenInvalid
-        case 429:
-            throw BankSyncError.rateLimited
-        case 500..<600:
-            throw BankSyncError.transient(L10n.string("Monobank API temporarily unavailable."))
-        default:
-            throw BankSyncError.invalidResponse
-        }
-    }
-}
-
-public final class BankSyncService: BankSyncPerforming, @unchecked Sendable {
-    private let repository: CashRunwayRepository
-    private let client: any MonobankClient
-    private let now: @Sendable () -> Date
-
-    public init(
-        repository: CashRunwayRepository,
-        client: any MonobankClient,
-        now: @escaping @Sendable () -> Date = Date.init
-    ) {
-        self.repository = repository
-        self.client = client
-        self.now = now
-    }
-
-    public func syncOnDemand() async throws -> BankSyncResult {
-        var result = BankSyncResult()
-        for integration in try repository.activeBankIntegrations() {
-            do {
-                let integrationResult = try await sync([integration])
-                result.importedCount += integrationResult.importedCount
-                result.skippedCount += integrationResult.skippedCount
-                result.syncedAccountCount += integrationResult.syncedAccountCount
-            } catch BankSyncError.tokenInvalid {
-                continue
-            }
-        }
-        return result
-    }
-
-    public func syncOnForeground() async throws -> BankSyncResult {
-        try await syncOnDemand()
-    }
-
-    public func syncIntegration(_ integrationID: UUID) async throws -> BankSyncResult {
-        guard let integration = try repository.bankIntegrations().first(where: { $0.id == integrationID }) else {
-            throw CashRunwayError.notFound
-        }
-        guard integration.status == .active else {
-            return BankSyncResult()
-        }
-        return try await sync([integration])
-    }
-
-    private func sync(_ integrations: [BankIntegration]) async throws -> BankSyncResult {
-        var result = BankSyncResult()
-        for integration in integrations {
-            var integrationSyncedAt: Date?
-            for account in try repository.enabledBankAccounts(integrationID: integration.id) {
-                guard account.currencyCode == 980 else { continue }
-                let lowerBound = integration.syncStartAt
-                let from = max(account.lastSuccessfulSyncAt?.addingTimeInterval(-6 * 60 * 60) ?? lowerBound, lowerBound)
-                let to = now()
-                integrationSyncedAt = to
-
-                for window in statementWindows(from: from, to: to) {
-                    let items: [MonobankStatementItem]
-                    do {
-                        items = try await client.statement(accountID: account.providerAccountID, from: window.start, to: window.end)
-                    } catch BankSyncError.tokenInvalid {
-                        try markTokenInvalid(integration)
-                        throw BankSyncError.tokenInvalid
-                    }
-
-                    let importable = items.filter { item in
-                        Date(timeIntervalSince1970: TimeInterval(item.time)) >= lowerBound
-                            && item.amount < 0
-                            && item.currencyCode == 980
-                    }
-                    result.skippedCount += items.count - importable.count
-                    let importResult = try repository.importMonobankExpenseItems(importable, account: account, integration: integration)
-                    result.importedCount += importResult.importedCount
-                    result.skippedCount += importResult.skippedCount
-                }
-
-                try repository.markBankAccountSynced(account.id, at: to)
-                result.syncedAccountCount += 1
-            }
-            if let integrationSyncedAt {
-                try repository.markBankIntegrationSynced(integration.id, at: integrationSyncedAt)
-            }
-        }
-        return result
-    }
-
-    private func markTokenInvalid(_ integration: BankIntegration) throws {
-        var updated = integration
-        updated.status = .tokenInvalid
-        updated.lastSyncError = BankSyncError.tokenInvalid.localizedDescription
-        updated.updatedAt = now()
-        try repository.saveBankIntegration(updated)
-    }
-}
-
-public final class MonobankConnectionService: @unchecked Sendable {
-    private let repository: CashRunwayRepository
-    private let tokenStore: any BankTokenStore
-    private let tokenValidator: any MonobankTokenValidating
-    private let syncPerformer: any BankSyncPerforming
-    private let now: @Sendable () -> Date
-
-    public init(
-        repository: CashRunwayRepository,
-        tokenStore: any BankTokenStore,
-        tokenValidator: any MonobankTokenValidating,
-        syncPerformer: any BankSyncPerforming,
-        now: @escaping @Sendable () -> Date = Date.init
-    ) {
-        self.repository = repository
-        self.tokenStore = tokenStore
-        self.tokenValidator = tokenValidator
-        self.syncPerformer = syncPerformer
-        self.now = now
-    }
-
-    public func validateToken(_ token: String) async throws -> MonobankClientInfo {
-        let trimmedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedToken.isEmpty else { throw BankSyncError.tokenInvalid }
-        return try await tokenValidator.clientInfo(token: trimmedToken)
-    }
-
-    @discardableResult
-    public func connectMonobank(
-        token: String,
-        selections: [MonobankAccountConnectionSelection]
-    ) async throws -> BankIntegration {
-        let trimmedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedToken.isEmpty else { throw BankSyncError.tokenInvalid }
-        let enabledSelections = selections.filter { $0.isEnabled && $0.account.currencyCode == 980 }
-        guard !enabledSelections.isEmpty else {
-            throw CashRunwayError.validation(L10n.string("Select at least one UAH Monobank card."))
-        }
-        let walletIDs = Set(try repository.wallets().map(\.id))
-        guard enabledSelections.allSatisfy({ walletIDs.contains($0.walletID) }) else {
-            throw CashRunwayError.validation(L10n.string("Each selected Monobank account must map to an existing wallet."))
-        }
-
-        let timestamp = now()
-        let integrationID = UUID()
-        let tokenAccount = "bank-token-monobank-\(integrationID.uuidString)"
-        try tokenStore.writeToken(trimmedToken, account: tokenAccount)
-
-        let integration = BankIntegration(
-            id: integrationID,
-            provider: .monobank,
-            displayName: "Monobank",
-            status: .active,
-            syncStartAt: timestamp,
-            tokenKeychainAccount: tokenAccount,
-            lastClientInfoSyncAt: timestamp,
-            lastSuccessfulSyncAt: nil,
-            lastSyncError: nil,
-            createdAt: timestamp,
-            updatedAt: timestamp
-        )
-        let accounts = enabledSelections.map { selection in
-            BankAccount(
-                id: UUID(),
-                integrationID: integration.id,
-                provider: .monobank,
-                providerAccountID: selection.account.id,
-                walletID: selection.walletID,
-                displayName: Self.displayName(for: selection.account),
-                accountType: selection.account.type,
-                currencyCode: selection.account.currencyCode,
-                maskedPAN: selection.account.maskedPan?.first,
-                iban: selection.account.iban,
-                isEnabled: true,
-                syncStartAt: timestamp,
-                lastSuccessfulSyncAt: nil,
-                lastStatementItemTime: nil,
-                createdAt: timestamp,
-                updatedAt: timestamp
-            )
-        }
-
-        do {
-            try repository.saveBankConnection(integration: integration, accounts: accounts)
-        } catch {
-            try tokenStore.deleteToken(account: tokenAccount)
-            throw error
-        }
-
-        do {
-            _ = try await syncPerformer.syncIntegration(integration.id)
-        } catch {
-            try repository.recordBankSyncError(integrationID: integration.id, error: error.localizedDescription, at: now())
-        }
-        return integration
-    }
-
-    public func disconnectIntegration(_ integrationID: UUID) throws {
-        guard let integration = try repository.bankIntegrations().first(where: { $0.id == integrationID }) else {
-            throw CashRunwayError.notFound
-        }
-        try tokenStore.deleteToken(account: integration.tokenKeychainAccount)
-        try repository.disableBankIntegration(integrationID, at: now())
-    }
-
-    private static func displayName(for account: MonobankAccount) -> String {
-        let cardName = (account.type?.isEmpty == false ? account.type! : L10n.string("Card")).capitalized
-        if let masked = account.maskedPan?.first, !masked.isEmpty {
-            return L10n.string("%@ card %@", cardName, "****\(masked.suffix(4))")
-        }
-        return L10n.string("%@ card", cardName)
-    }
-}
-
-public final class BankSyncCoordinator: BankSyncPerforming, @unchecked Sendable {
-    private let repository: CashRunwayRepository
-    private let tokenStore: any BankTokenStore
-    private let now: @Sendable () -> Date
-
-    public init(
-        repository: CashRunwayRepository,
-        tokenStore: any BankTokenStore,
-        now: @escaping @Sendable () -> Date = Date.init
-    ) {
-        self.repository = repository
-        self.tokenStore = tokenStore
-        self.now = now
-    }
-
-    public func syncOnDemand() async throws -> BankSyncResult {
-        var result = BankSyncResult()
-        for integration in try repository.activeBankIntegrations() {
-            do {
-                let integrationResult = try await syncIntegration(integration.id)
-                result.importedCount += integrationResult.importedCount
-                result.skippedCount += integrationResult.skippedCount
-                result.syncedAccountCount += integrationResult.syncedAccountCount
-            } catch BankSyncError.tokenInvalid {
-                continue
-            }
-        }
-        return result
-    }
-
-    public func syncOnForeground() async throws -> BankSyncResult {
-        try await syncOnDemand()
-    }
-
-    public func syncIntegration(_ integrationID: UUID) async throws -> BankSyncResult {
-        guard let integration = try repository.bankIntegrations().first(where: { $0.id == integrationID }) else {
-            throw CashRunwayError.notFound
-        }
-        let client = MonobankPersonalAPIClient(tokenStore: tokenStore, tokenAccount: integration.tokenKeychainAccount)
-        let service = BankSyncService(repository: repository, client: client, now: now)
-        return try await service.syncIntegration(integrationID)
-    }
-}
-
-public enum BankCategoryResolutionSource: Sendable {
-    case cashRunwayWallet
-    case bankStatement(BankProvider)
-    case genericBankStatement
-}
-
-public struct BankCategoryResolutionResult: Sendable {
-    public let categoryID: UUID
-    public let categoryName: String
-}
-
-/// Loads bank-category rules and active categories once, then resolves rows
-/// in-memory. This avoids a database read per imported row, which is critical
-/// for large CSV/XLSX imports.
-public final class BankCategoryResolver: @unchecked Sendable {
-    private struct Rule {
-        let provider: BankProvider
-        let merchantPattern: String?
-        let mcc: Int?
-        let categoryID: UUID
-    }
-
-    private struct CategoryEntry {
-        let id: UUID
-        let name: String
-        let kind: CategoryKind
-    }
-
-    private var merchantRules: [Rule] = []
-    private var mccRules: [Rule] = []
-    private var categoriesByNormalizedName: [CategoryKind: [String: CategoryEntry]] = [:]
-    private var categoriesByID: [UUID: CategoryEntry] = [:]
-
-    // swiftlint:disable:next cyclomatic_complexity
-    public init(repository: CashRunwayRepository) throws {
-        try repository.databaseManager.dbQueue.read { db in
-            // Load all categories (including archived) so remapped names resolve.
-            let allCategoryRows = try Row.fetchAll(
-                db,
-                sql: "SELECT id, name, kind, is_archived FROM categories"
-            )
-            var allCategoriesByID: [UUID: CategoryEntry] = [:]
-            for row in allCategoryRows {
-                guard let id = UUID(uuidString: row["id"]) else { continue }
-                guard let kind = CategoryKind(rawValue: row["kind"]) else { continue }
-                let entry = CategoryEntry(id: id, name: row["name"], kind: kind)
-                allCategoriesByID[id] = entry
-            }
-
-            // Build remap chain map.
-            let remapRows = try Row.fetchAll(db, sql: "SELECT old_category_id, new_category_id FROM category_remaps")
-            var remaps: [UUID: UUID] = [:]
-            for row in remapRows {
-                guard let oldID = UUID(uuidString: row["old_category_id"]),
-                      let newID = UUID(uuidString: row["new_category_id"]) else { continue }
-                remaps[oldID] = newID
-            }
-
-            func finalCategoryID(_ id: UUID) -> UUID {
-                var visited: Set<UUID> = []
-                var current = id
-                while let next = remaps[current], visited.insert(current).inserted {
-                    current = next
-                }
-                return current
-            }
-
-            // Active categories by ID, plus name lookup for active categories.
-            var activeByID: [UUID: CategoryEntry] = [:]
-            var byName: [CategoryKind: [String: CategoryEntry]] = [:]
-            for (_, entry) in allCategoriesByID where entry.id == finalCategoryID(entry.id) {
-                activeByID[entry.id] = entry
-                let key = BankCategoryResolver.normalize(entry.name)
-                byName[entry.kind, default: [:]][key] = entry
-            }
-
-            // Map names of archived/remapped categories to their active destination.
-            for (_, entry) in allCategoriesByID {
-                let finalID = finalCategoryID(entry.id)
-                guard finalID != entry.id, let activeEntry = activeByID[finalID] else { continue }
-                let key = BankCategoryResolver.normalize(entry.name)
-                byName[entry.kind, default: [:]][key] = activeEntry
-            }
-
-            self.categoriesByID = activeByID
-            self.categoriesByNormalizedName = byName
-
-            // Load rules and point them at their final active category.
-            let ruleRows = try Row.fetchAll(
-                db,
-                sql: """
-                SELECT provider, rule_type, merchant_pattern, mcc, category_id
-                FROM bank_category_rules
-                ORDER BY confidence DESC, created_at
-                """
-            )
-            var merchantRules: [Rule] = []
-            var mccRules: [Rule] = []
-            for row in ruleRows {
-                guard let provider = BankProvider(rawValue: row["provider"]) else { continue }
-                guard let rawCategoryID = UUID(uuidString: row["category_id"]),
-                      activeByID[finalCategoryID(rawCategoryID)] != nil else { continue }
-                let ruleType: String = row["rule_type"]
-                if ruleType == "merchant" {
-                    merchantRules.append(Rule(
-                        provider: provider,
-                        merchantPattern: row["merchant_pattern"],
-                        mcc: nil,
-                        categoryID: finalCategoryID(rawCategoryID)
-                    ))
-                } else if ruleType == "mcc" {
-                    mccRules.append(Rule(
-                        provider: provider,
-                        merchantPattern: nil,
-                        mcc: row["mcc"],
-                        categoryID: finalCategoryID(rawCategoryID)
-                    ))
-                }
-            }
-            self.merchantRules = merchantRules
-            self.mccRules = mccRules
-        }
-    }
-
-    // swiftlint:disable:next cyclomatic_complexity
-    public func resolve(
-        source: BankCategoryResolutionSource,
-        kind: TransactionDraft.Kind,
-        merchant: String?,
-        description: String,
-        rawCategoryName: String?,
-        mcc: Int?,
-        originalMcc: Int?
-    ) -> BankCategoryResolutionResult? {
-        guard kind != .transfer else { return nil }
-        let categoryKind: CategoryKind = kind == .income ? .income : .expense
-        let fallbackName = kind == .income ? "Other Income" : "Other Expense"
-        let allowsBankFallbacks = switch source {
-        case .bankStatement, .genericBankStatement:
-            true
-        case .cashRunwayWallet:
-            false
-        }
-
-        if case .bankStatement(let provider) = source {
-            let haystack = [merchant, description]
-                .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
-                .joined(separator: " ")
-            if !haystack.isEmpty {
-                for rule in merchantRules where rule.provider == provider {
-                    if let pattern = rule.merchantPattern, !pattern.isEmpty, haystack.contains(pattern.lowercased()) {
-                        return result(for: rule.categoryID, fallbackName: fallbackName)
-                    }
-                }
-            }
-
-            let codes = Set([mcc, originalMcc].compactMap { $0 })
-            if !codes.isEmpty {
-                for rule in mccRules where rule.provider == provider {
-                    guard let ruleMCC = rule.mcc, codes.contains(ruleMCC) else { continue }
-                    return result(for: rule.categoryID, fallbackName: fallbackName)
-                }
-            }
-        }
-
-        if let rawCategoryName {
-            let key = BankCategoryResolver.normalize(rawCategoryName)
-            if let entry = categoriesByNormalizedName[categoryKind]?[key] {
-                return BankCategoryResolutionResult(categoryID: entry.id, categoryName: entry.name)
-            }
-        }
-
-        if allowsBankFallbacks {
-            if let builtInCategoryName = Self.builtInMerchantCategoryName(
-                merchant: merchant,
-                description: description,
-                kind: kind
-            ), let entry = categoriesByNormalizedName[categoryKind]?[Self.normalize(builtInCategoryName)] {
-                return BankCategoryResolutionResult(categoryID: entry.id, categoryName: builtInCategoryName)
-            }
-
-            if let rawCategoryName,
-               let canonicalName = BankCategoryNameMapping.categoryName(for: rawCategoryName, kind: kind) {
-                let key = BankCategoryResolver.normalize(canonicalName)
-                if let entry = categoriesByNormalizedName[categoryKind]?[key] {
-                    return BankCategoryResolutionResult(categoryID: entry.id, categoryName: canonicalName)
-                }
-            }
-
-            for code in [mcc, originalMcc].compactMap({ $0 }) {
-                if let canonicalName = MCCCategoryMapping.categoryName(for: code),
-                   let entry = categoriesByNormalizedName[categoryKind]?[BankCategoryResolver.normalize(canonicalName)] {
-                    return BankCategoryResolutionResult(categoryID: entry.id, categoryName: canonicalName)
-                }
-            }
-        }
-
-        if allowsBankFallbacks,
-           let entry = categoriesByNormalizedName[categoryKind]?[BankCategoryResolver.normalize(fallbackName)] {
-            return BankCategoryResolutionResult(categoryID: entry.id, categoryName: fallbackName)
-        }
-        return nil
-    }
-
-    private func result(for categoryID: UUID, fallbackName: String) -> BankCategoryResolutionResult? {
-        guard let entry = categoriesByID[categoryID] else {
-            return nil
-        }
-        return BankCategoryResolutionResult(categoryID: entry.id, categoryName: entry.name)
-    }
-
-    static func normalize(_ input: String) -> String {
-        input
-            .precomposedStringWithCanonicalMapping
-            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "uk_UA"))
-            .lowercased()
-            .replacingOccurrences(of: "'", with: " ")
-            .replacingOccurrences(of: "\u{2019}", with: " ")
-            .replacingOccurrences(of: "&", with: " ")
-            .replacingOccurrences(of: "-", with: " ")
-            .replacingOccurrences(of: "_", with: " ")
-            .replacingOccurrences(of: "/", with: " ")
-            .components(separatedBy: .whitespacesAndNewlines)
-            .filter { !$0.isEmpty }
-            .joined(separator: " ")
-    }
-
-    private static func builtInMerchantCategoryName(
-        merchant: String?,
-        description: String?,
-        kind: TransactionDraft.Kind
-    ) -> String? {
-        guard kind == .expense else { return nil }
-
-        let haystack = [merchant, description].compactMap { $0?.lowercased() }
-        guard !haystack.isEmpty else { return nil }
-
-        if haystack.contains(where: { $0.contains("temu") }) {
-            return "Shopping"
-        }
-
-        return nil
-    }
-}
-
-/// Backward-compatible alias for code that previously used the per-row mapper.
-public typealias BankCategoryMapper = BankCategoryResolver
-
 private func resolvedCategoryID(_ db: Database, kind: CategoryKind, named name: String) throws -> UUID? {
     if let activeID = try String.fetchOne(
         db,
@@ -781,7 +53,11 @@ private func resolvedCategoryID(_ db: Database, kind: CategoryKind, named name: 
     return nil
 }
 
-public final class CashRunwayRepository: @unchecked Sendable {
+public final class CashRunwayRepository: CashRunwayRepositorying, @unchecked Sendable {
+    // @unchecked Sendable is justified: `databaseManager` is Sendable (GRDB
+    // DatabaseQueue serializes all DB access). `walletsHasCategoryIDColumn`
+    // is a `var` cache but is only read/written inside `dbQueue.read/write`
+    // callbacks, so GRDB's queue serialization prevents concurrent access.
     public let databaseManager: DatabaseManager
     private var walletsHasCategoryIDColumn: Bool?
 
@@ -1185,7 +461,7 @@ extension CashRunwayRepository {
 
             for item in items {
                 let occurredAt = Date(timeIntervalSince1970: TimeInterval(item.time))
-                guard occurredAt >= lowerBound, item.amount < 0, item.currencyCode == 980 else {
+                guard occurredAt >= lowerBound, item.amount < 0, item.currencyCode == ISO4217NumericCurrencyCode.uah else {
                     result.skippedCount += 1
                     continue
                 }
@@ -1222,6 +498,7 @@ extension CashRunwayRepository {
                 )
 
                 try validate(draft)
+                try validateTransactionCurrency(db, draft: draft)
                 try saveSingleTransaction(db, draft: draft)
                 try insertBankTransactionImport(
                     db,
@@ -1285,55 +562,6 @@ extension CashRunwayRepository {
         }
     }
 
-    public func exportFullBackup() throws -> CashRunwayBackup {
-        try databaseManager.dbQueue.read { db in
-            let metadata = CashRunwayBackupMetadata(
-                format: "cash-runway-backup",
-                version: 2,
-                createdAt: Date(),
-                appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0",
-                currency: "UAH"
-            )
-
-            return CashRunwayBackup(
-                metadata: metadata,
-                wallets: try Row.fetchAll(db, sql: "SELECT * FROM wallets ORDER BY sort_order, name").map(Self.backupWallet),
-                walletCategories: try Row.fetchAll(db, sql: "SELECT * FROM wallet_categories ORDER BY name").map(Self.backupWalletCategory),
-                categories: try Row.fetchAll(db, sql: "SELECT * FROM categories ORDER BY kind, sort_order, name").map(Self.backupCategory),
-                labels: try Row.fetchAll(db, sql: "SELECT * FROM labels ORDER BY name").map(Self.backupLabel),
-                transactions: try Row.fetchAll(db, sql: "SELECT * FROM transactions ORDER BY occurred_at, created_at, id").map(Self.backupTransaction),
-                transactionLabels: try Row.fetchAll(db, sql: "SELECT * FROM transaction_labels ORDER BY transaction_id, label_id").map(Self.backupTransactionLabel),
-                budgets: try Row.fetchAll(db, sql: "SELECT * FROM budgets ORDER BY month_key, category_id").map(Self.backupBudget),
-                recurringTemplates: try Row.fetchAll(db, sql: "SELECT * FROM recurring_templates ORDER BY created_at, id").map(Self.backupRecurringTemplate),
-                recurringInstances: try Row.fetchAll(db, sql: "SELECT * FROM recurring_instances ORDER BY due_date, id").map(Self.backupRecurringInstance),
-                importJobs: try Row.fetchAll(db, sql: "SELECT * FROM import_jobs ORDER BY started_at, id").map(Self.backupImportJob)
-            )
-        }
-    }
-
-    @discardableResult
-    public func restoreFullBackup(_ backup: CashRunwayBackup) throws -> BackupRestoreResult {
-        try restoreFullBackupCollectingClearedBankTokens(backup).result
-    }
-
-    func restoreFullBackupCollectingClearedBankTokens(
-        _ backup: CashRunwayBackup
-    ) throws -> (result: BackupRestoreResult, tokenAccounts: [String]) {
-        let summary = try BackupValidator.validate(backup)
-        let tokenAccounts = try databaseManager.dbQueue.write { db in
-            let tokenAccounts = try clearBankSyncTables(db)
-            try clearDerivedTables(db)
-            try clearSourceTables(db)
-            try insertBackupSourceData(backup, into: db)
-            try db.execute(sql: "UPDATE wallets SET current_balance_minor = starting_balance_minor")
-            let monthKeys = Set(backup.transactions.map(\.localMonthKey)).union(backup.budgets.map(\.monthKey))
-            try rebuildMonths(db, monthKeys: monthKeys)
-            try rebuildFTS(db)
-            return tokenAccounts
-        }
-        return (BackupRestoreResult(summary: summary), tokenAccounts)
-    }
-
     public func latestTransactionMonthKey() throws -> Int? {
         try databaseManager.dbQueue.read { db in
             try Int.fetchOne(db, sql: "SELECT MAX(local_month_key) FROM transactions WHERE is_deleted = 0")
@@ -1377,11 +605,12 @@ extension CashRunwayRepository {
 
     public func saveWallet(_ wallet: Wallet) throws {
         try databaseManager.dbQueue.write { db in
-            if try walletTableHasCategoryID(db) {
+            try validateWalletCurrencyChange(db, wallet: wallet)
+            if try walletTableHasCategoryID(db), try Self.tableHasColumn(db, table: "wallets", column: "currency_code") {
                 try db.execute(
                     sql: """
-                    INSERT INTO wallets (id, name, kind, category_id, color_hex, icon_name, starting_balance_minor, current_balance_minor, is_archived, sort_order, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO wallets (id, name, kind, category_id, color_hex, icon_name, starting_balance_minor, current_balance_minor, currency_code, is_archived, sort_order, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(id) DO UPDATE SET
                         name = excluded.name,
                         kind = excluded.kind,
@@ -1390,6 +619,7 @@ extension CashRunwayRepository {
                         icon_name = excluded.icon_name,
                         starting_balance_minor = excluded.starting_balance_minor,
                         current_balance_minor = excluded.current_balance_minor,
+                        currency_code = excluded.currency_code,
                         is_archived = excluded.is_archived,
                         sort_order = excluded.sort_order,
                         updated_at = excluded.updated_at
@@ -1397,7 +627,7 @@ extension CashRunwayRepository {
                     arguments: [
                         wallet.id.uuidString, wallet.name, wallet.kind.rawValue, wallet.categoryID.uuidString,
                         wallet.colorHex, wallet.iconName,
-                        wallet.startingBalanceMinor, wallet.currentBalanceMinor, wallet.isArchived, wallet.sortOrder,
+                        wallet.startingBalanceMinor, wallet.currentBalanceMinor, wallet.currencyCode.rawValue, wallet.isArchived, wallet.sortOrder,
                         wallet.createdAt, wallet.updatedAt,
                     ]
                 )
@@ -1424,6 +654,31 @@ extension CashRunwayRepository {
                     ]
                 )
             }
+        }
+    }
+
+    public func canChangeWalletCurrency(id: UUID) throws -> Bool {
+        try databaseManager.dbQueue.read { db in
+            guard try Self.tableHasColumn(db, table: "wallets", column: "currency_code"),
+                  let row = try Row.fetchOne(
+                    db,
+                    sql: "SELECT starting_balance_minor, current_balance_minor FROM wallets WHERE id = ?",
+                    arguments: [id.uuidString]
+                  )
+            else {
+                return true
+            }
+
+            let existingStarting: Int64 = row["starting_balance_minor"]
+            let existingCurrent: Int64 = row["current_balance_minor"]
+            guard existingStarting == 0,
+                  existingCurrent == 0,
+                  try dependentCurrencyDataCount(db, walletID: id) == 0
+            else {
+                return false
+            }
+
+            return true
         }
     }
 
@@ -1558,15 +813,51 @@ extension CashRunwayRepository {
 
     public func saveRecurringTemplate(_ template: RecurringTemplate) throws {
         try databaseManager.dbQueue.write { db in
+            try validateRecurringTemplateCurrency(db, template: template)
+            if try !Self.tableHasColumn(db, table: "recurring_templates", column: "currency_code") {
+                try db.execute(
+                    sql: """
+                    INSERT INTO recurring_templates (id, kind, wallet_id, counterparty_wallet_id, amount_minor, category_id, merchant, note, rule_type, rule_interval, day_of_month, weekday, start_date, end_date, is_active, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(id) DO UPDATE SET
+                        kind = excluded.kind,
+                        wallet_id = excluded.wallet_id,
+                        counterparty_wallet_id = excluded.counterparty_wallet_id,
+                        amount_minor = excluded.amount_minor,
+                        category_id = excluded.category_id,
+                        merchant = excluded.merchant,
+                        note = excluded.note,
+                        rule_type = excluded.rule_type,
+                        rule_interval = excluded.rule_interval,
+                        day_of_month = excluded.day_of_month,
+                        weekday = excluded.weekday,
+                        start_date = excluded.start_date,
+                        end_date = excluded.end_date,
+                        is_active = excluded.is_active,
+                        updated_at = excluded.updated_at
+                    """,
+                    arguments: [
+                        template.id.uuidString, template.kind.rawValue, template.walletID.uuidString,
+                        template.counterpartyWalletID?.uuidString, template.amountMinor, template.categoryID?.uuidString,
+                        template.merchant, template.note, template.ruleType.rawValue, template.ruleInterval,
+                        template.dayOfMonth, template.weekday, template.startDate, template.endDate, template.isActive,
+                        template.createdAt, template.updatedAt,
+                    ]
+                )
+                try refreshRecurringInstances(db)
+                return
+            }
+
             try db.execute(
                 sql: """
-                INSERT INTO recurring_templates (id, kind, wallet_id, counterparty_wallet_id, amount_minor, category_id, merchant, note, rule_type, rule_interval, day_of_month, weekday, start_date, end_date, is_active, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO recurring_templates (id, kind, wallet_id, counterparty_wallet_id, amount_minor, currency_code, category_id, merchant, note, rule_type, rule_interval, day_of_month, weekday, start_date, end_date, is_active, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     kind = excluded.kind,
                     wallet_id = excluded.wallet_id,
                     counterparty_wallet_id = excluded.counterparty_wallet_id,
                     amount_minor = excluded.amount_minor,
+                    currency_code = excluded.currency_code,
                     category_id = excluded.category_id,
                     merchant = excluded.merchant,
                     note = excluded.note,
@@ -1581,7 +872,7 @@ extension CashRunwayRepository {
                 """,
                 arguments: [
                     template.id.uuidString, template.kind.rawValue, template.walletID.uuidString,
-                    template.counterpartyWalletID?.uuidString, template.amountMinor, template.categoryID?.uuidString,
+                    template.counterpartyWalletID?.uuidString, template.amountMinor, template.currencyCode.rawValue, template.categoryID?.uuidString,
                     template.merchant, template.note, template.ruleType.rawValue, template.ruleInterval,
                     template.dayOfMonth, template.weekday, template.startDate, template.endDate, template.isActive,
                     template.createdAt, template.updatedAt,
@@ -1617,6 +908,7 @@ extension CashRunwayRepository {
 
     public func dashboard(monthKey: Int, walletID: UUID? = nil) throws -> DashboardSnapshot {
         try databaseManager.dbQueue.read { db in
+            try rejectMixedCurrencyAllWalletSnapshot(db, walletID: walletID)
             let totalBalanceMinor: Int64
             if let walletID {
                 totalBalanceMinor = try Int64.fetchOne(db, sql: "SELECT current_balance_minor FROM wallets WHERE id = ?", arguments: [walletID.uuidString]) ?? 0
@@ -1645,11 +937,12 @@ extension CashRunwayRepository {
                 SELECT c.id, c.name, c.color_hex, c.icon_name, m.expense_minor, m.txn_count
                 FROM monthly_category_spend m
                 JOIN categories c ON c.id = m.category_id
-                WHERE m.month_key = ?
+                WHERE m.month_key = ? AND m.kind = 'expense'
+                  AND (? IS NULL OR m.wallet_id = ?)
                 ORDER BY m.expense_minor DESC
                 LIMIT 8
                 """,
-                arguments: [monthKey]
+                arguments: [monthKey, walletID?.uuidString, walletID?.uuidString]
             )
             let totalExpense = max(monthExpenseMinor, 1)
             let categories = categoryRows.map { row in
@@ -1704,6 +997,7 @@ extension CashRunwayRepository {
     public func timelineSnapshot(monthKey: Int, walletID: UUID? = nil, query: TransactionQuery = .init(), period: TimelinePeriod = .month) throws -> TimelineSnapshot {
         try databaseManager.dbQueue.read { db in
             let effectiveWalletID = walletID ?? query.walletID
+            try rejectMixedCurrencyAllWalletSnapshot(db, walletID: effectiveWalletID)
             let bars = try Self.loadBars(db, monthKey: monthKey, walletID: effectiveWalletID, period: period)
             let anchorPeriodKey = Self.anchorPeriodKey(monthKey: monthKey, period: period)
 
@@ -1833,6 +1127,7 @@ extension CashRunwayRepository {
 
     public func allBars(walletID: UUID? = nil, period: TimelinePeriod = .month) throws -> [TimelineBarPoint] {
         try databaseManager.dbQueue.read { db in
+            try rejectMixedCurrencyAllWalletSnapshot(db, walletID: walletID)
             switch period {
             case .month:
                 return try Self.loadAllMonthlyBars(db, walletID: walletID)
@@ -2012,6 +1307,7 @@ extension CashRunwayRepository {
     // swiftlint:disable:next function_body_length
     public func overviewSnapshot(monthKey: Int, walletID: UUID? = nil) throws -> OverviewSnapshot {
         try databaseManager.dbQueue.read { db in
+            try rejectMixedCurrencyAllWalletSnapshot(db, walletID: walletID)
             let months = Self.monthWindow(endingAt: monthKey, count: 6)
             let cashflowRows = try Row.fetchAll(
                 db,
@@ -2064,22 +1360,17 @@ extension CashRunwayRepository {
                 db,
                 sql: """
                 SELECT c.id, c.name, c.kind, c.color_hex, c.icon_name,
-                       COALESCE(SUM(t.amount_minor), 0) AS expense_minor,
-                       COUNT(t.id) AS txn_count
+                       COALESCE(SUM(m.expense_minor), 0) AS expense_minor,
+                       COALESCE(SUM(m.income_minor), 0) AS income_minor,
+                       COALESCE(SUM(m.txn_count), 0) AS txn_count
                 FROM categories c
-                LEFT JOIN transactions t
-                  ON t.category_id = c.id
-                 AND t.is_deleted = 0
-                 AND (
-                    (c.kind = 'expense' AND t.type = 'expense')
-                    OR
-                    (c.kind = 'income' AND t.type = 'income')
-                 )
-                 AND t.local_month_key = ?
-                 \(walletID == nil ? "" : "AND t.wallet_id = ?")
+                LEFT JOIN monthly_category_spend m
+                  ON m.category_id = c.id
+                 AND m.month_key = ?
+                 \(walletID == nil ? "" : "AND m.wallet_id = ?")
                 WHERE c.kind IN ('expense', 'income')
                 GROUP BY c.id
-                HAVING expense_minor > 0
+                HAVING (expense_minor > 0 OR income_minor > 0)
                 ORDER BY c.kind, expense_minor DESC, c.sort_order, c.name
                 """,
                 arguments: walletID == nil ? [monthKey] : [monthKey, walletID!.uuidString]
@@ -2087,8 +1378,9 @@ extension CashRunwayRepository {
             let totalExpense = max(selectedPoint.expenseMinor, 1)
             let totalIncome = max(selectedPoint.incomeMinor, 1)
             let categories = categoryRows.map { row in
-                let amountMinor: Int64 = row["expense_minor"]
                 let kind = CategoryKind(rawValue: row["kind"]) ?? .expense
+                let amountMinor: Int64 = kind == .expense ? row["expense_minor"] : row["income_minor"]
+                let transactionCount: Int = row["txn_count"]
                 return OverviewCategoryRow(
                     id: UUID(uuidString: row["id"])!,
                     name: row["name"],
@@ -2096,7 +1388,7 @@ extension CashRunwayRepository {
                     colorHex: row["color_hex"],
                     iconName: row["icon_name"],
                     amountMinor: amountMinor,
-                    transactionCount: row["txn_count"],
+                    transactionCount: transactionCount,
                     percentage: Double(amountMinor) / Double(kind == .expense ? totalExpense : totalIncome)
                 )
             }
@@ -2104,20 +1396,17 @@ extension CashRunwayRepository {
             let labelRows = try Row.fetchAll(
                 db,
                 sql: """
-                SELECT l.id, l.name, l.color_hex,
-                       CASE t.type WHEN 'income' THEN 'income' ELSE 'expense' END AS kind,
-                       COALESCE(SUM(t.amount_minor), 0) AS label_minor,
-                       COUNT(DISTINCT t.id) AS txn_count
+                SELECT l.id, l.name, l.color_hex, m.kind,
+                       COALESCE(SUM(m.amount_minor), 0) AS label_minor,
+                       COALESCE(SUM(m.txn_count), 0) AS txn_count
                 FROM labels l
-                JOIN transaction_labels tl ON tl.label_id = l.id
-                JOIN transactions t ON t.id = tl.transaction_id
-                WHERE t.is_deleted = 0
-                  AND t.type IN ('expense', 'income')
-                  AND t.local_month_key = ?
-                  \(walletID == nil ? "" : "AND t.wallet_id = ?")
-                GROUP BY l.id, kind
+                JOIN monthly_label_spend m
+                  ON m.label_id = l.id
+                 AND m.month_key = ?
+                 \(walletID == nil ? "" : "AND m.wallet_id = ?")
+                GROUP BY l.id, m.kind
                 HAVING label_minor > 0
-                ORDER BY kind, label_minor DESC, l.name
+                ORDER BY m.kind, label_minor DESC, l.name
                 """,
                 arguments: walletID == nil ? [monthKey] : [monthKey, walletID!.uuidString]
             )
@@ -2230,6 +1519,7 @@ extension CashRunwayRepository {
                     walletID: sourceWalletID,
                     destinationWalletID: destinationWalletID,
                     amountMinor: transaction.amountMinor,
+                    currencyCode: transaction.currencyCode,
                     occurredAt: transaction.occurredAt,
                     labelIDs: labelIDs,
                     merchant: transaction.merchant ?? "",
@@ -2245,6 +1535,7 @@ extension CashRunwayRepository {
                 kind: transaction.type == .expense ? .expense : .income,
                 walletID: transaction.walletID,
                 amountMinor: transaction.amountMinor,
+                currencyCode: transaction.currencyCode,
                 occurredAt: transaction.occurredAt,
                 categoryID: transaction.categoryID,
                 labelIDs: labelIDs,
@@ -2260,6 +1551,7 @@ extension CashRunwayRepository {
     public func saveTransaction(_ draft: TransactionDraft) throws {
         try validate(draft)
         try databaseManager.dbQueue.write { db in
+            try validateTransactionCurrency(db, draft: draft)
             if draft.kind == .transfer {
                 try saveTransfer(db, draft: draft)
             } else {
@@ -2292,7 +1584,12 @@ extension CashRunwayRepository {
         }
 
         for item in transactionsToDelete {
-            try applyContribution(db, old: contribution(for: item), new: nil)
+            let labelIDs: [UUID] = try String.fetchAll(
+                db,
+                sql: "SELECT label_id FROM transaction_labels WHERE transaction_id = ?",
+                arguments: [item.id.uuidString]
+            ).compactMap(UUID.init(uuidString:))
+            try applyContribution(db, old: contribution(for: item, labelIDs: labelIDs), new: nil)
         }
         let idStrings = transactionsToDelete.map { $0.id.uuidString }
         try Self.cleanupTransactionReferences(db: db, idStrings: idStrings)
@@ -2309,6 +1606,10 @@ extension CashRunwayRepository {
     public func transactionDeletionSummary(for period: DeletePeriod, now: Date = Date()) throws -> TransactionDeletionSummary {
         try databaseManager.dbQueue.read { db in
             let (predicate, arguments) = Self.deletePeriodPredicate(period, now: now)
+            let hasCurrencyColumn = try Self.tableHasColumn(db, table: "transactions", column: "currency_code")
+            let currencySelect = hasCurrencyColumn
+                ? "COALESCE(GROUP_CONCAT(DISTINCT currency_code), '') AS currency_codes"
+                : "'UAH' AS currency_codes"
             let row = try Row.fetchOne(
                 db,
                 sql: """
@@ -2316,17 +1617,22 @@ extension CashRunwayRepository {
                     COUNT(*) AS count,
                     COALESCE(SUM(CASE WHEN type != 'transfer_in' THEN 1 ELSE 0 END), 0) AS display_count,
                     COALESCE(SUM(CASE WHEN type = 'expense' THEN ABS(amount_minor) ELSE 0 END), 0) AS expense_minor,
-                    COALESCE(SUM(CASE WHEN type = 'income' THEN ABS(amount_minor) ELSE 0 END), 0) AS income_minor
+                    COALESCE(SUM(CASE WHEN type = 'income' THEN amount_minor ELSE 0 END), 0) AS income_minor,
+                    \(currencySelect)
                 FROM transactions
                 WHERE \(predicate)
                 """,
                 arguments: arguments
             )!
+            let currencyCodesString: String = row["currency_codes"]
+            let currencyCodes = Set(currencyCodesString.split(separator: ",").map(String.init))
+            let isMixedCurrency = currencyCodes.count > 1
             return TransactionDeletionSummary(
                 count: row["count"],
                 displayCount: row["display_count"],
-                expenseMinor: row["expense_minor"],
-                incomeMinor: row["income_minor"]
+                expenseMinor: isMixedCurrency ? 0 : row["expense_minor"],
+                incomeMinor: isMixedCurrency ? 0 : row["income_minor"],
+                currencyCodes: currencyCodes
             )
         }
     }
@@ -2389,7 +1695,12 @@ extension CashRunwayRepository {
                     continue
                 }
                 let transaction = try Self.transaction(row)
-                try applyContribution(db, old: contribution(for: transaction), new: nil)
+                let labelIDs: [UUID] = try String.fetchAll(
+                    db,
+                    sql: "SELECT label_id FROM transaction_labels WHERE transaction_id = ?",
+                    arguments: [transaction.id.uuidString]
+                ).compactMap(UUID.init(uuidString:))
+                try applyContribution(db, old: contribution(for: transaction, labelIDs: labelIDs), new: nil)
             }
 
             let idStrings = plan.transactionIDs.map { $0.uuidString }
@@ -2437,10 +1748,12 @@ extension CashRunwayRepository {
 
     private static func deletionImpactRows(_ db: Database, period: DeletePeriod, now: Date) throws -> DeletionImpact {
         let (sql, arguments) = Self.deletePeriodPredicate(period, now: now)
+        let hasCurrencyColumn = try tableHasColumn(db, table: "transactions", column: "currency_code")
+        let currencySelect = hasCurrencyColumn ? ", currency_code" : ""
         let rows = try Row.fetchAll(
             db,
             sql: """
-            SELECT id, type, amount_minor, updated_at
+            SELECT id, type, amount_minor, updated_at\(currencySelect)
             FROM transactions
             WHERE \(sql)
             ORDER BY id
@@ -2450,6 +1763,7 @@ extension CashRunwayRepository {
         var expenseMinor: Int64 = 0
         var incomeMinor: Int64 = 0
         var displayCount = 0
+        var currencyCodes: Set<String> = []
         var items: [TransactionDeletionItem] = []
         items.reserveCapacity(rows.count)
         for row in rows {
@@ -2458,6 +1772,10 @@ extension CashRunwayRepository {
             items.append(TransactionDeletionItem(id: id, updatedAt: updatedAt))
             let type: String = row["type"]
             let amount: Int64 = row["amount_minor"]
+            if hasCurrencyColumn {
+                let code: String = row["currency_code"]
+                if !code.isEmpty { currencyCodes.insert(code) }
+            }
             switch type {
             case "expense":
                 expenseMinor += abs(amount)
@@ -2471,13 +1789,16 @@ extension CashRunwayRepository {
                 displayCount += 1
             }
         }
+        if currencyCodes.isEmpty { currencyCodes = ["UAH"] }
+        let isMixedCurrency = currencyCodes.count > 1
         return DeletionImpact(
             items: items,
             summary: TransactionDeletionSummary(
                 count: items.count,
                 displayCount: displayCount,
-                expenseMinor: expenseMinor,
-                incomeMinor: incomeMinor
+                expenseMinor: isMixedCurrency ? 0 : expenseMinor,
+                incomeMinor: isMixedCurrency ? 0 : incomeMinor,
+                currencyCodes: currencyCodes
             )
         )
     }
@@ -2595,45 +1916,6 @@ extension CashRunwayRepository {
         }
     }
 
-    // DEPRECATED — CSV import is now atomic via commitCSVImport. Do not use.
-    public func appendImportedTransactions(_ drafts: [TransactionDraft]) throws {
-        guard !drafts.isEmpty else { return }
-        try databaseManager.dbQueue.write { db in
-            for draft in drafts {
-                try validate(draft)
-                if draft.kind == .transfer {
-                    try saveTransfer(db, draft: draft, updateDerivedData: false)
-                } else {
-                    try saveSingleTransaction(db, draft: draft, updateDerivedData: false)
-                }
-            }
-        }
-    }
-
-    // DEPRECATED — CSV import is now atomic via commitCSVImport. Do not use.
-    public func finalizeImport(jobID: UUID, affectedMonths: Set<Int>, validRows: Int, invalidRows: Int, errorSummary: String?) throws {
-        try databaseManager.dbQueue.write { db in
-            try markDirtyRanges(db, monthKeys: affectedMonths)
-            try processPendingAggregateRebuilds(db)
-            try rebuildFTS(db)
-            try db.execute(
-                sql: """
-                UPDATE import_jobs
-                SET status = ?, valid_rows = ?, invalid_rows = ?, finished_at = ?, error_summary = ?
-                WHERE id = ?
-                """,
-                arguments: [
-                    ImportJobStatus.committed.rawValue,
-                    validRows,
-                    invalidRows,
-                    Date(),
-                    errorSummary,
-                    jobID.uuidString,
-                ]
-            )
-        }
-    }
-
     public func failImport(jobID: UUID, errorSummary: String) throws {
         try databaseManager.dbQueue.write { db in
             try db.execute(
@@ -2651,6 +1933,9 @@ extension CashRunwayRepository {
         rowErrors: [CSVRowError],
         invalidRows: Int? = nil
     ) throws -> CSVImportResult {
+        guard !ProtectedDataMonitor.skipIfUnavailable(work: "commitCSVImport") else {
+            throw CashRunwayError.validation("Protected data is unavailable. Try again after unlocking your device.")
+        }
         let now = Date()
         let jobID = UUID()
         let resolvedInvalidRows = invalidRows ?? rowErrors.count
@@ -2668,17 +1953,20 @@ extension CashRunwayRepository {
                 ]
             )
 
-            var seenFingerprints = try existingImportFingerprints(db)
-            let existingSemanticKeys = try existingImportSemanticKeys(db)
+            var seenFingerprints = Set<String>()
             var insertedRows = 0
             var duplicateRows = 0
             var affectedMonths = Set<Int>()
 
             for row in preparedRows {
                 let semanticKey = importSemanticKey(for: row.draft)
+                let fingerprintDuplicate = try importFingerprintExists(db, fingerprint: row.fingerprint)
+                    || (row.legacyFingerprint.map { try importFingerprintExists(db, fingerprint: $0) } ?? false)
+                let semanticDuplicate = try importSemanticKeyExists(db, key: semanticKey)
                 if seenFingerprints.contains(row.fingerprint)
                     || row.legacyFingerprint.map({ seenFingerprints.contains($0) }) ?? false
-                    || existingSemanticKeys.contains(semanticKey) {
+                    || fingerprintDuplicate
+                    || semanticDuplicate {
                     duplicateRows += 1
                     continue
                 }
@@ -2698,6 +1986,7 @@ extension CashRunwayRepository {
                 let labelIDs = try row.rawLabelNames.map { try resolveOrCreateLabel(db, name: $0) }
 
                 var draft = row.draft
+                draft.currencyCode = try walletCurrencyCode(db, walletID: draft.walletID)
                 draft.categoryID = categoryID
                 draft.labelIDs = labelIDs
                 draft.importJobID = jobID
@@ -2758,11 +2047,39 @@ extension CashRunwayRepository {
         }
     }
 
+    private func importFingerprintExists(_ db: Database, fingerprint: String) throws -> Bool {
+        let count = try Int.fetchOne(
+            db,
+            sql: "SELECT COUNT(*) FROM transactions WHERE import_fingerprint = ?",
+            arguments: [fingerprint]
+        ) ?? 0
+        return count > 0
+    }
+
+    private func importSemanticKeyExists(_ db: Database, key: String) throws -> Bool {
+        let count = try Int.fetchOne(
+            db,
+            sql: """
+            SELECT COUNT(*) FROM transactions
+            WHERE is_deleted = 0
+              AND (
+                import_fingerprint IS NULL
+                OR source IN ('manual', 'bank_sync')
+              )
+              AND wallet_id || '|' || type || '|' || local_day_key || '|' || amount_minor || '|' || lower(trim(coalesce(merchant, ''))) || '|' || lower(trim(coalesce(note, ''))) = ?
+            """,
+            arguments: [key]
+        ) ?? 0
+        return count > 0
+    }
+
+    @available(*, deprecated, message: "Replaced by per-row importFingerprintExists and importSemanticKeyExists checks")
     private func existingImportFingerprints(_ db: Database) throws -> Set<String> {
         let rows = try String.fetchAll(db, sql: "SELECT import_fingerprint FROM transactions WHERE import_fingerprint IS NOT NULL")
         return Set(rows)
     }
 
+    @available(*, deprecated, message: "Replaced by per-row importSemanticKeyExists check")
     private func existingImportSemanticKeys(_ db: Database) throws -> Set<String> {
         let rows = try Row.fetchAll(
             db,
@@ -2893,12 +2210,15 @@ extension CashRunwayRepository {
     }
 
     public func runMaintenance() throws {
+        guard !ProtectedDataMonitor.skipIfUnavailable(work: "runMaintenance") else { return }
         try databaseManager.dbQueue.write { db in
             try processPendingAggregateRebuilds(db)
+            try purgeExpiredRawJSON(db)
         }
     }
 
     public func refreshRecurringInstances() throws {
+        guard !ProtectedDataMonitor.skipIfUnavailable(work: "refreshRecurringInstances") else { return }
         try databaseManager.dbQueue.write { db in
             try refreshRecurringInstances(db)
         }
@@ -2926,6 +2246,7 @@ extension CashRunwayRepository {
                 walletID: template.walletID,
                 destinationWalletID: template.counterpartyWalletID,
                 amountMinor: instance.overrideAmountMinor ?? template.amountMinor,
+                currencyCode: template.currencyCode,
                 occurredAt: date,
                 categoryID: instance.overrideCategoryID ?? template.categoryID,
                 merchant: instance.overrideMerchant ?? template.merchant ?? "",
@@ -2969,6 +2290,7 @@ extension CashRunwayRepository {
             type: cashRunwayType,
             linkedTransferID: nil,
             amountMinor: draft.amountMinor,
+            currencyCode: draft.currencyCode,
             occurredAt: draft.occurredAt,
             localDayKey: DateKeys.dayKey(for: draft.occurredAt),
             localMonthKey: DateKeys.monthKey(for: draft.occurredAt),
@@ -2985,8 +2307,22 @@ extension CashRunwayRepository {
             updatedAt: now
         )
 
+        let existingLabelIDs: [UUID] = if let existing {
+            try String.fetchAll(
+                db,
+                sql: "SELECT label_id FROM transaction_labels WHERE transaction_id = ?",
+                arguments: [existing.id.uuidString]
+            ).compactMap(UUID.init(uuidString:))
+        } else {
+            []
+        }
+
         if updateDerivedData {
-            try applyContribution(db, old: existing.map(contribution(for:)), new: contribution(for: record))
+            try applyContribution(
+                db,
+                old: existing.map { contribution(for: $0, labelIDs: existingLabelIDs) },
+                new: contribution(for: record, labelIDs: draft.labelIDs)
+            )
         }
         try upsertTransactionRow(db, transaction: record)
         try syncLabels(db, transactionID: id, labelIDs: draft.labelIDs)
@@ -3019,6 +2355,7 @@ extension CashRunwayRepository {
             type: .transferOut,
             linkedTransferID: targetID,
             amountMinor: draft.amountMinor,
+            currencyCode: draft.currencyCode,
             occurredAt: draft.occurredAt,
             localDayKey: DateKeys.dayKey(for: draft.occurredAt),
             localMonthKey: DateKeys.monthKey(for: draft.occurredAt),
@@ -3040,6 +2377,7 @@ extension CashRunwayRepository {
             type: .transferIn,
             linkedTransferID: sourceID,
             amountMinor: draft.amountMinor,
+            currencyCode: draft.currencyCode,
             occurredAt: draft.occurredAt,
             localDayKey: DateKeys.dayKey(for: draft.occurredAt),
             localMonthKey: DateKeys.monthKey(for: draft.occurredAt),
@@ -3056,9 +2394,27 @@ extension CashRunwayRepository {
             updatedAt: now
         )
 
+        let transferExistingLabelIDs: [UUID] = if let sourceExisting {
+            try String.fetchAll(
+                db,
+                sql: "SELECT label_id FROM transaction_labels WHERE transaction_id IN (?, ?)",
+                arguments: [sourceExisting.id.uuidString, targetID.uuidString]
+            ).compactMap(UUID.init(uuidString:))
+        } else {
+            []
+        }
+
         if updateDerivedData {
-            try applyContribution(db, old: sourceExisting.map(contribution(for:)), new: contribution(for: sourceRecord))
-            try applyContribution(db, old: targetExisting.map(contribution(for:)), new: contribution(for: targetRecord))
+            try applyContribution(
+                db,
+                old: sourceExisting.map { contribution(for: $0, labelIDs: transferExistingLabelIDs) },
+                new: contribution(for: sourceRecord, labelIDs: draft.labelIDs)
+            )
+            try applyContribution(
+                db,
+                old: targetExisting.map { contribution(for: $0, labelIDs: transferExistingLabelIDs) },
+                new: contribution(for: targetRecord, labelIDs: draft.labelIDs)
+            )
         }
         try upsertTransactionRow(db, transaction: sourceRecord)
         try upsertTransactionRow(db, transaction: targetRecord)
@@ -3078,15 +2434,55 @@ extension CashRunwayRepository {
     }
 
     private func upsertTransactionRow(_ db: Database, transaction: CashRunwayTransaction) throws {
+        guard try Self.tableHasColumn(db, table: "transactions", column: "currency_code") else {
+            try db.execute(
+                sql: """
+                INSERT INTO transactions (id, wallet_id, type, linked_transfer_id, amount_minor, occurred_at, local_day_key, local_month_key, category_id, merchant, note, is_deleted, source, recurring_template_id, recurring_instance_id, import_job_id, import_fingerprint, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    wallet_id = excluded.wallet_id,
+                    type = excluded.type,
+                    linked_transfer_id = excluded.linked_transfer_id,
+                    amount_minor = excluded.amount_minor,
+                    occurred_at = excluded.occurred_at,
+                    local_day_key = excluded.local_day_key,
+                    local_month_key = excluded.local_month_key,
+                    category_id = excluded.category_id,
+                    merchant = excluded.merchant,
+                    note = excluded.note,
+                    source = excluded.source,
+                    recurring_template_id = excluded.recurring_template_id,
+                    recurring_instance_id = excluded.recurring_instance_id,
+                    import_job_id = excluded.import_job_id,
+                    import_fingerprint = excluded.import_fingerprint,
+                    updated_at = excluded.updated_at
+                """,
+                arguments: [
+                    transaction.id.uuidString, transaction.walletID.uuidString, transaction.type.rawValue, transaction.linkedTransferID?.uuidString,
+                    transaction.amountMinor, transaction.occurredAt, transaction.localDayKey, transaction.localMonthKey,
+                    transaction.categoryID?.uuidString, transaction.merchant, transaction.note, transaction.isDeleted,
+                    transaction.source.rawValue, transaction.recurringTemplateID?.uuidString, transaction.recurringInstanceID?.uuidString,
+                    transaction.importJobID?.uuidString, transaction.importFingerprint,
+                    transaction.createdAt, transaction.updatedAt,
+                ]
+            )
+            return
+        }
+
         try db.execute(
             sql: """
-            INSERT INTO transactions (id, wallet_id, type, linked_transfer_id, amount_minor, occurred_at, local_day_key, local_month_key, category_id, merchant, note, is_deleted, source, recurring_template_id, recurring_instance_id, import_job_id, import_fingerprint, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO transactions (
+                id, wallet_id, type, linked_transfer_id, amount_minor, currency_code, occurred_at, local_day_key,
+                local_month_key, category_id, merchant, note, is_deleted, source, recurring_template_id,
+                recurring_instance_id, import_job_id, import_fingerprint, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 wallet_id = excluded.wallet_id,
                 type = excluded.type,
                 linked_transfer_id = excluded.linked_transfer_id,
                 amount_minor = excluded.amount_minor,
+                currency_code = excluded.currency_code,
                 occurred_at = excluded.occurred_at,
                 local_day_key = excluded.local_day_key,
                 local_month_key = excluded.local_month_key,
@@ -3102,7 +2498,7 @@ extension CashRunwayRepository {
             """,
             arguments: [
                 transaction.id.uuidString, transaction.walletID.uuidString, transaction.type.rawValue, transaction.linkedTransferID?.uuidString,
-                transaction.amountMinor, transaction.occurredAt, transaction.localDayKey, transaction.localMonthKey,
+                transaction.amountMinor, transaction.currencyCode.rawValue, transaction.occurredAt, transaction.localDayKey, transaction.localMonthKey,
                 transaction.categoryID?.uuidString, transaction.merchant, transaction.note, transaction.isDeleted,
                 transaction.source.rawValue, transaction.recurringTemplateID?.uuidString, transaction.recurringInstanceID?.uuidString,
                 transaction.importJobID?.uuidString, transaction.importFingerprint,
@@ -3120,6 +2516,108 @@ extension CashRunwayRepository {
         }
     }
 
+    private func validateTransactionCurrency(_ db: Database, draft: TransactionDraft) throws {
+        let sourceCurrency = try walletCurrencyCode(db, walletID: draft.walletID)
+        if draft.kind == .transfer {
+            guard let destinationWalletID = draft.destinationWalletID else { return }
+            let destinationCurrency = try walletCurrencyCode(db, walletID: destinationWalletID)
+            guard sourceCurrency == destinationCurrency, sourceCurrency == draft.currencyCode else {
+                throw CashRunwayError.validation(L10n.string("Transfers require source wallet, destination wallet, and transaction currency to match."))
+            }
+        } else if sourceCurrency != draft.currencyCode {
+            throw CashRunwayError.validation(L10n.string("Transaction currency must match the selected wallet currency."))
+        }
+    }
+
+    private func validateRecurringTemplateCurrency(_ db: Database, template: RecurringTemplate) throws {
+        let sourceCurrency = try walletCurrencyCode(db, walletID: template.walletID)
+        if let counterpartyWalletID = template.counterpartyWalletID {
+            let counterpartyCurrency = try walletCurrencyCode(db, walletID: counterpartyWalletID)
+            guard sourceCurrency == counterpartyCurrency, sourceCurrency == template.currencyCode else {
+                throw CashRunwayError.validation(L10n.string("Recurring transfer currency must match both wallets."))
+            }
+        } else if sourceCurrency != template.currencyCode {
+            throw CashRunwayError.validation(L10n.string("Recurring template currency must match the selected wallet currency."))
+        }
+    }
+
+    private func validateWalletCurrencyChange(_ db: Database, wallet: Wallet) throws {
+        guard try Self.tableHasColumn(db, table: "wallets", column: "currency_code"),
+              let row = try Row.fetchOne(
+                  db,
+                  sql: "SELECT currency_code, starting_balance_minor, current_balance_minor FROM wallets WHERE id = ?",
+                  arguments: [wallet.id.uuidString]
+              )
+        else {
+            return
+        }
+
+        let existingCurrency = try CurrencyCode(validating: row["currency_code"])
+        guard existingCurrency != wallet.currencyCode else { return }
+
+        let existingStarting: Int64 = row["starting_balance_minor"]
+        let existingCurrent: Int64 = row["current_balance_minor"]
+        guard existingStarting == 0,
+              existingCurrent == 0,
+              wallet.startingBalanceMinor == 0,
+              wallet.currentBalanceMinor == 0,
+              try dependentCurrencyDataCount(db, walletID: wallet.id) == 0
+        else {
+            throw CashRunwayError.validation(L10n.string("Wallet currency cannot be changed after ledger or bank data exists."))
+        }
+    }
+
+    private func dependentCurrencyDataCount(_ db: Database, walletID: UUID) throws -> Int {
+        let walletID = walletID.uuidString
+        var count = try Int.fetchOne(
+            db,
+            sql: "SELECT COUNT(*) FROM transactions WHERE wallet_id = ?",
+            arguments: [walletID]
+        ) ?? 0
+        count += try Int.fetchOne(
+            db,
+            sql: "SELECT COUNT(*) FROM recurring_templates WHERE wallet_id = ? OR counterparty_wallet_id = ?",
+            arguments: [walletID, walletID]
+        ) ?? 0
+        if try tableExists(db, name: "bank_accounts") {
+            count += try Int.fetchOne(
+                db,
+                sql: "SELECT COUNT(*) FROM bank_accounts WHERE wallet_id = ?",
+                arguments: [walletID]
+            ) ?? 0
+        }
+        return count
+    }
+
+    private func walletCurrencyCode(_ db: Database, walletID: UUID) throws -> CurrencyCode {
+        guard try Self.tableHasColumn(db, table: "wallets", column: "currency_code") else {
+            return .uah
+        }
+        guard let rawValue = try String.fetchOne(
+            db,
+            sql: "SELECT currency_code FROM wallets WHERE id = ?",
+            arguments: [walletID.uuidString]
+        ) else {
+            throw CashRunwayError.notFound
+        }
+        return try CurrencyCode(validating: rawValue)
+    }
+
+    private func rejectMixedCurrencyAllWalletSnapshot(_ db: Database, walletID: UUID?) throws {
+        guard walletID == nil,
+              try Self.tableHasColumn(db, table: "wallets", column: "currency_code")
+        else {
+            return
+        }
+        let activeCurrencyCount = try Int.fetchOne(
+            db,
+            sql: "SELECT COUNT(DISTINCT currency_code) FROM wallets WHERE is_archived = 0"
+        ) ?? 0
+        guard activeCurrencyCount <= 1 else {
+            throw CashRunwayError.validation(L10n.string("All-wallet totals require a single wallet currency until currency conversion is available."))
+        }
+    }
+
     private func syncLabels(_ db: Database, transactionID: UUID, labelIDs: [UUID]) throws {
         try db.execute(sql: "DELETE FROM transaction_labels WHERE transaction_id = ?", arguments: [transactionID.uuidString])
         for labelID in Array(Set(labelIDs)) {
@@ -3130,550 +2628,6 @@ extension CashRunwayRepository {
         }
     }
 
-    private func contribution(for transaction: CashRunwayTransaction) -> AggregateContribution {
-        AggregateContribution(
-            walletID: transaction.walletID,
-            monthKey: transaction.localMonthKey,
-            dayKey: transaction.localDayKey,
-            type: transaction.type,
-            amountMinor: transaction.amountMinor,
-            categoryID: transaction.categoryID
-        )
-    }
-
-    private func applyContribution(_ db: Database, old: AggregateContribution?, new: AggregateContribution?) throws {
-        if let old {
-            try mutateAggregate(db, contribution: old, multiplier: -1)
-        }
-        if let new {
-            try mutateAggregate(db, contribution: new, multiplier: 1)
-        }
-        let impactedMonthKeys = Set([old?.monthKey, new?.monthKey].compactMap { $0 })
-        try recomputeBudgetSnapshots(db, monthKeys: impactedMonthKeys)
-    }
-
-    private static func categorySpendDeltas(_ db: Database, categoryID: UUID) throws -> [CategorySpendDelta] {
-        let rows = try Row.fetchAll(
-            db,
-            sql: """
-            SELECT local_month_key, COALESCE(SUM(amount_minor), 0) AS expense_minor, COUNT(*) AS txn_count
-            FROM transactions
-            WHERE is_deleted = 0 AND type = 'expense' AND category_id = ?
-            GROUP BY local_month_key
-            """,
-            arguments: [categoryID.uuidString]
-        )
-        return rows.map {
-            CategorySpendDelta(
-                monthKey: $0["local_month_key"],
-                expenseMinor: $0["expense_minor"],
-                transactionCount: $0["txn_count"]
-            )
-        }
-    }
-
-    private func applyCategoryMergeDeltas(_ db: Database, oldCategoryID: UUID, newCategoryID: UUID, deltas: [CategorySpendDelta]) throws {
-        guard !deltas.isEmpty else { return }
-        let now = Date()
-        for delta in deltas {
-            try db.execute(
-                sql: """
-                UPDATE monthly_category_spend
-                SET expense_minor = expense_minor - ?, txn_count = txn_count - ?, updated_at = ?
-                WHERE category_id = ? AND month_key = ?
-                """,
-                arguments: [delta.expenseMinor, delta.transactionCount, now, oldCategoryID.uuidString, delta.monthKey]
-            )
-            try db.execute(
-                sql: "DELETE FROM monthly_category_spend WHERE category_id = ? AND month_key = ? AND expense_minor = 0 AND txn_count <= 0",
-                arguments: [oldCategoryID.uuidString, delta.monthKey]
-            )
-            try db.execute(
-                sql: """
-                INSERT INTO monthly_category_spend (category_id, month_key, expense_minor, txn_count, updated_at)
-                VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT(category_id, month_key) DO UPDATE SET
-                    expense_minor = expense_minor + excluded.expense_minor,
-                    txn_count = txn_count + excluded.txn_count,
-                    updated_at = excluded.updated_at
-                """,
-                arguments: [newCategoryID.uuidString, delta.monthKey, delta.expenseMinor, delta.transactionCount, now]
-            )
-        }
-    }
-
-    private func mutateAggregate(_ db: Database, contribution: AggregateContribution, multiplier: Int64) throws {
-        let amount = contribution.amountMinor * multiplier
-        let now = Date()
-        let (income, expense, transferIn, transferOut): (Int64, Int64, Int64, Int64) = switch contribution.type {
-        case .expense: (0, amount, 0, 0)
-        case .income: (amount, 0, 0, 0)
-        case .transferIn: (0, 0, amount, 0)
-        case .transferOut: (0, 0, 0, amount)
-        }
-
-        try db.execute(
-            sql: """
-            INSERT INTO monthly_wallet_cashflow (wallet_id, month_key, income_minor, expense_minor, transfer_in_minor, transfer_out_minor, txn_count, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(wallet_id, month_key) DO UPDATE SET
-                income_minor = income_minor + excluded.income_minor,
-                expense_minor = expense_minor + excluded.expense_minor,
-                transfer_in_minor = transfer_in_minor + excluded.transfer_in_minor,
-                transfer_out_minor = transfer_out_minor + excluded.transfer_out_minor,
-                txn_count = txn_count + excluded.txn_count,
-                updated_at = excluded.updated_at
-            """,
-            arguments: [
-                contribution.walletID.uuidString, contribution.monthKey, income, expense, transferIn, transferOut,
-                multiplier, now,
-            ]
-        )
-
-        if contribution.type == .expense, let categoryID = contribution.categoryID {
-            try db.execute(
-                sql: """
-                INSERT INTO monthly_category_spend (category_id, month_key, expense_minor, txn_count, updated_at)
-                VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT(category_id, month_key) DO UPDATE SET
-                    expense_minor = expense_minor + excluded.expense_minor,
-                    txn_count = txn_count + excluded.txn_count,
-                    updated_at = excluded.updated_at
-                """,
-                arguments: [categoryID.uuidString, contribution.monthKey, amount, multiplier, now]
-            )
-            try db.execute(
-                sql: "DELETE FROM monthly_category_spend WHERE category_id = ? AND month_key = ? AND expense_minor = 0 AND txn_count <= 0",
-                arguments: [categoryID.uuidString, contribution.monthKey]
-            )
-        }
-
-        try db.execute(
-            sql: """
-            INSERT INTO daily_wallet_balance_delta (wallet_id, day_key, net_delta_minor, updated_at)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(wallet_id, day_key) DO UPDATE SET
-                net_delta_minor = net_delta_minor + excluded.net_delta_minor,
-                updated_at = excluded.updated_at
-            """,
-            arguments: [contribution.walletID.uuidString, contribution.dayKey, amount * contribution.type.walletDeltaSign, now]
-        )
-        try db.execute(
-            sql: "DELETE FROM daily_wallet_balance_delta WHERE wallet_id = ? AND day_key = ? AND net_delta_minor = 0",
-            arguments: [contribution.walletID.uuidString, contribution.dayKey]
-        )
-        try db.execute(
-            sql: "UPDATE wallets SET current_balance_minor = current_balance_minor + ?, updated_at = ? WHERE id = ?",
-            arguments: [amount * contribution.type.walletDeltaSign, now, contribution.walletID.uuidString]
-        )
-        try db.execute(
-            sql: """
-            DELETE FROM monthly_wallet_cashflow
-            WHERE wallet_id = ? AND month_key = ? AND income_minor = 0 AND expense_minor = 0
-              AND transfer_in_minor = 0 AND transfer_out_minor = 0 AND txn_count <= 0
-            """,
-            arguments: [contribution.walletID.uuidString, contribution.monthKey]
-        )
-    }
-
-    private func recomputeBudgetSnapshots(_ db: Database, monthKeys: Set<Int>) throws {
-        guard !monthKeys.isEmpty else { return }
-        let now = Date()
-        for monthKey in monthKeys {
-            let rows = try Row.fetchAll(
-                db,
-                sql: """
-                SELECT b.id, b.limit_minor, COALESCE(m.expense_minor, 0) AS spent_minor
-                FROM budgets b
-                LEFT JOIN monthly_category_spend m ON m.category_id = b.category_id AND m.month_key = b.month_key
-                WHERE b.month_key = ? AND b.is_archived = 0
-                """,
-                arguments: [monthKey]
-            )
-            for row in rows {
-                let budgetID: String = row["id"]
-                let limitMinor: Int64 = row["limit_minor"]
-                let spentMinor: Int64 = row["spent_minor"]
-                let remainingMinor = limitMinor - spentMinor
-                let percent = Int((spentMinor * 10_000) / max(limitMinor, 1))
-                try db.execute(
-                    sql: """
-                    INSERT INTO budget_progress_snapshot (budget_id, month_key, spent_minor, remaining_minor, percent_used_bp, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(budget_id, month_key) DO UPDATE SET
-                        spent_minor = excluded.spent_minor,
-                        remaining_minor = excluded.remaining_minor,
-                        percent_used_bp = excluded.percent_used_bp,
-                        updated_at = excluded.updated_at
-                    """,
-                    arguments: [budgetID, monthKey, spentMinor, remainingMinor, percent, now]
-                )
-            }
-        }
-    }
-
-    // swiftlint:disable:next cyclomatic_complexity
-    private func listTransactions(_ db: Database, query: TransactionQuery, limit: Int? = 300) throws -> [TransactionListItem] {
-        var conditions = ["t.is_deleted = 0", "t.type != 'transfer_in'"]
-        var arguments: [String: any DatabaseValueConvertible] = [:]
-
-        if let walletID = query.walletID {
-            conditions.append("t.wallet_id = :walletID")
-            arguments["walletID"] = walletID.uuidString
-        }
-        if let categoryID = query.categoryID {
-            conditions.append("t.category_id = :categoryID")
-            arguments["categoryID"] = categoryID.uuidString
-        }
-        if let labelID = query.labelID {
-            conditions.append("EXISTS (SELECT 1 FROM transaction_labels tl WHERE tl.transaction_id = t.id AND tl.label_id = :labelID)")
-            arguments["labelID"] = labelID.uuidString
-        }
-        if !query.searchText.isEmpty {
-            conditions.append("t.id IN (SELECT transaction_id FROM transaction_search WHERE transaction_search MATCH :search)")
-            arguments["search"] = query.searchText + "*"
-        }
-        if let startDate = query.startDate {
-            conditions.append("t.occurred_at >= :startDate")
-            arguments["startDate"] = startDate
-        }
-        if let endDate = query.endDate {
-            conditions.append("t.occurred_at <= :endDate")
-            arguments["endDate"] = endDate
-        }
-
-        let allowedDBKinds = query.kinds.flatMap { kind -> [String] in
-            switch kind {
-            case .expense: [TransactionKind.expense.rawValue]
-            case .income: [TransactionKind.income.rawValue]
-            case .transfer: [TransactionKind.transferOut.rawValue]
-            }
-        }
-        if allowedDBKinds.count != TransactionDraft.Kind.allCases.count {
-            conditions.append("t.type IN (\(allowedDBKinds.enumerated().map { ":kind\($0.offset)" }.joined(separator: ", ")))")
-            for (index, value) in allowedDBKinds.enumerated() {
-                arguments["kind\(index)"] = value
-            }
-        }
-
-        let sql = """
-        SELECT t.*, w.name AS wallet_name, c.id AS category_id, c.name AS category_name, c.color_hex AS category_color_hex, c.icon_name AS category_icon_name
-        FROM transactions t
-        JOIN wallets w ON w.id = t.wallet_id
-        LEFT JOIN categories c ON c.id = t.category_id
-        WHERE \(conditions.joined(separator: " AND "))
-        ORDER BY t.occurred_at DESC, t.created_at DESC
-        \(limit.map { "LIMIT \($0)" } ?? "")
-        """
-
-        let rows = try Row.fetchAll(db, sql: sql, arguments: StatementArguments(arguments))
-        let transactionIDs = rows.compactMap { row -> String? in row["id"] }
-        let labelsByTransactionID: [UUID: [Label]] = try {
-            if transactionIDs.isEmpty {
-                return [:]
-            }
-            // SQLite default limit is 999 variables per query; chunk to stay safely under.
-            let chunkSize = 900
-            var dict: [UUID: [Label]] = [:]
-            for index in stride(from: 0, to: transactionIDs.count, by: chunkSize) {
-                let chunk = Array(transactionIDs[index..<min(index + chunkSize, transactionIDs.count)])
-                let inPlaceholders = chunk.enumerated().map { ":txLabel\($0.offset)" }.joined(separator: ", ")
-                let labelSQL = """
-                SELECT tl.transaction_id, l.* FROM labels l
-                JOIN transaction_labels tl ON tl.label_id = l.id
-                WHERE tl.transaction_id IN (\(inPlaceholders))
-                ORDER BY l.name
-                """
-                var labelArgs: [String: any DatabaseValueConvertible] = [:]
-                for (index, txID) in chunk.enumerated() {
-                    labelArgs["txLabel\(index)"] = txID
-                }
-                let labelRows = try Row.fetchAll(db, sql: labelSQL, arguments: StatementArguments(labelArgs))
-                for labelRow in labelRows {
-                    if let txID = UUID(uuidString: labelRow["transaction_id"]) {
-                        var arr = dict[txID, default: []]
-                        arr.append(try Self.label(labelRow))
-                        dict[txID] = arr
-                    }
-                }
-            }
-            return dict
-        }()
-
-        return try rows.map { row in
-            let transaction = try Self.transaction(row)
-            let labels = labelsByTransactionID[transaction.id] ?? []
-            return TransactionListItem(
-                id: transaction.id,
-                walletName: row["wallet_name"],
-                amountMinor: transaction.type == .expense || transaction.type == .transferOut ? -transaction.amountMinor : transaction.amountMinor,
-                occurredAt: transaction.occurredAt,
-                categoryName: row["category_name"],
-                categoryID: row["category_id"],
-                categoryColorHex: row["category_color_hex"],
-                categoryIconName: row["category_icon_name"],
-                merchant: transaction.merchant ?? "",
-                note: transaction.note ?? "",
-                kind: transaction.type == .expense ? .expense : (transaction.type == .income ? .income : .transfer),
-                source: transaction.source,
-                labels: labels,
-                dayKey: transaction.localDayKey
-            )
-        }
-    }
-
-    private func balance(atEndOfMonth monthKey: Int, walletID: UUID?, db: Database) throws -> Int64 {
-        let monthEnd = Self.endOfMonth(for: monthKey)
-        let modifier = """
-        CASE
-            WHEN t.type IN ('expense', 'transfer_out') THEN -t.amount_minor
-            ELSE t.amount_minor
-        END
-        """
-
-        if let walletID {
-            let startingBalance = try Int64.fetchOne(
-                db,
-                sql: "SELECT COALESCE(starting_balance_minor, 0) FROM wallets WHERE id = ?",
-                arguments: [walletID.uuidString]
-            ) ?? 0
-            let netDelta = try Int64.fetchOne(
-                db,
-                sql: """
-                SELECT COALESCE(SUM(\(modifier)), 0)
-                FROM transactions t
-                WHERE t.wallet_id = ?
-                  AND t.is_deleted = 0
-                  AND t.occurred_at <= ?
-                """,
-                arguments: [walletID.uuidString, monthEnd]
-            ) ?? 0
-            return startingBalance + netDelta
-        }
-
-        let startingBalance = try Int64.fetchOne(
-            db,
-            sql: "SELECT COALESCE(SUM(starting_balance_minor), 0) FROM wallets WHERE is_archived = 0"
-        ) ?? 0
-        let netDelta = try Int64.fetchOne(
-            db,
-            sql: """
-            SELECT COALESCE(SUM(\(modifier)), 0)
-            FROM transactions t
-            WHERE t.is_deleted = 0
-              AND t.occurred_at <= ?
-            """,
-            arguments: [monthEnd]
-        ) ?? 0
-        return startingBalance + netDelta
-    }
-
-    /// Computes ending balances for multiple months in a single pass using the aggregate table.
-    /// This is O(1) per month after the initial query, vs. O(n) per month when summing all transactions.
-    private func monthEndBalances(for months: [Int], walletID: UUID?, db: Database) throws -> [Int: Int64] {
-        guard !months.isEmpty else { return [:] }
-        let sortedMonths = Set(months).sorted()
-        let latest = sortedMonths.last!
-
-        let startingBalance: Int64
-        if let walletID {
-            startingBalance = try Int64.fetchOne(
-                db,
-                sql: "SELECT COALESCE(starting_balance_minor, 0) FROM wallets WHERE id = ?",
-                arguments: [walletID.uuidString]
-            ) ?? 0
-        } else {
-            startingBalance = try Int64.fetchOne(
-                db,
-                sql: "SELECT COALESCE(SUM(starting_balance_minor), 0) FROM wallets WHERE is_archived = 0"
-            ) ?? 0
-        }
-
-        let rows = try Row.fetchAll(
-            db,
-            sql: """
-            SELECT month_key,
-                   COALESCE(SUM(income_minor - expense_minor + transfer_in_minor - transfer_out_minor), 0) AS net_delta
-            FROM monthly_wallet_cashflow
-            WHERE month_key <= ?
-            \(walletID == nil ? "" : "AND wallet_id = ?")
-            GROUP BY month_key
-            ORDER BY month_key
-            """,
-            arguments: walletID == nil
-                ? [latest]
-                : [latest, walletID!.uuidString]
-        )
-
-        var cumulative = startingBalance
-        var balances: [Int: Int64] = [:]
-        var rowIndex = 0
-        for month in sortedMonths {
-            while rowIndex < rows.count, (rows[rowIndex]["month_key"] as Int) <= month {
-                cumulative += rows[rowIndex]["net_delta"] as Int64
-                rowIndex += 1
-            }
-            balances[month] = cumulative
-        }
-        return balances
-    }
-
-    private func syncSearch(_ db: Database, transaction: CashRunwayTransaction) throws {
-        try db.execute(sql: "DELETE FROM transaction_search WHERE transaction_id = ?", arguments: [transaction.id.uuidString])
-        let walletName = try String.fetchOne(db, sql: "SELECT name FROM wallets WHERE id = ?", arguments: [transaction.walletID.uuidString]) ?? ""
-        let categoryName = transaction.categoryID.flatMap {
-            try? String.fetchOne(db, sql: "SELECT name FROM categories WHERE id = ?", arguments: [$0.uuidString])
-        } ?? ""
-        let labelNames = try String.fetchAll(
-            db,
-            sql: """
-            SELECT l.name FROM labels l
-            JOIN transaction_labels tl ON tl.label_id = l.id
-            WHERE tl.transaction_id = ?
-            """,
-            arguments: [transaction.id.uuidString]
-        ).joined(separator: " ")
-        try db.execute(
-            sql: "INSERT INTO transaction_search (transaction_id, merchant, note, wallet_name, category_name, labels) VALUES (?, ?, ?, ?, ?, ?)",
-            arguments: [transaction.id.uuidString, transaction.merchant ?? "", transaction.note ?? "", walletName, categoryName, labelNames]
-        )
-    }
-
-    private func syncSearch(_ db: Database, transactionIDs: [String]) throws {
-        guard !transactionIDs.isEmpty else { return }
-
-        let chunkSize = 900
-        for index in stride(from: 0, to: transactionIDs.count, by: chunkSize) {
-            let chunk = Array(transactionIDs[index..<min(index + chunkSize, transactionIDs.count)])
-            let placeholders = chunk.enumerated().map { ":id\($0.offset)" }.joined(separator: ", ")
-            var arguments: [String: any DatabaseValueConvertible] = [:]
-            for (index, transactionID) in chunk.enumerated() {
-                arguments["id\(index)"] = transactionID
-            }
-            let rows = try Row.fetchAll(
-                db,
-                sql: "SELECT * FROM transactions WHERE is_deleted = 0 AND id IN (\(placeholders))",
-                arguments: StatementArguments(arguments)
-            )
-            for row in rows {
-                try syncSearch(db, transaction: try Self.transaction(row))
-            }
-        }
-    }
-
-    private func rebuildMonths(_ db: Database, monthKeys: Set<Int>) throws {
-        for monthKey in monthKeys {
-            try db.execute(sql: "DELETE FROM monthly_wallet_cashflow WHERE month_key = ?", arguments: [monthKey])
-            try db.execute(sql: "DELETE FROM monthly_category_spend WHERE month_key = ?", arguments: [monthKey])
-            try db.execute(sql: "DELETE FROM budget_progress_snapshot WHERE month_key = ?", arguments: [monthKey])
-
-            let rows = try Row.fetchAll(db, sql: "SELECT * FROM transactions WHERE is_deleted = 0 AND local_month_key = ?", arguments: [monthKey])
-            for row in rows {
-                let transaction = try Self.transaction(row)
-                try mutateAggregate(db, contribution: contribution(for: transaction), multiplier: 1)
-            }
-        }
-        try recomputeBudgetSnapshots(db, monthKeys: monthKeys)
-    }
-
-    private func markDirtyRanges(_ db: Database, monthKeys: Set<Int>) throws {
-        guard !monthKeys.isEmpty else { return }
-        let now = Date()
-        for monthKey in monthKeys {
-            try db.execute(
-                sql: """
-                INSERT INTO aggregate_dirty_ranges (id, kind, month_key, status, created_at, updated_at)
-                VALUES (?, 'month', ?, 'pending', ?, ?)
-                """,
-                arguments: [UUID().uuidString, monthKey, now, now]
-            )
-        }
-    }
-
-    private func processPendingAggregateRebuilds(_ db: Database) throws {
-        let monthKeys = Set(try Int.fetchAll(
-            db,
-            sql: "SELECT DISTINCT month_key FROM aggregate_dirty_ranges WHERE kind = 'month' AND status = 'pending' AND month_key IS NOT NULL"
-        ))
-        guard !monthKeys.isEmpty else { return }
-        let startedAt = Date()
-        for monthKey in monthKeys {
-            try db.execute(
-                sql: "UPDATE aggregate_dirty_ranges SET status = 'running', updated_at = ? WHERE kind = 'month' AND month_key = ? AND status = 'pending'",
-                arguments: [startedAt, monthKey]
-            )
-        }
-        try rebuildMonths(db, monthKeys: monthKeys)
-        let finishedAt = Date()
-        for monthKey in monthKeys {
-            try db.execute(
-                sql: "UPDATE aggregate_dirty_ranges SET status = 'done', updated_at = ? WHERE kind = 'month' AND month_key = ? AND status = 'running'",
-                arguments: [finishedAt, monthKey]
-            )
-        }
-    }
-
-    private func rebuildFTS(_ db: Database) throws {
-        try db.execute(sql: "DELETE FROM transaction_search")
-        let rows = try Row.fetchAll(db, sql: "SELECT * FROM transactions WHERE is_deleted = 0")
-        for row in rows {
-            try syncSearch(db, transaction: try Self.transaction(row))
-        }
-    }
-
-    private func refreshRecurringInstances(_ db: Database) throws {
-        let calendar = DateKeys.calendar
-        let start = calendar.date(byAdding: .day, value: -7, to: .now) ?? .now
-        let end = calendar.date(byAdding: .day, value: 60, to: .now) ?? .now
-        let templates = try Row.fetchAll(db, sql: "SELECT * FROM recurring_templates WHERE is_active = 1").map(Self.recurringTemplate)
-        for template in templates {
-            for dueDate in Self.generatedDates(for: template, start: start, end: end) {
-                let dayKey = DateKeys.dayKey(for: dueDate)
-                try db.execute(
-                    sql: """
-                    INSERT OR IGNORE INTO recurring_instances (id, template_id, due_date, day_key, status, linked_transaction_id, override_amount_minor, override_category_id, override_note, override_merchant, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL, ?, ?)
-                    """,
-                    arguments: [UUID().uuidString, template.id.uuidString, dueDate, dayKey, RecurringInstanceStatus.scheduled.rawValue, Date(), Date()]
-                )
-            }
-        }
-    }
-
-    public static func generatedDates(
-        for template: RecurringTemplate,
-        start: Date,
-        end: Date,
-        calendar: Calendar = DateKeys.calendar
-    ) -> [Date] {
-        var dates: [Date] = []
-        var cursor = max(start, template.startDate)
-        while cursor <= end {
-            if let endDate = template.endDate, cursor > endDate { break }
-            let match: Bool
-            switch template.ruleType {
-            case .daily:
-                match = calendar.dateComponents([.day], from: template.startDate, to: cursor).day! % template.ruleInterval == 0
-            case .weekly:
-                match = calendar.dateComponents([.day], from: template.startDate, to: cursor).day! % (7 * template.ruleInterval) == 0
-            case .monthly:
-                let comps = calendar.dateComponents([.day], from: cursor)
-                let monthsFromStart = calendar.dateComponents([.month], from: template.startDate, to: cursor).month ?? 0
-                match = comps.day == template.dayOfMonth && monthsFromStart % template.ruleInterval == 0
-            case .yearly:
-                let current = calendar.dateComponents([.month, .day], from: cursor)
-                let startComps = calendar.dateComponents([.month, .day], from: template.startDate)
-                let yearsFromStart = calendar.dateComponents([.year], from: template.startDate, to: cursor).year ?? 0
-                match = current.month == startComps.month && current.day == (template.dayOfMonth ?? startComps.day) && yearsFromStart % template.ruleInterval == 0
-            }
-            if match {
-                dates.append(cursor)
-            }
-            cursor = calendar.date(byAdding: .day, value: 1, to: cursor) ?? cursor.addingTimeInterval(86_400)
-        }
-        return dates
-    }
-
     private static func fallbackMerchant(for type: TransactionKind) -> String {
         switch type {
         case .expense: "Expense"
@@ -3681,626 +2635,5 @@ extension CashRunwayRepository {
         case .transferOut: "Transfer"
         case .transferIn: "Transfer In"
         }
-    }
-
-    private func clearDerivedTables(_ db: Database) throws {
-        try db.execute(sql: "DELETE FROM transaction_search")
-        try db.execute(sql: "DELETE FROM aggregate_dirty_ranges")
-        try db.execute(sql: "DELETE FROM budget_progress_snapshot")
-        try db.execute(sql: "DELETE FROM daily_wallet_balance_delta")
-        try db.execute(sql: "DELETE FROM monthly_category_spend")
-        try db.execute(sql: "DELETE FROM monthly_wallet_cashflow")
-    }
-
-    private func clearSourceTables(_ db: Database) throws {
-        try db.execute(sql: "DELETE FROM transaction_labels")
-        try db.execute(sql: "DELETE FROM transactions")
-        try db.execute(sql: "DELETE FROM recurring_instances")
-        try db.execute(sql: "DELETE FROM recurring_templates")
-        try db.execute(sql: "DELETE FROM import_jobs")
-        try db.execute(sql: "DELETE FROM budgets")
-        try db.execute(sql: "DELETE FROM labels")
-        try db.execute(sql: "DELETE FROM categories")
-        try db.execute(sql: "DELETE FROM wallets")
-        try db.execute(sql: "DELETE FROM wallet_categories")
-    }
-
-    // swiftlint:disable:next function_body_length
-    private func clearBankSyncTables(_ db: Database) throws -> [String] {
-        let tokenAccounts = try String.fetchAll(
-            db,
-            sql: "SELECT token_keychain_account FROM bank_integrations"
-        )
-        try db.execute(sql: "DELETE FROM bank_transaction_imports")
-        try db.execute(sql: "DELETE FROM bank_accounts")
-        try db.execute(sql: "DELETE FROM bank_category_rules")
-        try db.execute(sql: "DELETE FROM bank_integrations")
-        return tokenAccounts
-    }
-
-    private func insertBackupSourceData(_ backup: CashRunwayBackup, into db: Database) throws {
-        let walletCategories = backup.walletCategories.isEmpty
-            ? WalletCategory.allBuiltIn.map {
-                BackupWalletCategory(
-                    id: $0.id,
-                    name: $0.name,
-                    kind: $0.kind,
-                    isSystem: $0.isSystem,
-                    createdAt: $0.createdAt,
-                    updatedAt: $0.updatedAt
-                )
-            }
-            : backup.walletCategories
-
-        for category in walletCategories {
-            try db.execute(
-                sql: """
-                INSERT INTO wallet_categories (id, name, kind, is_system, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                arguments: [
-                    category.id.uuidString, category.name, category.kind.rawValue,
-                    category.isSystem, category.createdAt, category.updatedAt,
-                ]
-            )
-        }
-
-        for wallet in backup.wallets {
-            let categoryID = wallet.categoryID ?? WalletCategory.builtIn(byKind: wallet.kind).id
-            try db.execute(
-                sql: """
-                INSERT INTO wallets (id, name, kind, category_id, color_hex, icon_name, starting_balance_minor, current_balance_minor, is_archived, sort_order, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                arguments: [
-                    wallet.id.uuidString, wallet.name, wallet.kind.rawValue, categoryID.uuidString,
-                    wallet.colorHex, wallet.iconName,
-                    wallet.startingBalanceMinor, wallet.startingBalanceMinor, wallet.isArchived, wallet.sortOrder,
-                    wallet.createdAt, wallet.updatedAt,
-                ]
-            )
-        }
-
-        for category in backup.categories {
-            try db.execute(
-                sql: """
-                INSERT INTO categories (id, name, kind, icon_name, color_hex, parent_id, is_system, is_archived, sort_order, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                arguments: [
-                    category.id.uuidString, category.name, category.kind.rawValue, category.iconName, category.colorHex,
-                    category.parentID?.uuidString, category.isSystem, category.isArchived, category.sortOrder,
-                    category.createdAt, category.updatedAt,
-                ]
-            )
-        }
-
-        for label in backup.labels {
-            try db.execute(
-                sql: "INSERT INTO labels (id, name, color_hex, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-                arguments: [label.id.uuidString, label.name, label.colorHex, label.createdAt, label.updatedAt]
-            )
-        }
-
-        for importJob in backup.importJobs {
-            try db.execute(
-                sql: """
-                    INSERT INTO import_jobs (id, source_name, source_format_id, file_name, status, total_rows, valid_rows, invalid_rows, started_at, finished_at, error_summary)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                arguments: [
-                    importJob.id.uuidString, importJob.sourceName, importJob.sourceFormatID, importJob.fileName, importJob.status.rawValue,
-                    importJob.totalRows, importJob.validRows, importJob.invalidRows, importJob.startedAt,
-                    importJob.finishedAt, importJob.errorSummary,
-                ]
-            )
-        }
-
-        for budget in backup.budgets {
-            try db.execute(
-                sql: "INSERT INTO budgets (id, category_id, month_key, limit_minor, is_archived, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                arguments: [
-                    budget.id.uuidString, budget.categoryID.uuidString, budget.monthKey, budget.limitMinor,
-                    budget.isArchived, budget.createdAt, budget.updatedAt,
-                ]
-            )
-        }
-
-        for template in backup.recurringTemplates {
-            try db.execute(
-                sql: """
-                INSERT INTO recurring_templates (id, kind, wallet_id, counterparty_wallet_id, amount_minor, category_id, merchant, note, rule_type, rule_interval, day_of_month, weekday, start_date, end_date, is_active, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                arguments: [
-                    template.id.uuidString, template.kind.rawValue, template.walletID.uuidString,
-                    template.counterpartyWalletID?.uuidString, template.amountMinor, template.categoryID?.uuidString,
-                    template.merchant, template.note, template.ruleType.rawValue, template.ruleInterval,
-                    template.dayOfMonth, template.weekday, template.startDate, template.endDate, template.isActive,
-                    template.createdAt, template.updatedAt,
-                ]
-            )
-        }
-
-        for instance in backup.recurringInstances {
-            try db.execute(
-                sql: """
-                INSERT INTO recurring_instances (id, template_id, due_date, day_key, status, linked_transaction_id, override_amount_minor, override_category_id, override_note, override_merchant, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                arguments: [
-                    instance.id.uuidString, instance.templateID.uuidString, instance.dueDate, instance.dayKey,
-                    instance.status.rawValue, instance.linkedTransactionID?.uuidString, instance.overrideAmountMinor,
-                    instance.overrideCategoryID?.uuidString, instance.overrideNote, instance.overrideMerchant,
-                    instance.createdAt, instance.updatedAt,
-                ]
-            )
-        }
-
-        for transaction in backup.transactions {
-            try db.execute(
-                sql: """
-                INSERT INTO transactions (id, wallet_id, type, linked_transfer_id, amount_minor, occurred_at, local_day_key, local_month_key, category_id, merchant, note, is_deleted, source, recurring_template_id, recurring_instance_id, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                arguments: [
-                    transaction.id.uuidString, transaction.walletID.uuidString, transaction.type.rawValue,
-                    transaction.linkedTransferID?.uuidString, transaction.amountMinor, transaction.occurredAt,
-                    transaction.localDayKey, transaction.localMonthKey, transaction.categoryID?.uuidString,
-                    transaction.merchant, transaction.note, transaction.isDeleted, transaction.source.rawValue,
-                    transaction.recurringTemplateID?.uuidString, transaction.recurringInstanceID?.uuidString,
-                    transaction.createdAt, transaction.updatedAt,
-                ]
-            )
-        }
-
-        for row in backup.transactionLabels {
-            try db.execute(
-                sql: "INSERT INTO transaction_labels (transaction_id, label_id) VALUES (?, ?)",
-                arguments: [row.transactionID.uuidString, row.labelID.uuidString]
-            )
-        }
-    }
-
-    private static func wallet(_ row: Row) throws -> Wallet {
-        let kind: WalletKind = WalletKind(rawValue: row["kind"]) ?? .other
-        let categoryID = (row["category_id"] as String?).flatMap(UUID.init(uuidString:))
-            ?? WalletCategory.builtIn(byKind: kind).id
-        return Wallet(
-            id: UUID(uuidString: row["id"])!,
-            name: row["name"],
-            kind: kind,
-            categoryID: categoryID,
-            colorHex: row["color_hex"],
-            iconName: row["icon_name"],
-            startingBalanceMinor: row["starting_balance_minor"],
-            currentBalanceMinor: row["current_balance_minor"],
-            isArchived: row["is_archived"],
-            sortOrder: row["sort_order"],
-            createdAt: row["created_at"],
-            updatedAt: row["updated_at"]
-        )
-    }
-
-    private static func walletCategory(_ row: Row) throws -> WalletCategory {
-        WalletCategory(
-            id: UUID(uuidString: row["id"])!,
-            name: row["name"],
-            kind: WalletKind(rawValue: row["kind"]) ?? .other,
-            isSystem: row["is_system"],
-            createdAt: row["created_at"],
-            updatedAt: row["updated_at"]
-        )
-    }
-
-    private static func backupWallet(_ row: Row) throws -> BackupWallet {
-        let kind: WalletKind = WalletKind(rawValue: row["kind"]) ?? .other
-        let categoryID = (row["category_id"] as String?).flatMap(UUID.init(uuidString:))
-        return BackupWallet(
-            id: UUID(uuidString: row["id"])!,
-            name: row["name"],
-            kind: kind,
-            categoryID: categoryID,
-            colorHex: row["color_hex"],
-            iconName: row["icon_name"],
-            startingBalanceMinor: row["starting_balance_minor"],
-            currentBalanceMinor: row["current_balance_minor"],
-            isArchived: row["is_archived"],
-            sortOrder: row["sort_order"],
-            createdAt: row["created_at"],
-            updatedAt: row["updated_at"]
-        )
-    }
-
-    private static func backupWalletCategory(_ row: Row) throws -> BackupWalletCategory {
-        BackupWalletCategory(
-            id: UUID(uuidString: row["id"])!,
-            name: row["name"],
-            kind: WalletKind(rawValue: row["kind"]) ?? .other,
-            isSystem: row["is_system"],
-            createdAt: row["created_at"],
-            updatedAt: row["updated_at"]
-        )
-    }
-
-    private static func category(_ row: Row) throws -> Category {
-        try category(prefixed: "", row: row)
-    }
-
-    private static func monthWindow(endingAt monthKey: Int, count: Int) -> [Int] {
-        let start = DateKeys.startOfMonth(for: monthKey)
-        return (0..<count).compactMap { offset in
-            DateKeys.calendar.date(byAdding: .month, value: offset - (count - 1), to: start)
-        }.map(DateKeys.monthKey(for:))
-    }
-
-    private static func yearWindow(endingAt year: Int, count: Int) -> [Int] {
-        (0..<count).map { year + $0 - (count - 1) }
-    }
-
-    private static func endOfMonth(for monthKey: Int) -> Date {
-        let start = DateKeys.startOfMonth(for: monthKey)
-        let nextMonth = DateKeys.calendar.date(byAdding: .month, value: 1, to: start) ?? start
-        return DateKeys.calendar.date(byAdding: .second, value: -1, to: nextMonth) ?? nextMonth
-    }
-
-    private static func category(prefixed prefix: String, row: Row) throws -> Category {
-        Category(
-            id: UUID(uuidString: row["\(prefix)id"])!,
-            name: row["\(prefix)name"],
-            kind: CategoryKind(rawValue: row["\(prefix)kind"]) ?? .expense,
-            iconName: row["\(prefix)icon_name"],
-            colorHex: row["\(prefix)color_hex"],
-            parentID: (row["\(prefix)parent_id"] as String?).flatMap(UUID.init(uuidString:)),
-            isSystem: row["\(prefix)is_system"],
-            isArchived: row["\(prefix)is_archived"],
-            sortOrder: row["\(prefix)sort_order"],
-            createdAt: row["\(prefix)created_at"],
-            updatedAt: row["\(prefix)updated_at"]
-        )
-    }
-
-    private static func backupCategory(_ row: Row) throws -> BackupCategory {
-        BackupCategory(
-            id: UUID(uuidString: row["id"])!,
-            name: row["name"],
-            kind: CategoryKind(rawValue: row["kind"]) ?? .expense,
-            iconName: row["icon_name"],
-            colorHex: row["color_hex"],
-            parentID: (row["parent_id"] as String?).flatMap(UUID.init(uuidString:)),
-            isSystem: row["is_system"],
-            isArchived: row["is_archived"],
-            sortOrder: row["sort_order"],
-            createdAt: row["created_at"],
-            updatedAt: row["updated_at"]
-        )
-    }
-
-    private static func label(_ row: Row) throws -> Label {
-        Label(
-            id: UUID(uuidString: row["id"])!,
-            name: row["name"],
-            colorHex: row["color_hex"],
-            createdAt: row["created_at"],
-            updatedAt: row["updated_at"]
-        )
-    }
-
-    private static func bankIntegration(_ row: Row) throws -> BankIntegration {
-        BankIntegration(
-            id: UUID(uuidString: row["id"])!,
-            provider: BankProvider(rawValue: row["provider"]) ?? .monobank,
-            displayName: row["display_name"],
-            status: BankIntegrationStatus(rawValue: row["status"]) ?? .syncFailed,
-            syncStartAt: row["sync_start_at"],
-            tokenKeychainAccount: row["token_keychain_account"],
-            lastClientInfoSyncAt: row["last_client_info_sync_at"],
-            lastSuccessfulSyncAt: row["last_successful_sync_at"],
-            lastSyncError: row["last_sync_error"],
-            createdAt: row["created_at"],
-            updatedAt: row["updated_at"]
-        )
-    }
-
-    private static func bankAccount(_ row: Row) throws -> BankAccount {
-        BankAccount(
-            id: UUID(uuidString: row["id"])!,
-            integrationID: UUID(uuidString: row["integration_id"])!,
-            provider: BankProvider(rawValue: row["provider"]) ?? .monobank,
-            providerAccountID: row["provider_account_id"],
-            walletID: UUID(uuidString: row["wallet_id"])!,
-            displayName: row["display_name"],
-            accountType: row["account_type"],
-            currencyCode: row["currency_code"],
-            maskedPAN: row["masked_pan"],
-            iban: row["iban"],
-            isEnabled: row["is_enabled"],
-            syncStartAt: row["sync_start_at"],
-            lastSuccessfulSyncAt: row["last_successful_sync_at"],
-            lastStatementItemTime: row["last_statement_item_time"],
-            createdAt: row["created_at"],
-            updatedAt: row["updated_at"]
-        )
-    }
-
-    private static func tableHasColumn(_ db: Database, table: String, column: String) throws -> Bool {
-        let rows = try Row.fetchAll(db, sql: "PRAGMA table_info(\(table))")
-        return rows.contains { ($0["name"] as String?) == column }
-    }
-
-    private static func bankTransactionImport(_ row: Row) throws -> BankTransactionImport {
-        BankTransactionImport(
-            id: UUID(uuidString: row["id"])!,
-            provider: BankProvider(rawValue: row["provider"]) ?? .monobank,
-            integrationID: UUID(uuidString: row["integration_id"])!,
-            bankAccountID: UUID(uuidString: row["bank_account_id"])!,
-            providerAccountID: row["provider_account_id"],
-            providerStatementItemID: row["provider_statement_item_id"],
-            statementTime: row["statement_time"],
-            amountMinorSigned: row["amount_minor_signed"],
-            operationAmountMinorSigned: row["operation_amount_minor_signed"],
-            currencyCode: row["currency_code"],
-            mcc: row["mcc"],
-            originalMCC: row["original_mcc"],
-            description: row["description"],
-            comment: row["comment"],
-            counterName: row["counter_name"],
-            counterIBAN: row["counter_iban"],
-            receiptID: row["receipt_id"],
-            hold: row["hold"],
-            rawJSON: row["raw_json"],
-            cashRunwayTransactionID: (row["cash_runway_transaction_id"] as String?).flatMap(UUID.init(uuidString:)),
-            importStatus: BankTransactionImportStatus(rawValue: row["import_status"]) ?? .failed,
-            createdAt: row["created_at"],
-            updatedAt: row["updated_at"]
-        )
-    }
-
-    private func existingBankImport(_ db: Database, provider: BankProvider, providerAccountID: String, statementItemID: String) throws -> BankTransactionImport? {
-        guard let row = try Row.fetchOne(
-            db,
-            sql: """
-            SELECT * FROM bank_transaction_imports
-            WHERE provider = ? AND provider_account_id = ? AND provider_statement_item_id = ?
-            """,
-            arguments: [provider.rawValue, providerAccountID, statementItemID]
-        ) else {
-            return nil
-        }
-        return try Self.bankTransactionImport(row)
-    }
-
-    private func insertBankTransactionImport(
-        _ db: Database,
-        id: UUID,
-        provider: BankProvider,
-        integrationID: UUID,
-        bankAccountID: UUID,
-        providerAccountID: String,
-        item: MonobankStatementItem,
-        cashRunwayTransactionID: UUID,
-        now: Date
-    ) throws {
-        let rawJSON = String(data: try JSONEncoder().encode(item), encoding: .utf8) ?? "{}"
-        try db.execute(
-            sql: """
-            INSERT INTO bank_transaction_imports (
-                id, provider, integration_id, bank_account_id, provider_account_id,
-                provider_statement_item_id, statement_time, amount_minor_signed,
-                operation_amount_minor_signed, currency_code, mcc, original_mcc,
-                description, comment, counter_name, counter_iban, receipt_id, hold,
-                raw_json, cash_runway_transaction_id, import_status, created_at, updated_at
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            arguments: [
-                id.uuidString,
-                provider.rawValue,
-                integrationID.uuidString,
-                bankAccountID.uuidString,
-                providerAccountID,
-                item.id,
-                item.time,
-                item.amount,
-                item.operationAmount,
-                item.currencyCode,
-                item.mcc,
-                item.originalMcc,
-                item.description,
-                item.comment,
-                item.counterName,
-                item.counterIban,
-                item.receiptId,
-                item.hold,
-                rawJSON,
-                cashRunwayTransactionID.uuidString,
-                BankTransactionImportStatus.imported.rawValue,
-                now,
-                now,
-            ]
-        )
-    }
-
-    private static func backupLabel(_ row: Row) throws -> BackupLabel {
-        BackupLabel(
-            id: UUID(uuidString: row["id"])!,
-            name: row["name"],
-            colorHex: row["color_hex"],
-            createdAt: row["created_at"],
-            updatedAt: row["updated_at"]
-        )
-    }
-
-    private static func transaction(_ row: Row) throws -> CashRunwayTransaction {
-        CashRunwayTransaction(
-            id: UUID(uuidString: row["id"])!,
-            walletID: UUID(uuidString: row["wallet_id"])!,
-            type: TransactionKind(rawValue: row["type"]) ?? .expense,
-            linkedTransferID: (row["linked_transfer_id"] as String?).flatMap(UUID.init(uuidString:)),
-            amountMinor: row["amount_minor"],
-            occurredAt: row["occurred_at"],
-            localDayKey: row["local_day_key"],
-            localMonthKey: row["local_month_key"],
-            categoryID: (row["category_id"] as String?).flatMap(UUID.init(uuidString:)),
-            merchant: row["merchant"],
-            note: row["note"],
-            isDeleted: row["is_deleted"],
-            source: TransactionSource(rawValue: row["source"]) ?? .manual,
-            recurringTemplateID: (row["recurring_template_id"] as String?).flatMap(UUID.init(uuidString:)),
-            recurringInstanceID: (row["recurring_instance_id"] as String?).flatMap(UUID.init(uuidString:)),
-            importJobID: (row["import_job_id"] as String?).flatMap(UUID.init(uuidString:)),
-            importFingerprint: row["import_fingerprint"],
-            createdAt: row["created_at"],
-            updatedAt: row["updated_at"]
-        )
-    }
-
-    private static func backupTransaction(_ row: Row) throws -> BackupTransaction {
-        BackupTransaction(
-            id: UUID(uuidString: row["id"])!,
-            walletID: UUID(uuidString: row["wallet_id"])!,
-            type: TransactionKind(rawValue: row["type"]) ?? .expense,
-            linkedTransferID: (row["linked_transfer_id"] as String?).flatMap(UUID.init(uuidString:)),
-            amountMinor: row["amount_minor"],
-            occurredAt: row["occurred_at"],
-            localDayKey: row["local_day_key"],
-            localMonthKey: row["local_month_key"],
-            categoryID: (row["category_id"] as String?).flatMap(UUID.init(uuidString:)),
-            merchant: row["merchant"],
-            note: row["note"],
-            isDeleted: row["is_deleted"],
-            source: TransactionSource(rawValue: row["source"]) ?? .manual,
-            recurringTemplateID: (row["recurring_template_id"] as String?).flatMap(UUID.init(uuidString:)),
-            recurringInstanceID: (row["recurring_instance_id"] as String?).flatMap(UUID.init(uuidString:)),
-            importJobID: nil,
-            importFingerprint: nil,
-            createdAt: row["created_at"],
-            updatedAt: row["updated_at"]
-        )
-    }
-
-    private static func backupTransactionLabel(_ row: Row) throws -> BackupTransactionLabel {
-        BackupTransactionLabel(
-            transactionID: UUID(uuidString: row["transaction_id"])!,
-            labelID: UUID(uuidString: row["label_id"])!
-        )
-    }
-
-    private static func budget(_ row: Row) throws -> Budget {
-        Budget(
-            id: UUID(uuidString: row["id"])!,
-            categoryID: UUID(uuidString: row["category_id"])!,
-            monthKey: row["month_key"],
-            limitMinor: row["limit_minor"],
-            isArchived: row["is_archived"],
-            createdAt: row["created_at"],
-            updatedAt: row["updated_at"]
-        )
-    }
-
-    private static func backupBudget(_ row: Row) throws -> BackupBudget {
-        BackupBudget(
-            id: UUID(uuidString: row["id"])!,
-            categoryID: UUID(uuidString: row["category_id"])!,
-            monthKey: row["month_key"],
-            limitMinor: row["limit_minor"],
-            isArchived: row["is_archived"],
-            createdAt: row["created_at"],
-            updatedAt: row["updated_at"]
-        )
-    }
-
-    private static func recurringTemplate(_ row: Row) throws -> RecurringTemplate {
-        RecurringTemplate(
-            id: UUID(uuidString: row["id"])!,
-            kind: RecurringTemplateKind(rawValue: row["kind"]) ?? .expense,
-            walletID: UUID(uuidString: row["wallet_id"])!,
-            counterpartyWalletID: (row["counterparty_wallet_id"] as String?).flatMap(UUID.init(uuidString:)),
-            amountMinor: row["amount_minor"],
-            categoryID: (row["category_id"] as String?).flatMap(UUID.init(uuidString:)),
-            merchant: row["merchant"],
-            note: row["note"],
-            ruleType: RecurrenceRuleType(rawValue: row["rule_type"]) ?? .monthly,
-            ruleInterval: row["rule_interval"],
-            dayOfMonth: row["day_of_month"],
-            weekday: row["weekday"],
-            startDate: row["start_date"],
-            endDate: row["end_date"],
-            isActive: row["is_active"],
-            createdAt: row["created_at"],
-            updatedAt: row["updated_at"]
-        )
-    }
-
-    private static func backupRecurringTemplate(_ row: Row) throws -> BackupRecurringTemplate {
-        BackupRecurringTemplate(
-            id: UUID(uuidString: row["id"])!,
-            kind: RecurringTemplateKind(rawValue: row["kind"]) ?? .expense,
-            walletID: UUID(uuidString: row["wallet_id"])!,
-            counterpartyWalletID: (row["counterparty_wallet_id"] as String?).flatMap(UUID.init(uuidString:)),
-            amountMinor: row["amount_minor"],
-            categoryID: (row["category_id"] as String?).flatMap(UUID.init(uuidString:)),
-            merchant: row["merchant"],
-            note: row["note"],
-            ruleType: RecurrenceRuleType(rawValue: row["rule_type"]) ?? .monthly,
-            ruleInterval: row["rule_interval"],
-            dayOfMonth: row["day_of_month"],
-            weekday: row["weekday"],
-            startDate: row["start_date"],
-            endDate: row["end_date"],
-            isActive: row["is_active"],
-            createdAt: row["created_at"],
-            updatedAt: row["updated_at"]
-        )
-    }
-
-    private static func recurringInstance(_ row: Row) throws -> RecurringInstance {
-        RecurringInstance(
-            id: UUID(uuidString: row["id"])!,
-            templateID: UUID(uuidString: row["template_id"])!,
-            dueDate: row["due_date"],
-            dayKey: row["day_key"],
-            status: RecurringInstanceStatus(rawValue: row["status"]) ?? .scheduled,
-            linkedTransactionID: (row["linked_transaction_id"] as String?).flatMap(UUID.init(uuidString:)),
-            overrideAmountMinor: row["override_amount_minor"],
-            overrideCategoryID: (row["override_category_id"] as String?).flatMap(UUID.init(uuidString:)),
-            overrideNote: row["override_note"],
-            overrideMerchant: row["override_merchant"],
-            createdAt: row["created_at"],
-            updatedAt: row["updated_at"]
-        )
-    }
-
-    private static func backupRecurringInstance(_ row: Row) throws -> BackupRecurringInstance {
-        BackupRecurringInstance(
-            id: UUID(uuidString: row["id"])!,
-            templateID: UUID(uuidString: row["template_id"])!,
-            dueDate: row["due_date"],
-            dayKey: row["day_key"],
-            status: RecurringInstanceStatus(rawValue: row["status"]) ?? .scheduled,
-            linkedTransactionID: (row["linked_transaction_id"] as String?).flatMap(UUID.init(uuidString:)),
-            overrideAmountMinor: row["override_amount_minor"],
-            overrideCategoryID: (row["override_category_id"] as String?).flatMap(UUID.init(uuidString:)),
-            overrideNote: row["override_note"],
-            overrideMerchant: row["override_merchant"],
-            createdAt: row["created_at"],
-            updatedAt: row["updated_at"]
-        )
-    }
-
-    private static func backupImportJob(_ row: Row) throws -> BackupImportJob {
-        BackupImportJob(
-            id: UUID(uuidString: row["id"])!,
-            sourceName: row["source_name"],
-            sourceFormatID: row["source_format_id"],
-            fileName: row["file_name"],
-            status: ImportJobStatus(rawValue: row["status"]) ?? .created,
-            totalRows: row["total_rows"],
-            validRows: row["valid_rows"],
-            invalidRows: row["invalid_rows"],
-            startedAt: row["started_at"],
-            finishedAt: row["finished_at"],
-            errorSummary: row["error_summary"]
-        )
     }
 }

@@ -2,31 +2,83 @@
 
 Swift/SwiftUI/GRDB iOS app with a Node/TypeScript reporting API.
 
+**Precedence:** This repo `AGENTS.md` overrides `~/.config/opencode/AGENTS.md` for
+Cash Runway-specific rules. Where this file is silent, follow global `AGENTS.md`.
+
+## Session start checklist
+
+Run `just session-start` at the beginning of every working session. It prints the
+worktree, branch, bootstraps CodeGraph, and runs the pre-flight inventory.
+
+Manual fallback if `just` is unavailable:
+1. `git worktree list`
+2. `git -C <worktree> rev-parse --abbrev-ref HEAD`
+3. `git status --short`
+4. `Scripts/pre-flight.sh`
+5. `Scripts/codegraph-bootstrap.sh`
+
 ## Always Apply
+
 - CashRunwayCore has one canonical source tree at `Sources/CashRunwayCore/`.
   Both Xcode and SwiftPM must compile this tree. Do not create mirrored copies.
 - Store credentials and sensitive values only in Keychain or server-side
   environment variables. Never commit or log secrets or sensitive user data.
 - Do not use `print()` for production diagnostics.
-- Use existing `just` recipes and repository scripts instead of recreating
-  commands.
-- Do not add, modify, or run XCUITest/E2E tests locally unless explicitly
-  requested.
+- Use existing `just` recipes and repository scripts instead of recreating commands.
+- Do not add, modify, or run XCUITest/E2E tests locally unless explicitly requested.
 - Treat every git worktree as a separate CodeGraph project.
-- Report every skipped validation gate and the reason it was skipped.
-  If a command times out or fails, report the gate name, command, timeout/limit,
-  failure reason, fallback used (if any), and whether the fallback is equivalent
-  or a partial substitute.
+- Report every skipped validation gate and the reason it was skipped. If a command
+  times out or fails, report the gate name, command, timeout/limit, failure reason,
+  fallback used, and whether the fallback is equivalent or a partial substitute.
 - Keep repo validation, runtime smoke tests, backend/API reachability, and
-  release readiness as separate status buckets. Green checks do not imply the
-  app launched, integrations worked, or release gates are complete.
+  release readiness as separate status buckets. Green checks do not imply the app
+  launched, integrations worked, or release gates are complete.
 - Tests that reference `ReportingSecrets`, `ProcessInfo.processInfo.environment`,
-  `#if DEBUG`, or any generated/compiled-time state must inject those
-  dependencies explicitly (e.g., `isPlaceholder:` parameter). Tests must not
-  silently depend on environment state that differs between dev and CI.
+  `#if DEBUG`, or any generated/compiled-time state must inject those dependencies
+  explicitly. Tests must not silently depend on environment state that differs
+  between dev and CI.
 - For SideStore or release work, keep the physical-device rehearsal as an
   explicit manual gate. Do not describe release readiness as complete until that
   rehearsal has actually passed.
+
+## CodeGraph
+
+- Run `just graph-bootstrap` once per worktree. It is idempotent and repairs a
+  stale or missing worktree marker automatically.
+- Run `just graph-sync` after meaningful edits (new files, renamed symbols, moved
+  functions) so callers and impact analysis stay accurate.
+- Before broad searches for symbols, functions, types, callers, or impact, prefer
+  CodeGraph commands:
+  - `codegraph query "<name>"`
+  - `codegraph callers "<symbol>"`
+  - `codegraph callees "<symbol>"`
+  - `codegraph impact "<symbol>"`
+  - `codegraph affected <files...>`
+- Fall back to `grep`/`glob` only when:
+  - CodeGraph returns zero results,
+  - you need a regex/text pattern that is not a symbol,
+  - or CodeGraph is unavailable. Report the fallback explicitly.
+- If `just graph-status` still fails after bootstrap, run `just graph-repair`.
+
+## SwiftPM validation
+
+| Goal | First try | If parallel runs hang or stale state is suspected |
+|---|---|---|
+| AgentAccess changes | `just check-agent` | `just test-isolated --filter Agent` |
+| Fast unit feedback (selected suites) | `just check-unit-parallel` | `just test-isolated --filter ...` |
+| Broader integration coverage | `just check-integration` | `just check-isolated` |
+| Full gate (excludes performance timing) | `just check-isolated` | `just check-isolated-with-perf` |
+| Full gate with performance timing | `just check-isolated-with-perf` | — |
+
+- When multiple Cash Runway worktrees are active on the machine, start the full
+  gate with `just check-isolated` instead of `just check-integration`. Parallel
+  SwiftPM helper processes from other worktrees can cause lock contention.
+- If SwiftPM appears blocked by stale build state or lock contention, retry once
+  with `just test-isolated` or `just check-isolated`.
+- `CashRunwayPerformanceTests` is intentionally excluded from `check-isolated`.
+  Run `just check-isolated-with-perf` or `just check-perf` when performance-sensitive
+  code changed or before final release sign-off.
+
 
 ## Git Safety
 
@@ -54,6 +106,12 @@ Swift/SwiftUI/GRDB iOS app with a Node/TypeScript reporting API.
   with `just test-isolated` or `just check-isolated`.
 - For PR handoff, use `just pr-status <PR>` for the status snapshot and
   `just pr-comment <PR> <markdown-file>` for multiline comments.
+- SwiftPM silent-hang stop rule: if a focused test goes quiet for roughly
+  60-90 seconds, inspect the process state and retry once with
+  `just test-isolated` instead of waiting indefinitely.
+- Test filter quoting: do not use `|` alternation with `just test-filter` or
+  `just test --filter`; run each filter separately or add a dedicated safe
+  recipe.
 
 ## Git Safety
 
@@ -107,9 +165,6 @@ Swift/SwiftUI/GRDB iOS app with a Node/TypeScript reporting API.
 - Keep routine progress updates to at most two sentences unless more detail is
   requested.
 - Do not emit recurring environment, completed-task, or current-focus recaps.
-- Run `Scripts/pre-flight.sh` before meaningful feature or bug-fix work.
-- Use CodeGraph before broad code searches or repeated raw file reads. Run
-  `just graph-bootstrap` before CodeGraph operations in each worktree.
 - For SwiftUI concurrency patterns (`.task(id:)`, `Task.detached`, async state
   driving irreversible actions), verify: cancellation handling, request-token
   guards against stale results, consumer re-validation of async state, and
@@ -120,8 +175,9 @@ Swift/SwiftUI/GRDB iOS app with a Node/TypeScript reporting API.
   `agent_docs/reference/token-efficiency.md`,
   `agent_docs/reference/verification-strategies.md`, and
   `agent_docs/reference/code-review.md`.
-- For files over 500 lines, locate the relevant symbol first and read a narrow
-  line range. Do not read the complete file unless necessary.
+- For files over 500 lines, use CodeGraph first and read narrow 20-40 line
+  windows around the relevant symbol before broader scans. Do not read the
+  complete file unless necessary.
 - Batch related reads in one response; emit multiple `Read` calls in parallel
   instead of reading one file per turn.
 - Always use existing `just` recipes for repository tasks. Do not run raw
@@ -144,8 +200,8 @@ Swift/SwiftUI/GRDB iOS app with a Node/TypeScript reporting API.
 - Prefer targeted tests during implementation and repository validation scripts
   for completion. Preserve complete raw logs outside model context.
 - Do not paste complete build logs, test logs, JSON catalogs, or large diffs
-  into the conversation. Report the outcome, the first relevant failure, and the
-  retained log location.
+  into the conversation. Report the outcome, the first relevant failure, and
+  the retained log location.
 - For visual verification, prefer MCP Xcode screenshots. If using raw simulator
   screenshots, downsample before reading them back. Take screenshots only at
   milestones, not after every build.
@@ -177,7 +233,7 @@ Before editing files in a worktree:
 
 Cash Runway generated/secrets files to flag:
 - `AppHost/AppReportingSecrets.generated.swift`
-- `DerivedData/`, `.build/`, `.codegraph/`, coverage output
+- `DerivedData/`, `.build/`, `.codegraph`, coverage output
 
 ## Load Only When Relevant
 Before editing matching areas, read:
@@ -191,5 +247,13 @@ Before editing matching areas, read:
   `agent_docs/instructions/validation.md`
 - Branches, worktrees, CodeGraph, or cleanup:
   `agent_docs/instructions/worktrees.md`
+- Session start, environment bootstrap, or worktree health:
+  `agent_docs/reference/session-start.md`
 
 Historical and troubleshooting material is under `agent_docs/reference/`.
+
+### Persistence Changes
+- Before adding migrations, inspect the partial-schema migration tests and
+  guard optional legacy tables and columns.
+- Every new repository or protocol seam needs at least one direct behavioral
+  test that exercises the seam through public behavior.

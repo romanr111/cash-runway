@@ -50,7 +50,7 @@ struct TransactionsView: View {
                                     }
                                     Spacer()
                                     VStack(alignment: .trailing, spacing: 3) {
-                                        Text(MoneyFormatter.string(from: wallet.currentBalanceMinor))
+            Text(MoneyFormatter.string(from: wallet.currentBalanceMinor, currencyCode: wallet.currencyCode))
                                             .font(.system(size: 17, weight: .semibold))
                                             .foregroundStyle(wallet.currentBalanceMinor < 0 ? CashRunwayTheme.negative : CashRunwayTheme.textPrimary)
                                         Image(systemName: "chevron.right")
@@ -73,9 +73,10 @@ struct TransactionsView: View {
                             kind: .cash,
                             colorHex: "#60788A",
                             iconName: "wallet.pass.fill",
-                            startingBalanceMinor: 0,
-                            currentBalanceMinor: 0,
-                            isArchived: false,
+                    startingBalanceMinor: 0,
+                    currentBalanceMinor: 0,
+                    currencyCode: model.defaultCurrencyCode,
+                    isArchived: false,
                             sortOrder: model.wallets.count,
                             createdAt: .now,
                             updatedAt: .now
@@ -109,9 +110,15 @@ struct TransactionsView: View {
             Text("Total Wealth")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(CashRunwayTheme.textSecondary)
-            Text(MoneyFormatter.string(from: model.overviewSnapshot?.totalWealthMinor ?? 0))
-                .font(.system(size: 34, weight: .bold, design: .rounded))
-                .foregroundStyle(CashRunwayTheme.textPrimary)
+            if let wealthText = model.aggregateMoneyString(from: model.overviewSnapshot?.totalWealthMinor ?? 0) {
+                Text(wealthText)
+                    .font(.system(size: 34, weight: .bold, design: .rounded))
+                    .foregroundStyle(CashRunwayTheme.textPrimary)
+            } else {
+                Text("Mixed-currency totals unavailable")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(CashRunwayTheme.textMuted)
+            }
             Text(L10n.walletCount(model.wallets.count))
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(CashRunwayTheme.textMuted)
@@ -139,6 +146,13 @@ struct TransactionRow: View {
                     .font(CashRunwayTheme.captionFont)
                     .foregroundStyle(CashRunwayTheme.textSecondary)
                     .lineLimit(1)
+                if !note.isEmpty {
+                    Text(note)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(CashRunwayTheme.textSecondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
                 HStack(spacing: 6) {
                     ForEach(Array(metadataParts.enumerated()), id: \.offset) { index, part in
                         if index > 0 {
@@ -152,7 +166,7 @@ struct TransactionRow: View {
                 .lineLimit(1)
             }
             Spacer()
-            Text(MoneyFormatter.string(from: item.amountMinor))
+            Text(MoneyFormatter.string(from: item.amountMinor, currencyCode: item.currencyCode))
                 .font(.system(size: 17, weight: .bold, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(CashRunwayTheme.amountColor(item.amountMinor))
@@ -169,20 +183,27 @@ struct TransactionRow: View {
         item.merchant.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? item.displayTitle : item.merchant
     }
 
+    private var localizedCategoryName: String? {
+        guard let categoryName = item.categoryName, !categoryName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+        return item.categoryID.map { BuiltInCategoryDisplayName.name(id: $0, fallback: categoryName) } ?? categoryName
+    }
+
     private var secondaryTitle: String {
-        if let categoryName = item.categoryName, !categoryName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            let localized = item.categoryID.map { BuiltInCategoryDisplayName.name(id: $0, fallback: categoryName) } ?? categoryName
+        let merchantIsEmpty = item.merchant.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if let localized = localizedCategoryName, !(merchantIsEmpty && localized == primaryTitle) {
             return "\(localized) · \(item.walletName)"
         }
         return item.walletName
     }
 
+    private var note: String {
+        item.note.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private var metadataParts: [String] {
         var parts: [String] = []
-        let note = item.note.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !note.isEmpty {
-            parts.append(note)
-        }
         parts.append(item.occurredAt.formatted(date: .abbreviated, time: .omitted))
         parts.append(item.source.displayName)
         if !item.labels.isEmpty {
@@ -192,7 +213,12 @@ struct TransactionRow: View {
     }
 
     private var accessibilitySummary: String {
-        ([item.displayTitle, MoneyFormatter.string(from: item.amountMinor), item.walletName] + metadataParts).joined(separator: ", ")
+        var components = [item.displayTitle, MoneyFormatter.string(from: item.amountMinor, currencyCode: item.currencyCode), item.walletName]
+        if !note.isEmpty {
+            components.append(note)
+        }
+        components.append(contentsOf: metadataParts)
+        return components.joined(separator: ", ")
     }
 
     private var fallbackColor: String {

@@ -86,8 +86,70 @@ struct FullBackupTests {
         let decoded = try service.decode(data: service.encode(try service.exportFullBackup()))
 
         #expect(decoded.metadata.format == "cash-runway-backup")
-        #expect(decoded.metadata.version == 2)
+        #expect(decoded.metadata.version == 3)
         #expect(decoded.transactions.count == 4)
+    }
+
+    @Test func fullBackupRoundTripPreservesCurrencyCodes() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        let category = try #require(try repository.categories(kind: .expense).first)
+        let usdWallet = Wallet(
+            id: UUID(),
+            name: "USD Wallet",
+            kind: .cash,
+            colorHex: nil,
+            iconName: nil,
+            startingBalanceMinor: 0,
+            currentBalanceMinor: 0,
+            currencyCode: .usd,
+            isArchived: false,
+            sortOrder: 0,
+            createdAt: .now,
+            updatedAt: .now
+        )
+        try repository.saveWallet(usdWallet)
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        try repository.saveTransaction(TransactionDraft(
+            kind: .expense,
+            walletID: usdWallet.id,
+            amountMinor: 12_34,
+            currencyCode: .usd,
+            occurredAt: now,
+            categoryID: category.id,
+            merchant: "Currency Backup"
+        ))
+        try repository.saveRecurringTemplate(RecurringTemplate(
+            id: UUID(),
+            kind: .expense,
+            walletID: usdWallet.id,
+            counterpartyWalletID: nil,
+            amountMinor: 12_34,
+            currencyCode: .usd,
+            categoryID: category.id,
+            merchant: "Currency Backup",
+            note: nil,
+            ruleType: .monthly,
+            ruleInterval: 1,
+            dayOfMonth: 1,
+            weekday: nil,
+            startDate: now,
+            endDate: nil,
+            isActive: true,
+            createdAt: now,
+            updatedAt: now
+        ))
+
+        let backup = try repository.exportFullBackup()
+        let target = try TestSupport.makeRepository()
+        try target.restoreFullBackup(backup)
+
+        #expect(backup.wallets.first { $0.id == usdWallet.id }?.currencyCode == .usd)
+        #expect(backup.transactions.first { $0.merchant == "Currency Backup" }?.currencyCode == .usd)
+        #expect(backup.recurringTemplates.first { $0.merchant == "Currency Backup" }?.currencyCode == .usd)
+        #expect(try target.wallets().first { $0.id == usdWallet.id }?.currencyCode == .usd)
+        #expect(try target.transactionDraft(id: try #require(backup.transactions.first { $0.merchant == "Currency Backup" }?.id)).currencyCode == .usd)
+        #expect(try target.recurringTemplates().first { $0.merchant == "Currency Backup" }?.currencyCode == .usd)
     }
 
     @Test func fullBackupDoesNotExposeKeychainOrLocalPaths() throws {
@@ -225,6 +287,41 @@ struct FullBackupTests {
         #expect(try countRows(target, table: "bank_accounts") == 0)
         #expect(try countRows(target, table: "bank_category_rules") == 0)
         #expect(try countRows(target, table: "bank_integrations") == 0)
+    }
+
+    @Test func fullBackupImportClearsExchangeRates() throws {
+        let backup = try makePopulatedRepository().0.exportFullBackup()
+        let target = try TestSupport.makeRepository()
+        let date = Date(timeIntervalSince1970: 1_800_000_000)
+
+        try target.saveExchangeRates([
+            ExchangeRate(
+                sourceCurrencyCode: .usd,
+                targetCurrencyCode: .uah,
+                rateDecimal: "41.2500",
+                effectiveDate: date,
+                source: "test"
+            )
+        ])
+
+        #expect(try countRows(target, table: "exchange_rates") == 1)
+
+        try target.restoreFullBackup(backup)
+
+        #expect(try countRows(target, table: "exchange_rates") == 0)
+    }
+
+    @Test func fullBackupExportDoesNotIncludeBankTransactionImports() throws {
+        let repository = try makePopulatedRepository().0
+        try seedBankSyncState(in: repository)
+
+        let service = BackupService(repository: repository)
+        let backup = try service.exportFullBackup()
+        let json = String(data: try service.encode(backup), encoding: .utf8) ?? ""
+
+        // bank_transaction_imports are intentionally excluded from user-facing backups.
+        #expect(!json.localizedCaseInsensitiveContains("bank_transaction_imports"))
+        #expect(!json.localizedCaseInsensitiveContains("raw_json"))
     }
 
     @Test func invalidFullBackupImportLeavesExistingBankSyncStateUnchanged() throws {
@@ -470,8 +567,8 @@ struct FullBackupTests {
                     provider_statement_item_id, statement_time, amount_minor_signed,
                     operation_amount_minor_signed, currency_code, mcc, original_mcc,
                     description, comment, counter_name, counter_iban, receipt_id, hold,
-                    raw_json, cash_runway_transaction_id, import_status, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    raw_json, raw_json_expires_at, cash_runway_transaction_id, import_status, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 arguments: [
                     UUID().uuidString,
@@ -493,6 +590,7 @@ struct FullBackupTests {
                     nil,
                     false,
                     "{}",
+                    now.addingTimeInterval(30 * 24 * 60 * 60),
                     nil,
                     BankTransactionImportStatus.imported.rawValue,
                     now,
