@@ -143,7 +143,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          just check
+          just check-isolated
 
       - name: Run simulator smoke
         timeout-minutes: 15
