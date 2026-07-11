@@ -830,11 +830,12 @@ public final class CashRunwayAppModel {
 
     /// Returns a wallet ID that is safe to use for aggregate queries.
     ///
-    /// If the selected wallet already produces a single aggregate currency, it is returned.
-    /// Otherwise the first active wallet is used, so mixed-currency all-wallet scopes never
-    /// reach repository methods that throw.
+    /// - If `selectedWalletID` still refers to an existing wallet, it is returned.
+    /// - If it is stale (e.g. the wallet was just deleted), it is ignored.
+    /// - Mixed-currency all-wallet scopes fall back to the first active wallet.
     fileprivate nonisolated static func normalizedWalletIDForAggregates(wallets: [Wallet], selectedWalletID: UUID?) -> UUID? {
-        if wallets.aggregateCurrencyCode(selectedWalletID: selectedWalletID) != nil {
+        if let selectedWalletID,
+           wallets.contains(where: { $0.id == selectedWalletID }) {
             return selectedWalletID
         }
         return wallets.first { !$0.isArchived }?.id

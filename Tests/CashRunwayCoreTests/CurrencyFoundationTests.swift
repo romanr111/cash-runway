@@ -485,6 +485,18 @@ struct CurrencyFoundationTests {
         }
     }
 
+    @Test func normalizedWalletIDForAggregatesIgnoresStaleSelectedWalletAfterDeletion() throws {
+        let repository = try makeCurrencyRepository()
+        let uahWallet = try saveCurrencyWallet(repository, currencyCode: .uah)
+        let usdWallet = try saveCurrencyWallet(repository, currencyCode: .usd)
+
+        try repository.deleteWallet(id: usdWallet.id)
+
+        let effectiveWalletID = try repository.normalizedWalletIDForAggregates(selectedWalletID: usdWallet.id)
+        #expect(effectiveWalletID != usdWallet.id, "Stale selected wallet ID should not survive wallet deletion.")
+        #expect(effectiveWalletID == uahWallet.id)
+    }
+
     @Test func backupExportUsesV3AndStringCurrencyCodes() throws {
         let repository = try makeCurrencyRepository()
         _ = try saveCurrencyWallet(repository, currencyCode: .usd)
