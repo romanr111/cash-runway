@@ -670,13 +670,3 @@ private struct CategoryDonutBadge: View {
         .scaleEffect(isSelected ? 1.08 : 1)
     }
 }
-
-private struct CategoryDetailRoute: Identifiable, Hashable {
-    let category: OverviewCategoryRow
-    let monthKey: Int
-    let walletID: UUID?
-
-    var id: String {
-        "\(category.id.uuidString)-\(monthKey)-\(walletID?.uuidString ?? "all-wallets")"
-    }
-}

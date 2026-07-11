@@ -8,6 +8,16 @@ private enum OverviewChartMetric: String, CaseIterable {
     case cashFlow = "Monthly Cash Flow"
 }
 
+private struct CategoryDetailRoute: Identifiable, Hashable {
+    let category: OverviewCategoryRow
+    let monthKey: Int
+    let walletID: UUID?
+
+    var id: String {
+        "\(category.id.uuidString)-\(monthKey)-\(walletID?.uuidString ?? "all-wallets")"
+    }
+}
+
 struct TimelineOverviewView: View {
     @Bindable var model: CashRunwayAppModel
     @State private var chartMetric = OverviewChartMetric.wealth
@@ -15,6 +25,8 @@ struct TimelineOverviewView: View {
     @State private var showsCategoryManagement = false
     @State private var showsAllCategories = false
     @State private var selectedCategoryID: UUID?
+    @State private var categoryDetailRoute: CategoryDetailRoute?
+    @State private var categoryDetailArmedCategoryID: UUID?
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -52,6 +64,14 @@ struct TimelineOverviewView: View {
         }
         .sheet(isPresented: $showsCategoryManagement) {
             CategoryManagementView(model: model, initialKind: categoryKind)
+        }
+        .navigationDestination(item: $categoryDetailRoute) { route in
+            CategoryDetailOverviewView(
+                model: model,
+                category: route.category,
+                monthKey: route.monthKey,
+                walletID: route.walletID
+            )
         }
         .simultaneousGesture(
             DragGesture(minimumDistance: 20, coordinateSpace: .local)
@@ -300,17 +320,21 @@ struct TimelineOverviewView: View {
         }
         .onChange(of: categoryKind) { _, _ in
             showsAllCategories = false
+            resetCategoryDetailArming()
             selectedCategoryID = categories.first?.id
         }
         .onChange(of: model.selectedMonthKey) { _, _ in
             showsAllCategories = false
+            resetCategoryDetailArming()
             selectedCategoryID = categories.first?.id
         }
         .onChange(of: model.selectedWalletID) { _, _ in
             showsAllCategories = false
+            resetCategoryDetailArming()
             selectedCategoryID = categories.first?.id
         }
         .onChange(of: categories.map(\.id)) { _, _ in
+            resetCategoryDetailArming()
             syncSelectedCategoryID(with: categories)
         }
     }
@@ -354,13 +378,14 @@ struct TimelineOverviewView: View {
                 kind: categoryKind,
                 selectedCategory: currentSelection
             ) { category in
+                resetCategoryDetailArming()
                 selectCategory(category, from: categories)
             }
 
             VStack(spacing: 10) {
                 ForEach(displayedCategories) { item in
                     Button {
-                        selectCategory(item, from: categories)
+                        handleCategoryRowTap(item, from: categories)
                     } label: {
                         categoryLegendRow(item, isSelected: item.id == currentSelection?.id)
                     }
@@ -380,6 +405,7 @@ struct TimelineOverviewView: View {
         remainingCategoryCount: Int
     ) -> some View {
         Button {
+            resetCategoryDetailArming()
             withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
                 let nextShowsAllCategories = !showsAllCategories
                 showsAllCategories = nextShowsAllCategories
@@ -522,6 +548,25 @@ struct TimelineOverviewView: View {
         selectedCategoryID = category.id
     }
 
+    private func handleCategoryRowTap(_ category: OverviewCategoryRow, from categories: [OverviewCategoryRow]) {
+        if categoryDetailArmedCategoryID == category.id, selectedCategoryID == category.id {
+            categoryDetailRoute = CategoryDetailRoute(
+                category: category,
+                monthKey: model.selectedMonthKey,
+                walletID: model.selectedWalletID
+            )
+            resetCategoryDetailArming()
+            return
+        }
+
+        selectCategory(category, from: categories)
+        categoryDetailArmedCategoryID = category.id
+    }
+
+    private func resetCategoryDetailArming() {
+        categoryDetailArmedCategoryID = nil
+    }
+
     private func transactionCountText(_ count: Int) -> String {
         L10n.transactionCount(count)
     }
@@ -612,5 +657,362 @@ struct TimelineOverviewView: View {
 
     private func walletName(for id: UUID) -> String? {
         model.wallets.first(where: { $0.id == id })?.name
+    }
+}
+
+private struct CategoryDayPoint: Identifiable, Hashable {
+    var id: Int { dayKey }
+    var dayKey: Int
+    var amountMinor: Int64
+}
+
+private struct CategoryDetailOverviewView: View {
+    @Bindable var model: CashRunwayAppModel
+    let category: OverviewCategoryRow
+    @State private var selectedMonthKey: Int
+    @State private var selectedWalletID: UUID?
+    @State private var isComposerPresented = false
+    @State private var draft: TransactionDraft
+
+    init(model: CashRunwayAppModel, category: OverviewCategoryRow, monthKey: Int, walletID: UUID?) {
+        self.model = model
+        self.category = category
+        _selectedMonthKey = State(initialValue: monthKey)
+        _selectedWalletID = State(initialValue: walletID)
+        let walletID = model.wallets.first?.id ?? UUID()
+        let currencyCode = model.wallets.first(where: { $0.id == walletID })?.currencyCode ?? model.defaultCurrencyCode
+        _draft = State(initialValue: TransactionDraft(
+            kind: category.kind == .income ? .income : .expense,
+            walletID: walletID,
+            amountMinor: 0,
+            currencyCode: currencyCode,
+            occurredAt: .now,
+            categoryID: category.id
+        ))
+    }
+
+    var body: some View {
+        let items = model.categoryDetailTransactions
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 22) {
+                filters
+                if isMixedCurrency {
+                    Text("Mixed-currency totals unavailable")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(CashRunwayTheme.textMuted)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 20)
+                } else {
+                    totalHeader(totalMinor: totalMinor(in: items))
+                    dayChart(items: items)
+                }
+                transactionList(items: items)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+            .padding(.bottom, 80)
+        }
+        .task(id: transactionQuery) {
+            await model.loadCategoryDetailTransactions(query: transactionQuery)
+        }
+        .background(CashRunwayTheme.background)
+        .navigationTitle(BuiltInCategoryDisplayName.name(category))
+        .navigationBarTitleDisplayMode(.inline)
+        .fullScreenCover(isPresented: $isComposerPresented) {
+            TransactionEditorView(model: model, draft: $draft)
+        }
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 20, coordinateSpace: .local)
+                .onEnded { value in
+                    let horizontal = abs(value.translation.width) > abs(value.translation.height)
+                    guard horizontal else { return }
+                    let threshold: CGFloat = 50
+                    if value.translation.width < -threshold {
+                        navigateMonth(by: 1)
+                    } else if value.translation.width > threshold {
+                        navigateMonth(by: -1)
+                    }
+                }
+        )
+    }
+
+    private var filters: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 12) {
+                Menu {
+                    Button("All Wallets") {
+                        selectedWalletID = nil
+                    }
+                    ForEach(model.wallets) { wallet in
+                        Button(wallet.name) {
+                            selectedWalletID = wallet.id
+                        }
+                    }
+                } label: {
+                    pill(selectedWalletID.flatMap(walletName(for:)) ?? "All Wallets")
+                }
+                pill("By months")
+            }
+
+            HStack(spacing: 0) {
+                Button {
+                    navigateMonth(by: -1)
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(hasPrevMonth ? CashRunwayTheme.textPrimary : CashRunwayTheme.textMuted.opacity(0.3))
+                        .frame(width: 44, height: 44)
+                }
+                .disabled(!hasPrevMonth)
+                .buttonStyle(.plain)
+                .accessibilityIdentifier(CashRunwayAccessibilityID.overviewMonthPreviousButton)
+
+                Spacer()
+
+                if let prev = prevMonthKey {
+                    categoryMonthButton(monthKey: prev, isSelected: false)
+                } else {
+                    Color.clear.frame(width: 90)
+                }
+
+                categoryMonthButton(monthKey: selectedMonthKey, isSelected: true)
+
+                if let next = nextMonthKey, hasNextMonth {
+                    categoryMonthButton(monthKey: next, isSelected: false)
+                } else {
+                    Color.clear.frame(width: 90)
+                }
+
+                Spacer()
+
+                Button {
+                    if hasNextMonth {
+                        navigateMonth(by: 1)
+                    }
+                } label: {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(hasNextMonth ? CashRunwayTheme.textPrimary : CashRunwayTheme.textMuted.opacity(0.3))
+                        .frame(width: 44, height: 44)
+                }
+                .disabled(!hasNextMonth)
+                .buttonStyle(.plain)
+                .accessibilityIdentifier(CashRunwayAccessibilityID.overviewMonthNextButton)
+            }
+        }
+    }
+
+    private func totalHeader(totalMinor: Int64) -> some View {
+        VStack(spacing: 8) {
+            CategoryGlyph(iconName: category.iconName, colorHex: category.colorHex, size: 58)
+            Text(MoneyFormatter.string(from: signedTotal(totalMinor), currencyCode: detailCurrencyCode))
+                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .foregroundStyle(category.kind == .expense ? CashRunwayTheme.negative : CashRunwayTheme.positive)
+            Text("Total")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(CashRunwayTheme.textSecondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+    }
+
+    private func dayChart(items: [TransactionListItem]) -> some View {
+        let points = dayPoints(from: items)
+        return VStack(alignment: .leading, spacing: 12) {
+            Chart(points) { point in
+                BarMark(
+                    x: .value("Day", dayLabel(for: point.dayKey)),
+                    y: .value("Amount", point.amountMinor)
+                )
+                .foregroundStyle(CashRunwayTheme.categoryColor(category.colorHex))
+                .clipShape(.rect(cornerRadius: 6))
+            }
+            .chartXAxis {
+                AxisMarks(values: .automatic) { value in
+                    AxisGridLine(stroke: StrokeStyle(lineWidth: 0))
+                    AxisValueLabel {
+                        if let label = value.as(String.self) {
+                            Text(label)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(CashRunwayTheme.textMuted)
+                        }
+                    }
+                }
+            }
+            .chartYAxis {
+                AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
+                    AxisGridLine(stroke: StrokeStyle(lineWidth: 1, dash: [3, 4]))
+                        .foregroundStyle(CashRunwayTheme.chartGrid)
+                    AxisValueLabel {
+                        if let amount = value.as(Int64.self) {
+                            Text(OverviewDisplayFormatter.compactMoney(from: amount))
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(CashRunwayTheme.textMuted)
+                        } else if let amount = value.as(Int.self) {
+                            Text(OverviewDisplayFormatter.compactMoney(from: Int64(amount)))
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(CashRunwayTheme.textMuted)
+                        } else if let amount = value.as(Double.self) {
+                            Text(OverviewDisplayFormatter.compactMoney(from: Int64(amount)))
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(CashRunwayTheme.textMuted)
+                        }
+                    }
+                }
+            }
+            .chartLegend(.hidden)
+            .frame(height: 250)
+        }
+    }
+
+    private func transactionList(items: [TransactionListItem]) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Transactions")
+                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .foregroundStyle(CashRunwayTheme.textPrimary)
+
+            if items.isEmpty {
+                Text("No transactions for this category and month.")
+                    .font(.system(size: 15))
+                    .foregroundStyle(CashRunwayTheme.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 20)
+            } else {
+                ForEach(items) { item in
+                    Button {
+                        openEditor(for: item)
+                    } label: {
+                        TransactionRow(item: item)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier(CashRunwayAccessibilityID.transactionRow(item))
+                    if item.id != items.last?.id {
+                        Divider()
+                            .overlay(CashRunwayTheme.line)
+                    }
+                }
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier(CashRunwayAccessibilityID.overviewCategoryDetailTransactionList)
+    }
+
+    private var transactionQuery: TransactionQuery {
+        TransactionQuery(
+            walletID: selectedWalletID,
+            categoryID: category.id,
+            startDate: DateKeys.startOfMonth(for: selectedMonthKey),
+            endDate: monthEnd(for: selectedMonthKey),
+            kinds: Set([category.kind == .income ? TransactionDraft.Kind.income : .expense])
+        )
+    }
+
+    private var prevMonthKey: Int? {
+        DateKeys.calendar.date(byAdding: .month, value: -1, to: DateKeys.startOfMonth(for: selectedMonthKey)).map(DateKeys.monthKey(for:))
+    }
+
+    private var nextMonthKey: Int? {
+        DateKeys.calendar.date(byAdding: .month, value: 1, to: DateKeys.startOfMonth(for: selectedMonthKey)).map(DateKeys.monthKey(for:))
+    }
+
+    private var hasPrevMonth: Bool {
+        prevMonthKey != nil
+    }
+
+    private var hasNextMonth: Bool {
+        (nextMonthKey ?? 0) <= model.maxMonthKey
+    }
+
+    private var detailCurrencyCode: CurrencyCode {
+        if let selectedWalletID {
+            model.wallets.first(where: { $0.id == selectedWalletID })?.currencyCode ?? model.defaultCurrencyCode
+        } else {
+            model.wallets.aggregateCurrencyCode(selectedWalletID: nil) ?? model.defaultCurrencyCode
+        }
+    }
+
+    private var isMixedCurrency: Bool {
+        selectedWalletID == nil && model.wallets.aggregateCurrencyCode(selectedWalletID: nil) == nil
+    }
+
+    private func navigateMonth(by offset: Int) {
+        guard let newDate = DateKeys.calendar.date(byAdding: .month, value: offset, to: DateKeys.startOfMonth(for: selectedMonthKey)) else { return }
+        let newMonthKey = DateKeys.monthKey(for: newDate)
+        guard newMonthKey <= model.maxMonthKey else { return }
+        selectedMonthKey = newMonthKey
+    }
+
+    private func categoryMonthButton(monthKey: Int, isSelected: Bool) -> some View {
+        Button {
+            guard !isSelected else { return }
+            selectedMonthKey = monthKey
+        } label: {
+            VStack(spacing: 6) {
+                Text(CashRunwayTheme.monthFullLabel(for: monthKey))
+                    .font(.system(size: 14, weight: isSelected ? .bold : .medium))
+                    .foregroundStyle(isSelected ? CashRunwayTheme.textPrimary : CashRunwayTheme.textMuted)
+                if isSelected {
+                    Capsule()
+                        .fill(CashRunwayTheme.accent)
+                        .frame(width: 20, height: 3)
+                } else {
+                    Color.clear.frame(width: 20, height: 3)
+                }
+            }
+            .frame(minWidth: 90)
+            .padding(.vertical, 4)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func totalMinor(in items: [TransactionListItem]) -> Int64 {
+        items.reduce(into: Int64.zero) { total, item in
+            total += abs(item.amountMinor)
+        }
+    }
+
+    private func signedTotal(_ totalMinor: Int64) -> Int64 {
+        category.kind == .expense ? -totalMinor : totalMinor
+    }
+
+    private func dayPoints(from items: [TransactionListItem]) -> [CategoryDayPoint] {
+        Dictionary(grouping: items, by: \.dayKey)
+            .map { dayKey, values in
+                CategoryDayPoint(
+                    dayKey: dayKey,
+                    amountMinor: values.reduce(into: Int64.zero) { $0 += abs($1.amountMinor) }
+                )
+            }
+            .sorted { $0.dayKey < $1.dayKey }
+    }
+
+    private func monthEnd(for monthKey: Int) -> Date {
+        let start = DateKeys.startOfMonth(for: monthKey)
+        return DateKeys.calendar.date(byAdding: .month, value: 1, to: start)?.addingTimeInterval(-0.001) ?? start
+    }
+
+    private func dayLabel(for dayKey: Int) -> String {
+        "\(dayKey % 100)"
+    }
+
+    private func walletName(for id: UUID) -> String? {
+        model.wallets.first(where: { $0.id == id })?.name
+    }
+
+    private func openEditor(for item: TransactionListItem) {
+        if let loadedDraft = model.loadTransactionDraft(id: item.id) {
+            draft = loadedDraft
+            isComposerPresented = true
+        }
+    }
+
+    private func pill(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(CashRunwayTheme.textPrimary)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(CashRunwayTheme.pill, in: Capsule())
     }
 }
