@@ -987,6 +987,9 @@ public final class DatabaseManager: @unchecked Sendable {
                     table.uniqueKey(["source", "base_currency_code", "quote_currency_code", "effective_date"])
                 }
             }),
+            ("v9_masked_card_search_privacy", { db in
+                try Self.migrateMaskedCardSearchPrivacy(db)
+            }),
         ]
     }
 
