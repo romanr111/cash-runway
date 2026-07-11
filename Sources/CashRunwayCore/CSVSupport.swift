@@ -621,24 +621,19 @@ do {
                     headerIndex: headerIndex,
                     wallet: wallet
                 )
-                let legacyFingerprint: String?
-                switch format.role {
-                case .genericBankStatement where rawCategoryName == nil:
-                    legacyFingerprint = importFingerprint(
-                        .init(
-                            sourceName: fingerprintSourceName,
-                            walletID: walletID,
-                            kind: kind,
-                            occurredAt: date,
-                            amountMinor: abs(signedAmount),
-                            merchant: merchant,
-                            note: note,
-                            currency: mapping.currencyColumn != nil ? currency : nil
-                        )
-                    )
-                default:
-                    legacyFingerprint = nil
-                }
+                let legacyFingerprint = computeLegacyFingerprint(
+                    format: format,
+                    fingerprintSourceName: fingerprintSourceName,
+                    walletID: walletID,
+                    kind: kind,
+                    date: date,
+                    signedAmount: signedAmount,
+                    merchant: merchant,
+                    note: note,
+                    currency: currency,
+                    rawCategoryName: rawCategoryName,
+                    hasCurrencyColumn: mapping.currencyColumn != nil
+                )
                 let draft = TransactionDraft(
                     kind: kind,
                     walletID: walletID,
@@ -679,6 +674,34 @@ do {
             preparedRows: preparedRows,
             rowErrors: rowErrors,
             invalidRows: invalidRows
+        )
+    }
+
+    private func computeLegacyFingerprint(
+        format: BankStatementFormat,
+        fingerprintSourceName: String,
+        walletID: UUID,
+        kind: TransactionDraft.Kind,
+        date: Date,
+        signedAmount: Int64,
+        merchant: String,
+        note: String,
+        currency: String?,
+        rawCategoryName: String?,
+        hasCurrencyColumn: Bool
+    ) -> String? {
+        guard format.role == .genericBankStatement, rawCategoryName == nil else { return nil }
+        return importFingerprint(
+            .init(
+                sourceName: fingerprintSourceName,
+                walletID: walletID,
+                kind: kind,
+                occurredAt: date,
+                amountMinor: abs(signedAmount),
+                merchant: merchant,
+                note: note,
+                currency: hasCurrencyColumn ? currency : nil
+            )
         )
     }
 
