@@ -32,6 +32,9 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Resolve release metadata
         id: meta
@@ -46,6 +49,22 @@ jobs:
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "build=${BUILD}" >> "${GITHUB_OUTPUT}"
           echo "tag=v${VERSION}" >> "${GITHUB_OUTPUT}"
+
+      - name: Generate release notes from git log
+        id: notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          PREV_TAG=$(git tag --sort=-version:refname | grep -v '^v0\.0\.0' | grep -v -- '-test-pages' | sed -n '1p' || true)
+          if [[ -n "${PREV_TAG}" ]]; then
+            RANGE="${PREV_TAG}..HEAD"
+          else
+            RANGE="$(git rev-list --max-parents=0 HEAD)..HEAD"
+          fi
+          RAW_NOTES=$(git log "${RANGE}" --no-merges --format='%s')
+          echo "release_notes<<EOFNOTES" >> "${GITHUB_OUTPUT}"
+          echo "${RAW_NOTES}" >> "${GITHUB_OUTPUT}"
+          echo "EOFNOTES" >> "${GITHUB_OUTPUT}"
 
       - name: Validate SideStore assets
         shell: bash
@@ -203,6 +222,8 @@ jobs:
 
       - name: Generate SideStore source JSON
         shell: bash
+        env:
+          RELEASE_NOTES: ${{ steps.notes.outputs.release_notes }}
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -218,6 +239,15 @@ jobs:
 
           ipa_url = f"https://github.com/romanr111/cash-runway/releases/download/v{version}/CashRunway.ipa"
           icon_url = "https://romanr111.github.io/cash-runway/icon.png"
+
+          raw_notes = os.environ.get("RELEASE_NOTES", "").strip()
+          if not raw_notes:
+              raw_notes = f"SideStore build v{version}"
+          lines = [ln.strip() for ln in raw_notes.splitlines() if ln.strip()]
+          description = "\n".join(f"• {ln}" for ln in lines)
+          MAX_LEN = 500
+          if len(description) > MAX_LEN:
+              description = description[:MAX_LEN - 3] + "..."
 
           source = {
               "name": "Cash Runway",
@@ -242,7 +272,7 @@ jobs:
 
                       "version": version,
                       "versionDate": date,
-                      "versionDescription": "Automated SideStore build from GitHub Actions.",
+                      "versionDescription": description,
                       "downloadURL": ipa_url,
                       "size": size,
 
@@ -251,7 +281,7 @@ jobs:
                               "version": version,
                               "buildVersion": build,
                               "date": date,
-                              "localizedDescription": "Automated SideStore build from GitHub Actions.",
+                              "localizedDescription": description,
                               "downloadURL": ipa_url,
                               "size": size,
                               "minOSVersion": "18.0"
@@ -279,18 +309,23 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_NOTES: ${{ steps.notes.outputs.release_notes }}
         run: |
           set -euo pipefail
           TAG="${{ steps.meta.outputs.tag }}"
+
+          NOTES_FILE="$(mktemp)"
+          printf '%s\n' "${RELEASE_NOTES}" > "${NOTES_FILE}"
 
           if gh release view "${TAG}" >/dev/null 2>&1; then
             gh release upload "${TAG}" CashRunway.ipa public/source.json --clobber
           else
             gh release create "${TAG}" CashRunway.ipa public/source.json \
               --title "${TAG}" \
-              --notes "Automated SideStore build for Cash Runway." \
+              --notes-file "${NOTES_FILE}" \
               --prerelease
           fi
+          rm -f "${NOTES_FILE}"
 
       - name: Verify GitHub Pages is enabled
         shell: bash
