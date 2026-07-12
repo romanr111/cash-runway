@@ -4,6 +4,22 @@
 
 This PR contains an implementation-ready, repository-grounded plan for redesigning the existing Timeline tab in `DashboardView` to match the approved cash-flow reference.
 
+## Required design reference and audit
+
+Before implementing any visual work, open the committed reference image:
+
+[`assets/timeline-screen-reference.jpg`](assets/timeline-screen-reference.jpg)
+
+<img src="assets/timeline-screen-reference.jpg" alt="Approved Timeline cash-flow design reference" width="320">
+
+The three-phase split was checked against the original monolithic plan. Read the coverage audit before starting implementation:
+
+- [`timeline-redesign-self-qa.md`](timeline-redesign-self-qa.md)
+
+The audit records preserved requirements, intentional corrections, recovered clarifications, project hygiene, performance guidance, visual matrices, and approximate effort. The image is the visual source of truth; numeric layout guidance in the phase documents is subordinate when the reference clearly establishes a relationship.
+
+## Implementation sequence
+
 The work is split into three sequential documents so an AI coding agent can complete and validate one bounded phase before moving to the next:
 
 1. [`timeline-redesign-phase-1-financial-foundation.md`](timeline-redesign-phase-1-financial-foundation.md) — financial semantics, deterministic comparison logic, truthful All Wallets behavior, date-boundary correctness, repository integration, and tests.
