@@ -15,3 +15,8 @@ reporting-api/.vercel/
 AppHost/ReportingConfig.local.xcconfig
 Scripts/__pycache__/
 __pycache__/
+
+# Stray build artifacts / tool state
+/main
+headroom_memory.db
+*.db
