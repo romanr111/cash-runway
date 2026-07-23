@@ -159,10 +159,12 @@ final class FakeDashboardRepository: DashboardRepositorying, @unchecked Sendable
                 result = result.filter { $0.walletName == target }
             }
             if let start = query.startDate {
-                result = result.filter { $0.occurredAt >= start }
+                let startDayKey = DateKeys.dayKey(for: start)
+                result = result.filter { DateKeys.dayKey(for: $0.occurredAt) >= startDayKey }
             }
             if let end = query.endDate {
-                result = result.filter { $0.occurredAt <= end }
+                let endDayKey = DateKeys.dayKey(for: end)
+                result = result.filter { DateKeys.dayKey(for: $0.occurredAt) <= endDayKey }
             }
             if let limit {
                 result = Array(result.prefix(limit))

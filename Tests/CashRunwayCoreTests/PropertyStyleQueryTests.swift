@@ -83,7 +83,8 @@ struct PropertyStyleQueryTests {
             TransactionBuilder().with(walletID: wallet.id).with(categoryID: expenseCategory.id).with(occurredAt: mar1).build()
         )
 
-        // endDate is treated as inclusive; add 1s to make Feb 1 exclusive so only Jan 1 and Feb 1 remain.
+        // endDate filtering is inclusive by local day key, so Feb 1's day key includes
+        // all of Feb 1; the +1s no longer changes the day and only Jan 1 and Feb 1 remain.
         let query = TransactionQuery(startDate: jan1, endDate: feb1.addingTimeInterval(1))
         let results = try repository.transactions(query: query)
         #expect(results.count == 2)

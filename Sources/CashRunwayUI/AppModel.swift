@@ -68,14 +68,15 @@ public final class CashRunwayAppModel {
     private var foregroundRefreshTask: Task<Void, Never>?
     private var timelineReloadState = TimelineReloadState()
 
+    /// Selected-period summary (net cash flow, income, expense, comparison) sourced from
+    /// the single consistent `timelineSnapshot`. `allBars` is now historical chart
+    /// navigation data only and is no longer used to derive headline values.
+    public var timelineSummary: TimelineSummaryAdapter {
+        TimelineSummaryAdapter(snapshot: timelineSnapshot)
+    }
+
     public var currentCashFlowMinor: Int64 {
-        let selectedBar = allBars.first(where: {
-            switch selectedTimelinePeriod {
-            case .month: return $0.periodKey == selectedMonthKey
-            case .year: return $0.periodKey == selectedMonthKey / 100
-            }
-        })
-        return selectedBar.map { $0.incomeMinor - $0.expenseMinor } ?? 0
+        timelineSummary.heroCashFlowMinor
     }
     var aggregateCurrencyCode: CurrencyCode? {
         wallets.aggregateCurrencyCode(selectedWalletID: selectedWalletID)
@@ -830,12 +831,14 @@ public final class CashRunwayAppModel {
 
     /// Returns a wallet ID that is safe to use for aggregate queries.
     ///
-    /// - If `selectedWalletID` still refers to an existing wallet, it is returned.
-    /// - If it is stale (e.g. the wallet was just deleted), it is ignored.
-    /// - Mixed-currency all-wallet scopes fall back to the first active wallet.
+    /// - A valid explicit `selectedWalletID` is returned unchanged.
+    /// - A stale explicit `selectedWalletID` falls back to the first active wallet.
+    /// - `nil` (All Wallets) is preserved as `nil` so a valid same-currency all-wallet
+    ///   scope is aggregated genuinely, rather than silently narrowed to one wallet.
+    ///   Mixed-currency All Wallets is rejected at the query boundary, not here.
     fileprivate nonisolated static func normalizedWalletIDForAggregates(wallets: [Wallet], selectedWalletID: UUID?) -> UUID? {
-        if let selectedWalletID,
-           wallets.contains(where: { $0.id == selectedWalletID }) {
+        guard let selectedWalletID else { return nil }
+        if wallets.contains(where: { $0.id == selectedWalletID }) {
             return selectedWalletID
         }
         return wallets.first { !$0.isArchived }?.id

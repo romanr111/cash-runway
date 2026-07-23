@@ -2,62 +2,66 @@
 
 ## Snapshot
 
-**Branch:** `release/v0.1.4`
-**Worktree:** `/Users/roman/.codex/worktrees/cash-runway-pr-92-review-comments`
-**PR:** https://github.com/romanr111/cash-runway/pull/92 — Release v0.1.4 into `main`
-**Base/head checked:** `main` `82279fc`, `release/v0.1.4` `7722ab1`
+**Branch:** `codex/timeline-phase-1-financial-foundation`
+**Worktree:** `/Users/roman/.codex/worktrees/cash-runway-timeline-phase-1`
+**Plan:** `docs/plans/timeline-redesign-phase-2-summary-chart.md`
+**Phase:** 2 of 3 (Header, Summary Card, and Chart) - COMPLETE
 
 ## Current State
 
-- Local no-commit merge of `origin/main` into `release/v0.1.4` has all conflicts resolved and staged.
-- No commit or push has been made.
-- GitHub still reports PR #92 as `DIRTY` / `CONFLICTING` because the local merge resolution is uncommitted and unpushed.
-- Review-fix patch is preserved at `/tmp/cash-runway-pr92/review-fixes-before-main-merge.patch`.
-- Project-file conflict backup is preserved at `/tmp/cash-runway-pr92/project.pbxproj.conflicted.bak`.
+- Phases 1 and 2 both complete in the same worktree; all validation gates green.
+- Timeline screen now uses the Phase 2 header + unified summary card + four-period grouped chart, while preserving the Phase 1 snapshot as the single source of truth for selected-period numbers.
+- The chart window ends at the selected period and supports tap and drag navigation; Spending Overview and search actions are preserved.
+- No commit or push has been made; changes are staged in the worktree only.
+- `CashRunway.xcodeproj/project.pbxproj.bak` remains untracked and must be removed before commit (`rm` is denied in this session; user action needed).
 
 ## Decisions
 
-- Resolve release-vs-main conflicts to the release-side v0.1.4 content because `main` contains v0.1.3 plus the Settings row tap-target fix, and the release branch already supersedes those changes.
-- Keep `AppHost/Info.plist` release metadata: `CFBundleShortVersionString` `0.1.4`, `CFBundleVersion` `273`.
-- Keep the release-side SwiftUI/UIVM extraction and project references.
-- Preserve the full-width Settings `moreRow` tap target via `.contentShape(.interaction, Rectangle())`.
-- Preserve review fixes:
-  - monthly overview month key must start inside the approved date scope,
-  - Agent wallet and transaction DTO money values preserve source currency codes,
-  - transaction deletion summary income uses signed `amount_minor`.
-- Signed income impact must remain visible in the delete preview and accessibility summary even when `incomeMinor` is negative.
+- `TimelineComparisonWindow` is a pure helper (Core) with explicit `now`/`calendar`; tests call it directly, repository integration tests call the concrete `timelineSnapshot(...now:)` overload. `DashboardRepositorying` protocol unchanged (no clock-related mock churn).
+- `TimelineSummaryAdapter` (UI) is the single presentation adapter over `TimelineSnapshot`; `AppModel.currentCashFlowMinor` now delegates to it instead of recomputing from `allBars`.
+- `TimelinePresentation` lives in `CashRunwayUIVM` so it is unit-testable from `CashRunwayUIVMTests`; it is auto-discovered by SwiftPM and not registered in the pbxproj app-target Sources phase.
+- `TimelineSummaryCard.swift` and `TimelineGroupedBarChart.swift` are in `Sources/CashRunwayUI` and are registered in the pbxproj app-target Sources phase.
+- All Wallets (`nil` walletID) is preserved as `nil` for same-currency scopes and rejected at the query boundary for mixed currencies (not narrowed to the first wallet).
+- `MoneyFormatter.string(from:currencyCode:locale:)` was added as an additive overload to support locale-aware formatting without changing existing call sites.
+- Chart labels use locale-aware compact values (`52,8 тис.` / `52.8k`) via `TimelinePresentation.compactValueText`; no hardcoded hryvnia symbols.
+- Comparison baseline labels use `DateIntervalFormatter` with the current locale; the sentence template is localized via `Localizable.xcstrings` with English fallback for tests.
 
 ## Working Set
 
 - `CONTINUITY.md`
-- `Sources/CashRunwayCore/AgentAccess/AgentAccessService.swift`
-- `Sources/CashRunwayCore/CashRunwayRepository.swift`
-- `Sources/CashRunwayCore/DeletePeriod.swift`
-- `Sources/CashRunwayUI/DeleteTransactionsView.swift`
-- `Tests/CashRunwayCoreTests/AgentAbuseBoundaryTests.swift`
-- `Tests/CashRunwayCoreTests/AgentPermissionBoundaryTests.swift`
-- `Tests/CashRunwayCoreTests/BulkDeleteTransactionsTests.swift`
+- `AppHost/Localizable.xcstrings` - new timeline comparison, chart-value, and accessibility keys
+- `CashRunway.xcodeproj/project.pbxproj` - registered `TimelineSummaryAdapter.swift`, `TimelineSummaryCard.swift`, `TimelineGroupedBarChart.swift`
+- `Sources/CashRunwayCore/Money.swift` - added `string(from:currencyCode:locale:)` overload
+- `Sources/CashRunwayCore/Models.swift` - made `TimelineBarPoint` public memberwise init public
+- `Sources/CashRunwayUIVM/TimelinePresentation.swift` (new) - pure presentation adapter
+- `Sources/CashRunwayUI/DashboardView.swift` - new header + summary card wiring; removed old hero/chartCard/overviewButton
+- `Sources/CashRunwayUI/TimelineSummaryCard.swift` (new) - summary card layout
+- `Sources/CashRunwayUI/TimelineGroupedBarChart.swift` (new) - four-period chart with tap/drag navigation
+- `Sources/CashRunwayUI/AccessibilityIdentifiers.swift` - added `timelineSummaryCard`, `timelineIncomeValue`, `timelineExpenseValue`, `timelineComparison`, `timelineChartPoint(_:)`
+- Phase 1 files remain in the working set: `TimelineComparisonWindow.swift`, `CashRunwayRepository.swift`, `CashRunwayRepositorying.swift`, `AggregateMaintenance.swift`, `AppModel.swift`, `TimelineSummaryAdapter.swift`, `TimelineSnapshotTests.swift`, `TimelineComparisonTests.swift`, `AgentTestMocks.swift`, `CurrencyFoundationTests.swift`, `PropertyStyleQueryTests.swift`
+- `Tests/CashRunwayUIVMTests/TimelinePresentationTests.swift` (new) - 16 presentation/behavior tests
 
 ## Validation
 
-- `git diff --check`: passed.
-- `git diff --cached --check`: passed.
-- `Scripts/verify-pbxproj.sh`: skipped direct execution, file is not executable in this worktree.
-- `bash Scripts/verify-pbxproj.sh`: passed.
-- `Scripts/pre-flight.sh`: passed.
-- `just test-filter AgentAbuseBoundaryTests`: passed.
-- `just test-filter AgentPermissionBoundaryTests`: passed.
-- `just test-filter BulkDeleteTransactionsTests`: passed after signed-income UI impact follow-up.
-- `just test-filter FullBackupTests`: passed.
-- `just test-filter MigrationIntegrityTests`: passed.
-- `just test-filter WalletCategoryTests`: passed.
-- `just check-agent`: passed.
-- `just check-isolated`: passed.
-- `just build`: passed.
-- `just graph-sync`: passed after signed-income UI impact follow-up.
-- `gh pr view 92 --json mergeStateStatus,mergeable,headRefOid,baseRefOid`: remote still `DIRTY` / `CONFLICTING` until local resolution is committed and pushed.
+All gates run in this worktree on 2026-07-23:
+
+- `just test-filter TimelineComparisonTests`: passed (12/12).
+- `just test-filter TimelineSnapshotTests`: passed (18/18).
+- `just test-filter TimelinePresentationTests`: passed (16/16).
+- `just lint`: passed (0 violations, 162 files).
+- `just build`: passed (`BUILD SUCCEEDED`; only pre-existing warnings: duplicate InfoPlist group, signed SQLCipher binary, AppIntents metadata skipped).
+- `just check-isolated`: passed (663 tests in 65 suites).
+- `just ui-check`: passed (iPhone 17 simulator build + agent validation).
+- `just smoke`: passed (seeded simulator smoke with `scenario=transaction_core`).
+- `just graph-sync`: passed (8 changed files, 4 added, 4 modified, 343 nodes).
+- `Scripts/verify-pbxproj.sh`: passed.
+- `Scripts/check_core_module_wiring.py`: passed (Core linked once, no Core sources in app target, 33 files checked).
+- `xcodebuild -list -project CashRunway.xcodeproj`: passed.
+- Skipped: `just check-isolated-with-perf` / `just check-perf` (no performance-sensitive code changed). `just check` (full CI gate) not run because no `ReportingSecrets*`/`ReportingConfig*`/pipeline/deploy files changed.
+- XCUITest/E2E not run per repo policy.
 
 ## Notes
 
-- Known build warnings only: duplicate `AppHost/uk.lproj/InfoPlist.strings` project reference, signed SQLCipher binary not stripped, AppIntents metadata skipped.
-- XCUITest/E2E was not run per repo policy.
+- `CashRunway.xcodeproj/project.pbxproj.bak` is untracked and must be removed before commit (rm denied in this session).
+- Pre-existing build warnings are unrelated (duplicate `AppHost/uk.lproj/InfoPlist.strings` project reference, signed SQLCipher binary not stripped, AppIntents metadata skipped).
+- Phase 3 (`timeline-redesign-phase-3-feed-filters-qa.md`) can now start; Phase 2 acceptance criteria 1-10 are satisfied.

@@ -468,21 +468,42 @@ struct CurrencyFoundationTests {
         let staleWallets = try repository.wallets()
         _ = try saveCurrencyWallet(repository, currencyCode: .usd)
 
+        // Fresh wallets are loaded at query time, so the stale snapshot sees only UAH.
         #expect(staleWallets.aggregateCurrencyCode(selectedWalletID: nil) == .uah)
 
+        // nil (All Wallets) is now preserved instead of narrowed to the first wallet.
+        // With mixed active currencies this is an unsafe aggregate scope.
         let effectiveWalletID = try repository.normalizedWalletIDForAggregates(selectedWalletID: nil)
-        #expect(effectiveWalletID != nil)
+        #expect(effectiveWalletID == nil)
 
         let monthKey = DateKeys.monthKey(for: .now)
-        #expect(throws: Never.self) {
+        // Mixed-currency All Wallets is rejected at the query boundary.
+        #expect(throws: CashRunwayError.self) {
             _ = try repository.dashboard(monthKey: monthKey, walletID: effectiveWalletID)
         }
-        #expect(throws: Never.self) {
+        #expect(throws: CashRunwayError.self) {
             _ = try repository.timelineSnapshot(monthKey: monthKey, walletID: effectiveWalletID, query: .init(), period: .month)
         }
-        #expect(throws: Never.self) {
+        #expect(throws: CashRunwayError.self) {
             _ = try repository.allBars(walletID: effectiveWalletID, period: .month)
         }
+    }
+
+    @Test func normalizedWalletIDForAggregatesPreservesNilAllWallets() throws {
+        let repository = try makeCurrencyRepository()
+        let uahWallet = try saveCurrencyWallet(repository, currencyCode: .uah)
+        _ = try saveCurrencyWallet(repository, currencyCode: .uah)
+
+        // Two same-currency active wallets: nil is preserved so both are aggregated.
+        let effectiveWalletID = try repository.normalizedWalletIDForAggregates(selectedWalletID: nil)
+        #expect(effectiveWalletID == nil, "Same-currency All Wallets scope must be preserved as nil.")
+
+        // And the aggregate queries succeed for the all-wallets nil scope.
+        let monthKey = DateKeys.monthKey(for: .now)
+        #expect(throws: Never.self) {
+            _ = try repository.timelineSnapshot(monthKey: monthKey, walletID: nil, query: .init(), period: .month)
+        }
+        _ = uahWallet
     }
 
     @Test func normalizedWalletIDForAggregatesIgnoresStaleSelectedWalletAfterDeletion() throws {
