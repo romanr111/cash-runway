@@ -115,10 +115,10 @@ public enum TransactionSource: String, CaseIterable, Codable, Sendable {
 
     public var displayName: String {
         switch self {
-        case .manual: L10n.string("Manual")
-        case .recurring: L10n.string("Scheduled")
-        case .bankSync: L10n.string("Bank Sync")
-        case .importCSV: L10n.string("CSV Import")
+        case .manual: L10n.string("transaction.source.manual")
+        case .recurring: L10n.string("transaction.source.recurring")
+        case .bankSync: L10n.string("transaction.source.bank")
+        case .importCSV: L10n.string("transaction.source.csv")
         }
     }
 }
@@ -1688,6 +1688,14 @@ public struct TransactionDraft: Identifiable, Codable, Hashable, Sendable {
         case expense
         case income
         case transfer
+
+        public var displayName: String {
+            switch self {
+            case .expense: L10n.string("Expense")
+            case .income: L10n.string("Income")
+            case .transfer: L10n.string("Transfer")
+            }
+        }
     }
 
     public var id: UUID?
