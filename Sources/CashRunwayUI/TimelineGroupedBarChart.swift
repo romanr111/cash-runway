@@ -6,6 +6,7 @@ struct TimelineGroupedBarChart: View {
     let points: [TimelineBarPoint]
     let selectedPeriodKey: Int
     let period: TimelinePeriod
+    let currencyCode: CurrencyCode?
     let locale: Locale
     let onSelect: (Int) -> Void
 
@@ -82,8 +83,9 @@ struct TimelineGroupedBarChart: View {
 
     private func accessibilityLabel(for point: TimelineBarPoint, isSelected: Bool) -> String {
         let periodName = TimelinePresentation.periodLabel(for: point.periodKey, period: period, locale: locale)
-        let incomeText = MoneyFormatter.string(from: point.incomeMinor, currencyCode: .uah, locale: locale)
-        let expenseText = MoneyFormatter.string(from: -point.expenseMinor, currencyCode: .uah, locale: locale)
+        let resolvedCurrency = currencyCode ?? .uah
+        let incomeText = MoneyFormatter.string(from: point.incomeMinor, currencyCode: resolvedCurrency, locale: locale)
+        let expenseText = MoneyFormatter.string(from: -point.expenseMinor, currencyCode: resolvedCurrency, locale: locale)
         let selectedText = isSelected ? "Selected" : ""
         return [periodName, "\(L10n.string("Income")) \(incomeText)", "\(L10n.string("Expense")) \(expenseText)", selectedText]
             .filter { !$0.isEmpty }
