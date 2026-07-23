@@ -1,6 +1,166 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "timeline.accessibility.expense": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "timeline.accessibility.expense"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Витрати"
+          }
+        }
+      }
+    },
+    "timeline.accessibility.income": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "timeline.accessibility.income"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Доходи"
+          }
+        }
+      }
+    },
+    "timeline.accessibility.net": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "timeline.accessibility.net"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Чистий грошовий потік"
+          }
+        }
+      }
+    },
+    "timeline.accessibility.period": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "timeline.accessibility.period"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Період"
+          }
+        }
+      }
+    },
+    "timeline.chartValue.millions": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "timeline.chartValue.millions"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": " млн"
+          }
+        }
+      }
+    },
+    "timeline.chartValue.thousands": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "timeline.chartValue.thousands"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": " тис."
+          }
+        }
+      }
+    },
+    "timeline.comparison.unavailable": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "timeline.comparison.unavailable"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Порівняння недоступне"
+          }
+        }
+      }
+    },
+    "timeline.comparison.unchanged": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "timeline.comparison.unchanged"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Витрати не змінилися порівняно з %@"
+          }
+        }
+      }
+    },
+    "timeline.comparison.lower": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "timeline.comparison.lower"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Витрати нижчі, ніж за %@"
+          }
+        }
+      }
+    },
+    "timeline.comparison.higher": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "timeline.comparison.higher"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Витрати вищі, ніж за %@"
+          }
+        }
+      }
+    },
     "" : {
 
     },

@@ -995,11 +995,43 @@ extension CashRunwayRepository {
 
 extension CashRunwayRepository {
     public func timelineSnapshot(monthKey: Int, walletID: UUID? = nil, query: TransactionQuery = .init(), period: TimelinePeriod = .month) throws -> TimelineSnapshot {
+        try timelineSnapshot(monthKey: monthKey, walletID: walletID, query: query, period: period, now: Date())
+    }
+
+    // swiftlint:disable:next function_body_length
+    /// Deterministic snapshot overload. Production calls `timelineSnapshot(...)` which
+    /// injects `Date()`; tests call this directly with a fixed date so month-to-date and
+    /// comparison behavior is reproducible. Not part of `DashboardRepositorying`; keeping
+    /// the clock off the protocol avoids forcing unrelated mocks/conformers to change.
+    public func timelineSnapshot(monthKey: Int, walletID: UUID?, query: TransactionQuery, period: TimelinePeriod, now: Date) throws -> TimelineSnapshot {
         try databaseManager.dbQueue.read { db in
             let effectiveWalletID = walletID ?? query.walletID
             try rejectMixedCurrencyAllWalletSnapshot(db, walletID: effectiveWalletID)
-            let bars = try Self.loadBars(db, monthKey: monthKey, walletID: effectiveWalletID, period: period)
             let anchorPeriodKey = Self.anchorPeriodKey(monthKey: monthKey, period: period)
+            var bars = try Self.loadBars(db, monthKey: monthKey, walletID: effectiveWalletID, period: period)
+
+            let window = TimelineComparisonWindow.comparisonWindow(
+                selectedMonthKey: monthKey,
+                period: period,
+                now: now,
+                calendar: DateKeys.calendar
+            )
+
+            // For a current partial period, the selected bar must reflect month-to-date /
+            // year-to-date actuals rather than the full-period cashflow aggregate.
+            if let window, window.isPartial {
+                let bounded = try Self.boundedSums(db, walletID: effectiveWalletID, startDayKey: window.currentStartDayKey, endDayKey: window.currentEndDayKey)
+                if let selectedIndex = bars.firstIndex(where: { $0.periodKey == anchorPeriodKey }) {
+                    var selectedBar = bars[selectedIndex]
+                    selectedBar = TimelineBarPoint(
+                        periodKey: selectedBar.periodKey,
+                        incomeMinor: bounded.income,
+                        expenseMinor: bounded.expense,
+                        xLabel: selectedBar.xLabel
+                    )
+                    bars[selectedIndex] = selectedBar
+                }
+            }
 
             var scopedQuery = query
             scopedQuery.walletID = effectiveWalletID
@@ -1018,15 +1050,125 @@ extension CashRunwayRepository {
 
             let selectedBar = bars.first(where: { $0.periodKey == anchorPeriodKey }) ?? bars.last
             let heroCashFlow = selectedBar.map { $0.incomeMinor - $0.expenseMinor } ?? 0
+            let comparison = try Self.buildComparison(
+                db: db,
+                walletID: effectiveWalletID,
+                window: window,
+                selectedBarExpense: selectedBar?.expenseMinor ?? 0
+            )
+
             return TimelineSnapshot(
                 anchorMonthKey: monthKey,
                 walletFilterID: effectiveWalletID,
                 heroCashFlowMinor: heroCashFlow,
                 bars: bars,
                 sections: sections,
-                period: period
+                period: period,
+                comparison: comparison
             )
         }
+    }
+
+    /// Bounded income/expense sums over an inclusive local-day-key range.
+    /// Transfers are excluded by the conditional sums (`type = 'income'`/`'expense'`).
+    private static func boundedSums(_ db: Database, walletID: UUID?, startDayKey: Int, endDayKey: Int) throws -> (income: Int64, expense: Int64) {
+        let walletArgument: any DatabaseValueConvertible = walletID?.uuidString ?? NSNull()
+        let row = try Row.fetchOne(
+            db,
+            sql: """
+            SELECT
+                COALESCE(SUM(CASE WHEN type = 'income' THEN amount_minor ELSE 0 END), 0) AS income_minor,
+                COALESCE(SUM(CASE WHEN type = 'expense' THEN amount_minor ELSE 0 END), 0) AS expense_minor
+            FROM transactions
+            WHERE is_deleted = 0
+              AND local_day_key BETWEEN ? AND ?
+              AND (? IS NULL OR wallet_id = ?)
+            """,
+            arguments: [startDayKey, endDayKey, walletArgument, walletArgument]
+        )
+        return (row?["income_minor"] ?? 0, row?["expense_minor"] ?? 0)
+    }
+
+    /// Bounded expense sum over the baseline window. Excludes income and both transfer
+    /// directions by filtering `type = 'expense'`.
+    private static func baselineExpense(_ db: Database, walletID: UUID?, startDayKey: Int, endDayKey: Int) throws -> Int64 {
+        let walletArgument: any DatabaseValueConvertible = walletID?.uuidString ?? NSNull()
+        let value = try Int64.fetchOne(
+            db,
+            sql: """
+            SELECT COALESCE(SUM(amount_minor), 0)
+            FROM transactions
+            WHERE is_deleted = 0
+              AND type = 'expense'
+              AND local_day_key BETWEEN ? AND ?
+              AND (? IS NULL OR wallet_id = ?)
+            """,
+            arguments: [startDayKey, endDayKey, walletArgument, walletArgument]
+        ) ?? 0
+        return value
+    }
+
+    /// Derives the comparison, honoring the snapshot invariant that the current expense
+    /// equals the selected bar's expense whenever comparison is available.
+    private static func buildComparison(
+        db: Database,
+        walletID: UUID?,
+        window: TimelineComparisonWindow?,
+        selectedBarExpense: Int64
+    ) throws -> TimelineComparison? {
+        // Strictly future selected period: retain stored totals, mark comparison unavailable.
+        guard let window else { return nil }
+
+        let baselineExpense = try Self.baselineExpense(
+            db,
+            walletID: walletID,
+            startDayKey: window.baselineStartDayKey,
+            endDayKey: window.baselineEndDayKey
+        )
+
+        // Invariant: comparison current expense mirrors the bounded selected-period bar.
+        let currentExpense = selectedBarExpense
+
+        let direction: TimelineComparison.Direction
+        let percentage: Double?
+
+        switch (currentExpense, baselineExpense) {
+        case let (current, baseline) where current > baseline && baseline > 0:
+            direction = .higher
+            percentage = Self.percentageChange(current: current, baseline: baseline)
+        case let (current, baseline) where current < baseline && baseline > 0:
+            direction = .lower
+            percentage = Self.percentageChange(current: current, baseline: baseline)
+        case let (current, baseline) where current == baseline:
+            // Equal, including both-zero: unchanged. Never NaN/infinity.
+            direction = .unchanged
+            percentage = baseline > 0 ? 0.0 : nil
+        case let (current, baseline) where baseline == 0 && current > 0:
+            // New spending with no baseline to compare against.
+            direction = .unavailable
+            percentage = nil
+        default:
+            // Defensive catch-all (e.g. negative guards): treat as unavailable.
+            direction = .unavailable
+            percentage = nil
+        }
+
+        return TimelineComparison(
+            direction: direction,
+            currentExpenseMinor: currentExpense,
+            baselineExpenseMinor: baselineExpense,
+            percentageChange: percentage,
+            currentStartDayKey: window.currentStartDayKey,
+            currentEndDayKey: window.currentEndDayKey,
+            baselineStartDayKey: window.baselineStartDayKey,
+            baselineEndDayKey: window.baselineEndDayKey,
+            isPartialPeriod: window.isPartial
+        )
+    }
+
+    private static func percentageChange(current: Int64, baseline: Int64) -> Double? {
+        guard baseline > 0 else { return nil }
+        return Double(current - baseline) / Double(baseline)
     }
 
     private static func anchorPeriodKey(monthKey: Int, period: TimelinePeriod) -> Int {

@@ -1836,6 +1836,13 @@ public struct TimelineBarPoint: Identifiable, Hashable, Sendable {
     public var incomeBarMinor: Int64 { incomeMinor }
     public var expenseBarMinor: Int64 { expenseMinor }
     public var xLabel: String
+
+    public init(periodKey: Int, incomeMinor: Int64, expenseMinor: Int64, xLabel: String) {
+        self.periodKey = periodKey
+        self.incomeMinor = incomeMinor
+        self.expenseMinor = expenseMinor
+        self.xLabel = xLabel
+    }
 }
 
 public struct TimelineSection: Identifiable, Hashable, Sendable {
@@ -1846,6 +1853,47 @@ public struct TimelineSection: Identifiable, Hashable, Sendable {
     public var items: [TransactionListItem]
 }
 
+public struct TimelineComparison: Hashable, Sendable {
+    public enum Direction: Hashable, Sendable {
+        case higher
+        case lower
+        case unchanged
+        case unavailable
+    }
+
+    public var direction: Direction
+    public var currentExpenseMinor: Int64
+    public var baselineExpenseMinor: Int64
+    public var percentageChange: Double?
+    public var currentStartDayKey: Int
+    public var currentEndDayKey: Int
+    public var baselineStartDayKey: Int
+    public var baselineEndDayKey: Int
+    public var isPartialPeriod: Bool
+
+    public init(
+        direction: Direction,
+        currentExpenseMinor: Int64,
+        baselineExpenseMinor: Int64,
+        percentageChange: Double?,
+        currentStartDayKey: Int,
+        currentEndDayKey: Int,
+        baselineStartDayKey: Int,
+        baselineEndDayKey: Int,
+        isPartialPeriod: Bool
+    ) {
+        self.direction = direction
+        self.currentExpenseMinor = currentExpenseMinor
+        self.baselineExpenseMinor = baselineExpenseMinor
+        self.percentageChange = percentageChange
+        self.currentStartDayKey = currentStartDayKey
+        self.currentEndDayKey = currentEndDayKey
+        self.baselineStartDayKey = baselineStartDayKey
+        self.baselineEndDayKey = baselineEndDayKey
+        self.isPartialPeriod = isPartialPeriod
+    }
+}
+
 public struct TimelineSnapshot: Sendable {
     public var anchorMonthKey: Int
     public var walletFilterID: UUID?
@@ -1853,6 +1901,27 @@ public struct TimelineSnapshot: Sendable {
     public var bars: [TimelineBarPoint]
     public var sections: [TimelineSection]
     public var period: TimelinePeriod
+    /// Selected-period expense comparison against the immediately preceding equivalent period.
+    /// `nil` only when the selected period is strictly future and no comparison is meaningful.
+    public var comparison: TimelineComparison?
+
+    public init(
+        anchorMonthKey: Int,
+        walletFilterID: UUID?,
+        heroCashFlowMinor: Int64,
+        bars: [TimelineBarPoint],
+        sections: [TimelineSection],
+        period: TimelinePeriod,
+        comparison: TimelineComparison? = nil
+    ) {
+        self.anchorMonthKey = anchorMonthKey
+        self.walletFilterID = walletFilterID
+        self.heroCashFlowMinor = heroCashFlowMinor
+        self.bars = bars
+        self.sections = sections
+        self.period = period
+        self.comparison = comparison
+    }
 }
 
 public struct OverviewMonthPoint: Identifiable, Hashable, Sendable {

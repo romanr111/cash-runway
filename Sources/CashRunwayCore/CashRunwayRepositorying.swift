@@ -161,13 +161,17 @@ public typealias CashRunwayRepositorying = BankSyncRepositorying &
 public extension DashboardRepositorying {
     /// Returns a wallet ID that is safe to use for aggregate queries.
     ///
-    /// - If `selectedWalletID` still refers to an existing wallet, it is returned.
-    /// - If it is stale (e.g. the wallet was just deleted), it is ignored.
-    /// - Mixed-currency all-wallet scopes fall back to the first active wallet.
+    /// - A valid explicit `selectedWalletID` is returned unchanged.
+    /// - A stale explicit `selectedWalletID` (e.g. the wallet was just deleted) falls
+    ///   back to the first active wallet, preserving a useful single-wallet scope.
+    /// - `nil` (All Wallets) is preserved as `nil` so the caller can aggregate every
+    ///   active wallet. Mixed-currency All Wallets is rejected at the query boundary
+    ///   (`rejectMixedCurrencyAllWalletSnapshot`), not here - this preserves a valid
+    ///   same-currency all-wallet scope instead of silently narrowing it to one wallet.
     func normalizedWalletIDForAggregates(selectedWalletID: UUID?) throws -> UUID? {
+        guard let selectedWalletID else { return nil }
         let wallets = try wallets()
-        if let selectedWalletID,
-           wallets.contains(where: { $0.id == selectedWalletID }) {
+        if wallets.contains(where: { $0.id == selectedWalletID }) {
             return selectedWalletID
         }
         return wallets.first(where: { !$0.isArchived })?.id ?? wallets.first?.id

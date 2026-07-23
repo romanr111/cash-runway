@@ -216,6 +216,10 @@ public enum MoneyFormatter {
     }
 
     public static func string(from minorUnits: Int64, currencyCode: CurrencyCode) -> String {
+        string(from: minorUnits, currencyCode: currencyCode, locale: Locale(identifier: "uk_UA"))
+    }
+
+    public static func string(from minorUnits: Int64, currencyCode: CurrencyCode, locale: Locale) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currencyCode.rawValue
@@ -224,7 +228,7 @@ public enum MoneyFormatter {
         }
         formatter.minimumFractionDigits = 2
         formatter.maximumFractionDigits = 2
-        formatter.locale = Locale(identifier: "uk_UA")
+        formatter.locale = locale
         let value = NSDecimalNumber(value: minorUnits).dividing(by: 100)
         return formatter.string(from: value) ?? "\(minorUnits / 100)"
     }

@@ -319,12 +319,12 @@ extension CashRunwayRepository {
             arguments["search"] = query.searchText + "*"
         }
         if let startDate = query.startDate {
-            conditions.append("t.occurred_at >= :startDate")
-            arguments["startDate"] = startDate
+            conditions.append("t.local_day_key >= :startDayKey")
+            arguments["startDayKey"] = DateKeys.dayKey(for: startDate)
         }
         if let endDate = query.endDate {
-            conditions.append("t.occurred_at <= :endDate")
-            arguments["endDate"] = endDate
+            conditions.append("t.local_day_key <= :endDayKey")
+            arguments["endDayKey"] = DateKeys.dayKey(for: endDate)
         }
 
         let allowedDBKinds = query.kinds.flatMap { kind -> [String] in

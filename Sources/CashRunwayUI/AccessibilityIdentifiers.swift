@@ -37,6 +37,14 @@ enum CashRunwayAccessibilityID {
     static let timelineSearchResetButton = "timeline.searchResetButton"
     static let timelineWalletMenu = "timeline.walletMenu"
     static let timelineCashFlowValue = "timeline.cashFlowValue"
+    static let timelineSummaryCard = "timeline.summaryCard"
+    static let timelineIncomeValue = "timeline.incomeValue"
+    static let timelineExpenseValue = "timeline.expenseValue"
+    static let timelineComparison = "timeline.comparison"
+
+    static func timelineChartPoint(_ periodKey: Int) -> String {
+        "timeline.chartPoint.\(periodKey)"
+    }
 
     static let overviewOpenButton = "overview.openButton"
     static let overviewExpensesCard = "overview.expensesCard"
