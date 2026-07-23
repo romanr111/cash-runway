@@ -182,6 +182,7 @@ struct TimelineSummaryCard: View {
             points: presentation.chartPoints,
             selectedPeriodKey: presentation.selectedPeriodKey,
             period: period,
+            currencyCode: presentation.currencyCode,
             locale: locale,
             onSelect: onSelectPeriod
         )
