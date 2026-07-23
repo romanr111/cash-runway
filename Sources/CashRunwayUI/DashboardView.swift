@@ -53,10 +53,13 @@ struct DashboardView: View {
                     addButton
                 }
             }
-            .overlay(alignment: .bottom) {
-                Color.clear
-                    .frame(height: 0)
-                    .padding(.bottom, 96)
+            .overlay {
+                if model.isLoading {
+                    ProgressView()
+                        .scaleEffect(1.2)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(CashRunwayTheme.background.opacity(0.72))
+                }
             }
             .navigationDestination(isPresented: $showsOverview) {
                 TimelineOverviewView(model: model)
@@ -94,9 +97,9 @@ struct DashboardView: View {
             }
         } label: {
             Image(systemName: "plus")
-                .font(.system(size: 26, weight: .bold))
+                .font(.system(size: 23, weight: .bold))
                 .foregroundStyle(.white)
-                .frame(width: 64, height: 64)
+                .frame(width: 56, height: 56)
                 .background(CashRunwayTheme.accent, in: Circle())
                 .shadow(color: CashRunwayTheme.accent.opacity(0.25), radius: 16, y: 10)
         }
@@ -220,19 +223,32 @@ struct DashboardView: View {
         }
     }
 
+    // The three controls must fit one non-scrolling row without clipping in any
+    // language. ViewThatFits picks the largest pill font whose row actually fits the
+    // available width (Ukrainian labels are longer than English), degrading on narrow
+    // devices instead of truncating or pushing a control offscreen.
     private var filters: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                walletMenu
-                periodMenu
-                filtersButton
-            }
-            .padding(.horizontal, 2)
+        ViewThatFits(in: .horizontal) {
+            filterRow(fontSize: 15)
+            filterRow(fontSize: 14)
+            filterRow(fontSize: 13)
+            filterRow(fontSize: 12)
+            filterRow(fontSize: 11)
         }
-        .frame(maxWidth: .infinity, alignment: .center)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var walletMenu: some View {
+    private func filterRow(fontSize: CGFloat) -> some View {
+        HStack(spacing: 0) {
+            walletMenu(fontSize: fontSize)
+            Spacer(minLength: 8)
+            periodMenu(fontSize: fontSize)
+            Spacer(minLength: 8)
+            filtersButton(fontSize: fontSize)
+        }
+    }
+
+    private func walletMenu(fontSize: CGFloat) -> some View {
         Menu {
             if model.wallets.aggregateCurrencyCode(selectedWalletID: nil) != nil {
                 Button(L10n.string("All Wallets")) {
@@ -251,19 +267,21 @@ struct DashboardView: View {
         } label: {
             pillLabel(
                 iconName: "wallet.bifold.fill",
-                text: model.selectedWalletID.flatMap(walletName(for:)) ?? L10n.string("All Wallets")
+                text: model.selectedWalletID.flatMap(walletName(for:)) ?? L10n.string("All Wallets"),
+                fontSize: fontSize
             )
         }
         .accessibilityIdentifier(CashRunwayAccessibilityID.timelineWalletMenu)
     }
 
-    private var periodMenu: some View {
+    private func periodMenu(fontSize: CGFloat) -> some View {
         Button {
             isPeriodPickerPresented = true
         } label: {
             pillLabel(
                 iconName: "calendar",
-                text: periodDisplayLabel
+                text: periodDisplayLabel,
+                fontSize: fontSize
             )
         }
         .accessibilityIdentifier(CashRunwayAccessibilityID.timelineMonthPicker)
@@ -278,14 +296,16 @@ struct DashboardView: View {
         }
     }
 
-    private var filtersButton: some View {
+    private func filtersButton(fontSize: CGFloat) -> some View {
         Button {
             isFiltersPresented = true
         } label: {
             ZStack(alignment: .topTrailing) {
                 pillLabel(
                     iconName: "slider.horizontal.3",
-                    text: L10n.string("Filters")
+                    text: L10n.string("Filters"),
+                    showsChevron: false,
+                    fontSize: fontSize
                 )
 
                 if filterPresentation.activeAdvancedFilterCount > 0 {
@@ -397,21 +417,23 @@ struct DashboardView: View {
         return L10n.string("timeline.noTransactions.addOrFilter")
     }
 
-    private func pillLabel(iconName: String, text: String) -> some View {
-        HStack(spacing: 10) {
+    private func pillLabel(iconName: String, text: String, showsChevron: Bool = true, fontSize: CGFloat) -> some View {
+        HStack(spacing: 6) {
             Image(systemName: iconName)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(size: fontSize, weight: .semibold))
                 .foregroundStyle(CashRunwayTheme.accent)
             Text(text)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: fontSize, weight: .semibold))
                 .foregroundStyle(CashRunwayTheme.textPrimary)
                 .lineLimit(1)
-                .minimumScaleFactor(0.8)
-            Image(systemName: "chevron.down")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(CashRunwayTheme.textMuted)
+                .minimumScaleFactor(0.85)
+            if showsChevron {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: fontSize * 0.78, weight: .bold))
+                    .foregroundStyle(CashRunwayTheme.textMuted)
+            }
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 11)
         .padding(.vertical, 12)
         .frame(minHeight: 44)
         .background(CashRunwayTheme.surface, in: Capsule())
