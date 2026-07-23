@@ -1865,8 +1865,6 @@ public struct TimelineComparison: Hashable, Sendable {
     public var currentExpenseMinor: Int64
     public var baselineExpenseMinor: Int64
     public var percentageChange: Double?
-    public var currentStartDayKey: Int
-    public var currentEndDayKey: Int
     public var baselineStartDayKey: Int
     public var baselineEndDayKey: Int
     public var isPartialPeriod: Bool
@@ -1876,8 +1874,6 @@ public struct TimelineComparison: Hashable, Sendable {
         currentExpenseMinor: Int64,
         baselineExpenseMinor: Int64,
         percentageChange: Double?,
-        currentStartDayKey: Int,
-        currentEndDayKey: Int,
         baselineStartDayKey: Int,
         baselineEndDayKey: Int,
         isPartialPeriod: Bool
@@ -1886,8 +1882,6 @@ public struct TimelineComparison: Hashable, Sendable {
         self.currentExpenseMinor = currentExpenseMinor
         self.baselineExpenseMinor = baselineExpenseMinor
         self.percentageChange = percentageChange
-        self.currentStartDayKey = currentStartDayKey
-        self.currentEndDayKey = currentEndDayKey
         self.baselineStartDayKey = baselineStartDayKey
         self.baselineEndDayKey = baselineEndDayKey
         self.isPartialPeriod = isPartialPeriod

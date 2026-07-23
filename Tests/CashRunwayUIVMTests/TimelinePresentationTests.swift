@@ -30,8 +30,6 @@ struct TimelinePresentationTests {
             currentExpenseMinor: currentExpenseMinor,
             baselineExpenseMinor: baselineExpenseMinor,
             percentageChange: percentageChange,
-            currentStartDayKey: 20260701,
-            currentEndDayKey: 20260711,
             baselineStartDayKey: baselineStartDayKey,
             baselineEndDayKey: baselineEndDayKey,
             isPartialPeriod: true

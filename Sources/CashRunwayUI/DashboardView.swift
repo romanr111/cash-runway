@@ -297,65 +297,6 @@ struct DashboardView: View {
     }
 }
 
-private struct MonthChartColumn: View {
-    let bar: TimelineBarPoint
-    let period: TimelinePeriod
-    let isSelected: Bool
-    let maxValue: Int64
-
-    private var incomeHeight: CGFloat {
-        barHeight(for: bar.incomeBarMinor)
-    }
-
-    private var expenseHeight: CGFloat {
-        barHeight(for: bar.expenseBarMinor)
-    }
-
-    private func barHeight(for value: Int64) -> CGFloat {
-        guard maxValue > 0 else { return 4 }
-        let height = CGFloat(value) / CGFloat(maxValue) * 140
-        return max(height, 4)
-    }
-
-    private var displayLabel: String {
-        switch period {
-        case .month:
-            "\(CashRunwayTheme.monthAbbreviation(for: bar.periodKey))\n\(bar.periodKey / 100)"
-        case .year:
-            "\(bar.periodKey)"
-        }
-    }
-
-    var body: some View {
-        VStack(spacing: 8) {
-            HStack(alignment: .bottom, spacing: 5) {
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(CashRunwayTheme.accent.opacity(isSelected ? 1.0 : 0.75))
-                    .frame(width: 16, height: incomeHeight)
-
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(CashRunwayTheme.negative.opacity(isSelected ? 0.95 : 0.7))
-                    .frame(width: 16, height: expenseHeight)
-            }
-
-            Text(displayLabel)
-                .font(.system(size: isSelected ? 12 : 11, weight: isSelected ? .bold : .medium))
-                .foregroundStyle(isSelected ? CashRunwayTheme.textPrimary : CashRunwayTheme.textMuted)
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-                .frame(width: 50)
-        }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(isSelected ? CashRunwayTheme.accent.opacity(0.08) : Color.clear)
-        )
-        .accessibilityLabel("\(displayLabel), income \(MoneyFormatter.string(from: bar.incomeMinor)), expense \(MoneyFormatter.string(from: bar.expenseMinor))")
-        .accessibilityAddTraits(.isButton)
-    }
-}
-
 enum OverviewDisplayFormatter {
     static func compactMoney(from minorUnits: Int64) -> String {
         let sign = minorUnits < 0 ? "-" : ""

@@ -1158,8 +1158,6 @@ extension CashRunwayRepository {
             currentExpenseMinor: currentExpense,
             baselineExpenseMinor: baselineExpense,
             percentageChange: percentage,
-            currentStartDayKey: window.currentStartDayKey,
-            currentEndDayKey: window.currentEndDayKey,
             baselineStartDayKey: window.baselineStartDayKey,
             baselineEndDayKey: window.baselineEndDayKey,
             isPartialPeriod: window.isPartial
