@@ -9,6 +9,7 @@ struct DashboardView: View {
     @State private var isComposerPresented = false
     @State private var isSearchPresented = false
     @State private var isFiltersPresented = false
+    @State private var isPeriodPickerPresented = false
     @State private var showsOverview = false
     @State private var draft = TransactionDraft(kind: .expense, walletID: UUID(), amountMinor: 0, occurredAt: .now)
     @State private var isWalletEditorPresented = false
@@ -43,7 +44,7 @@ struct DashboardView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 12)
-                .padding(.bottom, 120)
+                .padding(.bottom, 140)
             }
             .background(CashRunwayTheme.background)
             .toolbar(.hidden, for: .navigationBar)
@@ -51,6 +52,11 @@ struct DashboardView: View {
                 if !model.wallets.isEmpty {
                     addButton
                 }
+            }
+            .overlay(alignment: .bottom) {
+                Color.clear
+                    .frame(height: 0)
+                    .padding(.bottom, 96)
             }
             .navigationDestination(isPresented: $showsOverview) {
                 TimelineOverviewView(model: model)
@@ -60,6 +66,9 @@ struct DashboardView: View {
             }
             .sheet(isPresented: $isFiltersPresented) {
                 TimelineSearchSheet(model: model, entryMode: .filters)
+            }
+            .sheet(isPresented: $isPeriodPickerPresented) {
+                TimelinePeriodPickerSheet(model: model)
             }
             .fullScreenCover(isPresented: $isComposerPresented) {
                 TransactionEditorView(model: model, draft: $draft)
@@ -212,10 +221,13 @@ struct DashboardView: View {
     }
 
     private var filters: some View {
-        HStack(spacing: 12) {
-            walletMenu
-            periodMenu
-            filtersButton
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                walletMenu
+                periodMenu
+                filtersButton
+            }
+            .padding(.horizontal, 2)
         }
         .frame(maxWidth: .infinity, alignment: .center)
     }
@@ -227,7 +239,7 @@ struct DashboardView: View {
                     collapsedDayKeys.removeAll()
                     Task { await model.selectWallet(nil) }
                 }
-                .accessibilityIdentifier(CashRunwayAccessibilityID.timelineWallet(L10n.string("All Wallets")))
+                .accessibilityIdentifier(CashRunwayAccessibilityID.timelineWallet("All Wallets"))
             }
             ForEach(model.wallets) { wallet in
                 Button(wallet.name) {
@@ -246,15 +258,8 @@ struct DashboardView: View {
     }
 
     private var periodMenu: some View {
-        Menu {
-            ForEach(TimelinePeriod.allCases, id: \.self) { period in
-                Button(L10n.timelinePeriod(period)) {
-                    guard model.selectedTimelinePeriod != period else { return }
-                    model.selectTimelinePeriod(period)
-                    collapsedDayKeys.removeAll()
-                    Task { await model.reloadAll() }
-                }
-            }
+        Button {
+            isPeriodPickerPresented = true
         } label: {
             pillLabel(
                 iconName: "calendar",

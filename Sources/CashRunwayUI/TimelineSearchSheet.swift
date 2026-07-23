@@ -117,7 +117,16 @@ struct TimelineSearchSheet: View {
                 }
             }
 
-            Toggle(L10n.string("Date range"), isOn: $usesDateRange)
+            Toggle(L10n.string("Date range"), isOn: Binding(
+                get: { usesDateRange },
+                set: { newValue in
+                    usesDateRange = newValue
+                    if !newValue {
+                        draftQuery.startDate = nil
+                        draftQuery.endDate = nil
+                    }
+                }
+            ))
             if usesDateRange {
                 DatePicker(L10n.string("From"), selection: Binding(
                     get: { draftQuery.startDate ?? .now },

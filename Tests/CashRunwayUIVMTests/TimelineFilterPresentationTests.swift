@@ -161,4 +161,21 @@ import Foundation
         let date = Date(timeIntervalSince1970: 1_000_000)
         #expect(TimelineFilterPresentation.isDateRangeValid(startDate: date, endDate: date))
     }
+
+    // MARK: - Date-only validation
+
+    @Test func sameLocalDayIsValidEvenWhenHoursDiffer() {
+        let start = Date(timeIntervalSince1970: 1_000_000)
+        let end = Date(timeIntervalSince1970: 1_000_000 + 86_400 - 1)
+        #expect(TimelineFilterPresentation.isDateRangeValid(startDate: start, endDate: end))
+    }
+
+    @Test func togglingOffDateRangeClearsBothDates() {
+        var query = TransactionQuery()
+        query.startDate = Date(timeIntervalSince1970: 1_000_000)
+        query.endDate = Date(timeIntervalSince1970: 2_000_000)
+        let cleared = TimelineFilterPresentation.apply(draft: query, usesDateRange: false, walletID: nil)
+        #expect(cleared.startDate == nil)
+        #expect(cleared.endDate == nil)
+    }
 }

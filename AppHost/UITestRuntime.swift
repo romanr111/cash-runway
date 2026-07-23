@@ -51,6 +51,7 @@ private struct UITestLaunchConfiguration {
         case categoryMerge = "category_merge"
         case categoryEditor = "category_editor"
         case monobankFirstStart = "monobank_first_start"
+        case timelineQA = "timeline_qa"
     }
 
     enum StartScreen: String {
@@ -68,6 +69,9 @@ private struct UITestLaunchConfiguration {
         )
         let databasePath = environment["CASH_RUNWAY_UI_TEST_DB_PATH"] ?? "cash-runway-ui-tests.sqlite"
         let startScreen = StartScreen(rawValue: environment["CASH_RUNWAY_UI_TEST_START_SCREEN"] ?? "")
+        let timelineState = TimelineQAState(
+            rawValue: environment["CASH_RUNWAY_UI_TEST_TIMELINE_STATE"] ?? ""
+        ) ?? .nearEqual
 
         return UITestLaunchConfiguration(
             scenario: scenario,
@@ -77,7 +81,8 @@ private struct UITestLaunchConfiguration {
                 rawValue: environment["CASH_RUNWAY_UI_TEST_MONOBANK_MODE"]
                     ?? UITestMonobankMode.happyPath.rawValue
             ) ?? .happyPath,
-            startScreen: startScreen
+            startScreen: startScreen,
+            timelineState: timelineState
         )
     }
 
@@ -86,6 +91,7 @@ private struct UITestLaunchConfiguration {
     let shouldReset: Bool
     let monobankMode: UITestMonobankMode
     let startScreen: StartScreen?
+    let timelineState: TimelineQAState
 
     private let defaultsSuiteName = "dev.roman.cashrunway.uitest"
 
@@ -145,6 +151,8 @@ private struct UITestLaunchConfiguration {
             try CategoryMergeUITestSeeder(repository: repository).seed()
         case .categoryEditor:
             try CategoryEditorUITestSeeder(repository: repository).seed()
+        case .timelineQA:
+            try TimelineQAUITestSeeder(repository: repository).seed(state: timelineState)
         case .monobankFirstStart, .none:
             break
         }
@@ -481,6 +489,155 @@ private struct TransactionCoreUITestSeeder {
         )
         try repository.saveLabel(label)
         return label.id
+    }
+
+    private func requireCategory(named name: String, kind: CategoryKind) throws -> UUID {
+        if let category = try repository.categories(kind: kind).first(where: { $0.name == name }) {
+            return category.id
+        }
+        throw CashRunwayError.invalidState("UI test category \(name) is missing.")
+    }
+}
+
+private enum TimelineQAState: String {
+    case nearEqual = "near_equal"
+    case largeValue = "large_value"
+    case mixedCurrency = "mixed_currency"
+    case zeroIncome = "zero_income"
+}
+
+/// Deterministic Timeline QA dataset for screenshot / visual verification.
+///
+/// Each state renders a demanding Timeline layout on launch with no UI
+/// interaction, so `simctl launch + screenshot` can exercise the chart
+/// collision-stagger, large-value compaction, the mixed-currency-unavailable
+/// summary, and the zero-income label without XCUITest. Amounts and dates are
+/// fixed for reproducible screenshots; assumes a fresh database per launch.
+private struct TimelineQAUITestSeeder {
+    let repository: CashRunwayRepository
+
+    func seed(state: TimelineQAState) throws {
+        try removeExistingUITestTransactions()
+        try FixtureGenerator.seedFixtureWalletsIfNeeded(into: repository)
+
+        let wallets = try repository.wallets()
+        guard let mainID = wallets.first(where: { $0.name == "Main Wallet" })?.id else {
+            throw CashRunwayError.invalidState("UI test baseline wallet is missing.")
+        }
+
+        let salaryID = try requireCategory(named: "Salary", kind: .income)
+        let groceriesID = try requireCategory(named: "Groceries", kind: .expense)
+        let restaurantsID = try requireCategory(named: "Restaurants", kind: .expense)
+
+        let calendar = DateKeys.calendar
+        let now = Date()
+        let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: now)) ?? now
+        // Anchor mid-month so day offsets never cross a month boundary.
+        let anchor = calendar.date(byAdding: .day, value: 14, to: monthStart) ?? monthStart
+        func day(_ offset: Int) -> Date { calendar.date(byAdding: .day, value: offset, to: anchor) ?? anchor }
+        func monthsBack(_ count: Int) -> Date {
+            let start = calendar.date(byAdding: .month, value: -count, to: monthStart) ?? monthStart
+            return calendar.date(byAdding: .day, value: 14, to: start) ?? start
+        }
+
+        switch state {
+        case .nearEqual:
+            // Selected month: income (52,800) ~= expense (52,500) at the window's peak
+            // magnitude, spread across days for feed density, so the paired value labels
+            // collide and the stagger must separate them.
+            try save(.income, mainID, 40_000, day(-9), salaryID, "UITEST-QA Salary")
+            try save(.income, mainID, 12_800, day(-2), salaryID, "UITEST-QA Bonus")
+            try save(.expense, mainID, 15_000, day(-10), groceriesID, "UITEST-QA Groceries")
+            try save(.expense, mainID, 8_500, day(-7), restaurantsID, "UITEST-QA Restaurant")
+            try save(.expense, mainID, 12_000, day(-5), groceriesID, "UITEST-QA Market")
+            try save(.expense, mainID, 9_000, day(-3), restaurantsID, "UITEST-QA Cafe")
+            try save(.expense, mainID, 8_000, day(-1), groceriesID, "UITEST-QA Pharmacy")
+            // Prior three months at distinct, lower magnitudes for the 4-period window.
+            try save(.income, mainID, 35_000, monthsBack(1), salaryID, "UITEST-QA M1 income")
+            try save(.expense, mainID, 42_000, monthsBack(1), groceriesID, "UITEST-QA M1 expense")
+            try save(.income, mainID, 48_000, monthsBack(2), salaryID, "UITEST-QA M2 income")
+            try save(.expense, mainID, 30_000, monthsBack(2), groceriesID, "UITEST-QA M2 expense")
+            try save(.income, mainID, 25_000, monthsBack(3), salaryID, "UITEST-QA M3 income")
+            try save(.expense, mainID, 38_000, monthsBack(3), groceriesID, "UITEST-QA M3 expense")
+        case .largeValue:
+            // 9,999,999.99 income + large/small expenses to test compaction and no overflow.
+            try save(.income, mainID, 999_999_999, day(-1), salaryID, "UITEST-QA Large income")
+            try save(.expense, mainID, 7_947_122, day(-3), groceriesID, "UITEST-QA Rent")
+            try save(.expense, mainID, 86_400, day(-5), restaurantsID, "UITEST-QA Dinner")
+        case .mixedCurrency:
+            // A second active wallet in USD makes the aggregate currency mixed -> the
+            // summary renders the "cash flow unavailable" state. That state keys off
+            // wallet currencies, so the USD wallet needs no transactions (and a
+            // cross-currency transaction would be rejected at save time).
+            _ = try ensureForeignWallet(name: "USD Account", currency: .usd)
+            try save(.income, mainID, 40_000, day(-2), salaryID, "UITEST-QA UAH income")
+            try save(.expense, mainID, 25_000, day(-4), groceriesID, "UITEST-QA UAH expense")
+        case .zeroIncome:
+            // Expenses only -> income bar is 0 and renders the "-" label.
+            try save(.expense, mainID, 15_000, day(-6), groceriesID, "UITEST-QA Groceries")
+            try save(.expense, mainID, 8_500, day(-4), restaurantsID, "UITEST-QA Restaurant")
+            try save(.expense, mainID, 12_000, day(-2), groceriesID, "UITEST-QA Market")
+        }
+
+        try repository.runMaintenance()
+        try repository.refreshRecurringInstances()
+    }
+
+    private func save(
+        _ kind: TransactionDraft.Kind,
+        _ walletID: UUID,
+        _ amountMinor: Int64,
+        _ date: Date,
+        _ categoryID: UUID,
+        _ note: String
+    ) throws {
+        try repository.saveTransaction(
+            TransactionDraft(
+                kind: kind,
+                walletID: walletID,
+                amountMinor: amountMinor,
+                occurredAt: date,
+                categoryID: categoryID,
+                merchant: note,
+                note: note,
+                source: .manual
+            )
+        )
+    }
+
+    private func ensureForeignWallet(name: String, currency: CurrencyCode) throws -> UUID {
+        if let existing = try repository.wallets().first(where: { $0.name == name }) {
+            return existing.id
+        }
+        let now = Date()
+        let wallet = Wallet(
+            id: UUID(uuidString: "33333333-3333-3333-3333-3333333333a1") ?? UUID(),
+            name: name,
+            kind: .account,
+            colorHex: "#EBAA3A",
+            iconName: "banknote.fill",
+            startingBalanceMinor: 0,
+            currentBalanceMinor: 0,
+            currencyCode: currency,
+            isArchived: false,
+            sortOrder: 5,
+            createdAt: now,
+            updatedAt: now
+        )
+        try repository.saveWallet(wallet)
+        return wallet.id
+    }
+
+    private func removeExistingUITestTransactions() throws {
+        let existing = try repository.transactions(query: .init(), limit: nil)
+            .filter { $0.note.hasPrefix("UITEST-") || $0.merchant.hasPrefix("UITEST-") }
+        for item in existing {
+            do {
+                try repository.deleteTransaction(id: item.id)
+            } catch CashRunwayError.notFound {
+                continue
+            }
+        }
     }
 
     private func requireCategory(named name: String, kind: CategoryKind) throws -> UUID {

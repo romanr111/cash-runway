@@ -96,6 +96,6 @@ public struct TimelineFilterPresentation: Equatable, Sendable {
 
     public static func isDateRangeValid(startDate: Date?, endDate: Date?) -> Bool {
         guard let startDate, let endDate else { return true }
-        return startDate <= endDate
+        return DateKeys.dayKey(for: startDate) <= DateKeys.dayKey(for: endDate)
     }
 }

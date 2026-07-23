@@ -20,3 +20,5 @@ __pycache__/
 /main
 headroom_memory.db
 *.db
+
+.codex/

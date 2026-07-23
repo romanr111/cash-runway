@@ -58,6 +58,14 @@ enum CashRunwayAccessibilityID {
         "timeline.dayToggle.\(dayKey)"
     }
 
+    static func timelineMonthPickerOption(_ monthKey: Int) -> String {
+        "timeline.monthPicker.option.\(monthKey)"
+    }
+
+    static func timelineYearPickerOption(_ year: Int) -> String {
+        "timeline.yearPicker.option.\(year)"
+    }
+
     static let overviewOpenButton = "overview.openButton"
     static let overviewExpensesCard = "overview.expensesCard"
     static let overviewIncomeCard = "overview.incomeCard"

@@ -10,7 +10,6 @@ struct TimelineGroupedBarChart: View {
     let locale: Locale
     let onSelect: (Int) -> Void
 
-    private let groupWidth: CGFloat = 72
     private let barWidth: CGFloat = 18
     private let labelReserve: CGFloat = 44
     private let periodLabelReserve: CGFloat = 38
@@ -42,7 +41,7 @@ struct TimelineGroupedBarChart: View {
                             scale: scale,
                             maxMagnitude: maxMagnitude
                         )
-                        .frame(width: groupWidth)
+                        .frame(maxWidth: .infinity)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -86,7 +85,7 @@ struct TimelineGroupedBarChart: View {
         let resolvedCurrency = currencyCode ?? .uah
         let incomeText = MoneyFormatter.string(from: point.incomeMinor, currencyCode: resolvedCurrency, locale: locale)
         let expenseText = MoneyFormatter.string(from: -point.expenseMinor, currencyCode: resolvedCurrency, locale: locale)
-        let selectedText = isSelected ? "Selected" : ""
+        let selectedText = isSelected ? L10n.string("Selected") : ""
         return [periodName, "\(L10n.string("Income")) \(incomeText)", "\(L10n.string("Expense")) \(expenseText)", selectedText]
             .filter { !$0.isEmpty }
             .joined(separator: ". ")
@@ -103,51 +102,65 @@ private struct TimelineChartGroup: View {
     let scale: CGFloat
     let maxMagnitude: Int64
 
+    private let labelGap: CGFloat = 4
+    private let topLabelReserve: CGFloat = 36
+    private let collisionThreshold: CGFloat = 14
+    private let collisionStagger: CGFloat = 14
+
     var body: some View {
-        VStack(spacing: 4) {
-            valueLabels
-            bars
+        VStack(spacing: 6) {
+            barsWithLabels
             periodLabel
         }
     }
 
-    private var valueLabels: some View {
-        let incomeValue = Double(point.incomeBarMinor) * scale
-        let expenseValue = Double(point.expenseBarMinor) * scale
-        let collision = abs(incomeValue - expenseValue) < 20
-        let offset: CGFloat = collision ? 18 : 0
-
-        return ZStack(alignment: .bottom) {
-            Text(TimelinePresentation.compactValueText(minorUnits: point.incomeBarMinor, locale: locale))
-                .font(.system(size: 11, weight: .semibold).monospacedDigit())
-                .foregroundStyle(CashRunwayTheme.textSecondary)
-                .offset(y: -offset)
-            Text(TimelinePresentation.compactValueText(minorUnits: point.expenseBarMinor, locale: locale))
-                .font(.system(size: 11, weight: .semibold).monospacedDigit())
-                .foregroundStyle(CashRunwayTheme.textSecondary)
-                .offset(y: offset)
+    // Each value label is anchored directly above its own bar's top, so bars of
+    // different heights naturally separate their labels. When two bars are nearly
+    // equal in height, the income label is nudged up so the pair never superimposes.
+    private var barsWithLabels: some View {
+        HStack(alignment: .bottom, spacing: 4) {
+            barColumn(
+                value: point.incomeBarMinor,
+                neighbor: point.expenseBarMinor,
+                color: CashRunwayTheme.accent,
+                staggerWhenClose: true
+            )
+            barColumn(
+                value: point.expenseBarMinor,
+                neighbor: point.incomeBarMinor,
+                color: CashRunwayTheme.negative,
+                staggerWhenClose: false
+            )
         }
-        .frame(height: 22)
+        .frame(height: maxBarHeight + topLabelReserve, alignment: .bottom)
     }
 
-    private var bars: some View {
-        HStack(alignment: .bottom, spacing: 4) {
-            bar(value: point.incomeBarMinor, color: CashRunwayTheme.accent)
-            bar(value: point.expenseBarMinor, color: CashRunwayTheme.negative)
+    private func barColumn(value: Int64, neighbor: Int64, color: Color, staggerWhenClose: Bool) -> some View {
+        let height = max(CGFloat(value) * scale, value == 0 ? 0 : minBarHeight)
+        let neighborHeight = max(CGFloat(neighbor) * scale, neighbor == 0 ? 0 : minBarHeight)
+        let isClose = value > 0 && neighbor > 0 && abs(height - neighborHeight) < collisionThreshold
+        let stagger: CGFloat = (staggerWhenClose && isClose) ? collisionStagger : 0
+        return ZStack(alignment: .bottom) {
+            RoundedRectangle(cornerRadius: 4)
+                .fill(color.opacity(isSelected ? 1.0 : 0.75))
+                .frame(width: barWidth, height: height)
+
+            valueLabel(value: value)
+                .offset(y: -(height + labelGap + stagger))
         }
-        .frame(height: maxBarHeight, alignment: .bottom)
+        .frame(width: barWidth, height: maxBarHeight + topLabelReserve, alignment: .bottom)
+    }
+
+    private func valueLabel(value: Int64) -> some View {
+        Text(value == 0 ? "-" : TimelinePresentation.compactValueText(minorUnits: value, locale: locale))
+            .font(.system(size: 10, weight: .semibold).monospacedDigit())
+            .foregroundStyle(CashRunwayTheme.textSecondary)
+            .fixedSize()
     }
 
     private var maxBarHeight: CGFloat {
         guard maxMagnitude > 0 else { return minBarHeight }
         return CGFloat(maxMagnitude) * scale
-    }
-
-    private func bar(value: Int64, color: Color) -> some View {
-        let height = max(CGFloat(value) * scale, value == 0 ? 0 : minBarHeight)
-        return RoundedRectangle(cornerRadius: 4)
-            .fill(color.opacity(isSelected ? 1.0 : 0.75))
-            .frame(width: barWidth, height: height)
     }
 
     private var periodLabel: some View {

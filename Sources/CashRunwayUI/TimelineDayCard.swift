@@ -95,10 +95,8 @@ struct TimelineDayCard: View {
         let total: String
         if isMixedCurrency {
             total = L10n.string("Mixed-currency totals unavailable")
-        } else if let totalText {
-            total = totalText
         } else {
-            total = MoneyFormatter.string(from: section.totalMinor, currencyCode: .uah)
+            total = totalText ?? ""
         }
         let state = isCollapsed ? L10n.string("timeline.accessibility.expand") : L10n.string("timeline.accessibility.collapse")
         return "\(date), \(total), \(state)"
