@@ -197,7 +197,7 @@ struct DashboardView: View {
 
     private var summaryCard: some View {
         Group {
-            if model.wallets.filter({ !$0.isArchived }).count > 1, model.wallets.aggregateCurrencyCode(selectedWalletID: nil) == nil {
+            if model.wallets.filter({ !$0.isArchived }).count > 1, model.wallets.aggregateCurrencyCode(selectedWalletID: model.selectedWalletID) == nil {
                 ContentUnavailableView(
                     L10n.string("Mixed-currency cash flow unavailable"),
                     systemImage: "chart.bar",
