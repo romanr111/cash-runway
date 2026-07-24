@@ -1,12 +1,476 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Period mode": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Period mode"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Режим періоду"
+          }
+        }
+      }
+    },
+    "Selected": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selected"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вибрано"
+          }
+        }
+      }
+    },
+    "Select Period": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select Period"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Оберіть період"
+          }
+        }
+      }
+    },
+    "Mixed-currency cash flow unavailable": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mixed-currency cash flow unavailable"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Підсумки грошового потоку недоступні для різних валют"
+          }
+        }
+      }
+    },
+    "transaction.source.recurring": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scheduled"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "За розкладом"
+          }
+        }
+      }
+    },
+    "timeline.wallet.singleCurrencyHint": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select a single wallet to see cash flow summaries."
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Оберіть один гаманець, щоб побачити підсумки грошового потоку"
+          }
+        }
+      }
+    },
+    "timeline.search.clear": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear search"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Очистити пошук"
+          }
+        }
+      }
+    },
+    "timeline.period.year": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Year"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Рік"
+          }
+        }
+      }
+    },
+    "timeline.period.month": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Month"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Місяць"
+          }
+        }
+      }
+    },
+    "timeline.noTransactions.broaden": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add a transaction or broaden the search filters."
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Додайте транзакцію або розширте пошукові фільтри."
+          }
+        }
+      }
+    },
+    "timeline.noTransactions.addOrFilter": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add a transaction or adjust the filters."
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Додайте транзакцію або змініть фільтри."
+          }
+        }
+      }
+    },
+    "timeline.filter.dateRangeInvalid": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start date must be on or before end date"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Дата початку має бути не пізніше дати завершення"
+          }
+        }
+      }
+    },
+    "timeline.filter.activeCount": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filters, %d active"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Фільтри, активних: %d"
+          }
+        }
+      }
+    },
+    "timeline.dayHeader.yesterday": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yesterday"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вчора"
+          }
+        }
+      }
+    },
+    "timeline.dayHeader.today": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Today"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сьогодні"
+          }
+        }
+      }
+    },
+    "timeline.accessibility.searchActive": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Active search"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Активний пошук"
+          }
+        }
+      }
+    },
+    "timeline.accessibility.filteredBy": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filtered by"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Відфільтровано за"
+          }
+        }
+      }
+    },
+    "timeline.accessibility.expand": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expand"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Розгорнути"
+          }
+        }
+      }
+    },
+    "timeline.accessibility.collapse": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Collapse"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Згорнути"
+          }
+        }
+      }
+    },
+    "transaction.source.manual": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manual"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вручну"
+          }
+        }
+      }
+    },
+    "transaction.source.csv": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CSV Import"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Імпорт CSV"
+          }
+        }
+      }
+    },
+    "transaction.source.bank": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bank Sync"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Банківська синхронізація"
+          }
+        }
+      }
+    },
+    "No transactions match the active filters.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No transactions match the active filters."
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Немає транзакцій, що відповідають активним фільтрам."
+          }
+        }
+      }
+    },
+    "No transactions in selected period": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No transactions in selected period"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Немає транзакцій у вибраному періоді"
+          }
+        }
+      }
+    },
+    "No transactions found": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No transactions found"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Транзакцій не знайдено"
+          }
+        }
+      }
+    },
+    "Mixed-currency totals unavailable": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mixed-currency totals unavailable"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Недоступно для різних валют"
+          }
+        }
+      }
+    },
+    "Clear filters": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear filters"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Очистити фільтри"
+          }
+        }
+      }
+    },
+    "Clear all": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear all"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Очистити все"
+          }
+        }
+      }
+    },
+    "Clear": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Очистити"
+          }
+        }
+      }
+    },
     "timeline.accessibility.expense": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "timeline.accessibility.expense"
+            "value": "Expense"
           }
         },
         "uk": {
@@ -22,7 +486,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "timeline.accessibility.income"
+            "value": "Income"
           }
         },
         "uk": {
@@ -38,7 +502,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "timeline.accessibility.net"
+            "value": "Net cash flow"
           }
         },
         "uk": {
@@ -54,7 +518,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "timeline.accessibility.period"
+            "value": "Period"
           }
         },
         "uk": {
@@ -70,7 +534,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "timeline.chartValue.millions"
+            "value": "M"
           }
         },
         "uk": {
@@ -86,7 +550,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "timeline.chartValue.thousands"
+            "value": "K"
           }
         },
         "uk": {
@@ -102,7 +566,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "timeline.comparison.unavailable"
+            "value": "Comparison unavailable"
           }
         },
         "uk": {
@@ -118,7 +582,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "timeline.comparison.unchanged"
+            "value": "Expenses unchanged from %@"
           }
         },
         "uk": {
@@ -134,7 +598,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "timeline.comparison.lower"
+            "value": "Expenses lower than %@"
           }
         },
         "uk": {
@@ -150,7 +614,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "timeline.comparison.higher"
+            "value": "Expenses higher than %@"
           }
         },
         "uk": {
@@ -638,7 +1102,7 @@
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Усі категорії"
+            "value" : "Всі категорії"
           }
         }
       }
@@ -705,7 +1169,7 @@
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Усі мітки"
+            "value" : "Всі мітки"
           }
         }
       }
@@ -2566,7 +3030,7 @@
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Діапазон дат"
+            "value" : "Період"
           }
         }
       }
@@ -4654,7 +5118,7 @@
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Отримувач, нотатка, гаманець, мітка"
+            "value" : "Продавець, примітка, гаманець, мітка"
           }
         }
       }
@@ -6469,7 +6933,7 @@
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Заплановано"
+            "value" : "За розкладом"
           }
         }
       }

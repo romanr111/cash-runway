@@ -47,6 +47,8 @@
 		A00100010001000100010062 /* Sources/CashRunwayUI/TimelineSummaryAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010061 /* Sources/CashRunwayUI/TimelineSummaryAdapter.swift */; };
 		A00100010001000100010063 /* Sources/CashRunwayUI/TimelineSummaryCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010063 /* Sources/CashRunwayUI/TimelineSummaryCard.swift */; };
 		A00100010001000100010064 /* Sources/CashRunwayUI/TimelineGroupedBarChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010064 /* Sources/CashRunwayUI/TimelineGroupedBarChart.swift */; };
+		A00100010001000100010065 /* Sources/CashRunwayUI/TimelineDayCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010065 /* Sources/CashRunwayUI/TimelineDayCard.swift */; };
+		A00100010001000100010066 /* Sources/CashRunwayUI/TimelinePeriodPickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010066 /* Sources/CashRunwayUI/TimelinePeriodPickerSheet.swift */; };
 			A00100010001000100010026 /* AppHost/Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = A00200010001000100010026 /* AppHost/Localizable.xcstrings */; };
 			A0010001000100010001002F /* AppHost/uk.lproj/InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = A0020001000100010001002E /* AppHost/uk.lproj/InfoPlist.strings */; };
 		A01300010001000100010003 /* CashRunwayCore in Frameworks */ = {isa = PBXBuildFile; productRef = A01300010001000100010002 /* CashRunwayCore */; };
@@ -98,6 +100,8 @@
 		A00200010001000100010061 /* Sources/CashRunwayUI/TimelineSummaryAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayUI/TimelineSummaryAdapter.swift; sourceTree = "<group>"; };
 		A00200010001000100010063 /* Sources/CashRunwayUI/TimelineSummaryCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayUI/TimelineSummaryCard.swift; sourceTree = "<group>"; };
 		A00200010001000100010064 /* Sources/CashRunwayUI/TimelineGroupedBarChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayUI/TimelineGroupedBarChart.swift; sourceTree = "<group>"; };
+		A00200010001000100010065 /* Sources/CashRunwayUI/TimelineDayCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayUI/TimelineDayCard.swift; sourceTree = "<group>"; };
+		A00200010001000100010066 /* Sources/CashRunwayUI/TimelinePeriodPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/CashRunwayUI/TimelinePeriodPickerSheet.swift; sourceTree = "<group>"; };
 		A00200010001000100010016 /* Tests/CashRunwayUITests/CashRunwayUITestCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/CashRunwayUITests/CashRunwayUITestCase.swift; sourceTree = "<group>"; };
 		A00200010001000100010017 /* Tests/CashRunwayUITests/TransactionCRUDUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/CashRunwayUITests/TransactionCRUDUITests.swift; sourceTree = "<group>"; };
 		A00200010001000100010018 /* Tests/CashRunwayUITests/TransactionOverviewUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/CashRunwayUITests/TransactionOverviewUITests.swift; sourceTree = "<group>"; };
@@ -209,6 +213,8 @@
 				A00200010001000100010061 /* Sources/CashRunwayUI/TimelineSummaryAdapter.swift */,
 				A00200010001000100010063 /* Sources/CashRunwayUI/TimelineSummaryCard.swift */,
 				A00200010001000100010064 /* Sources/CashRunwayUI/TimelineGroupedBarChart.swift */,
+				A00200010001000100010065 /* Sources/CashRunwayUI/TimelineDayCard.swift */,
+				A00200010001000100010066 /* Sources/CashRunwayUI/TimelinePeriodPickerSheet.swift */,
 			);
 			name = UI;
 			sourceTree = "<group>";
@@ -423,6 +429,8 @@
 			A00100010001000100010062 /* Sources/CashRunwayUI/TimelineSummaryAdapter.swift in Sources */,
 			A00100010001000100010063 /* Sources/CashRunwayUI/TimelineSummaryCard.swift in Sources */,
 			A00100010001000100010064 /* Sources/CashRunwayUI/TimelineGroupedBarChart.swift in Sources */,
+			A00100010001000100010065 /* Sources/CashRunwayUI/TimelineDayCard.swift in Sources */,
+			A00100010001000100010066 /* Sources/CashRunwayUI/TimelinePeriodPickerSheet.swift in Sources */,
 		);
 		runOnlyForDeploymentPostprocessing = 0;
 	};

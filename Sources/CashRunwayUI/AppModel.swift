@@ -315,7 +315,7 @@ public final class CashRunwayAppModel {
     public func reloadOverview() async {
         let effectiveWalletID = normalizeWalletScopeForAggregates()
         let wallets = self.wallets
-        guard Self.shouldLoadOverviewSnapshot(wallets: wallets, selectedWalletID: effectiveWalletID) else {
+        guard Self.shouldLoadAggregateSnapshots(wallets: wallets, selectedWalletID: effectiveWalletID) else {
             overviewSnapshot = nil
             preloadAdjacentOverviewSnapshots()
             return
@@ -454,7 +454,7 @@ public final class CashRunwayAppModel {
     private func preloadAdjacentOverviewSnapshots() {
         let wallets = self.wallets
         let effectiveWalletID = Self.normalizedWalletIDForAggregates(wallets: wallets, selectedWalletID: selectedWalletID)
-        guard Self.shouldLoadOverviewSnapshot(wallets: wallets, selectedWalletID: effectiveWalletID) else {
+        guard Self.shouldLoadAggregateSnapshots(wallets: wallets, selectedWalletID: effectiveWalletID) else {
             return
         }
 
@@ -788,7 +788,7 @@ public final class CashRunwayAppModel {
         let effectiveWalletID = normalizedWalletIDForAggregates(wallets: wallets, selectedWalletID: selectedWalletID)
         var query = transactionQuery
         query.walletID = effectiveWalletID
-        let shouldLoadOverview = shouldLoadOverviewSnapshot(wallets: wallets, selectedWalletID: effectiveWalletID)
+        let shouldLoadAggregates = shouldLoadAggregateSnapshots(wallets: wallets, selectedWalletID: effectiveWalletID)
         return AppModelSnapshot(
             wallets: wallets,
             walletCategories: try repository.walletCategories(),
@@ -799,9 +799,9 @@ public final class CashRunwayAppModel {
             instances: try repository.recurringInstances(),
             budgets: try repository.budgets(monthKey: selectedMonthKey),
             transactions: try repository.transactions(query: query),
-            dashboardSnapshot: try repository.dashboard(monthKey: selectedMonthKey, walletID: effectiveWalletID),
-            timelineSnapshot: try repository.timelineSnapshot(monthKey: selectedMonthKey, walletID: effectiveWalletID, query: query, period: selectedTimelinePeriod),
-            overviewSnapshot: shouldLoadOverview ? try repository.overviewSnapshot(monthKey: selectedMonthKey, walletID: effectiveWalletID) : nil,
+            dashboardSnapshot: shouldLoadAggregates ? try repository.dashboard(monthKey: selectedMonthKey, walletID: effectiveWalletID) : nil,
+            timelineSnapshot: shouldLoadAggregates ? try repository.timelineSnapshot(monthKey: selectedMonthKey, walletID: effectiveWalletID, query: query, period: selectedTimelinePeriod) : nil,
+            overviewSnapshot: shouldLoadAggregates ? try repository.overviewSnapshot(monthKey: selectedMonthKey, walletID: effectiveWalletID) : nil,
             transactionQuery: query
         )
     }
@@ -817,14 +817,14 @@ public final class CashRunwayAppModel {
         let effectiveWalletID = normalizedWalletIDForAggregates(wallets: wallets, selectedWalletID: selectedWalletID)
         var query = transactionQuery
         query.walletID = effectiveWalletID
-        let shouldLoadOverview = shouldLoadOverviewSnapshot(wallets: wallets, selectedWalletID: effectiveWalletID)
+        let shouldLoadAggregates = shouldLoadAggregateSnapshots(wallets: wallets, selectedWalletID: effectiveWalletID)
         return MutableSnapshots(
             budgets: try repository.budgets(monthKey: selectedMonthKey),
             walletCategories: try repository.walletCategories(),
             transactions: try repository.transactions(query: query),
-            dashboardSnapshot: try repository.dashboard(monthKey: selectedMonthKey, walletID: effectiveWalletID),
-            timelineSnapshot: try repository.timelineSnapshot(monthKey: selectedMonthKey, walletID: effectiveWalletID, query: query, period: selectedTimelinePeriod),
-            overviewSnapshot: shouldLoadOverview ? try repository.overviewSnapshot(monthKey: selectedMonthKey, walletID: effectiveWalletID) : nil,
+            dashboardSnapshot: shouldLoadAggregates ? try repository.dashboard(monthKey: selectedMonthKey, walletID: effectiveWalletID) : nil,
+            timelineSnapshot: shouldLoadAggregates ? try repository.timelineSnapshot(monthKey: selectedMonthKey, walletID: effectiveWalletID, query: query, period: selectedTimelinePeriod) : nil,
+            overviewSnapshot: shouldLoadAggregates ? try repository.overviewSnapshot(monthKey: selectedMonthKey, walletID: effectiveWalletID) : nil,
             transactionQuery: query
         )
     }
@@ -852,7 +852,12 @@ public final class CashRunwayAppModel {
         return effectiveWalletID
     }
 
-    private nonisolated static func shouldLoadOverviewSnapshot(wallets: [Wallet], selectedWalletID: UUID?) -> Bool {
+    /// Whether all-wallet aggregate snapshots (dashboard, timeline, allBars, overview)
+    /// can be computed. A single or same-currency active-wallet scope aggregates
+    /// genuinely; a mixed-currency All-Wallets scope is rejected at the repository
+    /// boundary, so callers skip those aggregates and render the unavailable state
+    /// instead of surfacing a fatal error.
+    fileprivate nonisolated static func shouldLoadAggregateSnapshots(wallets: [Wallet], selectedWalletID: UUID?) -> Bool {
         let activeWallets = wallets.filter { !$0.isArchived }
         return activeWallets.count <= 1 || activeWallets.aggregateCurrencyCode(selectedWalletID: selectedWalletID) != nil
     }
@@ -925,7 +930,6 @@ private actor BackgroundWork {
         transactionQuery: TransactionQuery
     ) throws -> (bars: [TimelineBarPoint], snapshot: AppModelSnapshot) {
         let effectiveWalletID = try repository.normalizedWalletIDForAggregates(selectedWalletID: selectedWalletID)
-        let bars = try repository.allBars(walletID: effectiveWalletID, period: selectedTimelinePeriod)
         let snapshot = try CashRunwayAppModel.loadSnapshot(
             repository: repository,
             selectedMonthKey: selectedMonthKey,
@@ -933,6 +937,11 @@ private actor BackgroundWork {
             selectedTimelinePeriod: selectedTimelinePeriod,
             transactionQuery: transactionQuery
         )
+        // Mixed-currency All-Wallets cannot aggregate a truthful chart; skip the bars
+        // (the snapshot already nils its aggregates) so the UI shows the unavailable card.
+        let bars = CashRunwayAppModel.shouldLoadAggregateSnapshots(wallets: snapshot.wallets, selectedWalletID: effectiveWalletID)
+            ? try repository.allBars(walletID: effectiveWalletID, period: selectedTimelinePeriod)
+            : []
         return (bars, snapshot)
     }
 

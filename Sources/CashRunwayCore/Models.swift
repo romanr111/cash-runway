@@ -115,10 +115,10 @@ public enum TransactionSource: String, CaseIterable, Codable, Sendable {
 
     public var displayName: String {
         switch self {
-        case .manual: L10n.string("Manual")
-        case .recurring: L10n.string("Scheduled")
-        case .bankSync: L10n.string("Bank Sync")
-        case .importCSV: L10n.string("CSV Import")
+        case .manual: L10n.string("transaction.source.manual")
+        case .recurring: L10n.string("transaction.source.recurring")
+        case .bankSync: L10n.string("transaction.source.bank")
+        case .importCSV: L10n.string("transaction.source.csv")
         }
     }
 }

@@ -32,10 +32,14 @@ enum CashRunwayAccessibilityID {
 
     static let timelineSearchButton = "timeline.searchButton"
     static let timelineSearchField = "timeline.searchField"
+    static let timelineSearchClearButton = "timeline.searchClearButton"
     static let timelineSearchApplyButton = "timeline.searchApplyButton"
     static let timelineSearchCancelButton = "timeline.searchCancelButton"
     static let timelineSearchResetButton = "timeline.searchResetButton"
     static let timelineWalletMenu = "timeline.walletMenu"
+    static let timelineMonthPicker = "timeline.monthPicker"
+    static let timelineFilterButton = "timeline.filterButton"
+    static let timelineFilterBadge = "timeline.filterBadge"
     static let timelineCashFlowValue = "timeline.cashFlowValue"
     static let timelineSummaryCard = "timeline.summaryCard"
     static let timelineIncomeValue = "timeline.incomeValue"
@@ -44,6 +48,22 @@ enum CashRunwayAccessibilityID {
 
     static func timelineChartPoint(_ periodKey: Int) -> String {
         "timeline.chartPoint.\(periodKey)"
+    }
+
+    static func timelineDayHeader(_ dayKey: Int) -> String {
+        "timeline.dayHeader.\(dayKey)"
+    }
+
+    static func timelineDayToggle(_ dayKey: Int) -> String {
+        "timeline.dayToggle.\(dayKey)"
+    }
+
+    static func timelineMonthPickerOption(_ monthKey: Int) -> String {
+        "timeline.monthPicker.option.\(monthKey)"
+    }
+
+    static func timelineYearPickerOption(_ year: Int) -> String {
+        "timeline.yearPicker.option.\(year)"
     }
 
     static let overviewOpenButton = "overview.openButton"
