@@ -18,7 +18,7 @@ struct TimelinePeriodPickerSheet: View {
 
     var body: some View {
         NavigationStack {
-            List(selection: .constant(selectedMonthKey)) {
+            List {
                 Section {
                     Picker(L10n.string("Period mode"), selection: $mode) {
                         Text(L10n.timelinePeriod(.month)).tag(TimelinePeriod.month)

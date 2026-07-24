@@ -5,7 +5,7 @@ import SwiftUI
 ///
 /// Wraps a `TimelineSection` in a surface card with a header that shows the day,
 /// total, and an expand/collapse chevron. Tapping the header toggles collapse state.
-/// Transaction rows reuse `TransactionRow` and preserve editor navigation.
+/// Transaction rows use a compact row layout and preserve editor navigation.
 struct TimelineDayCard: View {
     let section: TimelineSection
     let totalText: String?

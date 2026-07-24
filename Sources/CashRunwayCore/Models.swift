@@ -1688,14 +1688,6 @@ public struct TransactionDraft: Identifiable, Codable, Hashable, Sendable {
         case expense
         case income
         case transfer
-
-        public var displayName: String {
-            switch self {
-            case .expense: L10n.string("Expense")
-            case .income: L10n.string("Income")
-            case .transfer: L10n.string("Transfer")
-            }
-        }
     }
 
     public var id: UUID?
