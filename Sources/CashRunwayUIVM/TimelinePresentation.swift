@@ -153,6 +153,8 @@ public struct TimelinePresentation: Equatable, Sendable {
     }
 
     /// Locale-aware compact value for chart labels (e.g. `52,8 тис.` / `52.8k`).
+    /// Thousand labels at 100k or higher omit their hundreds digit so they fit within
+    /// a selected chart column without crowding its edges.
     public static func compactValueText(minorUnits: Int64, locale: Locale) -> String {
         let value = Double(abs(minorUnits)) / 100.0
 
@@ -168,6 +170,7 @@ public struct TimelinePresentation: Equatable, Sendable {
         }
         if value >= 1_000 {
             let scaled = value / 1_000
+            formatter.maximumFractionDigits = scaled >= 100 ? 0 : 1
             return "\(formatter.string(from: NSNumber(value: scaled)) ?? "0")\(Self.thousandsSuffix(for: locale))"
         }
         return formatter.string(from: NSNumber(value: value)) ?? "0"

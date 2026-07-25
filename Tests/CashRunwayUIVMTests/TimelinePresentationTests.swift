@@ -259,10 +259,22 @@ struct TimelinePresentationTests {
         #expect(value.hasSuffix("k"))
     }
 
+    @Test("six-figure Ukrainian compact value omits hundreds")
+    func ukrainianSixFigureCompactValueOmitsHundreds() {
+        let value = TimelinePresentation.compactValueText(minorUnits: 17_030_000, locale: ukrainian)
+        #expect(value == "170 тис.")
+    }
+
     @Test("zero compact value is safe")
     func zeroCompactValue() {
         let value = TimelinePresentation.compactValueText(minorUnits: 0, locale: english)
         #expect(value == "0")
+    }
+
+    @Test("near-baseline chart guide stays hidden")
+    func nearBaselineChartGuideStaysHidden() {
+        #expect(!TimelineChartPresentation.showsReferenceLine(value: 697, scale: 0.01, minimumDistance: 10))
+        #expect(TimelineChartPresentation.showsReferenceLine(value: 79_500, scale: 0.01, minimumDistance: 10))
     }
 
     // MARK: - Chart window
