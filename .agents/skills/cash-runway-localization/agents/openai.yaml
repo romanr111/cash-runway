@@ -1,0 +1,7 @@
+interface:
+  display_name: "Cash Runway Localization"
+  short_description: "Cash Runway English/Ukrainian localization workflow"
+  default_prompt: "Use $cash-runway-localization to implement or review Cash Runway English/Ukrainian localization safely."
+
+policy:
+  allow_implicit_invocation: true
