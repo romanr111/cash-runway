@@ -54,6 +54,7 @@ struct TimelineDayCard: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .shadow(color: CashRunwayTheme.softShadow, radius: 12, y: 5)
         .contentShape(Rectangle())
     }
 

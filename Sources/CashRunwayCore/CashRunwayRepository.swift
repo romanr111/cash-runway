@@ -1071,8 +1071,16 @@ extension CashRunwayRepository {
 
     /// Bounded income/expense sums over an inclusive local-day-key range.
     /// Transfers are excluded by the conditional sums (`type = 'income'`/`'expense'`).
+    /// All-Wallets (nil) scope excludes archived wallets to match the UI definition.
     private static func boundedSums(_ db: Database, walletID: UUID?, startDayKey: Int, endDayKey: Int) throws -> (income: Int64, expense: Int64) {
-        let walletArgument: any DatabaseValueConvertible = walletID?.uuidString ?? NSNull()
+        let (walletScope, walletArguments): (String, [any DatabaseValueConvertible])
+        if let walletID {
+            walletScope = "AND wallet_id = ?"
+            walletArguments = [walletID.uuidString]
+        } else {
+            walletScope = "AND wallet_id IN (SELECT id FROM wallets WHERE is_archived = 0)"
+            walletArguments = []
+        }
         let row = try Row.fetchOne(
             db,
             sql: """
@@ -1082,17 +1090,25 @@ extension CashRunwayRepository {
             FROM transactions
             WHERE is_deleted = 0
               AND local_day_key BETWEEN ? AND ?
-              AND (? IS NULL OR wallet_id = ?)
+              \(walletScope)
             """,
-            arguments: [startDayKey, endDayKey, walletArgument, walletArgument]
+            arguments: StatementArguments([startDayKey, endDayKey] + walletArguments)
         )
         return (row?["income_minor"] ?? 0, row?["expense_minor"] ?? 0)
     }
 
     /// Bounded expense sum over the baseline window. Excludes income and both transfer
     /// directions by filtering `type = 'expense'`.
+    /// All-Wallets (nil) scope excludes archived wallets to match the UI definition.
     private static func baselineExpense(_ db: Database, walletID: UUID?, startDayKey: Int, endDayKey: Int) throws -> Int64 {
-        let walletArgument: any DatabaseValueConvertible = walletID?.uuidString ?? NSNull()
+        let (walletScope, walletArguments): (String, [any DatabaseValueConvertible])
+        if let walletID {
+            walletScope = "AND wallet_id = ?"
+            walletArguments = [walletID.uuidString]
+        } else {
+            walletScope = "AND wallet_id IN (SELECT id FROM wallets WHERE is_archived = 0)"
+            walletArguments = []
+        }
         let value = try Int64.fetchOne(
             db,
             sql: """
@@ -1101,9 +1117,9 @@ extension CashRunwayRepository {
             WHERE is_deleted = 0
               AND type = 'expense'
               AND local_day_key BETWEEN ? AND ?
-              AND (? IS NULL OR wallet_id = ?)
+              \(walletScope)
             """,
-            arguments: [startDayKey, endDayKey, walletArgument, walletArgument]
+            arguments: StatementArguments([startDayKey, endDayKey] + walletArguments)
         ) ?? 0
         return value
     }
@@ -1183,14 +1199,24 @@ extension CashRunwayRepository {
         }
     }
 
+    /// SQL fragment + arguments restricting `monthly_wallet_cashflow` rows to the
+    /// selected wallet, or to all active (non-archived) wallets when `walletID` is nil
+    /// (All Wallets). Archived wallets hold historical aggregate rows that must not
+    /// leak into the All-Wallets scope the UI defines.
+    private static func monthlyCashflowWalletScope(_ walletID: UUID?) -> (fragment: String, arguments: [any DatabaseValueConvertible]) {
+        if let walletID {
+            return ("wallet_id = ?", [walletID.uuidString])
+        }
+        return ("wallet_id IN (SELECT id FROM wallets WHERE is_archived = 0)", [])
+    }
+
     private static func loadMonthlyBars(_ db: Database, monthKey: Int, walletID: UUID?) throws -> [TimelineBarPoint] {
         let months = Self.monthWindow(endingAt: monthKey, count: 6)
         var conditions = ["month_key BETWEEN ? AND ?"]
         var arguments: [any DatabaseValueConvertible] = [months.first ?? monthKey, months.last ?? monthKey]
-        if let walletID {
-            conditions.append("wallet_id = ?")
-            arguments.append(walletID.uuidString)
-        }
+        let scope = Self.monthlyCashflowWalletScope(walletID)
+        conditions.append(scope.fragment)
+        arguments.append(contentsOf: scope.arguments)
         let rows = try Row.fetchAll(
             db,
             sql: """
@@ -1228,10 +1254,9 @@ extension CashRunwayRepository {
         let endMonth = year * 100 + 12
         var conditions = ["month_key BETWEEN ? AND ?"]
         var arguments: [any DatabaseValueConvertible] = [startMonth, endMonth]
-        if let walletID {
-            conditions.append("wallet_id = ?")
-            arguments.append(walletID.uuidString)
-        }
+        let scope = Self.monthlyCashflowWalletScope(walletID)
+        conditions.append(scope.fragment)
+        arguments.append(contentsOf: scope.arguments)
         let rows = try Row.fetchAll(
             db,
             sql: """
@@ -1278,19 +1303,14 @@ extension CashRunwayRepository {
     }
 
     private static func loadAllMonthlyBars(_ db: Database, walletID: UUID?) throws -> [TimelineBarPoint] {
-        var conditions: [String] = []
-        var arguments: [any DatabaseValueConvertible] = []
-        if let walletID {
-            conditions.append("wallet_id = ?")
-            arguments.append(walletID.uuidString)
-        }
-        let whereClause = conditions.isEmpty ? "" : "WHERE \(conditions.joined(separator: " AND "))"
+        let scope = Self.monthlyCashflowWalletScope(walletID)
+        let whereClause = "WHERE \(scope.fragment)"
 
         let minMaxRow = try Row.fetchOne(db, sql: """
             SELECT MIN(month_key) as min_month, MAX(month_key) as max_month
             FROM monthly_wallet_cashflow
             \(whereClause)
-            """, arguments: StatementArguments(arguments))
+            """, arguments: StatementArguments(scope.arguments))
 
         guard let minMonth: Int = minMaxRow?["min_month"],
               let maxMonth: Int = minMaxRow?["max_month"] else {
@@ -1308,12 +1328,8 @@ extension CashRunwayRepository {
             }
         }
 
-        var dataConditions = ["month_key BETWEEN ? AND ?"]
-        var dataArguments: [any DatabaseValueConvertible] = [minMonth, maxMonth]
-        if let walletID {
-            dataConditions.append("wallet_id = ?")
-            dataArguments.append(walletID.uuidString)
-        }
+        let dataConditions = ["month_key BETWEEN ? AND ?", scope.fragment]
+        let dataArguments: [any DatabaseValueConvertible] = [minMonth, maxMonth] + scope.arguments
         let dataRows = try Row.fetchAll(
             db,
             sql: """
@@ -1345,19 +1361,14 @@ extension CashRunwayRepository {
     }
 
     private static func loadAllYearlyBars(_ db: Database, walletID: UUID?) throws -> [TimelineBarPoint] {
-        var conditions: [String] = []
-        var arguments: [any DatabaseValueConvertible] = []
-        if let walletID {
-            conditions.append("wallet_id = ?")
-            arguments.append(walletID.uuidString)
-        }
-        let whereClause = conditions.isEmpty ? "" : "WHERE \(conditions.joined(separator: " AND "))"
+        let scope = Self.monthlyCashflowWalletScope(walletID)
+        let whereClause = "WHERE \(scope.fragment)"
 
         let minMaxRow = try Row.fetchOne(db, sql: """
             SELECT MIN(month_key / 100) as min_year, MAX(month_key / 100) as max_year
             FROM monthly_wallet_cashflow
             \(whereClause)
-            """, arguments: StatementArguments(arguments))
+            """, arguments: StatementArguments(scope.arguments))
 
         guard let minYear: Int = minMaxRow?["min_year"],
               let maxYear: Int = minMaxRow?["max_year"] else {
@@ -1366,12 +1377,8 @@ extension CashRunwayRepository {
 
         let years = Array(minYear...maxYear)
 
-        var dataConditions = ["month_key / 100 BETWEEN ? AND ?"]
-        var dataArguments: [any DatabaseValueConvertible] = [minYear, maxYear]
-        if let walletID {
-            dataConditions.append("wallet_id = ?")
-            dataArguments.append(walletID.uuidString)
-        }
+        let dataConditions = ["month_key / 100 BETWEEN ? AND ?", scope.fragment]
+        let dataArguments: [any DatabaseValueConvertible] = [minYear, maxYear] + scope.arguments
         let dataRows = try Row.fetchAll(
             db,
             sql: """

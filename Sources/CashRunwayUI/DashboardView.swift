@@ -32,7 +32,7 @@ struct DashboardView: View {
     var body: some View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 20) {
+                VStack(spacing: 12) {
                     if model.hasBootstrapped && model.wallets.isEmpty {
                         emptyState
                     } else {
@@ -43,7 +43,7 @@ struct DashboardView: View {
                     }
                 }
                 .padding(.horizontal, 20)
-                .padding(.top, 12)
+                .padding(.top, 6)
                 .padding(.bottom, 140)
             }
             .background(CashRunwayTheme.background)
@@ -157,7 +157,7 @@ struct DashboardView: View {
     private var timelineHeader: some View {
         HStack(alignment: .center) {
             Text(L10n.string("Cash Flow"))
-                .font(.system(size: 32, weight: .bold))
+                .font(.system(size: 27, weight: .bold))
                 .foregroundStyle(CashRunwayTheme.textPrimary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
@@ -166,7 +166,6 @@ struct DashboardView: View {
 
             searchButton
         }
-        .padding(.top, 4)
     }
 
     private var searchButton: some View {
@@ -176,10 +175,9 @@ struct DashboardView: View {
             ZStack {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(filterPresentation.isSearchActive ? .white : CashRunwayTheme.textSecondary)
-                    .frame(width: 36, height: 36)
-                    .background(filterPresentation.isSearchActive ? CashRunwayTheme.accent : CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1))
+                    .foregroundStyle(filterPresentation.isSearchActive ? .white : CashRunwayTheme.accentDark)
+                    .frame(width: 38, height: 38)
+                    .background(filterPresentation.isSearchActive ? CashRunwayTheme.accent : CashRunwayTheme.accentMuted, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
                 if filterPresentation.isSearchActive {
                     Circle()
@@ -208,19 +206,52 @@ struct DashboardView: View {
             } else {
                 TimelineSummaryCard(
                     presentation: presentation,
-                    period: model.selectedTimelinePeriod,
+                    period: presentation.period,
                     locale: L10n.locale,
                     onSelectPeriod: { periodKey in
-                        let newMonthKey = DateKeys.monthKey(fromPeriodKey: periodKey, period: model.selectedTimelinePeriod)
+                        let newMonthKey = DateKeys.monthKey(fromPeriodKey: periodKey, period: presentation.period)
                         guard newMonthKey != model.selectedMonthKey else { return }
                         model.selectedMonthKey = newMonthKey
                         collapsedDayKeys.removeAll()
                         model.reloadTimeline()
-                    },
-                    onOverview: { showsOverview = true }
+                    }
                 )
+
+                spendingOverviewButton
             }
         }
+    }
+
+    // Standalone, elevated action card beneath the summary, matching the reference
+    // where "Spending Overview" is its own tappable card rather than an inline row.
+    private var spendingOverviewButton: some View {
+        Button {
+            showsOverview = true
+        } label: {
+            HStack(spacing: 10) {
+                Spacer(minLength: 0)
+                Image(systemName: "chart.pie.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(CashRunwayTheme.accent)
+                Text(L10n.string("Spending Overview"))
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(CashRunwayTheme.textPrimary)
+                Spacer(minLength: 0)
+            }
+            .overlay(alignment: .trailing) {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(CashRunwayTheme.textMuted)
+            }
+            .padding(.horizontal, 20)
+            .frame(minHeight: 46)
+            .frame(maxWidth: .infinity)
+            .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .shadow(color: CashRunwayTheme.softShadow, radius: 12, y: 5)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(CashRunwayAccessibilityID.overviewOpenButton)
     }
 
     // The three controls must fit one non-scrolling row without clipping in any
@@ -302,7 +333,7 @@ struct DashboardView: View {
         } label: {
             ZStack(alignment: .topTrailing) {
                 pillLabel(
-                    iconName: "slider.horizontal.3",
+                    iconName: "line.3.horizontal.decrease",
                     text: L10n.string("Filters"),
                     showsChevron: false,
                     fontSize: fontSize
@@ -313,7 +344,7 @@ struct DashboardView: View {
                         .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(.white)
                         .frame(minWidth: 18, minHeight: 18)
-                        .background(CashRunwayTheme.negative, in: Circle())
+                        .background(CashRunwayTheme.accent, in: Circle())
                         .offset(x: 4, y: -4)
                         .accessibilityIdentifier(CashRunwayAccessibilityID.timelineFilterBadge)
                 }

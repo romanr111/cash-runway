@@ -122,15 +122,23 @@ struct TimelinePeriodPickerSheet: View {
     }
 
     private func applySelection() {
-        guard selectedMonthKey != model.selectedMonthKey || mode != model.selectedTimelinePeriod else {
+        let periodChanged = model.selectedTimelinePeriod != mode
+        guard selectedMonthKey != model.selectedMonthKey || periodChanged else {
             dismiss()
             return
         }
-        if model.selectedTimelinePeriod != mode {
+        if periodChanged {
             model.selectTimelinePeriod(mode)
         }
         model.selectedMonthKey = selectedMonthKey
         dismiss()
-        model.reloadTimeline()
+        // Period mode (month/year) changes the granularity of `allBars` used by the
+        // chart; `reloadTimeline()` only refreshes mutable snapshots, so route a mode
+        // change through `reloadAll()` which also reloads `allBars`.
+        if periodChanged {
+            Task { await model.reloadAll() }
+        } else {
+            model.reloadTimeline()
+        }
     }
 }

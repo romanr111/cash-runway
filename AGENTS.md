@@ -8,14 +8,13 @@ Cash Runway-specific rules. Where this file is silent, follow global `AGENTS.md`
 ## Session start checklist
 
 Run `just session-start` at the beginning of every working session. It prints the
-worktree, branch, bootstraps CodeGraph, and runs the pre-flight inventory.
+worktree, branch, and runs the pre-flight inventory.
 
 Manual fallback if `just` is unavailable:
 1. `git worktree list`
 2. `git -C <worktree> rev-parse --abbrev-ref HEAD`
 3. `git status --short`
 4. `Scripts/pre-flight.sh`
-5. `Scripts/codegraph-bootstrap.sh`
 
 ## Always Apply
 
@@ -43,22 +42,9 @@ Manual fallback if `just` is unavailable:
 
 ## CodeGraph
 
-- Run `just graph-bootstrap` once per worktree. It is idempotent and repairs a
-  stale or missing worktree marker automatically.
-- Run `just graph-sync` after meaningful edits (new files, renamed symbols, moved
-  functions) so callers and impact analysis stay accurate.
-- Before broad searches for symbols, functions, types, callers, or impact, prefer
-  CodeGraph commands:
-  - `codegraph query "<name>"`
-  - `codegraph callers "<symbol>"`
-  - `codegraph callees "<symbol>"`
-  - `codegraph impact "<symbol>"`
-  - `codegraph affected <files...>`
-- Fall back to `grep`/`glob` only when:
-  - CodeGraph returns zero results,
-  - you need a regex/text pattern that is not a symbol,
-  - or CodeGraph is unavailable. Report the fallback explicitly.
-- If `just graph-status` still fails after bootstrap, run `just graph-repair`.
+The global selection policy determines whether CodeGraph is appropriate. See
+`agent_docs/reference/codegraph-commands.md` for Cash Runway-specific commands,
+worktree ownership, and lifecycle guidance.
 
 ## SwiftPM validation
 
@@ -175,9 +161,9 @@ Manual fallback if `just` is unavailable:
   `agent_docs/reference/token-efficiency.md`,
   `agent_docs/reference/verification-strategies.md`, and
   `agent_docs/reference/code-review.md`.
-- For files over 500 lines, use CodeGraph first and read narrow 20-40 line
-  windows around the relevant symbol before broader scans. Do not read the
-  complete file unless necessary.
+- For files over 500 lines, use the navigation method selected by the global
+  policy and read narrow 20-40 line windows around the relevant symbol before
+  broader scans. Do not read the complete file unless necessary.
 - Batch related reads in one response; emit multiple `Read` calls in parallel
   instead of reading one file per turn.
 - Always use existing `just` recipes for repository tasks. Do not run raw

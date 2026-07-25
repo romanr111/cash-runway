@@ -1,0 +1,4 @@
+interface:
+  display_name: "Cash Runway Release"
+  short_description: "Prepare Cash Runway releases from dev to main with tags and SideStore."
+  default_prompt: "Use $cash-runway-release to prepare a new Cash Runway release: create an integration branch from dev, bump the version tag, group commits logically, open a PR into main with a summary, and prepare the SideStore release."

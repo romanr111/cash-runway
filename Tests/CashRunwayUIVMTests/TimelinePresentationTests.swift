@@ -130,7 +130,9 @@ struct TimelinePresentationTests {
         )
 
         #expect(!presentation.incomeText.hasPrefix("-"))
-        #expect(presentation.incomeText.contains("123.45"))
+        // Metric-card amounts drop kopecks (whole hryvnia only).
+        #expect(presentation.incomeText.contains("123"))
+        #expect(!presentation.incomeText.contains("123.45"))
     }
 
     @Test("expense text shows negative sign")
@@ -144,7 +146,9 @@ struct TimelinePresentationTests {
         )
 
         #expect(presentation.expenseText.hasPrefix("-") || presentation.expenseText.hasPrefix("−"))
-        #expect(presentation.expenseText.contains("123.45"))
+        // Metric-card amounts drop kopecks (whole hryvnia only).
+        #expect(presentation.expenseText.contains("123"))
+        #expect(!presentation.expenseText.contains("123.45"))
     }
 
     // MARK: - Comparison copy
@@ -314,5 +318,66 @@ struct TimelinePresentationTests {
 
         #expect(presentation.chartPoints.count == 4)
         #expect(presentation.chartPoints.map(\.periodKey) == [202602, 202603, 202604, 202605])
+    }
+
+    // MARK: - Year mode
+
+    @Test("year label renders a clean year, never a raw month key")
+    func yearLabelRendersCleanYear() {
+        // Regression: the year branch used to print the key verbatim, so a stray
+        // month key (YYYYMM) leaked through as "202607". It must decode to the year.
+        #expect(TimelinePresentation.periodLabel(for: 2026, period: .year, locale: english) == "2026")
+        #expect(TimelinePresentation.periodLabel(for: 202607, period: .year, locale: english) == "2026")
+        #expect(TimelinePresentation.periodLabel(for: 202607, period: .year, locale: ukrainian) == "2026")
+    }
+
+    @Test("presentation period reflects the snapshot period")
+    func presentationPeriodReflectsSnapshot() {
+        let yearSnapshot = snapshot(period: .year, heroCashFlowMinor: 1000, bars: [bar(periodKey: 2026, incomeMinor: 2000, expenseMinor: 1000)])
+        let yearPresentation = TimelinePresentation(snapshot: yearSnapshot, allBars: [], currencyCode: .uah, locale: english)
+        #expect(yearPresentation.period == .year)
+
+        let monthSnapshot = snapshot(heroCashFlowMinor: 1000, bars: [bar(periodKey: 202607, incomeMinor: 2000, expenseMinor: 1000)])
+        let monthPresentation = TimelinePresentation(snapshot: monthSnapshot, allBars: [], currencyCode: .uah, locale: english)
+        #expect(monthPresentation.period == .month)
+    }
+
+    @Test("year mode selects a year-shaped period key from the anchor month")
+    func yearModeSelectsYearKey() {
+        let snapshot = snapshot(anchorMonthKey: 202607, period: .year, heroCashFlowMinor: 1000, bars: [bar(periodKey: 2026, incomeMinor: 2000, expenseMinor: 1000)])
+        let presentation = TimelinePresentation(snapshot: snapshot, allBars: [], currencyCode: .uah, locale: english)
+
+        // 202607 -> 2026 (year), never the raw month key.
+        #expect(presentation.selectedPeriodKey == 2026)
+        #expect(TimelinePresentation.periodLabel(for: presentation.selectedPeriodKey, period: presentation.period, locale: english) == "2026")
+    }
+
+    @Test("allChartPoints keeps the full year range, unwindowed and year-keyed")
+    func allChartPointsFullYearRange() {
+        let years = (2021...2026).map { bar(periodKey: $0, incomeMinor: 100, expenseMinor: 100) }
+        let snapshot = snapshot(anchorMonthKey: 202607, period: .year, heroCashFlowMinor: -100, bars: [bar(periodKey: 2026, incomeMinor: 100, expenseMinor: 200)])
+        let presentation = TimelinePresentation(snapshot: snapshot, allBars: years, currencyCode: .uah, locale: english)
+
+        // The scrubber renders the full range (not the 4-window used by chartPoints).
+        #expect(presentation.allChartPoints.map(\.periodKey) == [2021, 2022, 2023, 2024, 2025, 2026])
+        #expect(presentation.chartPoints.count == 4)
+        // The selected snapshot bar still overrides its matching year in the full strip.
+        #expect(presentation.allChartPoints.last?.expenseMinor == 200)
+    }
+
+    @Test("a month snapshot always labels as months (single-source guarantee)")
+    func monthSnapshotLabelsAsMonths() {
+        // Documents the fix: labelling against presentation.period (snapshot-derived)
+        // means a month snapshot can never render under year labels while a mode
+        // switch's async reload is still in flight.
+        let snapshot = snapshot(anchorMonthKey: 202607, heroCashFlowMinor: 1000, bars: [bar(periodKey: 202607, incomeMinor: 2000, expenseMinor: 1000)])
+        let presentation = TimelinePresentation(snapshot: snapshot, allBars: [], currencyCode: .uah, locale: english)
+
+        #expect(presentation.period == .month)
+        let label = TimelinePresentation.periodLabel(for: presentation.selectedPeriodKey, period: presentation.period, locale: english)
+        // Month label is two-line "MMM\nYYYY" and never the raw 6-digit key.
+        #expect(label.contains("2026"))
+        #expect(label != "202607")
+        #expect(label.contains("\n"))
     }
 }
