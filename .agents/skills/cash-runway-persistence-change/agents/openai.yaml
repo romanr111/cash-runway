@@ -1,0 +1,7 @@
+interface:
+  display_name: "Cash Runway Persistence Change"
+  short_description: "Migrations, repository seams, and persistence compatibility checks"
+  default_prompt: "Use $cash-runway-persistence-change for migrations, repository seams, backup/export/restore compatibility, and persistence validation."
+
+policy:
+  allow_implicit_invocation: true

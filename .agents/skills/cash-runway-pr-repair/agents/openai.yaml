@@ -1,0 +1,3 @@
+interface:
+  display_name: "Cash Runway PR Repair"
+  short_description: "Fix and push existing Cash Runway PRs with lint, focused tests, and GitHub check triage."

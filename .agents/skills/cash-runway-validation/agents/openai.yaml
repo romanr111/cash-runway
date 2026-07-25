@@ -1,0 +1,7 @@
+interface:
+  display_name: "Cash Runway Validation"
+  short_description: "Cash Runway validation routing and Xcode log triage"
+  default_prompt: "Use $cash-runway-validation to choose and run the right Cash Runway validation checks without local UI/E2E execution."
+
+policy:
+  allow_implicit_invocation: true

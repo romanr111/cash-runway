@@ -79,8 +79,9 @@ Do not rewrite or regenerate the complete catalog manually.
 
 ## Large-File Exploration
 
-- Use CodeGraph before broad repository searches.
-- Use `rg -n` to locate exact symbols or text when CodeGraph is insufficient.
+- Follow the global CodeGraph selection policy. Use `rg -n` by default for
+  exact symbols or text; use CodeGraph only when that policy selects it for
+  structural analysis.
 - Read narrow line ranges for large files.
 - Do not read entire multi-thousand-line files unless explicitly justified.
 - Use `agent_docs/reference/code-location-guide.md` only when location guidance
