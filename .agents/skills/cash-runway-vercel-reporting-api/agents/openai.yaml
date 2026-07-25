@@ -1,0 +1,7 @@
+interface:
+  display_name: "Cash Runway Reporting API"
+  short_description: "Vercel reporting API readiness checks"
+  default_prompt: "Use $cash-runway-vercel-reporting-api to verify Cash Runway reporting API Vercel deployment, env mode, public reachability, GitHub App issue creation, and PR readiness."
+
+policy:
+  allow_implicit_invocation: true
