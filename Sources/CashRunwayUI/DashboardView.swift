@@ -206,17 +206,16 @@ struct DashboardView: View {
             } else {
                 TimelineSummaryCard(
                     presentation: presentation,
-                    period: model.selectedTimelinePeriod,
+                    period: presentation.period,
                     locale: L10n.locale,
                     onSelectPeriod: { periodKey in
-                        let newMonthKey = DateKeys.monthKey(fromPeriodKey: periodKey, period: model.selectedTimelinePeriod)
+                        let newMonthKey = DateKeys.monthKey(fromPeriodKey: periodKey, period: presentation.period)
                         guard newMonthKey != model.selectedMonthKey else { return }
                         model.selectedMonthKey = newMonthKey
                         collapsedDayKeys.removeAll()
                         model.reloadTimeline()
                     }
                 )
-                .simultaneousGesture(periodSwipeGesture)
 
                 spendingOverviewButton
             }
@@ -253,23 +252,6 @@ struct DashboardView: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier(CashRunwayAccessibilityID.overviewOpenButton)
-    }
-
-    // Horizontal swipe across the summary card navigates one period at a time
-    // (swipe left -> newer, swipe right -> older), matching the legacy timeline.
-    // Guarded to fire only on predominantly-horizontal drags so vertical scrolling
-    // is preserved. Navigation is clamped at the current period by the model.
-    private var periodSwipeGesture: some Gesture {
-        DragGesture(minimumDistance: 24)
-            .onEnded { value in
-                let horizontal = value.translation.width
-                let vertical = value.translation.height
-                guard abs(horizontal) > 44, abs(horizontal) > abs(vertical) * 1.4 else { return }
-                let impact = UIImpactFeedbackGenerator(style: .light)
-                impact.impactOccurred()
-                collapsedDayKeys.removeAll()
-                model.navigatePeriod(by: horizontal < 0 ? 1 : -1)
-            }
     }
 
     // The three controls must fit one non-scrolling row without clipping in any

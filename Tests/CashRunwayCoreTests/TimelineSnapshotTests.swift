@@ -196,6 +196,46 @@ import Testing
         }
     }
 
+    // MARK: - All Wallets scope excludes archived wallets
+
+    @Test func allWalletsScopeExcludesArchivedWalletTransactions() throws {
+        // Regression: nil (All Wallets) scope must aggregate only active wallets.
+        // An archived same-currency wallet's historical transactions must not leak
+        // into the snapshot bars, the bounded current-period sums, the baseline
+        // comparison, or the historical `allBars` chart.
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        let activeWallet = WalletBuilder().with(name: "UAH Active").with(currencyCode: .uah).build()
+        let archivedWallet = WalletBuilder().with(name: "UAH Archived").with(currencyCode: .uah).build()
+        try repository.saveWallet(activeWallet)
+        try repository.saveWallet(archivedWallet)
+        let expenseCategory = try repository.categories(kind: .expense).first!
+        let now = date(2026, 7, 11)
+
+        try repository.saveTransaction(
+            TransactionBuilder().with(walletID: activeWallet.id).with(categoryID: expenseCategory.id).with(amountMinor: 2_000).with(occurredAt: date(2026, 7, 5)).build()
+        )
+        try repository.saveTransaction(
+            TransactionBuilder().with(walletID: archivedWallet.id).with(categoryID: expenseCategory.id).with(amountMinor: 8_000).with(occurredAt: date(2026, 7, 5)).build()
+        )
+
+        // Archive the second wallet by re-saving with isArchived = true. Its
+        // monthly_wallet_cashflow rows persist; the nil scope must filter them out.
+        var archived = archivedWallet
+        archived.isArchived = true
+        try repository.saveWallet(archived)
+        #expect(try repository.wallets().count == 1, "Archived wallet must not appear in the active wallets list.")
+
+        let snapshot = try repository.timelineSnapshot(monthKey: 202607, walletID: nil, query: TransactionQuery(), period: TimelinePeriod.month, now: now)
+        let selectedBar = snapshot.bars.first { $0.periodKey == 202607 }
+        #expect(selectedBar?.expenseMinor == 2_000, "All Wallets must exclude archived-wallet transactions from the current-period bar.")
+        #expect(snapshot.comparison?.baselineExpenseMinor == 0, "All Wallets must exclude archived-wallet transactions from the baseline.")
+
+        let bars = try repository.allBars(walletID: nil, period: TimelinePeriod.month)
+        let julyBar = bars.first { $0.periodKey == 202607 }
+        #expect(julyBar?.expenseMinor == 2_000, "All Wallets allBars must exclude archived-wallet transactions.")
+    }
+
     // MARK: - Zero baseline / safety
 
     @Test func zeroBaselineNeverProducesNaNOrInfinity() throws {

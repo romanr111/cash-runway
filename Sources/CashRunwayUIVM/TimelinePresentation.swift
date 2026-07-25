@@ -24,12 +24,21 @@ public struct TimelinePresentation: Equatable, Sendable {
     }
 
     public let selectedPeriodKey: Int
+    /// Authoritative render period, taken from the snapshot (never from a live model
+    /// value). Callers must label and select against this so a stale month snapshot
+    /// never renders under year labels while an async reload re-keys the data.
+    public let period: TimelinePeriod
     public let netText: String
     public let incomeText: String
     public let expenseText: String
     public let netStyle: AmountStyle
     public let comparison: Comparison?
+    /// The four-point visible window ending at the selected period.
     public let chartPoints: [TimelineBarPoint]
+    /// The full ordered strip of bars (all periods), with the selected snapshot bar
+    /// merged in. Drives the horizontal snap-scroll chart, which scrolls over
+    /// already-loaded data without a per-step reload.
+    public let allChartPoints: [TimelineBarPoint]
     public let accessibilitySummary: String
     public let currencyCode: CurrencyCode?
 
@@ -59,13 +68,17 @@ public struct TimelinePresentation: Equatable, Sendable {
         let expenseMinor = selectedBar?.expenseMinor ?? 0
 
         self.selectedPeriodKey = selectedPeriodKey
+        self.period = period
         self.currencyCode = currencyCode
         self.netStyle = Self.amountStyle(for: heroCashFlowMinor)
         self.netText = Self.formattedMoney(minorUnits: heroCashFlowMinor, currencyCode: currencyCode, locale: locale)
-        self.incomeText = Self.formattedMoney(minorUnits: incomeMinor, currencyCode: currencyCode, locale: locale)
-        self.expenseText = Self.formattedMoney(minorUnits: -Int64(expenseMinor), currencyCode: currencyCode, locale: locale)
+        // Metric cards drop kopecks (whole hryvnia only) - the fraction adds noise at
+        // a glance and the hero already reads as a rounded figure.
+        self.incomeText = Self.formattedMoney(minorUnits: incomeMinor, currencyCode: currencyCode, locale: locale, fractionDigits: 0)
+        self.expenseText = Self.formattedMoney(minorUnits: -Int64(expenseMinor), currencyCode: currencyCode, locale: locale, fractionDigits: 0)
         self.comparison = snapshot?.comparison.map { Self.comparisonPresentation($0, period: period, locale: locale) }
         self.chartPoints = Self.chartPoints(allBars: allBars, selectedBar: selectedBar, selectedPeriodKey: selectedPeriodKey)
+        self.allChartPoints = Self.allChartPoints(allBars: allBars, selectedBar: selectedBar)
         self.accessibilitySummary = Self.accessibilitySummary(
             periodLabel: Self.periodLabel(for: selectedPeriodKey, period: period, locale: locale),
             netText: netText,
@@ -99,9 +112,9 @@ public struct TimelinePresentation: Equatable, Sendable {
         return .zero
     }
 
-    private static func formattedMoney(minorUnits: Int64, currencyCode: CurrencyCode?, locale: Locale) -> String {
+    private static func formattedMoney(minorUnits: Int64, currencyCode: CurrencyCode?, locale: Locale, fractionDigits: Int = 2) -> String {
         let code = currencyCode ?? .uah
-        return MoneyFormatter.string(from: minorUnits, currencyCode: code, locale: locale)
+        return MoneyFormatter.string(from: minorUnits, currencyCode: code, locale: locale, fractionDigits: fractionDigits)
     }
 
     // MARK: - Chart window
@@ -123,6 +136,20 @@ public struct TimelinePresentation: Equatable, Sendable {
 
         let startIndex = max(0, selectedIndex - (maxVisibleCount - 1))
         return Array(merged[startIndex...selectedIndex])
+    }
+
+    /// The full ordered strip (no windowing) with the selected snapshot bar merged in,
+    /// so the scrubber can scroll across every period without a per-step reload while
+    /// still reflecting the selected period's up-to-date (possibly partial) values.
+    private static func allChartPoints(
+        allBars: [TimelineBarPoint],
+        selectedBar: TimelineBarPoint?
+    ) -> [TimelineBarPoint] {
+        var merged = allBars
+        if let selectedBar, let index = merged.firstIndex(where: { $0.periodKey == selectedBar.periodKey }) {
+            merged[index] = selectedBar
+        }
+        return merged
     }
 
     /// Locale-aware compact value for chart labels (e.g. `52,8 тис.` / `52.8k`).
@@ -177,7 +204,11 @@ public struct TimelinePresentation: Equatable, Sendable {
             let year = periodKey / 100
             return "\(month)\n\(year)"
         case .year:
-            return "\(periodKey)"
+            // A year key is a plain year (e.g. 2024). Defensively decode a
+            // month-shaped key (YYYYMM, i.e. >= 10_000) back to its year so a stale
+            // month key can never render verbatim as a 6-digit "202407".
+            let year = periodKey >= 10_000 ? periodKey / 100 : periodKey
+            return "\(year)"
         }
     }
 

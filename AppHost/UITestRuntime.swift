@@ -72,6 +72,9 @@ private struct UITestLaunchConfiguration {
         let timelineState = TimelineQAState(
             rawValue: environment["CASH_RUNWAY_UI_TEST_TIMELINE_STATE"] ?? ""
         ) ?? .nearEqual
+        let timelinePeriod = TimelinePeriod(
+            rawValue: environment["CASH_RUNWAY_UI_TEST_TIMELINE_PERIOD"] ?? ""
+        )
 
         return UITestLaunchConfiguration(
             scenario: scenario,
@@ -82,7 +85,8 @@ private struct UITestLaunchConfiguration {
                     ?? UITestMonobankMode.happyPath.rawValue
             ) ?? .happyPath,
             startScreen: startScreen,
-            timelineState: timelineState
+            timelineState: timelineState,
+            timelinePeriod: timelinePeriod
         )
     }
 
@@ -92,6 +96,9 @@ private struct UITestLaunchConfiguration {
     let monobankMode: UITestMonobankMode
     let startScreen: StartScreen?
     let timelineState: TimelineQAState
+    // Optional launch override for the Timeline period mode (month/year), so year
+    // grouping can be screenshot-verified deterministically without UI automation.
+    let timelinePeriod: TimelinePeriod?
 
     private let defaultsSuiteName = "dev.roman.cashrunway.uitest"
 
@@ -135,6 +142,9 @@ private struct UITestLaunchConfiguration {
             csvService: CSVService(repository: repository),
             backupService: BackupService(repository: repository, bankTokenStore: KeychainBankTokenStore(keychain: keychain))
         )
+        if let timelinePeriod {
+            model.selectTimelinePeriod(timelinePeriod)
+        }
         return CashRunwayAppRuntime(
             model: model,
             startupError: nil,

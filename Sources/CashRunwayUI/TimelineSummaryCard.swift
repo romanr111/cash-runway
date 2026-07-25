@@ -229,7 +229,7 @@ struct TimelineSummaryCard: View {
 
     private var chart: some View {
         TimelineGroupedBarChart(
-            points: presentation.chartPoints,
+            points: presentation.allChartPoints,
             selectedPeriodKey: presentation.selectedPeriodKey,
             period: period,
             currencyCode: presentation.currencyCode,

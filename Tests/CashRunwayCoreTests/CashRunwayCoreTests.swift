@@ -43,6 +43,11 @@ struct CashRunwayCoreTests {
 
         let yearPeriodKey = DateKeys.periodKey(for: date, period: .year)
         #expect(DateKeys.monthKey(fromPeriodKey: yearPeriodKey, period: .year) == 202501)
+
+        // Regression: a month-shaped key (YYYYMM) fed into the year conversion during a
+        // period transition must not fabricate a day-shaped key (202607 -> 20260701),
+        // which desynced the whole timeline to a bogus far-future year.
+        #expect(DateKeys.monthKey(fromPeriodKey: 202607, period: .year) == 202607)
     }
 
     @Test func selectedYearReturnsToJulyWhenSwitchingBackToMonthTimeline() {

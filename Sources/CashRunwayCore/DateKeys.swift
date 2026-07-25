@@ -44,7 +44,11 @@ public enum DateKeys {
         case .month:
             return periodKey
         case .year:
-            return periodKey * 100 + 1
+            // A year period key is a plain year (e.g. 2025 -> 202501). Guard against a
+            // month-shaped key (YYYYMM, i.e. >= 10_000) slipping in during a period
+            // transition, which would otherwise fabricate a day-shaped key
+            // (202607 -> 20260701) and desync the whole timeline to a bogus far-future year.
+            return periodKey >= 10_000 ? periodKey : periodKey * 100 + 1
         }
     }
 
