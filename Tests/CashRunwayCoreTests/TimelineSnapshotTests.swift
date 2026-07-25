@@ -236,6 +236,38 @@ import Testing
         #expect(julyBar?.expenseMinor == 2_000, "All Wallets allBars must exclude archived-wallet transactions.")
     }
 
+    @Test func allWalletsDashboardAndOverviewExcludeArchivedWalletData() throws {
+        let repository = try TestSupport.makeRepository()
+        try repository.seedIfNeeded()
+        let activeWallet = WalletBuilder().with(name: "UAH Active").with(currencyCode: .uah).build()
+        let archivedWallet = WalletBuilder().with(name: "UAH Archived").with(currencyCode: .uah).build()
+        try repository.saveWallet(activeWallet)
+        try repository.saveWallet(archivedWallet)
+        let expenseCategory = try repository.categories(kind: .expense).first!
+
+        try repository.saveTransaction(
+            TransactionBuilder().with(walletID: activeWallet.id).with(categoryID: expenseCategory.id).with(amountMinor: 2_000).with(occurredAt: date(2026, 7, 5)).build()
+        )
+        try repository.saveTransaction(
+            TransactionBuilder().with(walletID: archivedWallet.id).with(categoryID: expenseCategory.id).with(amountMinor: 8_000).with(occurredAt: date(2026, 7, 5)).build()
+        )
+        var archived = archivedWallet
+        archived.isArchived = true
+        try repository.saveWallet(archived)
+
+        let dashboard = try repository.dashboard(monthKey: 202607, walletID: nil)
+        #expect(dashboard.monthExpenseMinor == 2_000)
+        #expect(dashboard.categories.first?.amountMinor == 2_000)
+        #expect(dashboard.recentTransactions.count == 1)
+        #expect(dashboard.recentTransactions.allSatisfy { $0.walletName == activeWallet.name })
+        #expect(dashboard.wealthHistory.last?.amountMinor == -2_000)
+
+        let overview = try repository.overviewSnapshot(monthKey: 202607, walletID: nil)
+        #expect(overview.monthExpenseMinor == 2_000)
+        #expect(overview.totalWealthMinor == -2_000)
+        #expect(overview.categories.first?.amountMinor == 2_000)
+    }
+
     // MARK: - Zero baseline / safety
 
     @Test func zeroBaselineNeverProducesNaNOrInfinity() throws {

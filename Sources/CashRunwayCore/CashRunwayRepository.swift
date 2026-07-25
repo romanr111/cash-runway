@@ -909,6 +909,8 @@ extension CashRunwayRepository {
     public func dashboard(monthKey: Int, walletID: UUID? = nil) throws -> DashboardSnapshot {
         try databaseManager.dbQueue.read { db in
             try rejectMixedCurrencyAllWalletSnapshot(db, walletID: walletID)
+            let cashflowScope = Self.activeWalletScope(walletID)
+            let categoryScope = Self.activeWalletScope(walletID, column: "m.wallet_id")
             let totalBalanceMinor: Int64
             if let walletID {
                 totalBalanceMinor = try Int64.fetchOne(db, sql: "SELECT current_balance_minor FROM wallets WHERE id = ?", arguments: [walletID.uuidString]) ?? 0
@@ -922,9 +924,9 @@ extension CashRunwayRepository {
                 SELECT income_minor, expense_minor, transfer_in_minor, transfer_out_minor
                 FROM monthly_wallet_cashflow
                 WHERE month_key = ?
-                \(walletID == nil ? "" : "AND wallet_id = ?")
+                AND \(cashflowScope.fragment)
                 """,
-                arguments: walletID == nil ? [monthKey] : [monthKey, walletID!.uuidString]
+                arguments: StatementArguments([monthKey] + cashflowScope.arguments)
             )
 
             let monthIncomeMinor = monthCashflowRows.reduce(into: Int64.zero) { $0 += $1["income_minor"] }
@@ -938,11 +940,11 @@ extension CashRunwayRepository {
                 FROM monthly_category_spend m
                 JOIN categories c ON c.id = m.category_id
                 WHERE m.month_key = ? AND m.kind = 'expense'
-                  AND (? IS NULL OR m.wallet_id = ?)
+                  AND \(categoryScope.fragment)
                 ORDER BY m.expense_minor DESC
                 LIMIT 8
                 """,
-                arguments: [monthKey, walletID?.uuidString, walletID?.uuidString]
+                arguments: StatementArguments([monthKey] + categoryScope.arguments)
             )
             let totalExpense = max(monthExpenseMinor, 1)
             let categories = categoryRows.map { row in
@@ -964,10 +966,11 @@ extension CashRunwayRepository {
                 SELECT day_key, COALESCE(SUM(net_delta_minor), 0) AS total
                 FROM daily_wallet_balance_delta
                 WHERE day_key BETWEEN ? AND ?
+                  AND \(cashflowScope.fragment)
                 GROUP BY day_key
                 ORDER BY day_key
                 """,
-                arguments: [monthKey * 100 + 1, monthKey * 100 + 31]
+                arguments: StatementArguments([monthKey * 100 + 1, monthKey * 100 + 31] + cashflowScope.arguments)
             )
             var rollingBalance = totalBalanceMinor - historyRows.reduce(into: Int64.zero) { $0 += $1["total"] }
             let wealthHistory = historyRows.map { row -> BalancePoint in
@@ -1199,22 +1202,25 @@ extension CashRunwayRepository {
         }
     }
 
-    /// SQL fragment + arguments restricting `monthly_wallet_cashflow` rows to the
-    /// selected wallet, or to all active (non-archived) wallets when `walletID` is nil
+    /// SQL fragment + arguments restricting wallet-owned rows to the selected wallet,
+    /// or to all active (non-archived) wallets when `walletID` is nil
     /// (All Wallets). Archived wallets hold historical aggregate rows that must not
     /// leak into the All-Wallets scope the UI defines.
-    private static func monthlyCashflowWalletScope(_ walletID: UUID?) -> (fragment: String, arguments: [any DatabaseValueConvertible]) {
+    static func activeWalletScope(
+        _ walletID: UUID?,
+        column: String = "wallet_id"
+    ) -> (fragment: String, arguments: [any DatabaseValueConvertible]) {
         if let walletID {
-            return ("wallet_id = ?", [walletID.uuidString])
+            return ("\(column) = ?", [walletID.uuidString])
         }
-        return ("wallet_id IN (SELECT id FROM wallets WHERE is_archived = 0)", [])
+        return ("\(column) IN (SELECT id FROM wallets WHERE is_archived = 0)", [])
     }
 
     private static func loadMonthlyBars(_ db: Database, monthKey: Int, walletID: UUID?) throws -> [TimelineBarPoint] {
         let months = Self.monthWindow(endingAt: monthKey, count: 6)
         var conditions = ["month_key BETWEEN ? AND ?"]
         var arguments: [any DatabaseValueConvertible] = [months.first ?? monthKey, months.last ?? monthKey]
-        let scope = Self.monthlyCashflowWalletScope(walletID)
+        let scope = Self.activeWalletScope(walletID)
         conditions.append(scope.fragment)
         arguments.append(contentsOf: scope.arguments)
         let rows = try Row.fetchAll(
@@ -1254,7 +1260,7 @@ extension CashRunwayRepository {
         let endMonth = year * 100 + 12
         var conditions = ["month_key BETWEEN ? AND ?"]
         var arguments: [any DatabaseValueConvertible] = [startMonth, endMonth]
-        let scope = Self.monthlyCashflowWalletScope(walletID)
+        let scope = Self.activeWalletScope(walletID)
         conditions.append(scope.fragment)
         arguments.append(contentsOf: scope.arguments)
         let rows = try Row.fetchAll(
@@ -1303,7 +1309,7 @@ extension CashRunwayRepository {
     }
 
     private static func loadAllMonthlyBars(_ db: Database, walletID: UUID?) throws -> [TimelineBarPoint] {
-        let scope = Self.monthlyCashflowWalletScope(walletID)
+        let scope = Self.activeWalletScope(walletID)
         let whereClause = "WHERE \(scope.fragment)"
 
         let minMaxRow = try Row.fetchOne(db, sql: """
@@ -1361,7 +1367,7 @@ extension CashRunwayRepository {
     }
 
     private static func loadAllYearlyBars(_ db: Database, walletID: UUID?) throws -> [TimelineBarPoint] {
-        let scope = Self.monthlyCashflowWalletScope(walletID)
+        let scope = Self.activeWalletScope(walletID)
         let whereClause = "WHERE \(scope.fragment)"
 
         let minMaxRow = try Row.fetchOne(db, sql: """
@@ -1455,6 +1461,8 @@ extension CashRunwayRepository {
     public func overviewSnapshot(monthKey: Int, walletID: UUID? = nil) throws -> OverviewSnapshot {
         try databaseManager.dbQueue.read { db in
             try rejectMixedCurrencyAllWalletSnapshot(db, walletID: walletID)
+            let cashflowScope = Self.activeWalletScope(walletID)
+            let categoryScope = Self.activeWalletScope(walletID, column: "m.wallet_id")
             let months = Self.monthWindow(endingAt: monthKey, count: 6)
             let cashflowRows = try Row.fetchAll(
                 db,
@@ -1464,13 +1472,11 @@ extension CashRunwayRepository {
                        COALESCE(SUM(expense_minor), 0) AS expense_minor
                 FROM monthly_wallet_cashflow
                 WHERE month_key BETWEEN ? AND ?
-                \(walletID == nil ? "" : "AND wallet_id = ?")
+                AND \(cashflowScope.fragment)
                 GROUP BY month_key
                 ORDER BY month_key
                 """,
-                arguments: walletID == nil
-                    ? [months.first ?? monthKey, months.last ?? monthKey]
-                    : [months.first ?? monthKey, months.last ?? monthKey, walletID!.uuidString]
+                arguments: StatementArguments([months.first ?? monthKey, months.last ?? monthKey] + cashflowScope.arguments)
             )
             let cashflowByMonth = Dictionary(uniqueKeysWithValues: cashflowRows.map { row in
                 let month: Int = row["month_key"]
@@ -1512,15 +1518,15 @@ extension CashRunwayRepository {
                        COALESCE(SUM(m.txn_count), 0) AS txn_count
                 FROM categories c
                 LEFT JOIN monthly_category_spend m
-                  ON m.category_id = c.id
+                 ON m.category_id = c.id
                  AND m.month_key = ?
-                 \(walletID == nil ? "" : "AND m.wallet_id = ?")
+                 AND \(categoryScope.fragment)
                 WHERE c.kind IN ('expense', 'income')
                 GROUP BY c.id
                 HAVING (expense_minor > 0 OR income_minor > 0)
                 ORDER BY c.kind, expense_minor DESC, c.sort_order, c.name
                 """,
-                arguments: walletID == nil ? [monthKey] : [monthKey, walletID!.uuidString]
+                arguments: StatementArguments([monthKey] + categoryScope.arguments)
             )
             let totalExpense = max(selectedPoint.expenseMinor, 1)
             let totalIncome = max(selectedPoint.incomeMinor, 1)
