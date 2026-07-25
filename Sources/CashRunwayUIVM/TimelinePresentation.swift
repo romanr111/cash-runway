@@ -125,10 +125,7 @@ public struct TimelinePresentation: Equatable, Sendable {
         selectedPeriodKey: Int,
         maxVisibleCount: Int = 4
     ) -> [TimelineBarPoint] {
-        var merged = allBars
-        if let selectedBar, let index = merged.firstIndex(where: { $0.periodKey == selectedBar.periodKey }) {
-            merged[index] = selectedBar
-        }
+        let merged = mergedChartPoints(allBars: allBars, selectedBar: selectedBar)
 
         guard let selectedIndex = merged.firstIndex(where: { $0.periodKey == selectedPeriodKey }) else {
             return Array(merged.suffix(maxVisibleCount))
@@ -145,9 +142,21 @@ public struct TimelinePresentation: Equatable, Sendable {
         allBars: [TimelineBarPoint],
         selectedBar: TimelineBarPoint?
     ) -> [TimelineBarPoint] {
+        mergedChartPoints(allBars: allBars, selectedBar: selectedBar)
+    }
+
+    private static func mergedChartPoints(
+        allBars: [TimelineBarPoint],
+        selectedBar: TimelineBarPoint?
+    ) -> [TimelineBarPoint] {
         var merged = allBars
-        if let selectedBar, let index = merged.firstIndex(where: { $0.periodKey == selectedBar.periodKey }) {
+        guard let selectedBar else { return merged }
+
+        if let index = merged.firstIndex(where: { $0.periodKey == selectedBar.periodKey }) {
             merged[index] = selectedBar
+        } else {
+            let insertionIndex = merged.firstIndex { $0.periodKey > selectedBar.periodKey } ?? merged.endIndex
+            merged.insert(selectedBar, at: insertionIndex)
         }
         return merged
     }
