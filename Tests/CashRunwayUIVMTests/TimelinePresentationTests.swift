@@ -117,6 +117,40 @@ struct TimelinePresentationTests {
         #expect(selected?.expenseMinor == 79471)
     }
 
+    @Test("selected snapshot bar inserts after the latest historical point")
+    func selectedBarInsertsAfterHistory() {
+        let selected = bar(periodKey: 202607, incomeMinor: 4000, expenseMinor: 1000)
+        let presentation = TimelinePresentation(
+            snapshot: snapshot(anchorMonthKey: 202607, heroCashFlowMinor: 3000, bars: [selected]),
+            allBars: [
+                bar(periodKey: 202605, incomeMinor: 1000, expenseMinor: 200),
+                bar(periodKey: 202606, incomeMinor: 2000, expenseMinor: 400)
+            ],
+            currencyCode: .uah,
+            locale: english
+        )
+
+        #expect(presentation.chartPoints.map(\.periodKey) == [202605, 202606, 202607])
+        #expect(presentation.allChartPoints.map(\.periodKey) == [202605, 202606, 202607])
+    }
+
+    @Test("selected snapshot bar inserts in historical order")
+    func selectedBarInsertsWithinHistory() {
+        let selected = bar(periodKey: 202606, incomeMinor: 4000, expenseMinor: 1000)
+        let presentation = TimelinePresentation(
+            snapshot: snapshot(anchorMonthKey: 202606, heroCashFlowMinor: 3000, bars: [selected]),
+            allBars: [
+                bar(periodKey: 202605, incomeMinor: 1000, expenseMinor: 200),
+                bar(periodKey: 202607, incomeMinor: 2000, expenseMinor: 400)
+            ],
+            currencyCode: .uah,
+            locale: english
+        )
+
+        #expect(presentation.chartPoints.map(\.periodKey) == [202605, 202606])
+        #expect(presentation.allChartPoints.map(\.periodKey) == [202605, 202606, 202607])
+    }
+
     // MARK: - Income and expense signs
 
     @Test("income text shows positive magnitude")
@@ -315,6 +349,20 @@ struct TimelinePresentationTests {
 
         #expect(presentation.chartPoints.count == 2)
         #expect(presentation.chartPoints.last?.periodKey == 202602)
+    }
+
+    @Test("selected snapshot bar renders when history is empty")
+    func selectedBarRendersWithEmptyHistory() {
+        let selected = bar(periodKey: 202607, incomeMinor: 500, expenseMinor: 200)
+        let presentation = TimelinePresentation(
+            snapshot: snapshot(heroCashFlowMinor: 300, bars: [selected]),
+            allBars: [],
+            currencyCode: .uah,
+            locale: english
+        )
+
+        #expect(presentation.chartPoints == [selected])
+        #expect(presentation.allChartPoints == [selected])
     }
 
     @Test("older selection shifts window to end at that selection")
