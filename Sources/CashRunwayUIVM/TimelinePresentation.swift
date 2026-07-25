@@ -156,6 +156,14 @@ public struct TimelinePresentation: Equatable, Sendable {
 
     // MARK: - Period labels
 
+    /// Uppercases only the first character using the given locale, leaving the rest
+    /// untouched. Ukrainian month names are lowercase by default; chart axis labels
+    /// present them capitalized (`Квіт.`) without affecting mid-sentence uses.
+    static func capitalizedFirst(_ value: String, locale: Locale) -> String {
+        guard let first = value.first else { return value }
+        return String(first).uppercased(with: locale) + value.dropFirst()
+    }
+
     /// Two-line period label for chart groups: month abbreviation and year for month
     /// mode; the year alone for year mode.
     public static func periodLabel(for periodKey: Int, period: TimelinePeriod, locale: Locale) -> String {
@@ -165,7 +173,7 @@ public struct TimelinePresentation: Equatable, Sendable {
             let formatter = DateFormatter()
             formatter.locale = locale
             formatter.dateFormat = "MMM"
-            let month = formatter.string(from: date)
+            let month = capitalizedFirst(formatter.string(from: date), locale: locale)
             let year = periodKey / 100
             return "\(month)\n\(year)"
         case .year:
