@@ -15,7 +15,7 @@
 - The active worktree contains pre-existing changes to reporting secrets, timeline repository and picker code, and timeline snapshot tests. They were not changed by this task.
 - Timeline screen now uses the Phase 2 header + unified summary card + four-period grouped chart, while preserving the Phase 1 snapshot as the single source of truth for selected-period numbers.
 - The chart window ends at the selected period and supports tap and drag navigation; Spending Overview and search actions are preserved.
-- No commit or push has been made; changes are staged in the worktree only.
+- PR #110 now includes `72affa3` for timeline history navigation and `e85cf5b` for the project-local skill migration; both commits were pushed to `codex/timeline-hero-and-chart-polish` on 2026-07-25.
 - `CashRunway.xcodeproj/project.pbxproj.bak` remains untracked and must be removed before commit (`rm` is denied in this session; user action needed).
 
 ## Decisions
