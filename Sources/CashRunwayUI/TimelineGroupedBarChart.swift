@@ -148,15 +148,23 @@ struct TimelineGroupedBarChart: View {
     }
 
     private func barGroup(_ point: TimelineBarPoint, scale: CGFloat, maxMagnitude: Int64) -> some View {
-        TimelineChartGroup(
+        let isSelected = point.periodKey == selectedKey
+        return TimelineChartGroup(
             point: point,
-            isSelected: point.periodKey == selectedKey,
+            isSelected: isSelected,
             period: period,
             locale: locale,
             scale: scale,
             maxMagnitude: maxMagnitude
         )
         .frame(width: ChartMetrics.groupWidth)
+        .background {
+            if isSelected {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(CashRunwayTheme.pill)
+                    .transition(.opacity)
+            }
+        }
     }
 
     // MARK: - Selection
