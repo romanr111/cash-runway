@@ -6,7 +6,9 @@ import SwiftUI
 /// selected-period reference lines (drawn by the parent, fixed) stay pixel-aligned
 /// with the bar baseline (laid out by `TimelineChartGroup`, scrolling).
 private enum ChartMetrics {
-    static let topLabelReserve: CGFloat = 30
+    static let topLabelReserve: CGFloat = 40
+    static let selectedValueTopInset: CGFloat = 10
+    static let minimumReferenceLineDistance: CGFloat = 10
     static let periodLabelHeight: CGFloat = 32
     static let barLabelSpacing: CGFloat = 6
     static let barWidth: CGFloat = 14
@@ -159,11 +161,8 @@ struct TimelineGroupedBarChart: View {
         )
         .frame(width: ChartMetrics.groupWidth)
         .background {
-            if isSelected {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(CashRunwayTheme.pill)
-                    .transition(.opacity)
-            }
+            RoundedRectangle(cornerRadius: CashRunwayTheme.radiusS, style: .continuous)
+                .fill(CashRunwayTheme.accent.opacity(isSelected ? 0.08 : 0))
         }
     }
 
@@ -217,11 +216,15 @@ struct TimelineGroupedBarChart: View {
         .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.9), value: selectedKey)
     }
 
-    // A 1pt full-width guide at the given value's bar height; nothing is drawn for a
-    // zero value so no line ever sticks to the baseline.
+    // A 1pt full-width guide at the given value's bar height. Guides too close to
+    // the baseline are omitted so they cannot be mistaken for the baseline itself.
     @ViewBuilder
     private func referenceLine(value: Int64, color: Color, baselineY: CGFloat, scale: CGFloat, width: CGFloat) -> some View {
-        if value > 0 {
+        if TimelineChartPresentation.showsReferenceLine(
+            value: value,
+            scale: scale,
+            minimumDistance: ChartMetrics.minimumReferenceLineDistance
+        ) {
             let lineY = baselineY - CGFloat(value) * scale
             Rectangle()
                 .fill(color.opacity(0.22))
@@ -286,6 +289,7 @@ private struct TimelineChartGroup: View {
             valueLabel(value: point.incomeBarMinor, color: CashRunwayTheme.accent)
             valueLabel(value: point.expenseBarMinor, color: CashRunwayTheme.negative)
         }
+        .padding(.top, ChartMetrics.selectedValueTopInset)
     }
 
     private func bar(value: Int64, color: Color) -> some View {
