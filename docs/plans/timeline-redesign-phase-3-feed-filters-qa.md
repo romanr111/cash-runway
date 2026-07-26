@@ -504,7 +504,6 @@ just lint
 just ui-check
 just build
 just smoke
-just graph-sync
 ```
 
 Also run the large-year physical-device profile.

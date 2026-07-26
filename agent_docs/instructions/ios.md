@@ -79,9 +79,9 @@ Do not rewrite or regenerate the complete catalog manually.
 
 ## Large-File Exploration
 
-- Follow the global CodeGraph selection policy. Use `rg -n` by default for
-  exact symbols or text; use CodeGraph only when that policy selects it for
-  structural analysis.
+- Use `rg -n` for exact symbols or text, then read only the required range.
+- For an unknown concept, follow the read guard's conditional GrepAI guidance;
+  do not initialize GrepAI for routine exploration.
 - Read narrow line ranges for large files.
 - Do not read entire multi-thousand-line files unless explicitly justified.
 - Use `agent_docs/reference/code-location-guide.md` only when location guidance

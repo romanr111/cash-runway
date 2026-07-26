@@ -35,7 +35,7 @@ If dirty files are unrelated, leave them alone. If they affect files you must
 touch, inspect them and integrate with them. Never use `git add -A`.
 
 Run the repo preflight helpers required by `AGENTS.md` where feasible. If
-CodeGraph is unavailable, report the fallback and keep searches narrow.
+the preferred search tool is unavailable, report the fallback and keep searches narrow.
 
 ## Repair Loop
 
@@ -117,5 +117,5 @@ Report:
 - Local validation commands that passed.
 - GitHub checks that are passing, pending, skipped, or failing.
 - Any skipped gate and why.
-- CodeGraph availability and any fallback used.
+- Any search or inspection fallback used.
 - Headroom proxy status if the repo instructions required checking it.

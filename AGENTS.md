@@ -25,7 +25,6 @@ Manual fallback if `just` is unavailable:
 - Do not use `print()` for production diagnostics.
 - Use existing `just` recipes and repository scripts instead of recreating commands.
 - Do not add, modify, or run XCUITest/E2E tests locally unless explicitly requested.
-- Treat every git worktree as a separate CodeGraph project.
 - Report every skipped validation gate and the reason it was skipped. If a command
   times out or fails, report the gate name, command, timeout/limit, failure reason,
   fallback used, and whether the fallback is equivalent or a partial substitute.
@@ -39,12 +38,6 @@ Manual fallback if `just` is unavailable:
 - For SideStore or release work, keep the physical-device rehearsal as an
   explicit manual gate. Do not describe release readiness as complete until that
   rehearsal has actually passed.
-
-## CodeGraph
-
-The global selection policy determines whether CodeGraph is appropriate. See
-`agent_docs/reference/codegraph-commands.md` for Cash Runway-specific commands,
-worktree ownership, and lifecycle guidance.
 
 ## SwiftPM validation
 
@@ -157,7 +150,6 @@ worktree ownership, and lifecycle guidance.
   awaiting downstream refresh/mutation before reporting success.
 - Detailed command references:
   `agent_docs/reference/headroom-commands.md`,
-  `agent_docs/reference/codegraph-commands.md`,
   `agent_docs/reference/token-efficiency.md`,
   `agent_docs/reference/verification-strategies.md`, and
   `agent_docs/reference/code-review.md`.
@@ -206,10 +198,10 @@ worktree ownership, and lifecycle guidance.
 
 ## Generated and Heavy Files
 - Do not hand-edit generated files, lock files, coverage output, `.build`,
-  `DerivedData`, `.codegraph`, or Xcode project files unless the task explicitly
+  `DerivedData`, or Xcode project files unless the task explicitly
   requires it. Use the approved generator or project tool instead.
 - Do not read generated, vendored, artifact, snapshot, coverage, `.build`,
-  `DerivedData`, or `.codegraph` files unless the task requires them.
+  or `DerivedData` files unless the task requires them.
 
 ### Pre-task diff inventory
 Before editing files in a worktree:
@@ -219,7 +211,7 @@ Before editing files in a worktree:
 
 Cash Runway generated/secrets files to flag:
 - `AppHost/AppReportingSecrets.generated.swift`
-- `DerivedData/`, `.build/`, `.codegraph`, coverage output
+- `DerivedData/`, `.build/`, coverage output
 
 ## Load Only When Relevant
 Before editing matching areas, read:
@@ -231,7 +223,7 @@ Before editing matching areas, read:
   `agent_docs/instructions/security-privacy.md`
 - Validation or task completion:
   `agent_docs/instructions/validation.md`
-- Branches, worktrees, CodeGraph, or cleanup:
+- Branches, worktrees, or cleanup:
   `agent_docs/instructions/worktrees.md`
 - Session start, environment bootstrap, or worktree health:
   `agent_docs/reference/session-start.md`
