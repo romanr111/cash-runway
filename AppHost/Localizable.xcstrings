@@ -1,9 +1,6 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "" : {
-
-    },
     "·" : {
       "localizations" : {
         "en" : {
@@ -1860,7 +1857,20 @@
       }
     },
     "Choose the default currency for new wallets." : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose the default currency for new wallets."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Виберіть валюту за замовчуванням для нових гаманців."
+          }
+        }
+      }
     },
     "Choose the destination wallet in the form below." : {
       "localizations" : {
@@ -4720,7 +4730,20 @@
       }
     },
     "Mixed-currency overview unavailable" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mixed-currency overview unavailable"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Огляд недоступний для різних валют"
+          }
+        }
+      }
     },
     "Mixed-currency totals unavailable" : {
       "localizations" : {
@@ -6608,7 +6631,20 @@
       }
     },
     "Select a single wallet to view spending charts." : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select a single wallet to view spending charts."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Виберіть один гаманець, щоб переглянути діаграми витрат."
+          }
+        }
+      }
     },
     "Select at least one UAH Monobank card." : {
       "extractionState" : "stale",
