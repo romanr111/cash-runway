@@ -8,6 +8,21 @@ if [[ ! -f "$WORKFLOW" ]]; then
     exit 1
 fi
 
+if ! grep -q 'git log --first-parent --format=' "$WORKFLOW"; then
+    echo "release workflow must derive notes from the previous release commit on main history" >&2
+    exit 1
+fi
+
+if ! grep -q 'current_version="${VERSION}"' "$WORKFLOW"; then
+    echo "release workflow must exclude the current release from its own note baseline" >&2
+    exit 1
+fi
+
+if grep -q 'PREV_TAG=$(git tag --sort=-version:refname' "$WORKFLOW"; then
+    echo "release workflow must not use an unreachable release tag as the note baseline" >&2
+    exit 1
+fi
+
 if ! grep -q 'MARKETING_VERSION="${{ steps.meta.outputs.version }}"' "$WORKFLOW"; then
     echo "release xcodebuild must set MARKETING_VERSION from release metadata" >&2
     exit 1

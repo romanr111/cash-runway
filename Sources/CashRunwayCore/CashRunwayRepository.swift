@@ -909,6 +909,8 @@ extension CashRunwayRepository {
     public func dashboard(monthKey: Int, walletID: UUID? = nil) throws -> DashboardSnapshot {
         try databaseManager.dbQueue.read { db in
             try rejectMixedCurrencyAllWalletSnapshot(db, walletID: walletID)
+            let cashflowScope = Self.activeWalletScope(walletID)
+            let categoryScope = Self.activeWalletScope(walletID, column: "m.wallet_id")
             let totalBalanceMinor: Int64
             if let walletID {
                 totalBalanceMinor = try Int64.fetchOne(db, sql: "SELECT current_balance_minor FROM wallets WHERE id = ?", arguments: [walletID.uuidString]) ?? 0
@@ -922,9 +924,9 @@ extension CashRunwayRepository {
                 SELECT income_minor, expense_minor, transfer_in_minor, transfer_out_minor
                 FROM monthly_wallet_cashflow
                 WHERE month_key = ?
-                \(walletID == nil ? "" : "AND wallet_id = ?")
+                AND \(cashflowScope.fragment)
                 """,
-                arguments: walletID == nil ? [monthKey] : [monthKey, walletID!.uuidString]
+                arguments: StatementArguments([monthKey] + cashflowScope.arguments)
             )
 
             let monthIncomeMinor = monthCashflowRows.reduce(into: Int64.zero) { $0 += $1["income_minor"] }
@@ -938,11 +940,11 @@ extension CashRunwayRepository {
                 FROM monthly_category_spend m
                 JOIN categories c ON c.id = m.category_id
                 WHERE m.month_key = ? AND m.kind = 'expense'
-                  AND (? IS NULL OR m.wallet_id = ?)
+                  AND \(categoryScope.fragment)
                 ORDER BY m.expense_minor DESC
                 LIMIT 8
                 """,
-                arguments: [monthKey, walletID?.uuidString, walletID?.uuidString]
+                arguments: StatementArguments([monthKey] + categoryScope.arguments)
             )
             let totalExpense = max(monthExpenseMinor, 1)
             let categories = categoryRows.map { row in
@@ -964,10 +966,11 @@ extension CashRunwayRepository {
                 SELECT day_key, COALESCE(SUM(net_delta_minor), 0) AS total
                 FROM daily_wallet_balance_delta
                 WHERE day_key BETWEEN ? AND ?
+                  AND \(cashflowScope.fragment)
                 GROUP BY day_key
                 ORDER BY day_key
                 """,
-                arguments: [monthKey * 100 + 1, monthKey * 100 + 31]
+                arguments: StatementArguments([monthKey * 100 + 1, monthKey * 100 + 31] + cashflowScope.arguments)
             )
             var rollingBalance = totalBalanceMinor - historyRows.reduce(into: Int64.zero) { $0 += $1["total"] }
             let wealthHistory = historyRows.map { row -> BalancePoint in
@@ -995,11 +998,43 @@ extension CashRunwayRepository {
 
 extension CashRunwayRepository {
     public func timelineSnapshot(monthKey: Int, walletID: UUID? = nil, query: TransactionQuery = .init(), period: TimelinePeriod = .month) throws -> TimelineSnapshot {
+        try timelineSnapshot(monthKey: monthKey, walletID: walletID, query: query, period: period, now: Date())
+    }
+
+    // swiftlint:disable:next function_body_length
+    /// Deterministic snapshot overload. Production calls `timelineSnapshot(...)` which
+    /// injects `Date()`; tests call this directly with a fixed date so month-to-date and
+    /// comparison behavior is reproducible. Not part of `DashboardRepositorying`; keeping
+    /// the clock off the protocol avoids forcing unrelated mocks/conformers to change.
+    public func timelineSnapshot(monthKey: Int, walletID: UUID?, query: TransactionQuery, period: TimelinePeriod, now: Date) throws -> TimelineSnapshot {
         try databaseManager.dbQueue.read { db in
             let effectiveWalletID = walletID ?? query.walletID
             try rejectMixedCurrencyAllWalletSnapshot(db, walletID: effectiveWalletID)
-            let bars = try Self.loadBars(db, monthKey: monthKey, walletID: effectiveWalletID, period: period)
             let anchorPeriodKey = Self.anchorPeriodKey(monthKey: monthKey, period: period)
+            var bars = try Self.loadBars(db, monthKey: monthKey, walletID: effectiveWalletID, period: period)
+
+            let window = TimelineComparisonWindow.comparisonWindow(
+                selectedMonthKey: monthKey,
+                period: period,
+                now: now,
+                calendar: DateKeys.calendar
+            )
+
+            // For a current partial period, the selected bar must reflect month-to-date /
+            // year-to-date actuals rather than the full-period cashflow aggregate.
+            if let window, window.isPartial {
+                let bounded = try Self.boundedSums(db, walletID: effectiveWalletID, startDayKey: window.currentStartDayKey, endDayKey: window.currentEndDayKey)
+                if let selectedIndex = bars.firstIndex(where: { $0.periodKey == anchorPeriodKey }) {
+                    var selectedBar = bars[selectedIndex]
+                    selectedBar = TimelineBarPoint(
+                        periodKey: selectedBar.periodKey,
+                        incomeMinor: bounded.income,
+                        expenseMinor: bounded.expense,
+                        xLabel: selectedBar.xLabel
+                    )
+                    bars[selectedIndex] = selectedBar
+                }
+            }
 
             var scopedQuery = query
             scopedQuery.walletID = effectiveWalletID
@@ -1018,15 +1053,139 @@ extension CashRunwayRepository {
 
             let selectedBar = bars.first(where: { $0.periodKey == anchorPeriodKey }) ?? bars.last
             let heroCashFlow = selectedBar.map { $0.incomeMinor - $0.expenseMinor } ?? 0
+            let comparison = try Self.buildComparison(
+                db: db,
+                walletID: effectiveWalletID,
+                window: window,
+                selectedBarExpense: selectedBar?.expenseMinor ?? 0
+            )
+
             return TimelineSnapshot(
                 anchorMonthKey: monthKey,
                 walletFilterID: effectiveWalletID,
                 heroCashFlowMinor: heroCashFlow,
                 bars: bars,
                 sections: sections,
-                period: period
+                period: period,
+                comparison: comparison
             )
         }
+    }
+
+    /// Bounded income/expense sums over an inclusive local-day-key range.
+    /// Transfers are excluded by the conditional sums (`type = 'income'`/`'expense'`).
+    /// All-Wallets (nil) scope excludes archived wallets to match the UI definition.
+    private static func boundedSums(_ db: Database, walletID: UUID?, startDayKey: Int, endDayKey: Int) throws -> (income: Int64, expense: Int64) {
+        let (walletScope, walletArguments): (String, [any DatabaseValueConvertible])
+        if let walletID {
+            walletScope = "AND wallet_id = ?"
+            walletArguments = [walletID.uuidString]
+        } else {
+            walletScope = "AND wallet_id IN (SELECT id FROM wallets WHERE is_archived = 0)"
+            walletArguments = []
+        }
+        let row = try Row.fetchOne(
+            db,
+            sql: """
+            SELECT
+                COALESCE(SUM(CASE WHEN type = 'income' THEN amount_minor ELSE 0 END), 0) AS income_minor,
+                COALESCE(SUM(CASE WHEN type = 'expense' THEN amount_minor ELSE 0 END), 0) AS expense_minor
+            FROM transactions
+            WHERE is_deleted = 0
+              AND local_day_key BETWEEN ? AND ?
+              \(walletScope)
+            """,
+            arguments: StatementArguments([startDayKey, endDayKey] + walletArguments)
+        )
+        return (row?["income_minor"] ?? 0, row?["expense_minor"] ?? 0)
+    }
+
+    /// Bounded expense sum over the baseline window. Excludes income and both transfer
+    /// directions by filtering `type = 'expense'`.
+    /// All-Wallets (nil) scope excludes archived wallets to match the UI definition.
+    private static func baselineExpense(_ db: Database, walletID: UUID?, startDayKey: Int, endDayKey: Int) throws -> Int64 {
+        let (walletScope, walletArguments): (String, [any DatabaseValueConvertible])
+        if let walletID {
+            walletScope = "AND wallet_id = ?"
+            walletArguments = [walletID.uuidString]
+        } else {
+            walletScope = "AND wallet_id IN (SELECT id FROM wallets WHERE is_archived = 0)"
+            walletArguments = []
+        }
+        let value = try Int64.fetchOne(
+            db,
+            sql: """
+            SELECT COALESCE(SUM(amount_minor), 0)
+            FROM transactions
+            WHERE is_deleted = 0
+              AND type = 'expense'
+              AND local_day_key BETWEEN ? AND ?
+              \(walletScope)
+            """,
+            arguments: StatementArguments([startDayKey, endDayKey] + walletArguments)
+        ) ?? 0
+        return value
+    }
+
+    /// Derives the comparison, honoring the snapshot invariant that the current expense
+    /// equals the selected bar's expense whenever comparison is available.
+    private static func buildComparison(
+        db: Database,
+        walletID: UUID?,
+        window: TimelineComparisonWindow?,
+        selectedBarExpense: Int64
+    ) throws -> TimelineComparison? {
+        // Strictly future selected period: retain stored totals, mark comparison unavailable.
+        guard let window else { return nil }
+
+        let baselineExpense = try Self.baselineExpense(
+            db,
+            walletID: walletID,
+            startDayKey: window.baselineStartDayKey,
+            endDayKey: window.baselineEndDayKey
+        )
+
+        // Invariant: comparison current expense mirrors the bounded selected-period bar.
+        let currentExpense = selectedBarExpense
+
+        let direction: TimelineComparison.Direction
+        let percentage: Double?
+
+        switch (currentExpense, baselineExpense) {
+        case let (current, baseline) where current > baseline && baseline > 0:
+            direction = .higher
+            percentage = Self.percentageChange(current: current, baseline: baseline)
+        case let (current, baseline) where current < baseline && baseline > 0:
+            direction = .lower
+            percentage = Self.percentageChange(current: current, baseline: baseline)
+        case let (current, baseline) where current == baseline:
+            // Equal, including both-zero: unchanged. Never NaN/infinity.
+            direction = .unchanged
+            percentage = baseline > 0 ? 0.0 : nil
+        case let (current, baseline) where baseline == 0 && current > 0:
+            // New spending with no baseline to compare against.
+            direction = .unavailable
+            percentage = nil
+        default:
+            // Defensive catch-all (e.g. negative guards): treat as unavailable.
+            direction = .unavailable
+            percentage = nil
+        }
+
+        return TimelineComparison(
+            direction: direction,
+            currentExpenseMinor: currentExpense,
+            baselineExpenseMinor: baselineExpense,
+            percentageChange: percentage,
+            baselineStartDayKey: window.baselineStartDayKey,
+            baselineEndDayKey: window.baselineEndDayKey,
+            isPartialPeriod: window.isPartial
+        )
+    }
+
+    private static func percentageChange(current: Int64, baseline: Int64) -> Double? {
+        guard baseline > 0 else { return nil }
+        return Double(current - baseline) / Double(baseline)
     }
 
     private static func anchorPeriodKey(monthKey: Int, period: TimelinePeriod) -> Int {
@@ -1043,14 +1202,27 @@ extension CashRunwayRepository {
         }
     }
 
+    /// SQL fragment + arguments restricting wallet-owned rows to the selected wallet,
+    /// or to all active (non-archived) wallets when `walletID` is nil
+    /// (All Wallets). Archived wallets hold historical aggregate rows that must not
+    /// leak into the All-Wallets scope the UI defines.
+    static func activeWalletScope(
+        _ walletID: UUID?,
+        column: String = "wallet_id"
+    ) -> (fragment: String, arguments: [any DatabaseValueConvertible]) {
+        if let walletID {
+            return ("\(column) = ?", [walletID.uuidString])
+        }
+        return ("\(column) IN (SELECT id FROM wallets WHERE is_archived = 0)", [])
+    }
+
     private static func loadMonthlyBars(_ db: Database, monthKey: Int, walletID: UUID?) throws -> [TimelineBarPoint] {
         let months = Self.monthWindow(endingAt: monthKey, count: 6)
         var conditions = ["month_key BETWEEN ? AND ?"]
         var arguments: [any DatabaseValueConvertible] = [months.first ?? monthKey, months.last ?? monthKey]
-        if let walletID {
-            conditions.append("wallet_id = ?")
-            arguments.append(walletID.uuidString)
-        }
+        let scope = Self.activeWalletScope(walletID)
+        conditions.append(scope.fragment)
+        arguments.append(contentsOf: scope.arguments)
         let rows = try Row.fetchAll(
             db,
             sql: """
@@ -1088,10 +1260,9 @@ extension CashRunwayRepository {
         let endMonth = year * 100 + 12
         var conditions = ["month_key BETWEEN ? AND ?"]
         var arguments: [any DatabaseValueConvertible] = [startMonth, endMonth]
-        if let walletID {
-            conditions.append("wallet_id = ?")
-            arguments.append(walletID.uuidString)
-        }
+        let scope = Self.activeWalletScope(walletID)
+        conditions.append(scope.fragment)
+        arguments.append(contentsOf: scope.arguments)
         let rows = try Row.fetchAll(
             db,
             sql: """
@@ -1138,19 +1309,14 @@ extension CashRunwayRepository {
     }
 
     private static func loadAllMonthlyBars(_ db: Database, walletID: UUID?) throws -> [TimelineBarPoint] {
-        var conditions: [String] = []
-        var arguments: [any DatabaseValueConvertible] = []
-        if let walletID {
-            conditions.append("wallet_id = ?")
-            arguments.append(walletID.uuidString)
-        }
-        let whereClause = conditions.isEmpty ? "" : "WHERE \(conditions.joined(separator: " AND "))"
+        let scope = Self.activeWalletScope(walletID)
+        let whereClause = "WHERE \(scope.fragment)"
 
         let minMaxRow = try Row.fetchOne(db, sql: """
             SELECT MIN(month_key) as min_month, MAX(month_key) as max_month
             FROM monthly_wallet_cashflow
             \(whereClause)
-            """, arguments: StatementArguments(arguments))
+            """, arguments: StatementArguments(scope.arguments))
 
         guard let minMonth: Int = minMaxRow?["min_month"],
               let maxMonth: Int = minMaxRow?["max_month"] else {
@@ -1168,12 +1334,8 @@ extension CashRunwayRepository {
             }
         }
 
-        var dataConditions = ["month_key BETWEEN ? AND ?"]
-        var dataArguments: [any DatabaseValueConvertible] = [minMonth, maxMonth]
-        if let walletID {
-            dataConditions.append("wallet_id = ?")
-            dataArguments.append(walletID.uuidString)
-        }
+        let dataConditions = ["month_key BETWEEN ? AND ?", scope.fragment]
+        let dataArguments: [any DatabaseValueConvertible] = [minMonth, maxMonth] + scope.arguments
         let dataRows = try Row.fetchAll(
             db,
             sql: """
@@ -1205,19 +1367,14 @@ extension CashRunwayRepository {
     }
 
     private static func loadAllYearlyBars(_ db: Database, walletID: UUID?) throws -> [TimelineBarPoint] {
-        var conditions: [String] = []
-        var arguments: [any DatabaseValueConvertible] = []
-        if let walletID {
-            conditions.append("wallet_id = ?")
-            arguments.append(walletID.uuidString)
-        }
-        let whereClause = conditions.isEmpty ? "" : "WHERE \(conditions.joined(separator: " AND "))"
+        let scope = Self.activeWalletScope(walletID)
+        let whereClause = "WHERE \(scope.fragment)"
 
         let minMaxRow = try Row.fetchOne(db, sql: """
             SELECT MIN(month_key / 100) as min_year, MAX(month_key / 100) as max_year
             FROM monthly_wallet_cashflow
             \(whereClause)
-            """, arguments: StatementArguments(arguments))
+            """, arguments: StatementArguments(scope.arguments))
 
         guard let minYear: Int = minMaxRow?["min_year"],
               let maxYear: Int = minMaxRow?["max_year"] else {
@@ -1226,12 +1383,8 @@ extension CashRunwayRepository {
 
         let years = Array(minYear...maxYear)
 
-        var dataConditions = ["month_key / 100 BETWEEN ? AND ?"]
-        var dataArguments: [any DatabaseValueConvertible] = [minYear, maxYear]
-        if let walletID {
-            dataConditions.append("wallet_id = ?")
-            dataArguments.append(walletID.uuidString)
-        }
+        let dataConditions = ["month_key / 100 BETWEEN ? AND ?", scope.fragment]
+        let dataArguments: [any DatabaseValueConvertible] = [minYear, maxYear] + scope.arguments
         let dataRows = try Row.fetchAll(
             db,
             sql: """
@@ -1308,6 +1461,8 @@ extension CashRunwayRepository {
     public func overviewSnapshot(monthKey: Int, walletID: UUID? = nil) throws -> OverviewSnapshot {
         try databaseManager.dbQueue.read { db in
             try rejectMixedCurrencyAllWalletSnapshot(db, walletID: walletID)
+            let cashflowScope = Self.activeWalletScope(walletID)
+            let categoryScope = Self.activeWalletScope(walletID, column: "m.wallet_id")
             let months = Self.monthWindow(endingAt: monthKey, count: 6)
             let cashflowRows = try Row.fetchAll(
                 db,
@@ -1317,13 +1472,11 @@ extension CashRunwayRepository {
                        COALESCE(SUM(expense_minor), 0) AS expense_minor
                 FROM monthly_wallet_cashflow
                 WHERE month_key BETWEEN ? AND ?
-                \(walletID == nil ? "" : "AND wallet_id = ?")
+                AND \(cashflowScope.fragment)
                 GROUP BY month_key
                 ORDER BY month_key
                 """,
-                arguments: walletID == nil
-                    ? [months.first ?? monthKey, months.last ?? monthKey]
-                    : [months.first ?? monthKey, months.last ?? monthKey, walletID!.uuidString]
+                arguments: StatementArguments([months.first ?? monthKey, months.last ?? monthKey] + cashflowScope.arguments)
             )
             let cashflowByMonth = Dictionary(uniqueKeysWithValues: cashflowRows.map { row in
                 let month: Int = row["month_key"]
@@ -1365,15 +1518,15 @@ extension CashRunwayRepository {
                        COALESCE(SUM(m.txn_count), 0) AS txn_count
                 FROM categories c
                 LEFT JOIN monthly_category_spend m
-                  ON m.category_id = c.id
+                 ON m.category_id = c.id
                  AND m.month_key = ?
-                 \(walletID == nil ? "" : "AND m.wallet_id = ?")
+                 AND \(categoryScope.fragment)
                 WHERE c.kind IN ('expense', 'income')
                 GROUP BY c.id
                 HAVING (expense_minor > 0 OR income_minor > 0)
                 ORDER BY c.kind, expense_minor DESC, c.sort_order, c.name
                 """,
-                arguments: walletID == nil ? [monthKey] : [monthKey, walletID!.uuidString]
+                arguments: StatementArguments([monthKey] + categoryScope.arguments)
             )
             let totalExpense = max(selectedPoint.expenseMinor, 1)
             let totalIncome = max(selectedPoint.incomeMinor, 1)

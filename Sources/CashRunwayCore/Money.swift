@@ -216,15 +216,25 @@ public enum MoneyFormatter {
     }
 
     public static func string(from minorUnits: Int64, currencyCode: CurrencyCode) -> String {
+        string(from: minorUnits, currencyCode: currencyCode, locale: Locale(identifier: "uk_UA"))
+    }
+
+    public static func string(from minorUnits: Int64, currencyCode: CurrencyCode, locale: Locale) -> String {
+        string(from: minorUnits, currencyCode: currencyCode, locale: locale, fractionDigits: 2)
+    }
+
+    /// Currency string with a caller-chosen number of fraction digits. `fractionDigits: 0`
+    /// rounds to whole units (used where kopecks add noise, e.g. the summary metric cards).
+    public static func string(from minorUnits: Int64, currencyCode: CurrencyCode, locale: Locale, fractionDigits: Int) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currencyCode.rawValue
         if let currency = SupportedCurrency(rawValue: currencyCode.rawValue) {
             formatter.currencySymbol = currency.symbol
         }
-        formatter.minimumFractionDigits = 2
-        formatter.maximumFractionDigits = 2
-        formatter.locale = Locale(identifier: "uk_UA")
+        formatter.minimumFractionDigits = fractionDigits
+        formatter.maximumFractionDigits = fractionDigits
+        formatter.locale = locale
         let value = NSDecimalNumber(value: minorUnits).dividing(by: 100)
         return formatter.string(from: value) ?? "\(minorUnits / 100)"
     }

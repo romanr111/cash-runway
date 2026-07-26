@@ -1,10 +1,16 @@
 # CodeGraph command reference
 
-Use CodeGraph before broad code searches or repeated raw file reads.
+Follow `~/.codex/references/codegraph.md` to decide whether a task warrants
+CodeGraph. This reference applies only after that global selector chooses it.
 
 ## Bootstrap
 
-Run once per worktree before any CodeGraph operations:
+For a selected high-value task with a healthy worktree-local index, query it
+directly. If it has no index, run `just graph-bootstrap` to initialize the
+active worktree. Otherwise run it only for owner-marker repair or an index
+warning that requires recovery, because the wrapper runs `codegraph status`.
+Never copy or share graph directories between worktrees; separate worktrees
+require separate indexes.
 
 ```bash
 just graph-bootstrap
@@ -12,27 +18,16 @@ just graph-bootstrap
 Scripts/codegraph-bootstrap.sh
 ```
 
-## MCP tools
+## Exploration
 
-Primary:
-- `mcp__codegraph__codegraph_explore` — first tool for almost any codebase question: how does X work, architecture, bugs, locating symbols, or surveying an area.
-- `mcp__codegraph__codegraph_search` — quick symbol search by name; returns locations only (no code).
-- `mcp__codegraph__codegraph_node` — get one symbol in full: location, signature, callers/callees trail, and verbatim body.
+Prefer `mcp__codegraph__codegraph_explore`. CLI fallbacks are:
 
-Analysis:
-- `mcp__codegraph__codegraph_impact` — list symbols affected by changing a symbol; use before refactoring.
-- `mcp__codegraph__codegraph_files` — indexed file tree with language + symbol counts; faster than Glob for layout.
+- `codegraph explore "<question>"`
+- `codegraph callers "<symbol>"`
+- `codegraph callees "<symbol>"`
+- `codegraph impact "<symbol>"`
 
-Call graph:
-- `mcp__codegraph__codegraph_callers` — list functions that call a symbol.
-- `mcp__codegraph__codegraph_callees` — list functions that a symbol calls.
-- For full call flows, prefer `codegraph_explore`.
-
-Debug:
-- `mcp__codegraph__codegraph_status` — index health check; skip unless debugging.
-
-## Rules of thumb
-
-- For files over ~500 lines, locate the relevant symbol first and read a narrow line range.
-- Fall back to `rg -n` or `Grep` only when CodeGraph is unavailable or insufficient.
-- Verify any path or line number against the current checkout before editing.
+Use `just graph-status` and `just graph-reindex` only for diagnostics or an
+old-engine migration. Run `just graph-sync` only when the watcher is disabled
+or an actual stale-index warning appears. Verify any path or line number against
+the current checkout before editing.

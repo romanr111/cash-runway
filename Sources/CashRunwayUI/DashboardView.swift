@@ -1,37 +1,58 @@
+import CashRunwayCore
+import CashRunwayUIVM
 import Charts
 import Foundation
 import SwiftUI
-import CashRunwayCore
 
 struct DashboardView: View {
     @Bindable var model: CashRunwayAppModel
     @State private var isComposerPresented = false
     @State private var isSearchPresented = false
+    @State private var isFiltersPresented = false
+    @State private var isPeriodPickerPresented = false
     @State private var showsOverview = false
     @State private var draft = TransactionDraft(kind: .expense, walletID: UUID(), amountMinor: 0, occurredAt: .now)
     @State private var isWalletEditorPresented = false
     @State private var walletDraft = Wallet(id: UUID(), name: "", kind: .cash, colorHex: "#60788A", iconName: "wallet.pass.fill", startingBalanceMinor: 0, currentBalanceMinor: 0, isArchived: false, sortOrder: 0, createdAt: .now, updatedAt: .now)
+    @State private var collapsedDayKeys: Set<Int> = []
+
+    private var presentation: TimelinePresentation {
+        TimelinePresentation(
+            snapshot: model.timelineSnapshot,
+            allBars: model.allBars,
+            currencyCode: model.aggregateCurrencyCode,
+            locale: L10n.locale
+        )
+    }
+
+    private var filterPresentation: TimelineFilterPresentation {
+        TimelineFilterPresentation(query: model.transactionQuery)
+    }
 
     var body: some View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 24) {
+                VStack(spacing: 12) {
                     if model.hasBootstrapped && model.wallets.isEmpty {
                         emptyState
                     } else {
-                        hero
+                        timelineHeader
+                        summaryCard
                         filters
-                        chartCard
-                        overviewButton
                         transactionFeed
                     }
                 }
                 .padding(.horizontal, 20)
-                .padding(.top, 12)
-                .padding(.bottom, 120)
+                .padding(.top, 6)
+                .padding(.bottom, 140)
             }
             .background(CashRunwayTheme.background)
             .toolbar(.hidden, for: .navigationBar)
+            .overlay(alignment: .bottomTrailing) {
+                if !model.wallets.isEmpty {
+                    addButton
+                }
+            }
             .overlay {
                 if model.isLoading {
                     ProgressView()
@@ -40,38 +61,17 @@ struct DashboardView: View {
                         .background(CashRunwayTheme.background.opacity(0.72))
                 }
             }
-            .overlay(alignment: .bottomTrailing) {
-                if !model.wallets.isEmpty {
-                    Button {
-                if let walletID = model.wallets.first?.id {
-                    draft = TransactionDraft(
-                        kind: .expense,
-                        walletID: walletID,
-                        amountMinor: 0,
-                        currencyCode: model.wallets.first?.currencyCode ?? model.defaultCurrencyCode,
-                        occurredAt: .now,
-                        categoryID: model.expenseCategories.first?.id
-                    )
-                            isComposerPresented = true
-                        }
-                    } label: {
-                        Image(systemName: "plus")
-                            .font(.system(size: 26, weight: .bold))
-                            .foregroundStyle(.white)
-                            .frame(width: 64, height: 64)
-                            .background(CashRunwayTheme.accent, in: Circle())
-                            .shadow(color: CashRunwayTheme.accent.opacity(0.25), radius: 16, y: 10)
-                    }
-                    .accessibilityIdentifier(CashRunwayAccessibilityID.transactionAddButton)
-                    .padding(.trailing, 20)
-                    .padding(.bottom, 16)
-                }
-            }
             .navigationDestination(isPresented: $showsOverview) {
                 TimelineOverviewView(model: model)
             }
             .sheet(isPresented: $isSearchPresented) {
-                TimelineSearchSheet(model: model)
+                TimelineSearchSheet(model: model, entryMode: .search)
+            }
+            .sheet(isPresented: $isFiltersPresented) {
+                TimelineSearchSheet(model: model, entryMode: .filters)
+            }
+            .sheet(isPresented: $isPeriodPickerPresented) {
+                TimelinePeriodPickerSheet(model: model)
             }
             .fullScreenCover(isPresented: $isComposerPresented) {
                 TransactionEditorView(model: model, draft: $draft)
@@ -82,16 +82,42 @@ struct DashboardView: View {
         }
     }
 
+    private var addButton: some View {
+        Button {
+            if let walletID = model.wallets.first?.id {
+                draft = TransactionDraft(
+                    kind: .expense,
+                    walletID: walletID,
+                    amountMinor: 0,
+                    currencyCode: model.wallets.first?.currencyCode ?? model.defaultCurrencyCode,
+                    occurredAt: .now,
+                    categoryID: model.expenseCategories.first?.id
+                )
+                isComposerPresented = true
+            }
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 23, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 56, height: 56)
+                .background(CashRunwayTheme.accent, in: Circle())
+                .shadow(color: CashRunwayTheme.accent.opacity(0.25), radius: 16, y: 10)
+        }
+        .accessibilityIdentifier(CashRunwayAccessibilityID.transactionAddButton)
+        .padding(.trailing, 20)
+        .padding(.bottom, 16)
+    }
+
     private var emptyState: some View {
         VStack(spacing: 18) {
             Spacer(minLength: 60)
             Image(systemName: "wallet.pass.fill")
                 .font(.system(size: 56))
                 .foregroundStyle(CashRunwayTheme.textMuted)
-            Text("Create your first wallet")
+            Text(L10n.string("Create your first wallet"))
                 .font(.system(size: 22, weight: .bold, design: .rounded))
                 .foregroundStyle(CashRunwayTheme.textPrimary)
-            Text("Add a wallet to start tracking transactions and see your cash flow.")
+            Text(L10n.string("Add a wallet to start tracking transactions and see your cash flow."))
                 .font(.system(size: 15))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(CashRunwayTheme.textSecondary)
@@ -115,7 +141,7 @@ struct DashboardView: View {
             } label: {
                 HStack {
                     Image(systemName: "plus.circle.fill")
-                    Text("Add Wallet")
+                    Text(L10n.string("Add Wallet"))
                 }
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(.white)
@@ -128,239 +154,321 @@ struct DashboardView: View {
         .frame(maxWidth: .infinity)
     }
 
-    private var hero: some View {
-        VStack(spacing: 12) {
-            HStack {
-                Spacer()
-                Button {
-                    isSearchPresented = true
-                } label: {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(CashRunwayTheme.textPrimary)
-                        .frame(width: 40, height: 40)
-                        .background(CashRunwayTheme.surface, in: Circle())
-                        .overlay(Circle().stroke(CashRunwayTheme.line, lineWidth: 1))
-                }
-                .accessibilityIdentifier(CashRunwayAccessibilityID.timelineSearchButton)
-            }
+    private var timelineHeader: some View {
+        HStack(alignment: .center) {
+            Text(L10n.string("Cash Flow"))
+                .font(.system(size: 27, weight: .bold))
+                .foregroundStyle(CashRunwayTheme.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
 
-            VStack(spacing: 6) {
-                Group {
-                if model.isTimelineLoading {
-                    ProgressView()
-                        .controlSize(.regular)
-                        .accessibilityLabel("Loading cash flow")
-                } else {
-                    if let cashFlowText = model.aggregateMoneyString(from: model.currentCashFlowMinor) {
-                        Text(cashFlowText)
-                            .font(.system(size: 42, weight: .bold, design: .rounded))
-                            .foregroundStyle(CashRunwayTheme.textPrimary)
-                            .multilineTextAlignment(.center)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.72)
-                            .accessibilityIdentifier(CashRunwayAccessibilityID.timelineCashFlowValue)
-                    } else {
-                        Text("Mixed-currency cash flow unavailable")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(CashRunwayTheme.textMuted)
-                            .multilineTextAlignment(.center)
-                            .lineLimit(2)
-                            .minimumScaleFactor(0.85)
-                    }
-                }
-                }
-                .frame(height: 52)
-                .frame(maxWidth: .infinity)
-                Text("Cash Flow")
+            Spacer()
+
+            searchButton
+        }
+    }
+
+    private var searchButton: some View {
+        Button {
+            isSearchPresented = true
+        } label: {
+            ZStack {
+                Image(systemName: "magnifyingglass")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(CashRunwayTheme.textMuted)
+                    .foregroundStyle(filterPresentation.isSearchActive ? .white : CashRunwayTheme.accentDark)
+                    .frame(width: 38, height: 38)
+                    .background(filterPresentation.isSearchActive ? CashRunwayTheme.accent : CashRunwayTheme.accentMuted, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                if filterPresentation.isSearchActive {
+                    Circle()
+                        .fill(.white)
+                        .frame(width: 6, height: 6)
+                        .offset(x: 8, y: -8)
+                }
             }
-            .frame(maxWidth: .infinity)
         }
-        .padding(.top, 4)
+        .frame(width: 44, height: 44)
+        .contentShape(Rectangle())
+        .accessibilityIdentifier(CashRunwayAccessibilityID.timelineSearchButton)
+        .accessibilityLabel(filterPresentation.isSearchActive ? L10n.string("timeline.accessibility.searchActive") : L10n.string("Search"))
     }
 
-    private var filters: some View {
-        HStack(spacing: 12) {
-            Menu {
-                if model.wallets.aggregateCurrencyCode(selectedWalletID: nil) != nil {
-                    Button("All Wallets") {
-                        Task { await model.selectWallet(nil) }
-                    }
-                    .accessibilityIdentifier(CashRunwayAccessibilityID.timelineWallet("All Wallets"))
-                }
-                ForEach(model.wallets) { wallet in
-                    Button(wallet.name) {
-                        Task { await model.selectWallet(wallet.id) }
-                    }
-                    .accessibilityIdentifier(CashRunwayAccessibilityID.timelineWallet(wallet.name))
-                }
-            } label: {
-                pillLabel(text: model.selectedWalletID.flatMap(walletName(for:)) ?? L10n.string("All Wallets"), systemImage: "chevron.down")
-            }
-            .accessibilityIdentifier(CashRunwayAccessibilityID.timelineWalletMenu)
-
-            Menu {
-                ForEach(TimelinePeriod.allCases, id: \.self) { period in
-                    Button(L10n.timelinePeriod(period)) {
-                        model.selectTimelinePeriod(period)
-                        Task { await model.reloadAll() }
-                    }
-                }
-            } label: {
-                pillLabel(text: L10n.timelinePeriod(model.selectedTimelinePeriod), systemImage: "chevron.down")
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .center)
-    }
-
-    private var chartCard: some View {
-        let bars = model.allBars
-        let maxValue = bars.map { max($0.incomeBarMinor, $0.expenseBarMinor) }.max() ?? 0
-        let selectedPeriodKey = switch model.selectedTimelinePeriod {
-        case .month: model.selectedMonthKey
-        case .year: model.selectedMonthKey / 100
-        }
-
-        return VStack(alignment: .leading, spacing: 16) {
-            if model.wallets.filter({ !$0.isArchived }).count > 1, model.wallets.aggregateCurrencyCode(selectedWalletID: nil) == nil {
+    private var summaryCard: some View {
+        Group {
+            if model.wallets.filter({ !$0.isArchived }).count > 1, model.wallets.aggregateCurrencyCode(selectedWalletID: model.selectedWalletID) == nil {
                 ContentUnavailableView(
-                    "Mixed-currency cash flow unavailable",
+                    L10n.string("Mixed-currency cash flow unavailable"),
                     systemImage: "chart.bar",
-                    description: Text("Select a single wallet to view the timeline chart.")
+                    description: Text(L10n.string("timeline.wallet.singleCurrencyHint"))
                 )
-                .frame(height: 210)
-            } else if bars.isEmpty {
-                ContentUnavailableView("No Data", systemImage: "chart.bar")
-                    .frame(height: 210)
+                .frame(height: 260)
+                .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
             } else {
-                ScrollViewReader { proxy in
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        LazyHStack(alignment: .bottom, spacing: 16) {
-                            ForEach(bars) { bar in
-                                let isSelected = bar.periodKey == selectedPeriodKey
-                                Button {
-                                    guard !isSelected else { return }
-                                    let impact = UIImpactFeedbackGenerator(style: .light)
-                                    impact.impactOccurred()
-                                    let newMonthKey = DateKeys.monthKey(fromPeriodKey: bar.periodKey, period: model.selectedTimelinePeriod)
-                                    guard newMonthKey != model.selectedMonthKey else { return }
-                                    model.selectedMonthKey = newMonthKey
-                                    model.reloadTimeline()
-                                } label: {
-                                    MonthChartColumn(
-                                        bar: bar,
-                                        period: model.selectedTimelinePeriod,
-                                        isSelected: isSelected,
-                                        maxValue: maxValue
-                                    )
-                                    .id(bar.periodKey)
-                                    .contentShape(Rectangle())
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                        .padding(.horizontal, 20)
+                TimelineSummaryCard(
+                    presentation: presentation,
+                    period: presentation.period,
+                    locale: L10n.locale,
+                    onSelectPeriod: { periodKey in
+                        let newMonthKey = DateKeys.monthKey(fromPeriodKey: periodKey, period: presentation.period)
+                        guard newMonthKey != model.selectedMonthKey else { return }
+                        model.selectedMonthKey = newMonthKey
+                        collapsedDayKeys.removeAll()
+                        model.reloadTimeline()
                     }
-                    .frame(height: 210)
-                    .onAppear {
-                        proxy.scrollTo(selectedPeriodKey, anchor: .center)
-                    }
-                    .onChange(of: model.selectedMonthKey) { _, _ in
-                        let target = switch model.selectedTimelinePeriod {
-                        case .month: model.selectedMonthKey
-                        case .year: model.selectedMonthKey / 100
-                        }
-                        withAnimation(.smooth) {
-                            proxy.scrollTo(target, anchor: .center)
-                        }
-                    }
-                }
+                )
+
+                spendingOverviewButton
             }
         }
-        .padding(20)
-        .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
     }
 
-    private var overviewButton: some View {
+    // Standalone, elevated action card beneath the summary, matching the reference
+    // where "Spending Overview" is its own tappable card rather than an inline row.
+    private var spendingOverviewButton: some View {
         Button {
             showsOverview = true
         } label: {
-            HStack(spacing: 8) {
-                Text("Spending Overview")
+            HStack(spacing: 10) {
+                Spacer(minLength: 0)
+                Image(systemName: "chart.pie.fill")
                     .font(.system(size: 16, weight: .semibold))
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(CashRunwayTheme.accent)
+                Text(L10n.string("Spending Overview"))
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(CashRunwayTheme.textPrimary)
+                Spacer(minLength: 0)
             }
-            .foregroundStyle(CashRunwayTheme.textPrimary)
+            .overlay(alignment: .trailing) {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(CashRunwayTheme.textMuted)
+            }
             .padding(.horizontal, 20)
-            .padding(.vertical, 14)
-            .background(CashRunwayTheme.surface, in: Capsule())
-            .overlay(Capsule().stroke(CashRunwayTheme.line, lineWidth: 1))
+            .frame(minHeight: 46)
+            .frame(maxWidth: .infinity)
+            .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .shadow(color: CashRunwayTheme.softShadow, radius: 12, y: 5)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
         .accessibilityIdentifier(CashRunwayAccessibilityID.overviewOpenButton)
-        .frame(maxWidth: .infinity, alignment: .center)
+    }
+
+    // The three controls must fit one non-scrolling row without clipping in any
+    // language. ViewThatFits picks the largest pill font whose row actually fits the
+    // available width (Ukrainian labels are longer than English), degrading on narrow
+    // devices instead of truncating or pushing a control offscreen.
+    private var filters: some View {
+        ViewThatFits(in: .horizontal) {
+            filterRow(fontSize: 15)
+            filterRow(fontSize: 14)
+            filterRow(fontSize: 13)
+            filterRow(fontSize: 12)
+            filterRow(fontSize: 11)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func filterRow(fontSize: CGFloat) -> some View {
+        HStack(spacing: 0) {
+            walletMenu(fontSize: fontSize)
+            Spacer(minLength: 8)
+            periodMenu(fontSize: fontSize)
+            Spacer(minLength: 8)
+            filtersButton(fontSize: fontSize)
+        }
+    }
+
+    private func walletMenu(fontSize: CGFloat) -> some View {
+        Menu {
+            if model.wallets.aggregateCurrencyCode(selectedWalletID: nil) != nil {
+                Button(L10n.string("All Wallets")) {
+                    collapsedDayKeys.removeAll()
+                    Task { await model.selectWallet(nil) }
+                }
+                .accessibilityIdentifier(CashRunwayAccessibilityID.timelineWallet("All Wallets"))
+            }
+            ForEach(model.wallets) { wallet in
+                Button(wallet.name) {
+                    collapsedDayKeys.removeAll()
+                    Task { await model.selectWallet(wallet.id) }
+                }
+                .accessibilityIdentifier(CashRunwayAccessibilityID.timelineWallet(wallet.name))
+            }
+        } label: {
+            pillLabel(
+                iconName: "wallet.bifold.fill",
+                text: model.selectedWalletID.flatMap(walletName(for:)) ?? L10n.string("All Wallets"),
+                fontSize: fontSize
+            )
+        }
+        .accessibilityIdentifier(CashRunwayAccessibilityID.timelineWalletMenu)
+    }
+
+    private func periodMenu(fontSize: CGFloat) -> some View {
+        Button {
+            isPeriodPickerPresented = true
+        } label: {
+            pillLabel(
+                iconName: "calendar",
+                text: periodDisplayLabel,
+                fontSize: fontSize
+            )
+        }
+        .accessibilityIdentifier(CashRunwayAccessibilityID.timelineMonthPicker)
+    }
+
+    private var periodDisplayLabel: String {
+        switch model.selectedTimelinePeriod {
+        case .month:
+            return CashRunwayTheme.monthFullLabel(for: model.selectedMonthKey)
+        case .year:
+            return "\(model.selectedMonthKey / 100)"
+        }
+    }
+
+    private func filtersButton(fontSize: CGFloat) -> some View {
+        Button {
+            isFiltersPresented = true
+        } label: {
+            ZStack(alignment: .topTrailing) {
+                pillLabel(
+                    iconName: "line.3.horizontal.decrease",
+                    text: L10n.string("Filters"),
+                    showsChevron: false,
+                    fontSize: fontSize
+                )
+
+                if filterPresentation.activeAdvancedFilterCount > 0 {
+                    Text("\(filterPresentation.activeAdvancedFilterCount)")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(minWidth: 18, minHeight: 18)
+                        .background(CashRunwayTheme.accent, in: Circle())
+                        .offset(x: 4, y: -4)
+                        .accessibilityIdentifier(CashRunwayAccessibilityID.timelineFilterBadge)
+                }
+            }
+        }
+        .accessibilityIdentifier(CashRunwayAccessibilityID.timelineFilterButton)
+        .accessibilityLabel(filterButtonAccessibilityLabel)
+    }
+
+    private var filterButtonAccessibilityLabel: String {
+        let count = filterPresentation.activeAdvancedFilterCount
+        if count > 0 {
+            return L10n.string("timeline.filter.activeCount", count)
+        }
+        return L10n.string("Filters")
     }
 
     private var transactionFeed: some View {
-        LazyVStack(alignment: .leading, spacing: 18) {
+        LazyVStack(alignment: .leading, spacing: 16) {
             if let sections = model.timelineSnapshot?.sections, !sections.isEmpty {
                 ForEach(sections) { section in
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack(alignment: .firstTextBaseline) {
-                            Text(CashRunwayTheme.dayHeader(for: section.periodKey))
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundStyle(CashRunwayTheme.textPrimary)
-                            Spacer()
-                            if let sectionTotalText = model.aggregateMoneyString(from: section.totalMinor) {
-                                Text(sectionTotalText)
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundStyle(CashRunwayTheme.amountColor(section.totalMinor))
-                            } else {
-                                Text("Mixed-currency totals unavailable")
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundStyle(CashRunwayTheme.textMuted)
+                    TimelineDayCard(
+                        section: section,
+                        totalText: model.aggregateMoneyString(from: section.totalMinor),
+                        isMixedCurrency: model.aggregateCurrencyCode == nil,
+                        onSelectItem: openEditor(for:),
+                        isCollapsed: Binding(
+                            get: { collapsedDayKeys.contains(section.periodKey) },
+                            set: { isCollapsed in
+                                if isCollapsed {
+                                    collapsedDayKeys.insert(section.periodKey)
+                                } else {
+                                    collapsedDayKeys.remove(section.periodKey)
+                                }
                             }
-                        }
-                        ForEach(section.items) { item in
-                            Button {
-                                openEditor(for: item)
-                            } label: {
-                                TransactionRow(item: item)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier(CashRunwayAccessibilityID.transactionRow(item))
-                            if item.id != section.items.last?.id {
-                                Divider()
-                                    .overlay(CashRunwayTheme.line)
-                            }
-                        }
-                    }
+                        )
+                    )
                 }
             } else {
-                ContentUnavailableView(
-                    "No Transactions",
-                    systemImage: "tray",
-                    description: Text("Add a transaction or broaden the search filters.")
-                )
-                .padding(.top, 40)
+                emptyFeed
             }
         }
     }
 
-    private func pillLabel(text: String, systemImage: String) -> some View {
-        HStack(spacing: 10) {
-            Text(text)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(CashRunwayTheme.textPrimary)
-            Image(systemName: systemImage)
-                .font(.system(size: 11, weight: .bold))
+    private var emptyFeed: some View {
+        VStack(spacing: 12) {
+            Spacer(minLength: 20)
+            Image(systemName: "tray")
+                .font(.system(size: 48))
                 .foregroundStyle(CashRunwayTheme.textMuted)
+
+            Text(emptyFeedTitle)
+                .font(.system(size: 18, weight: .bold))
+                .foregroundStyle(CashRunwayTheme.textPrimary)
+                .multilineTextAlignment(.center)
+
+            Text(emptyFeedDescription)
+                .font(.system(size: 14))
+                .foregroundStyle(CashRunwayTheme.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+
+            if filterPresentation.hasAnyFeedFilter {
+                Button {
+                    let cleared = TimelineFilterPresentation.clearAll(query: model.transactionQuery)
+                    model.transactionQuery = cleared
+                    Task { await model.reloadAll() }
+                } label: {
+                    HStack {
+                        Image(systemName: "xmark")
+                        Text(L10n.string("Clear filters"))
+                    }
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(CashRunwayTheme.accent)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(CashRunwayTheme.accent, lineWidth: 1)
+                    )
+                }
+                .padding(.top, 8)
+            }
+
+            Spacer(minLength: 20)
         }
-        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity)
+    }
+
+    private var emptyFeedTitle: String {
+        if filterPresentation.hasAnyFeedFilter {
+            return L10n.string("No transactions found")
+        }
+        return L10n.string("No Transactions")
+    }
+
+    private var emptyFeedDescription: String {
+        if filterPresentation.hasAnyFeedFilter {
+            return L10n.string("No transactions match the active filters.")
+        }
+        return L10n.string("timeline.noTransactions.addOrFilter")
+    }
+
+    private func pillLabel(iconName: String, text: String, showsChevron: Bool = true, fontSize: CGFloat) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: iconName)
+                .font(.system(size: fontSize, weight: .semibold))
+                .foregroundStyle(CashRunwayTheme.accent)
+            Text(text)
+                .font(.system(size: fontSize, weight: .semibold))
+                .foregroundStyle(CashRunwayTheme.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+            if showsChevron {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: fontSize * 0.78, weight: .bold))
+                    .foregroundStyle(CashRunwayTheme.textMuted)
+            }
+        }
+        .padding(.horizontal, 11)
         .padding(.vertical, 12)
-        .background(CashRunwayTheme.pill, in: Capsule())
+        .frame(minHeight: 44)
+        .background(CashRunwayTheme.surface, in: Capsule())
+        .overlay(Capsule().stroke(CashRunwayTheme.line, lineWidth: 1))
     }
 
     private func walletName(for id: UUID) -> String? {
@@ -372,65 +480,6 @@ struct DashboardView: View {
             draft = loadedDraft
             isComposerPresented = true
         }
-    }
-}
-
-private struct MonthChartColumn: View {
-    let bar: TimelineBarPoint
-    let period: TimelinePeriod
-    let isSelected: Bool
-    let maxValue: Int64
-
-    private var incomeHeight: CGFloat {
-        barHeight(for: bar.incomeBarMinor)
-    }
-
-    private var expenseHeight: CGFloat {
-        barHeight(for: bar.expenseBarMinor)
-    }
-
-    private func barHeight(for value: Int64) -> CGFloat {
-        guard maxValue > 0 else { return 4 }
-        let height = CGFloat(value) / CGFloat(maxValue) * 140
-        return max(height, 4)
-    }
-
-    private var displayLabel: String {
-        switch period {
-        case .month:
-            "\(CashRunwayTheme.monthAbbreviation(for: bar.periodKey))\n\(bar.periodKey / 100)"
-        case .year:
-            "\(bar.periodKey)"
-        }
-    }
-
-    var body: some View {
-        VStack(spacing: 8) {
-            HStack(alignment: .bottom, spacing: 5) {
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(CashRunwayTheme.accent.opacity(isSelected ? 1.0 : 0.75))
-                    .frame(width: 16, height: incomeHeight)
-
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(CashRunwayTheme.negative.opacity(isSelected ? 0.95 : 0.7))
-                    .frame(width: 16, height: expenseHeight)
-            }
-
-            Text(displayLabel)
-                .font(.system(size: isSelected ? 12 : 11, weight: isSelected ? .bold : .medium))
-                .foregroundStyle(isSelected ? CashRunwayTheme.textPrimary : CashRunwayTheme.textMuted)
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-                .frame(width: 50)
-        }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(isSelected ? CashRunwayTheme.accent.opacity(0.08) : Color.clear)
-        )
-        .accessibilityLabel("\(displayLabel), income \(MoneyFormatter.string(from: bar.incomeMinor)), expense \(MoneyFormatter.string(from: bar.expenseMinor))")
-        .accessibilityAddTraits(.isButton)
     }
 }
 

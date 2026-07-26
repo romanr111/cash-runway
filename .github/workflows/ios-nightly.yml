@@ -115,7 +115,7 @@ jobs:
         run: |
           set -euo pipefail
           swift test \
-            --skip '(ModelSerializationTests|UtilityAndModelTests|BankCategoryMapperTests|BankConnectionServiceTests|BankSyncServiceTests)' \
+            --skip '(ModelSerializationTests|UtilityAndModelTests|BankCategoryMapperTests|BankConnectionServiceTests|BankSyncServiceTests|CashRunwayPerformanceTests)' \
             2>&1 | tee swift-integration-test.log
 
       - name: Upload integration test logs
@@ -124,6 +124,43 @@ jobs:
         with:
           name: integration-test-logs
           path: swift-integration-test.log
+          if-no-files-found: ignore
+
+  performance-tests:
+    name: Performance Tests
+    runs-on: macos-26
+    timeout-minutes: 45
+    needs: unit-tests
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Cache SwiftPM packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.swiftpm/cache
+          key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-
+
+      - name: Run performance suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Simulator/CI regression signal for the Timeline reload path at 10k
+          # transactions (timelineSnapshotTimingGate, allBarsTimingGate) plus the
+          # rest of CashRunwayPerformanceTests. A physical-device p95 against the
+          # ~20-30ms bar (self-QA sec. 3.6) needs a self-hosted device runner and
+          # is tracked separately.
+          Scripts/check-perf.sh 2>&1 | tee swift-performance-test.log
+
+      - name: Upload performance logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: performance-test-logs
+          path: swift-performance-test.log
           if-no-files-found: ignore
 
   coverage:

@@ -3,13 +3,12 @@ set shell := ["bash", "-o", "pipefail", "-eu", "-c"]
 scheme := "CashRunway"
 dest := "platform=iOS Simulator,name=iPhone 17"
 
-# Session start: bootstrap environment, verify git state, check CodeGraph, run pre-flight inventory.
+# Session start: verify Git and worktree state, then run the pre-flight inventory.
 session-start:
     @echo "=== Cash Runway session start ==="
     echo "worktree: $(pwd -P)"
     echo "branch: $(git rev-parse --abbrev-ref HEAD)"
     git worktree list
-    just graph-bootstrap
     Scripts/pre-flight.sh
     @echo "=== Session start complete ==="
 

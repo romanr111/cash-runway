@@ -302,6 +302,10 @@ extension CashRunwayRepository {
         var conditions = ["t.is_deleted = 0", "t.type != 'transfer_in'"]
         var arguments: [String: any DatabaseValueConvertible] = [:]
 
+        if query.walletID == nil {
+            conditions.append(Self.activeWalletScope(nil, column: "w.id").fragment)
+        }
+
         if let walletID = query.walletID {
             conditions.append("t.wallet_id = :walletID")
             arguments["walletID"] = walletID.uuidString
@@ -319,12 +323,12 @@ extension CashRunwayRepository {
             arguments["search"] = query.searchText + "*"
         }
         if let startDate = query.startDate {
-            conditions.append("t.occurred_at >= :startDate")
-            arguments["startDate"] = startDate
+            conditions.append("t.local_day_key >= :startDayKey")
+            arguments["startDayKey"] = DateKeys.dayKey(for: startDate)
         }
         if let endDate = query.endDate {
-            conditions.append("t.occurred_at <= :endDate")
-            arguments["endDate"] = endDate
+            conditions.append("t.local_day_key <= :endDayKey")
+            arguments["endDayKey"] = DateKeys.dayKey(for: endDate)
         }
 
         let allowedDBKinds = query.kinds.flatMap { kind -> [String] in
@@ -461,6 +465,7 @@ extension CashRunwayRepository {
         guard !months.isEmpty else { return [:] }
         let sortedMonths = Set(months).sorted()
         let latest = sortedMonths.last!
+        let scope = Self.activeWalletScope(walletID)
 
         let startingBalance: Int64
         if let walletID {
@@ -483,13 +488,11 @@ extension CashRunwayRepository {
                    COALESCE(SUM(income_minor - expense_minor + transfer_in_minor - transfer_out_minor), 0) AS net_delta
             FROM monthly_wallet_cashflow
             WHERE month_key <= ?
-            \(walletID == nil ? "" : "AND wallet_id = ?")
+            AND \(scope.fragment)
             GROUP BY month_key
             ORDER BY month_key
             """,
-            arguments: walletID == nil
-                ? [latest]
-                : [latest, walletID!.uuidString]
+            arguments: StatementArguments([latest] + scope.arguments)
         )
 
         var cumulative = startingBalance

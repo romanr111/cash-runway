@@ -70,27 +70,55 @@ public enum CashRunwayTheme {
     private static func monthFullLabelFormatter() -> DateFormatter {
         let formatter = DateFormatter()
         formatter.locale = L10n.locale
-        formatter.dateFormat = "MMMM yyyy"
+        // Standalone (nominative) month so pills and headers read "Липень 2026",
+        // not the genitive "липня 2026" that "MMMM" produces in Ukrainian.
+        formatter.dateFormat = "LLLL yyyy"
         return formatter
     }
 
     public static func monthFullLabel(for monthKey: Int) -> String {
-        monthFullLabelFormatter().string(from: DateKeys.startOfMonth(for: monthKey))
+        let raw = monthFullLabelFormatter().string(from: DateKeys.startOfMonth(for: monthKey))
+        return capitalizingFirstLetter(raw)
     }
 
-    private static func dayHeaderFormatter() -> DateFormatter {
+    private static func dayHeaderWeekdayFormatter() -> DateFormatter {
         let formatter = DateFormatter()
         formatter.locale = L10n.locale
-        formatter.dateFormat = "EEEE, d MMM"
+        formatter.dateFormat = "EEEE"
         return formatter
     }
 
+    private static func dayHeaderDayMonthFormatter() -> DateFormatter {
+        let formatter = DateFormatter()
+        formatter.locale = L10n.locale
+        formatter.dateFormat = "d MMMM"
+        return formatter
+    }
+
+    /// Day header for the Timeline feed: relative "Today"/"Yesterday" for the two most
+    /// recent days, otherwise a capitalized weekday, followed by day and full month
+    /// (e.g. "Сьогодні, 11 липня" / "Четвер, 10 липня").
     public static func dayHeader(for dayKey: Int) -> String {
         let year = dayKey / 10_000
         let month = (dayKey / 100) % 100
         let day = dayKey % 100
         let date = DateKeys.calendar.date(from: DateComponents(year: year, month: month, day: day)) ?? .now
-        return dayHeaderFormatter().string(from: date)
+        let dayMonth = dayHeaderDayMonthFormatter().string(from: date)
+
+        let prefix: String
+        if DateKeys.calendar.isDateInToday(date) {
+            prefix = L10n.string("timeline.dayHeader.today")
+        } else if DateKeys.calendar.isDateInYesterday(date) {
+            prefix = L10n.string("timeline.dayHeader.yesterday")
+        } else {
+            prefix = capitalizingFirstLetter(dayHeaderWeekdayFormatter().string(from: date))
+        }
+        return "\(prefix), \(dayMonth)"
+    }
+
+    private static func capitalizingFirstLetter(_ value: String) -> String {
+        guard let first = value.first else { return value }
+        return String(first).uppercased(with: L10n.locale) + value.dropFirst()
     }
 }
 

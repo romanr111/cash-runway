@@ -22,29 +22,25 @@ Each worktree must have its own:
 .codegraph/worktree-root
 ```
 
-Never copy or share `.codegraph/` between worktrees.
+Never copy or share `.codegraph/` between worktrees. Different worktrees require
+separate indexes.
 
-After creating or entering a worktree, run:
+Bootstrap only when the global CodeGraph selector chooses it for a high-value
+task. If that selected task has no index, bootstrap initializes this worktree's
+separate index:
 
 ```bash
 just graph-bootstrap
-just graph-status
 ```
 
-After meaningful source changes, run:
-
-```bash
-just graph-sync
-```
-
-Use this only when normal synchronization is insufficient:
+Run this only when a required rebuild or old-engine migration is needed:
 
 ```bash
 just graph-reindex
 ```
 
 Multiple agents may share one CodeGraph daemon only when they operate in the
-same worktree. Different worktrees require separate indexes.
+same worktree.
 
 ## Branch Management
 

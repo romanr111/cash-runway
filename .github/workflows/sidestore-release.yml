@@ -55,11 +55,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          PREV_TAG=$(git tag --sort=-version:refname | grep -v '^v0\.0\.0' | grep -v -- '-test-pages' | sed -n '1p' || true)
-          if [[ -n "${PREV_TAG}" ]]; then
-            RANGE="${PREV_TAG}..HEAD"
+          PREV_RELEASE_COMMIT=$(git log --first-parent --format='%H%x09%s' | awk -F '\t' -v current_version="${VERSION}" '
+            $2 ~ "^Release v[0-9]+\\.[0-9]+\\.[0-9]+([[:space:]]|$)" &&
+            $2 !~ "^Release v" current_version "([[:space:]]|$)" { print $1; exit }
+          ')
+          if [[ -n "${PREV_RELEASE_COMMIT}" ]]; then
+            RANGE="${PREV_RELEASE_COMMIT}..HEAD"
           else
-            RANGE="$(git rev-list --max-parents=0 HEAD)..HEAD"
+            PREV_TAG=$(git tag --merged HEAD --sort=-version:refname | grep -v '^v0\.0\.0' | grep -v "^v${VERSION}$" | grep -v -- '-test-pages' | sed -n '1p' || true)
+            if [[ -n "${PREV_TAG}" ]]; then
+              RANGE="${PREV_TAG}..HEAD"
+            else
+              RANGE="$(git rev-list --max-parents=0 HEAD)..HEAD"
+            fi
           fi
           RAW_NOTES=$(git log "${RANGE}" --no-merges --format='%s')
           echo "release_notes<<EOFNOTES" >> "${GITHUB_OUTPUT}"
