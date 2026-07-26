@@ -523,9 +523,10 @@ extension CashRunwayRepository {
             """,
             arguments: [transaction.id.uuidString]
         ).joined(separator: " ")
+        let merchantSearchText = MaskedCardIdentifier.privacyPreservingSearchText(for: transaction.merchant ?? "")
         try db.execute(
             sql: "INSERT INTO transaction_search (transaction_id, merchant, note, wallet_name, category_name, labels) VALUES (?, ?, ?, ?, ?, ?)",
-            arguments: [transaction.id.uuidString, transaction.merchant ?? "", transaction.note ?? "", walletName, categoryName, labelNames]
+            arguments: [transaction.id.uuidString, merchantSearchText, transaction.note ?? "", walletName, categoryName, labelNames]
         )
     }
 
