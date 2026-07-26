@@ -33,6 +33,11 @@ if grep -q 'PREV_TAG=$(git tag --sort=-version:refname' "$WORKFLOW"; then
     exit 1
 fi
 
+if grep -q 'print \$1; exit' "$WORKFLOW"; then
+    echo "release workflow must drain the commit log after selecting the prior release" >&2
+    exit 1
+fi
+
 if ! grep -q 'MARKETING_VERSION="${{ steps.meta.outputs.version }}"' "$WORKFLOW"; then
     echo "release xcodebuild must set MARKETING_VERSION from release metadata" >&2
     exit 1
