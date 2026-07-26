@@ -82,3 +82,14 @@ All gates run in this worktree on 2026-07-23:
 - `CashRunway.xcodeproj/project.pbxproj.bak` is untracked and must be removed before commit (rm denied in this session).
 - Pre-existing build warnings are unrelated (duplicate `AppHost/uk.lproj/InfoPlist.strings` project reference, signed SQLCipher binary not stripped, AppIntents metadata skipped).
 - Phase 3 (`timeline-redesign-phase-3-feed-filters-qa.md`) can now start; Phase 2 acceptance criteria 1-10 are satisfied.
+
+## Historical Snapshot - `origin/main` (SUPERSEDED 2026-07-26)
+
+**Branch:** `release/v0.1.4`
+**Worktree:** `/Users/roman/.codex/worktrees/cash-runway-pr-92-review-comments`
+**PR:** https://github.com/romanr111/cash-runway/pull/92 - Release v0.1.4 into `main`
+**Base/head checked:** `main` `82279fc`, `release/v0.1.4` `7722ab1`
+
+- Local no-commit merge of `origin/main` into `release/v0.1.4` had all conflicts resolved and staged; GitHub still reported PR #92 as `DIRTY` / `CONFLICTING` until the resolution was pushed.
+- Release decisions retained: version `0.1.4` / build `273`, SwiftUI/UIVM extraction and project references, full-width Settings `moreRow` tap target, month-key date-scope fix, source-currency Agent DTO values, and signed `amount_minor` income in the delete summary.
+- Historical validation: `git diff --check`, `git diff --cached --check`, `bash Scripts/verify-pbxproj.sh`, `Scripts/pre-flight.sh`, targeted Agent/bulk-delete tests, `just check-agent`, `just check-isolated`, `just build`, and `just graph-sync` passed. XCUITest/E2E was not run.
