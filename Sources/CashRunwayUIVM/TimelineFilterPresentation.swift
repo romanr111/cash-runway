@@ -90,6 +90,14 @@ public struct TimelineFilterPresentation: Equatable, Sendable {
         if !usesDateRange {
             applied.startDate = nil
             applied.endDate = nil
+        } else {
+            let today = DateKeys.calendar.startOfDay(for: .now)
+            if applied.startDate == nil {
+                applied.startDate = today
+            }
+            if applied.endDate == nil {
+                applied.endDate = today
+            }
         }
         return applied
     }

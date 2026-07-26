@@ -7,6 +7,7 @@ struct TimelinePeriodPickerSheet: View {
 
     @State private var mode: TimelinePeriod
     @State private var selectedMonthKey: Int
+    @State private var selectedMonthExplicitly = false
 
     private var maxMonthKey: Int { model.maxMonthKey }
 
@@ -59,6 +60,7 @@ struct TimelinePeriodPickerSheet: View {
         ForEach(monthKeys, id: \.self) { monthKey in
             Button {
                 selectedMonthKey = monthKey
+                selectedMonthExplicitly = true
             } label: {
                 HStack {
                     Text(CashRunwayTheme.monthFullLabel(for: monthKey))
@@ -130,7 +132,9 @@ struct TimelinePeriodPickerSheet: View {
         if periodChanged {
             model.selectTimelinePeriod(mode)
         }
-        model.selectedMonthKey = selectedMonthKey
+        if !periodChanged || mode == .year || selectedMonthExplicitly {
+            model.selectedMonthKey = selectedMonthKey
+        }
         dismiss()
         // Period mode (month/year) changes the granularity of `allBars` used by the
         // chart; `reloadTimeline()` only refreshes mutable snapshots, so route a mode

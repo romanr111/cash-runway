@@ -145,6 +145,17 @@ import Foundation
         #expect(applied.endDate == draft.endDate)
     }
 
+    @Test func applyMaterializesBothDatesWhenDateRangeIsEnabledWithoutPickerChanges() {
+        let applied = TimelineFilterPresentation.apply(
+            draft: TransactionQuery(),
+            usesDateRange: true,
+            walletID: nil
+        )
+
+        #expect(applied.startDate != nil)
+        #expect(applied.endDate != nil)
+    }
+
     @Test func validDateRangeWhenEitherSideNil() {
         #expect(TimelineFilterPresentation.isDateRangeValid(startDate: nil, endDate: nil))
         #expect(TimelineFilterPresentation.isDateRangeValid(startDate: Date(), endDate: nil))
