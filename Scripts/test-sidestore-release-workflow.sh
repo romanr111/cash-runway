@@ -18,6 +18,16 @@ if ! grep -q 'current_version="${VERSION}"' "$WORKFLOW"; then
     exit 1
 fi
 
+if ! awk '
+  /- name: Generate release notes from git log/ { in_notes_step = 1; next }
+  in_notes_step && /^      - name:/ { exit }
+  in_notes_step && /VERSION="\$\{\{ steps\.meta\.outputs\.version \}\}"/ { found = 1 }
+  END { exit !found }
+' "$WORKFLOW"; then
+    echo "release notes step must define VERSION from resolved release metadata" >&2
+    exit 1
+fi
+
 if grep -q 'PREV_TAG=$(git tag --sort=-version:refname' "$WORKFLOW"; then
     echo "release workflow must not use an unreachable release tag as the note baseline" >&2
     exit 1
