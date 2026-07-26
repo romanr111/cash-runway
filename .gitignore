@@ -9,7 +9,6 @@ xcuserdata/
 reporting-api/node_modules/
 .vercel/
 reporting-api/.vercel/
-.codegraph/
 .xcodebuildmcp/
 .vercel
 AppHost/ReportingConfig.local.xcconfig
@@ -22,3 +21,4 @@ headroom_memory.db
 *.db
 
 .codex/
+.grepai/

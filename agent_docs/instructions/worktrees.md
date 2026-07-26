@@ -1,4 +1,4 @@
-# Worktree and CodeGraph Instructions
+# Worktree Instructions
 
 ## Worktree Isolation
 
@@ -12,35 +12,6 @@ Scripts/pre-flight.sh
 
 Review the current branch, modified files, untracked files, and existing diff.
 Do not overwrite or discard unrelated work.
-
-## CodeGraph Lifecycle
-
-Each worktree must have its own:
-
-```text
-.codegraph/codegraph.db
-.codegraph/worktree-root
-```
-
-Never copy or share `.codegraph/` between worktrees. Different worktrees require
-separate indexes.
-
-Bootstrap only when the global CodeGraph selector chooses it for a high-value
-task. If that selected task has no index, bootstrap initializes this worktree's
-separate index:
-
-```bash
-just graph-bootstrap
-```
-
-Run this only when a required rebuild or old-engine migration is needed:
-
-```bash
-just graph-reindex
-```
-
-Multiple agents may share one CodeGraph daemon only when they operate in the
-same worktree.
 
 ## Branch Management
 

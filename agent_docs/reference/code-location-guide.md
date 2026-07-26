@@ -1,6 +1,6 @@
 # Code Location Guide
 
-This is a navigation aid, not a substitute for CodeGraph or `rg -n`.
+This is a navigation aid, not a substitute for `rg -n` and bounded reads.
 
 | Concern | Primary location |
 | --- | --- |
@@ -16,4 +16,4 @@ This is a navigation aid, not a substitute for CodeGraph or `rg -n`.
 | UI-test seeding and runtime | `AppHost/UITestRuntime.swift` |
 
 Verify every path against the current repository before committing.
-Use CodeGraph or `rg -n` to locate the current symbol and exact line range.
+Use `rg -n` to locate the current symbol and exact line range.

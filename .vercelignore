@@ -1,5 +1,4 @@
 .build/
-.codegraph/
 .git/
 .github/
 .swiftpm/

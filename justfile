@@ -12,24 +12,6 @@ session-start:
     Scripts/pre-flight.sh
     @echo "=== Session start complete ==="
 
-graph-bootstrap:
-    Scripts/codegraph-bootstrap.sh
-
-graph-init: graph-bootstrap
-
-graph-sync: graph-bootstrap
-    codegraph sync
-
-graph-reindex: graph-bootstrap
-    codegraph index --force
-
-graph-repair:
-    rm -f .codegraph/worktree-root
-    just graph-bootstrap
-
-graph-status: graph-bootstrap
-    codegraph status
-
 build:
     xcodebuild -scheme {{scheme}} -sdk iphonesimulator -destination '{{dest}}' clean build 2>&1 | grep -E "(warning:|error:|BUILD SUCCEEDED|BUILD FAILED)"
 
