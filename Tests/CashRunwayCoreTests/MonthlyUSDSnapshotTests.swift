@@ -315,7 +315,17 @@ struct MonthlyUSDSnapshotTests {
         let repository = try makeRepository()
         let service = try makeService(repository, provider: CountingRateProvider(rate: nil))
         let wallet = try makeWallet(repository)
-        // 2026-06 end (Jun 30) is ≤ the fixed `now` (its own end instant):
+        // Month candidates in the nil-path backfill come from the LEDGER, so
+        // seed a real transaction in 2026-06. (The 2030 month exists only as an
+        // aggregate row with no transactions, so the backfill never sees it —
+        // and even if a month end is in the future, it is skipped by date.)
+        try repository.saveTransaction(TransactionDraft(
+            kind: .expense,
+            walletID: wallet.id,
+            amountMinor: 1_000,
+            currencyCode: .uah,
+            occurredAt: junEnd
+        ))
         try seedCashflow(repository, walletID: wallet.id, monthKey: 202606, incomeMinor: 0, expenseMinor: 1_000)
         try seedCashflow(repository, walletID: wallet.id, monthKey: 203001, incomeMinor: 0, expenseMinor: 1_000)
 
