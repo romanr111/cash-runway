@@ -360,7 +360,7 @@ extension CashRunwayRepository {
             let existing = try Row.fetchOne(
                 db,
                 sql: """
-                SELECT income_minor, expense_minor, saved_minor, base_currency_code,
+                SELECT id, income_minor, expense_minor, saved_minor, base_currency_code,
                        rate_decimal, is_approximate
                 FROM monthly_usd_snapshot
                 WHERE month_key = ? AND wallet_id = ? AND currency_code = ?
@@ -391,7 +391,15 @@ extension CashRunwayRepository {
                 if totalsUnchanged, baseCurrencyMatches, hasExistingConversion, !upgradeApproximation {
                     return
                 }
-                _ = try snapshot.update(db)
+                // Rewrite in place: reuse the STORED row id (the service mints a
+                // fresh snapshot id every pass; updating against it would match
+                // no rows and silently keep stale totals).
+                var mutated = snapshot
+                let storedID: String? = existing["id"]
+                if let storedID, !storedID.isEmpty {
+                    mutated.id = storedID
+                }
+                _ = try mutated.update(db)
             } else {
                 var insert = snapshot
                 insert.id = snapshot.id.isEmpty ? UUID().uuidString : snapshot.id
