@@ -44,8 +44,7 @@ struct MonthlyRetrospectiveExportTests {
         return formatter.date(from: string)!
     }
 
-    @Test func noDataThrows() throws
-    {
+    @Test func noDataThrows() throws {
         #expect(throws: MonthlyRetrospectiveExportError.self) {
             try MonthlyRetrospectiveExport.rows(from: [])
         }
