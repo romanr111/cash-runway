@@ -517,7 +517,6 @@ private enum TimelineQAState: String {
     case largeValue = "large_value"
     case mixedCurrency = "mixed_currency"
     case zeroIncome = "zero_income"
-    case retrospective = "retrospective"
 }
 
 /// PR 124 / Issue #123: two complete prior months of UAH ledger data so the
