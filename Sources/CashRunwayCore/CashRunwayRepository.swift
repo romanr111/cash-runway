@@ -2,6 +2,12 @@
 import Foundation
 import GRDB
 
+/// Thrown only when the async→sync bridge in maintenance never captured a result
+/// (a programming error — the detached task always sets `result`).
+enum SnapshotBridgeError: Error {
+    case noResult
+}
+
 private func resolvedCategoryID(_ db: Database, kind: CategoryKind, named name: String) throws -> UUID? {
     if let activeID = try String.fetchOne(
         db,
@@ -2364,10 +2370,72 @@ extension CashRunwayRepository {
 
     public func runMaintenance() throws {
         guard !ProtectedDataMonitor.skipIfUnavailable(work: "runMaintenance") else { return }
-        try databaseManager.dbQueue.write { db in
+        let dirtyMonths = try databaseManager.dbQueue.write { db in
             try processPendingAggregateRebuilds(db)
             try purgeExpiredRawJSON(db)
+            return try pendingSnapshotMonthKeys(db: db)
         }
+        // Issue #121: refresh persisted retrospective USD snapshots for months whose
+        // aggregates changed (rate fetches happen here, off the DB write transaction).
+        guard !dirtyMonths.isEmpty else { return }
+        try refreshRetrospectiveUSDSnapshots(monthKeys: dirtyMonths)
+    }
+
+    /// Issue #121: refresh persisted retrospective USD snapshots for the given
+    /// months (or all history when nil). Runs the service synchronously with a
+    /// fresh provider chain; never rethrows a month's rate failure.
+    func refreshRetrospectiveUSDSnapshots(monthKeys: Set<Int>? = nil) throws {
+        let provider = CachingExchangeRateProvider(
+            upstream: HistoricalOfficialRateProvider(),
+            repository: self,
+            maxStaleness: .infinity
+        )
+        let service = MonthlyRetrospectiveUSDSnapshotService(repository: self, rateProvider: provider)
+        _ = try? Self.awaitBridge { try await service.refreshSnapshots(monthKeys: monthKeys.map(Set.init)) }
+    }
+
+    /// Months whose cashflow aggregates changed since the last snapshot pass:
+    /// rebuilt months whose `monthly_wallet_cashflow.updated_at` is newer than the
+    /// matching `monthly_usd_snapshot.updated_at` (or that have no snapshot yet).
+    private func pendingSnapshotMonthKeys(db: Database) throws -> Set<Int> {
+        let rows = try Row.fetchAll(
+            db,
+            sql: """
+            SELECT c.month_key AS month_key
+            FROM monthly_wallet_cashflow c
+            LEFT JOIN monthly_usd_snapshot s
+              ON s.month_key = c.month_key
+             AND s.wallet_id = c.wallet_id
+            WHERE s.id IS NULL
+               OR s.updated_at < c.updated_at
+            """
+        )
+        return Set(rows.compactMap { $0["month_key"] as Int? })
+    }
+
+    /// Bridges an async service call into synchronous maintenance code. Only used
+    /// from `runMaintenance`, which runs on a background queue — never the main thread.
+    /// The box is a thread-safe handoff from the detached task back to this thread.
+    private final class ResultBox<T>: @unchecked Sendable {
+        var value: Result<T, Error>?
+    }
+
+    private static func awaitBridge<T>(_ operation: @escaping @Sendable () async throws -> T) throws -> T {
+        let box = ResultBox<T>()
+        let semaphore = DispatchSemaphore(value: 0)
+        Task.detached(priority: .utility) {
+            do {
+                box.value = .success(try await operation())
+            } catch {
+                box.value = .failure(error)
+            }
+            semaphore.signal()
+        }
+        _ = semaphore.wait(timeout: .distantFuture)
+        guard let captured = box.value else {
+            throw SnapshotBridgeError.noResult
+        }
+        return try captured.get()
     }
 
     public func refreshRecurringInstances() throws {

@@ -987,6 +987,42 @@ public final class DatabaseManager: @unchecked Sendable {
                     table.uniqueKey(["source", "base_currency_code", "quote_currency_code", "effective_date"])
                 }
             }),
+
+            // Issue #121: retrospective monthly USD snapshot. Persists per-month
+            // income/expense/saved totals (minor units, in the wallet's original
+            // currency — UAH for the current all-Ukrainian default) alongside the
+            // month-end rate used to convert them to the reporting currency (USD
+            // default, driven by `currency_preferences.reporting_currency_code`).
+            // Stored once per (wallet, currency, month); history stays stable even
+            // if today's rates change. Rows are only rewritten if the underlying
+            // minor totals change (re-import/edit) or the stored metadata is
+            // incompatible with the current preferences — never for rate drift.
+            ("v9_monthly_usd_snapshot", { db in
+                try db.create(table: "monthly_usd_snapshot") { table in
+                    table.column("id", .text).primaryKey()
+                    table.column("month_key", .integer).notNull()
+                    table.column("wallet_id", .text).notNull()
+                    table.column("currency_code", .text).notNull()
+                    table.column("income_minor", .integer).notNull().defaults(to: 0)
+                    table.column("expense_minor", .integer).notNull().defaults(to: 0)
+                    table.column("saved_minor", .integer).notNull().defaults(to: 0)
+                    table.column("base_currency_code", .text).notNull().defaults(to: "USD")
+                    table.column("income_base_minor", .integer)
+                    table.column("expense_base_minor", .integer)
+                    table.column("saved_base_minor", .integer)
+                    table.column("rate_decimal", .text)
+                    table.column("rate_effective_date", .date)
+                    table.column("rate_source", .text)
+                    table.column("is_approximate", .boolean).notNull().defaults(to: false)
+                    table.column("updated_at", .datetime).notNull()
+                    table.uniqueKey(["month_key", "wallet_id", "currency_code"])
+                }
+                try db.create(
+                    index: "idx_monthly_usd_snapshot_month",
+                    on: "monthly_usd_snapshot",
+                    columns: ["month_key"]
+                )
+            }),
         ]
     }
 
