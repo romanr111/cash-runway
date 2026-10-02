@@ -324,7 +324,8 @@ struct MonthlyUSDSnapshotTests {
             walletID: wallet.id,
             amountMinor: 1_000,
             currencyCode: .uah,
-            occurredAt: junEnd
+            occurredAt: junEnd,
+            categoryID: WalletCategory.builtIn(byKind: .expense).id
         ))
         try seedCashflow(repository, walletID: wallet.id, monthKey: 202606, incomeMinor: 0, expenseMinor: 1_000)
         try seedCashflow(repository, walletID: wallet.id, monthKey: 203001, incomeMinor: 0, expenseMinor: 1_000)
