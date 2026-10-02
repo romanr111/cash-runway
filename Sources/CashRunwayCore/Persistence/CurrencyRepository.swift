@@ -400,11 +400,25 @@ extension CashRunwayRepository {
                     mutated.id = storedID
                 }
                 _ = try mutated.update(db)
+                try db.execute(
+                    sql: "UPDATE monthly_usd_snapshot SET wallet_id = ? WHERE id = ?",
+                    arguments: [snapshot.walletID.uuidString, mutated.id]
+                )
             } else {
                 var insert = snapshot
                 insert.id = snapshot.id.isEmpty ? UUID().uuidString : snapshot.id
                 _ = try insert.insert(db)
             }
+            // wallet_id hygiene: this column is TEXT; Codable persists UUID as a
+            // BLOB, and SQLite storage-class comparison then miss-matches for
+            // every TEXT-bound lookup (lookups AND the unique key). Rewrite the
+            // just-stored row's wallet_id as its canonical TEXT UUID; the
+            // v10_monthly_usd_snapshot_text_uuid migration normalizes legacy
+            // rows once.
+            try db.execute(
+                sql: "UPDATE monthly_usd_snapshot SET wallet_id = ? WHERE rowid = last_insert_rowid()",
+                arguments: [snapshot.walletID.uuidString]
+            )
         }
     }
 }
