@@ -251,7 +251,16 @@ public final class CashRunwayAppModel {
     public func bootstrap() async {
         do {
             try repository.seedIfNeeded()
-            try repository.runMaintenance()
+            // Maintenance must NOT run inline on the main actor: it rebuilds the
+            // full historical aggregate backfill (sequential per-month DB work),
+            // which would freeze the UI for that entire span. Run it detached;
+            // the single USD-snapshot backfill happens in the awaited refresh
+            // below (already off-main), and the UI reloads again whenever this
+            // detached pass lands.
+            let repository = self.repository
+            Task.detached(priority: .utility) {
+                try? repository.runMaintenance()
+            }
             try repository.refreshRecurringInstances()
             await refreshRetrospectiveUSDSnapshots()
             await reloadAll()
@@ -267,22 +276,35 @@ public final class CashRunwayAppModel {
     }
 
     /// Issue #121: backfills + reloads persisted retrospective monthly USD
-    /// snapshots (historical month-end rates). Runs off the main actor; failures
-    /// are non-fatal — the retrospective simply keeps its previously stored
-    /// values until the next run.
+    /// snapshots (historical month-end rates). Delegates to the repository's
+    /// non-blocking engine (service runs on a detached task); failures are
+    /// non-fatal — the retrospective simply keeps its previously stored values
+    /// until the next run. This is the app's single full snapshot backfill on
+    /// bootstrap: synchronous maintenance no longer runs a snapshot pass of its
+    /// own.
     public func refreshRetrospectiveUSDSnapshots() async {
         let repository = self.repository
-        let loaded: [RetrospectiveMonthlyUSDMetric]? = await Task.detached(priority: .utility) { () -> [RetrospectiveMonthlyUSDMetric]? in
-            let provider = CachingExchangeRateProvider(
-                upstream: HistoricalOfficialRateProvider(),
-                repository: repository,
-                maxStaleness: .infinity
+        await repository.refreshRetrospectiveUSDSnapshots()
+        // Reload stored metrics only when the read succeeds: on failure keep the
+        // previously stored values until the next run (non-fatal contract).
+        guard let aggregates = try? repository.monthlyUSDMonthAggregates() else { return }
+        retrospectiveMonthlyUSDMetrics = aggregates.map {
+            RetrospectiveMonthlyUSDMetric(
+                aggregate: $0,
+                monthKey: $0.monthKey,
+                currencyCode: $0.currencyCode,
+                baseCurrencyCode: $0.baseCurrencyCode,
+                incomeMinor: $0.incomeMinor,
+                expenseMinor: $0.expenseMinor,
+                savedMinor: $0.savedMinor,
+                incomeBaseMinor: $0.incomeBaseMinor,
+                expenseBaseMinor: $0.expenseBaseMinor,
+                savedBaseMinor: $0.savedBaseMinor,
+                rateDecimal: $0.rateDecimal,
+                rateEffectiveDate: $0.rateEffectiveDate,
+                rateSource: $0.rateSource,
+                isApproximate: $0.isApproximate
             )
-            let service = MonthlyRetrospectiveUSDSnapshotService(repository: repository, rateProvider: provider)
-            return try? await service.refreshSnapshots()
-        }.value
-        if let loaded {
-            retrospectiveMonthlyUSDMetrics = loaded
         }
     }
 
@@ -1035,6 +1057,11 @@ private actor BackgroundWork {
         }
         try repository.runMaintenance()
         try repository.refreshRecurringInstances()
+        // Issue #121: the snapshot pass no longer runs inside the synchronous
+        // maintenance (it blocked the calling thread on `awaitBridge` for the
+        // full backfill). Restore the incremental dirty-month refresh here,
+        // non-blocking and off-main.
+        await repository.refreshDirtyUSDSnapshots()
         let snapshot = try CashRunwayAppModel.loadSnapshot(
             repository: repository,
             selectedMonthKey: selectedMonthKey,

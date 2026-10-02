@@ -400,6 +400,12 @@ extension CashRunwayRepository {
                     mutated.id = storedID
                 }
                 _ = try mutated.update(db)
+                // wallet_id hygiene (rewrite path): the rowid-keyed trailing
+                // hygiene UPDATE previously ran here too, but `last_insert_rowid()`
+                // is stale when no insert happened in this call — with GRDB's
+                // shared connection it can name an unrelated row inserted by an
+                // earlier transaction, corrupting that snapshot's identity and
+                // breaking the unique key. Key on the row's own TEXT id instead.
                 try db.execute(
                     sql: "UPDATE monthly_usd_snapshot SET wallet_id = ? WHERE id = ?",
                     arguments: [snapshot.walletID.uuidString, mutated.id]
@@ -408,17 +414,19 @@ extension CashRunwayRepository {
                 var insert = snapshot
                 insert.id = snapshot.id.isEmpty ? UUID().uuidString : snapshot.id
                 _ = try insert.insert(db)
+                // wallet_id hygiene (insert path): this column is TEXT; Codable
+                // persists UUID as a BLOB, and SQLite storage-class comparison
+                // then miss-matches for every TEXT-bound lookup (lookups AND the
+                // unique key). Rewrite the just-inserted row's wallet_id as its
+                // canonical TEXT UUID; the v10_monthly_usd_snapshot_text_uuid
+                // migration normalizes legacy rows once. Keyed on the row's own
+                // id — `last_insert_rowid()` would also match here after a
+                // concurrent-table insert left a colliding rowid behind.
+                try db.execute(
+                    sql: "UPDATE monthly_usd_snapshot SET wallet_id = ? WHERE id = ?",
+                    arguments: [snapshot.walletID.uuidString, insert.id]
+                )
             }
-            // wallet_id hygiene: this column is TEXT; Codable persists UUID as a
-            // BLOB, and SQLite storage-class comparison then miss-matches for
-            // every TEXT-bound lookup (lookups AND the unique key). Rewrite the
-            // just-stored row's wallet_id as its canonical TEXT UUID; the
-            // v10_monthly_usd_snapshot_text_uuid migration normalizes legacy
-            // rows once.
-            try db.execute(
-                sql: "UPDATE monthly_usd_snapshot SET wallet_id = ? WHERE rowid = last_insert_rowid()",
-                arguments: [snapshot.walletID.uuidString]
-            )
         }
     }
 }
