@@ -122,16 +122,23 @@ public final class MonthlyRetrospectiveUSDSnapshotService: @unchecked Sendable {
     }
 
     /// Refreshes persisted snapshots. `monthKeys == nil` refreshes every
-    /// historical month (full backfill on first run); a non-nil set refreshes
-    /// only those months (targeted rebuilds after edits / aggregate rebuilds).
+    /// historical month found in the ledger (full backfill on first run); a
+    /// non-nil set is the authoritative targeted refresh list (callers derive
+    /// it from aggregate-dirty bookkeeping, so it doesn't need to be re-derived
+    /// from `transactions`).
     @discardableResult
     public func refreshSnapshots(monthKeys: Set<Int>?, now: Date = Date()) async throws -> [RetrospectiveMonthlyUSDMetric] {
         let preferences = try repository.currencyPreferences()
         let baseCurrency = Self.reportingCurrency(fallback: .usd, preferences: preferences)
-        let historicalMonths = try repository.historicalMonthKeys()
-        let targetMonths = monthKeys
-            .map { Set(historicalMonths).intersection($0).sorted() }
-            ?? historicalMonths.filter { Self.monthEndDate(for: $0) <= now }
+        let targetMonths: [Int]
+        if let monthKeys {
+            targetMonths = monthKeys
+                .filter { Self.monthEndDate(for: $0) <= now }
+                .sorted()
+        } else {
+            targetMonths = try repository.historicalMonthKeys()
+                .filter { Self.monthEndDate(for: $0) <= now }
+        }
         guard !targetMonths.isEmpty else { return [] }
 
         // Wallet lookup once per run: the cashflow aggregate carries no currency
