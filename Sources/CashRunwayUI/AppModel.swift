@@ -1066,7 +1066,7 @@ private actor BackgroundWork {
             throw MonthlyRetrospectiveExportError.noData
         }
         let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent(
-            MonthlyRetrospectiveExport.ExportFile.name(from: firstMonth, to: lastMonth, format: format)
+            ExportFile.name(from: firstMonth, to: lastMonth, format: format)
         )
         switch format {
         case .csv:
