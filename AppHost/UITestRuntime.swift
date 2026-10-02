@@ -52,6 +52,7 @@ private struct UITestLaunchConfiguration {
         case categoryEditor = "category_editor"
         case monobankFirstStart = "monobank_first_start"
         case timelineQA = "timeline_qa"
+        case retrospectiveQA = "retrospective_qa"
     }
 
     enum StartScreen: String {
@@ -163,6 +164,8 @@ private struct UITestLaunchConfiguration {
             try CategoryEditorUITestSeeder(repository: repository).seed()
         case .timelineQA:
             try TimelineQAUITestSeeder(repository: repository).seed(state: timelineState)
+        case .retrospectiveQA:
+            try RetrospectiveQAUITestSeeder(repository: repository).seed()
         case .monobankFirstStart, .none:
             break
         }
@@ -516,7 +519,109 @@ private enum TimelineQAState: String {
     case zeroIncome = "zero_income"
 }
 
-/// Deterministic Timeline QA dataset for screenshot / visual verification.
+/// PR 124 / Issue #123: two complete prior months of UAH ledger data so the
+/// deterministic USD snapshot backfill (store-once, exchange_rates seeded with
+/// fixed month-end rates) renders the dashboard `≈ $` cards without a network
+/// dependency and the Settings export row has real snapshot rows to serialize.
+private struct RetrospectiveQAUITestSeeder {
+    let repository: CashRunwayRepository
+
+    func seed() throws {
+        try FixtureGenerator.seedFixtureWalletsIfNeeded(into: repository)
+
+        let wallets = try repository.wallets()
+        guard let mainID = wallets.first(where: { $0.name == "Main Wallet" })?.id else {
+            throw CashRunwayError.invalidState("UI test baseline wallet is missing.")
+        }
+
+        let salaryID = try requireCategory(named: "Salary", kind: .income)
+        let groceriesID = try requireCategory(named: "Groceries", kind: .expense)
+
+        let calendar = DateKeys.calendar
+        let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: Date())) ?? Date()
+        // Mid-month anchors keep both relative months inside their own month.
+        func monthsBack(_ count: Int) -> Date {
+            let start = calendar.date(byAdding: .month, value: -count, to: monthStart) ?? monthStart
+            return calendar.date(byAdding: .day, value: 14, to: start) ?? start
+        }
+
+        // Prior calendar months (complete, backfillable; the current month is
+        // intentionally left without ledger rows so no future-month guard runs).
+        try save(.income, mainID, 52_800, monthsBack(1), salaryID, "UITEST-RETRO M1 income")
+        try save(.expense, mainID, 41_500, monthsBack(1), groceriesID, "UITEST-RETRO M1 groceries")
+        try save(.expense, mainID, 9_800, monthsBack(1), groceriesID, "UITEST-RETRO M1 market")
+        try save(.income, mainID, 48_000, monthsBack(2), salaryID, "UITEST-RETRO M2 income")
+        try save(.expense, mainID, 30_000, monthsBack(2), groceriesID, "UITEST-RETRO M2 groceries")
+        try save(.expense, mainID, 7_250, monthsBack(2), groceriesID, "UITEST-RETRO M2 pharmacy")
+
+        // Deterministic month-end rates replace the live NBU fetch: seeded with
+        // the same source label the production client writes, so the snapshot
+        // pass resolves from storage on both local and CI runs.
+        let previousMidMonth = monthsBack(1)
+        let previousMonthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: previousMidMonth)) ?? previousMidMonth
+        let previousMonthKey = DateKeys.monthKey(for: previousMidMonth)
+        let previousMonthEnd = lastSecond(of: previousMonthStart)
+        let twoBackMonthStart = calendar.date(byAdding: .month, value: -1, to: previousMonthStart) ?? previousMonthStart
+        let twoBackMonthEnd = lastSecond(of: twoBackMonthStart)
+        try repository.saveExchangeRates([
+            ExchangeRate(
+                sourceCurrencyCode: .usd,
+                targetCurrencyCode: .uah,
+                rateDecimal: "41.80",
+                effectiveDate: previousMonthEnd,
+                source: "nbu-official"
+            ),
+            ExchangeRate(
+                sourceCurrencyCode: .usd,
+                targetCurrencyCode: .uah,
+                rateDecimal: "41.25",
+                effectiveDate: twoBackMonthEnd,
+                source: "nbu-official"
+            ),
+        ])
+        _ = previousMonthKey
+
+        try repository.runMaintenance()
+        try repository.refreshRecurringInstances()
+    }
+
+    private func lastSecond(of monthStart: Date) -> Date {
+        let calendar = DateKeys.calendar
+        let nextMonth = calendar.date(byAdding: .month, value: 1, to: monthStart) ?? monthStart
+        return calendar.date(byAdding: .second, value: -1, to: nextMonth) ?? nextMonth
+    }
+
+    private func save(
+        _ kind: TransactionDraft.Kind,
+        _ walletID: UUID,
+        _ amountMinor: Int64,
+        _ date: Date,
+        _ categoryID: UUID,
+        _ note: String
+    ) throws {
+        try repository.saveTransaction(
+            TransactionDraft(
+                kind: kind,
+                walletID: walletID,
+                amountMinor: amountMinor,
+                occurredAt: date,
+                categoryID: categoryID,
+                merchant: note,
+                note: note,
+                source: .manual
+            )
+        )
+    }
+
+    private func requireCategory(named name: String, kind: CategoryKind) throws -> UUID {
+        if let category = try repository.categories(kind: kind).first(where: { $0.name == name }) {
+            return category.id
+        }
+        throw CashRunwayError.invalidState("UI test category \(name) is missing.")
+    }
+}
+
+/// Wraps the `timeline_qa` state selector for `CASH_RUNWAY_UI_TEST_TIMELINE_STATE`.
 ///
 /// Each state renders a demanding Timeline layout on launch with no UI
 /// interaction, so `simctl launch + screenshot` can exercise the chart

@@ -1,0 +1,82 @@
+[0/1] Planning build
+Building for debugging...
+[0/3] Write swift-version--1AB21518FC5DEDBE.txt
+error: emit-module command failed with exit code 1 (use -v to see invocation)
+[2/75] Emitting module CashRunwayUIVMTests
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayUIVMTests/BackupImportFlowStateTests.swift:2:8: error: no such module 'Testing'
+ 1 | @testable import CashRunwayUIVM
+ 2 | import Testing
+   |        `- error: no such module 'Testing'
+ 3 | 
+ 4 | @Suite("BackupImportFlowState")
+[3/75] Compiling CashRunwayUIVMTests BackupViewModelRegressionTests.swift
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayUIVMTests/BackupImportFlowStateTests.swift:2:8: error: no such module 'Testing'
+ 1 | @testable import CashRunwayUIVM
+ 2 | import Testing
+   |        `- error: no such module 'Testing'
+ 3 | 
+ 4 | @Suite("BackupImportFlowState")
+[4/75] Compiling CashRunwayUIVMTests ImportFileReaderTests.swift
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayUIVMTests/BackupImportFlowStateTests.swift:2:8: error: no such module 'Testing'
+ 1 | @testable import CashRunwayUIVM
+ 2 | import Testing
+   |        `- error: no such module 'Testing'
+ 3 | 
+ 4 | @Suite("BackupImportFlowState")
+[5/75] Compiling CashRunwayUIVMTests ImportViewModelTests.swift
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayUIVMTests/BackupImportFlowStateTests.swift:2:8: error: no such module 'Testing'
+ 1 | @testable import CashRunwayUIVM
+ 2 | import Testing
+   |        `- error: no such module 'Testing'
+ 3 | 
+ 4 | @Suite("BackupImportFlowState")
+[6/75] Compiling CashRunwayUIVMTests TimelineFilterPresentationTests.swift
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayUIVMTests/BackupImportFlowStateTests.swift:2:8: error: no such module 'Testing'
+ 1 | @testable import CashRunwayUIVM
+ 2 | import Testing
+   |        `- error: no such module 'Testing'
+ 3 | 
+ 4 | @Suite("BackupImportFlowState")
+[7/75] Compiling CashRunwayUIVMTests BankSyncViewModelRegressionTests.swift
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayUIVMTests/BackupImportFlowStateTests.swift:2:8: error: no such module 'Testing'
+ 1 | @testable import CashRunwayUIVM
+ 2 | import Testing
+   |        `- error: no such module 'Testing'
+ 3 | 
+ 4 | @Suite("BackupImportFlowState")
+[8/75] Compiling CashRunwayUIVMTests Fakes.swift
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayUIVMTests/BackupImportFlowStateTests.swift:2:8: error: no such module 'Testing'
+ 1 | @testable import CashRunwayUIVM
+ 2 | import Testing
+   |        `- error: no such module 'Testing'
+ 3 | 
+ 4 | @Suite("BackupImportFlowState")
+[9/75] Compiling CashRunwayUIVMTests BackupImportFlowStateTests.swift
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayUIVMTests/BackupImportFlowStateTests.swift:2:8: error: no such module 'Testing'
+ 1 | @testable import CashRunwayUIVM
+ 2 | import Testing
+   |        `- error: no such module 'Testing'
+ 3 | 
+ 4 | @Suite("BackupImportFlowState")
+[10/75] Compiling CashRunwayUIVMTests BackupViewModelTests.swift
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayUIVMTests/BackupImportFlowStateTests.swift:2:8: error: no such module 'Testing'
+ 1 | @testable import CashRunwayUIVM
+ 2 | import Testing
+   |        `- error: no such module 'Testing'
+ 3 | 
+ 4 | @Suite("BackupImportFlowState")
+[11/75] Compiling CashRunwayUIVMTests TimelinePresentationTests.swift
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayUIVMTests/BackupImportFlowStateTests.swift:2:8: error: no such module 'Testing'
+ 1 | @testable import CashRunwayUIVM
+ 2 | import Testing
+   |        `- error: no such module 'Testing'
+ 3 | 
+ 4 | @Suite("BackupImportFlowState")
+[12/75] Compiling CashRunwayUIVMTests BankSyncViewModelTests.swift
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayUIVMTests/BackupImportFlowStateTests.swift:2:8: error: no such module 'Testing'
+ 1 | @testable import CashRunwayUIVM
+ 2 | import Testing
+   |        `- error: no such module 'Testing'
+ 3 | 
+ 4 | @Suite("BackupImportFlowState")
+error: fatalError

@@ -1,0 +1,16 @@
+[0/1] Planning build
+Building for debugging...
+[0/2] Write swift-version-446CF6C7E0960E69.txt
+Build complete! (3.58s)
+◇ Test run started.
+↳ Testing Library Version: 6.2.4 (5ee435b15ad40ec)
+↳ Target Platform: x86_64-apple-macosx
+◇ Suite MonthlyRetrospectiveXLSXTests started.
+◇ Test xlsxRoundTripsThroughCoreXLSX() started.
+✔ Test xlsxRoundTripsThroughCoreXLSX() passed after 0.022 seconds.
+◇ Test emptyFieldsStayAligned() started.
+✔ Test emptyFieldsStayAligned() passed after 0.013 seconds.
+◇ Test unicodeAndQuotesSurvive() started.
+✔ Test unicodeAndQuotesSurvive() passed after 0.012 seconds.
+✔ Suite MonthlyRetrospectiveXLSXTests passed after 0.048 seconds.
+✔ Test run with 3 tests in 1 suite passed after 0.049 seconds.
