@@ -284,7 +284,7 @@ public final class CashRunwayAppModel {
     /// own.
     public func refreshRetrospectiveUSDSnapshots() async {
         let repository = self.repository
-        await repository.refreshRetrospectiveUSDSnapshots()
+        await repository.refreshRetrospectiveUSDSnapshots(monthKeys: nil)
         // Reload stored metrics only when the read succeeds: on failure keep the
         // previously stored values until the next run (non-fatal contract).
         guard let aggregates = try? repository.monthlyUSDMonthAggregates() else { return }
