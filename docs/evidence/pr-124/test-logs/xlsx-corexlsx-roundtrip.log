@@ -1,0 +1,7 @@
+CoreXLSX round-trip verification of PR 124 generated XLSX (from evidence-harness run `harness-run.log`):
+
+EXPORT_FILE_CSV=cash-runway-retrospective-2026-04-2026-06.csv
+EXPORT_FILE_XLSX=cash-runway-retrospective-2026-04-2026-06.xlsx
+XLSX_BYTES=5380
+ROUND_TRIP_STATUS=OK
+ROUND_TRIP_ROWS=7 SHEET=Retrospective

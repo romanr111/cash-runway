@@ -1,0 +1,520 @@
+[0/1] Planning build
+Building for debugging...
+[0/6] Write sources
+[0/6] /Users/openclaw/projects/cash-runway-ev124/.build-toolchain/x86_64-apple-macosx/debug/CashRunwayWorkspacePackageTests.derived/runner.swift
+[3/7] Write sources
+[4/7] Write swift-version-446CF6C7E0960E69.txt
+[6/79] Compiling CashRunwayUIVMTests ImportFileReaderTests.swift
+[7/79] Compiling CashRunwayUIVMTests TimelineFilterPresentationTests.swift
+[8/79] Compiling CashRunwayUIVMTests BankSyncViewModelTests.swift
+[9/79] Emitting module CashRunwayUIVMTests
+[10/79] Compiling CashRunwayUIVMTests TimelinePresentationTests.swift
+[11/79] Compiling CashRunwayUIVMTests BackupImportFlowStateTests.swift
+[12/79] Compiling CashRunwayUIVMTests Fakes.swift
+[13/79] Compiling CashRunwayUIVMTests BackupViewModelRegressionTests.swift
+[14/79] Compiling CashRunwayUIVMTests BackupViewModelTests.swift
+[15/79] Compiling CashRunwayUIVMTests BankSyncViewModelRegressionTests.swift
+[16/79] Compiling CashRunwayUIVMTests ImportViewModelTests.swift
+[17/79] Compiling CashRunwayCoreTests BankSyncServiceTests.swift
+[18/79] Compiling CashRunwayCoreTests BulkDeleteTransactionsTests.swift
+[19/79] Compiling CashRunwayCoreTests CSVEdgeCaseTests.swift
+[20/79] Compiling CashRunwayCoreTests CSVIdempotencyTests.swift
+[21/79] Compiling CashRunwayCoreTests CSVImportExportIntegrityTests.swift
+[22/79] Compiling CashRunwayCoreTests CachingExchangeRateProviderTests.swift
+[23/79] Compiling CashRunwayCoreTests MonthlyRetrospectiveExportTests.swift
+macro expansion #expect:1:35: warning: '#require(_:_:)' is redundant because 'first.first' never equals 'nil' (from macro 'require')
+`- /Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/MonthlyUSDSnapshotTests.swift:254:72: note: expanded code originates here
+252 |         ])
+253 |         let first = try await service.refreshSnapshots(monthKeys: [202606], now: junEnd)
+254 |         #expect(try #require(first.first)?.expenseBaseMinor == 100_000)
+    |         `- note: in expansion of macro 'expect' here
+    +--- macro expansion #expect ---------------------------------------
+    |1 | Testing.__checkValue(try #require(first.first)?.expenseBaseMinor == 100_000,expression: .__fromSyntaxNode("try #require(first.first)?.expenseBaseMinor == 100_000"),comments: [],isRequired: false,sourceLocation: Testing.SourceLocation.__here()).__expected()
+    |  |                                   `- warning: '#require(_:_:)' is redundant because 'first.first' never equals 'nil' (from macro 'require')
+    +-------------------------------------------------------------------
+255 | 
+256 |         // Ledger edit lands (aggregate rebuilt): totals change → stored row updates.
+[24/79] Compiling CashRunwayCoreTests MonthlyRetrospectiveXLSXTests.swift
+macro expansion #expect:1:35: warning: '#require(_:_:)' is redundant because 'first.first' never equals 'nil' (from macro 'require')
+`- /Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/MonthlyUSDSnapshotTests.swift:254:72: note: expanded code originates here
+252 |         ])
+253 |         let first = try await service.refreshSnapshots(monthKeys: [202606], now: junEnd)
+254 |         #expect(try #require(first.first)?.expenseBaseMinor == 100_000)
+    |         `- note: in expansion of macro 'expect' here
+    +--- macro expansion #expect ---------------------------------------
+    |1 | Testing.__checkValue(try #require(first.first)?.expenseBaseMinor == 100_000,expression: .__fromSyntaxNode("try #require(first.first)?.expenseBaseMinor == 100_000"),comments: [],isRequired: false,sourceLocation: Testing.SourceLocation.__here()).__expected()
+    |  |                                   `- warning: '#require(_:_:)' is redundant because 'first.first' never equals 'nil' (from macro 'require')
+    +-------------------------------------------------------------------
+255 | 
+256 |         // Ledger edit lands (aggregate rebuilt): totals change → stored row updates.
+[25/79] Compiling CashRunwayCoreTests MonthlyUSDSnapshotTests.swift
+macro expansion #expect:1:35: warning: '#require(_:_:)' is redundant because 'first.first' never equals 'nil' (from macro 'require')
+`- /Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/MonthlyUSDSnapshotTests.swift:254:72: note: expanded code originates here
+252 |         ])
+253 |         let first = try await service.refreshSnapshots(monthKeys: [202606], now: junEnd)
+254 |         #expect(try #require(first.first)?.expenseBaseMinor == 100_000)
+    |         `- note: in expansion of macro 'expect' here
+    +--- macro expansion #expect ---------------------------------------
+    |1 | Testing.__checkValue(try #require(first.first)?.expenseBaseMinor == 100_000,expression: .__fromSyntaxNode("try #require(first.first)?.expenseBaseMinor == 100_000"),comments: [],isRequired: false,sourceLocation: Testing.SourceLocation.__here()).__expected()
+    |  |                                   `- warning: '#require(_:_:)' is redundant because 'first.first' never equals 'nil' (from macro 'require')
+    +-------------------------------------------------------------------
+255 | 
+256 |         // Ledger edit lands (aggregate rebuilt): totals change → stored row updates.
+[26/79] Compiling CashRunwayCoreTests OverviewCategoryDistributionTests.swift
+macro expansion #expect:1:35: warning: '#require(_:_:)' is redundant because 'first.first' never equals 'nil' (from macro 'require')
+`- /Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/MonthlyUSDSnapshotTests.swift:254:72: note: expanded code originates here
+252 |         ])
+253 |         let first = try await service.refreshSnapshots(monthKeys: [202606], now: junEnd)
+254 |         #expect(try #require(first.first)?.expenseBaseMinor == 100_000)
+    |         `- note: in expansion of macro 'expect' here
+    +--- macro expansion #expect ---------------------------------------
+    |1 | Testing.__checkValue(try #require(first.first)?.expenseBaseMinor == 100_000,expression: .__fromSyntaxNode("try #require(first.first)?.expenseBaseMinor == 100_000"),comments: [],isRequired: false,sourceLocation: Testing.SourceLocation.__here()).__expected()
+    |  |                                   `- warning: '#require(_:_:)' is redundant because 'first.first' never equals 'nil' (from macro 'require')
+    +-------------------------------------------------------------------
+255 | 
+256 |         // Ledger edit lands (aggregate rebuilt): totals change → stored row updates.
+[27/79] Compiling CashRunwayCoreTests PrivatBankXLSXImportTests.swift
+macro expansion #expect:1:35: warning: '#require(_:_:)' is redundant because 'first.first' never equals 'nil' (from macro 'require')
+`- /Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/MonthlyUSDSnapshotTests.swift:254:72: note: expanded code originates here
+252 |         ])
+253 |         let first = try await service.refreshSnapshots(monthKeys: [202606], now: junEnd)
+254 |         #expect(try #require(first.first)?.expenseBaseMinor == 100_000)
+    |         `- note: in expansion of macro 'expect' here
+    +--- macro expansion #expect ---------------------------------------
+    |1 | Testing.__checkValue(try #require(first.first)?.expenseBaseMinor == 100_000,expression: .__fromSyntaxNode("try #require(first.first)?.expenseBaseMinor == 100_000"),comments: [],isRequired: false,sourceLocation: Testing.SourceLocation.__here()).__expected()
+    |  |                                   `- warning: '#require(_:_:)' is redundant because 'first.first' never equals 'nil' (from macro 'require')
+    +-------------------------------------------------------------------
+255 | 
+256 |         // Ledger edit lands (aggregate rebuilt): totals change → stored row updates.
+[28/79] Compiling CashRunwayCoreTests AgentAbuseBoundaryTests.swift
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/AgentAuditContractTests.swift:123:27: warning: 'as' test is always true
+121 |             )
+122 |             Issue.record("Expected walletOutOfScope error")
+123 |         } catch let error as AgentAccessError {
+    |                           `- warning: 'as' test is always true
+124 |             #expect(error == .walletOutOfScope)
+125 |         }
+
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/AgentPermissionBoundaryTests.swift:31:23: warning: immutable value 'sessions' was never used; consider replacing with '_' or removing it [#no-usage]
+ 29 |     @Test func expiredSessionIsDeniedAndAudited() async throws {
+ 30 |         let clock = TestClock()
+ 31 |         let (service, sessions, audit, _, _) = AgentTestMocks.makeService(clock: clock)
+    |                       `- warning: immutable value 'sessions' was never used; consider replacing with '_' or removing it [#no-usage]
+ 32 |         let session = try await AgentTestMocks.makeSession(
+ 33 |             service: service,
+
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/AgentPermissionBoundaryTests.swift:52:23: warning: immutable value 'sessions' was never used; consider replacing with '_' or removing it [#no-usage]
+ 50 |     @Test func revokedSessionIsDeniedAndAudited() async throws {
+ 51 |         let clock = TestClock()
+ 52 |         let (service, sessions, audit, _, _) = AgentTestMocks.makeService(clock: clock)
+    |                       `- warning: immutable value 'sessions' was never used; consider replacing with '_' or removing it [#no-usage]
+ 53 |         let session = try await AgentTestMocks.makeSession(
+ 54 |             service: service,
+
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/AgentRedactionTests.swift:186:27: warning: 'as' test is always true
+184 |             _ = try await service.readTransactions(sessionID: session.id, request: .init())
+185 |             Issue.record("Expected redactionFailed error")
+186 |         } catch let error as AgentAccessError {
+    |                           `- warning: 'as' test is always true
+187 |             #expect(error == .redactionFailed)
+188 |         }
+[29/79] Compiling CashRunwayCoreTests AgentAuditContractTests.swift
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/AgentAuditContractTests.swift:123:27: warning: 'as' test is always true
+121 |             )
+122 |             Issue.record("Expected walletOutOfScope error")
+123 |         } catch let error as AgentAccessError {
+    |                           `- warning: 'as' test is always true
+124 |             #expect(error == .walletOutOfScope)
+125 |         }
+
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/AgentPermissionBoundaryTests.swift:31:23: warning: immutable value 'sessions' was never used; consider replacing with '_' or removing it [#no-usage]
+ 29 |     @Test func expiredSessionIsDeniedAndAudited() async throws {
+ 30 |         let clock = TestClock()
+ 31 |         let (service, sessions, audit, _, _) = AgentTestMocks.makeService(clock: clock)
+    |                       `- warning: immutable value 'sessions' was never used; consider replacing with '_' or removing it [#no-usage]
+ 32 |         let session = try await AgentTestMocks.makeSession(
+ 33 |             service: service,
+
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/AgentPermissionBoundaryTests.swift:52:23: warning: immutable value 'sessions' was never used; consider replacing with '_' or removing it [#no-usage]
+ 50 |     @Test func revokedSessionIsDeniedAndAudited() async throws {
+ 51 |         let clock = TestClock()
+ 52 |         let (service, sessions, audit, _, _) = AgentTestMocks.makeService(clock: clock)
+    |                       `- warning: immutable value 'sessions' was never used; consider replacing with '_' or removing it [#no-usage]
+ 53 |         let session = try await AgentTestMocks.makeSession(
+ 54 |             service: service,
+
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/AgentRedactionTests.swift:186:27: warning: 'as' test is always true
+184 |             _ = try await service.readTransactions(sessionID: session.id, request: .init())
+185 |             Issue.record("Expected redactionFailed error")
+186 |         } catch let error as AgentAccessError {
+    |                           `- warning: 'as' test is always true
+187 |             #expect(error == .redactionFailed)
+188 |         }
+[30/79] Compiling CashRunwayCoreTests AgentPermissionBoundaryTests.swift
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/AgentAuditContractTests.swift:123:27: warning: 'as' test is always true
+121 |             )
+122 |             Issue.record("Expected walletOutOfScope error")
+123 |         } catch let error as AgentAccessError {
+    |                           `- warning: 'as' test is always true
+124 |             #expect(error == .walletOutOfScope)
+125 |         }
+
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/AgentPermissionBoundaryTests.swift:31:23: warning: immutable value 'sessions' was never used; consider replacing with '_' or removing it [#no-usage]
+ 29 |     @Test func expiredSessionIsDeniedAndAudited() async throws {
+ 30 |         let clock = TestClock()
+ 31 |         let (service, sessions, audit, _, _) = AgentTestMocks.makeService(clock: clock)
+    |                       `- warning: immutable value 'sessions' was never used; consider replacing with '_' or removing it [#no-usage]
+ 32 |         let session = try await AgentTestMocks.makeSession(
+ 33 |             service: service,
+
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/AgentPermissionBoundaryTests.swift:52:23: warning: immutable value 'sessions' was never used; consider replacing with '_' or removing it [#no-usage]
+ 50 |     @Test func revokedSessionIsDeniedAndAudited() async throws {
+ 51 |         let clock = TestClock()
+ 52 |         let (service, sessions, audit, _, _) = AgentTestMocks.makeService(clock: clock)
+    |                       `- warning: immutable value 'sessions' was never used; consider replacing with '_' or removing it [#no-usage]
+ 53 |         let session = try await AgentTestMocks.makeSession(
+ 54 |             service: service,
+
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/AgentRedactionTests.swift:186:27: warning: 'as' test is always true
+184 |             _ = try await service.readTransactions(sessionID: session.id, request: .init())
+185 |             Issue.record("Expected redactionFailed error")
+186 |         } catch let error as AgentAccessError {
+    |                           `- warning: 'as' test is always true
+187 |             #expect(error == .redactionFailed)
+188 |         }
+[31/79] Compiling CashRunwayCoreTests AgentRedactionServiceUnitTests.swift
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/AgentAuditContractTests.swift:123:27: warning: 'as' test is always true
+121 |             )
+122 |             Issue.record("Expected walletOutOfScope error")
+123 |         } catch let error as AgentAccessError {
+    |                           `- warning: 'as' test is always true
+124 |             #expect(error == .walletOutOfScope)
+125 |         }
+
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/AgentPermissionBoundaryTests.swift:31:23: warning: immutable value 'sessions' was never used; consider replacing with '_' or removing it [#no-usage]
+ 29 |     @Test func expiredSessionIsDeniedAndAudited() async throws {
+ 30 |         let clock = TestClock()
+ 31 |         let (service, sessions, audit, _, _) = AgentTestMocks.makeService(clock: clock)
+    |                       `- warning: immutable value 'sessions' was never used; consider replacing with '_' or removing it [#no-usage]
+ 32 |         let session = try await AgentTestMocks.makeSession(
+ 33 |             service: service,
+
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/AgentPermissionBoundaryTests.swift:52:23: warning: immutable value 'sessions' was never used; consider replacing with '_' or removing it [#no-usage]
+ 50 |     @Test func revokedSessionIsDeniedAndAudited() async throws {
+ 51 |         let clock = TestClock()
+ 52 |         let (service, sessions, audit, _, _) = AgentTestMocks.makeService(clock: clock)
+    |                       `- warning: immutable value 'sessions' was never used; consider replacing with '_' or removing it [#no-usage]
+ 53 |         let session = try await AgentTestMocks.makeSession(
+ 54 |             service: service,
+
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/AgentRedactionTests.swift:186:27: warning: 'as' test is always true
+184 |             _ = try await service.readTransactions(sessionID: session.id, request: .init())
+185 |             Issue.record("Expected redactionFailed error")
+186 |         } catch let error as AgentAccessError {
+    |                           `- warning: 'as' test is always true
+187 |             #expect(error == .redactionFailed)
+188 |         }
+[32/79] Compiling CashRunwayCoreTests AgentRedactionTests.swift
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/AgentAuditContractTests.swift:123:27: warning: 'as' test is always true
+121 |             )
+122 |             Issue.record("Expected walletOutOfScope error")
+123 |         } catch let error as AgentAccessError {
+    |                           `- warning: 'as' test is always true
+124 |             #expect(error == .walletOutOfScope)
+125 |         }
+
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/AgentPermissionBoundaryTests.swift:31:23: warning: immutable value 'sessions' was never used; consider replacing with '_' or removing it [#no-usage]
+ 29 |     @Test func expiredSessionIsDeniedAndAudited() async throws {
+ 30 |         let clock = TestClock()
+ 31 |         let (service, sessions, audit, _, _) = AgentTestMocks.makeService(clock: clock)
+    |                       `- warning: immutable value 'sessions' was never used; consider replacing with '_' or removing it [#no-usage]
+ 32 |         let session = try await AgentTestMocks.makeSession(
+ 33 |             service: service,
+
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/AgentPermissionBoundaryTests.swift:52:23: warning: immutable value 'sessions' was never used; consider replacing with '_' or removing it [#no-usage]
+ 50 |     @Test func revokedSessionIsDeniedAndAudited() async throws {
+ 51 |         let clock = TestClock()
+ 52 |         let (service, sessions, audit, _, _) = AgentTestMocks.makeService(clock: clock)
+    |                       `- warning: immutable value 'sessions' was never used; consider replacing with '_' or removing it [#no-usage]
+ 53 |         let session = try await AgentTestMocks.makeSession(
+ 54 |             service: service,
+
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/AgentRedactionTests.swift:186:27: warning: 'as' test is always true
+184 |             _ = try await service.readTransactions(sessionID: session.id, request: .init())
+185 |             Issue.record("Expected redactionFailed error")
+186 |         } catch let error as AgentAccessError {
+    |                           `- warning: 'as' test is always true
+187 |             #expect(error == .redactionFailed)
+188 |         }
+[33/79] Compiling CashRunwayCoreTests AgentTestMocks.swift
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/AgentAuditContractTests.swift:123:27: warning: 'as' test is always true
+121 |             )
+122 |             Issue.record("Expected walletOutOfScope error")
+123 |         } catch let error as AgentAccessError {
+    |                           `- warning: 'as' test is always true
+124 |             #expect(error == .walletOutOfScope)
+125 |         }
+
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/AgentPermissionBoundaryTests.swift:31:23: warning: immutable value 'sessions' was never used; consider replacing with '_' or removing it [#no-usage]
+ 29 |     @Test func expiredSessionIsDeniedAndAudited() async throws {
+ 30 |         let clock = TestClock()
+ 31 |         let (service, sessions, audit, _, _) = AgentTestMocks.makeService(clock: clock)
+    |                       `- warning: immutable value 'sessions' was never used; consider replacing with '_' or removing it [#no-usage]
+ 32 |         let session = try await AgentTestMocks.makeSession(
+ 33 |             service: service,
+
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/AgentPermissionBoundaryTests.swift:52:23: warning: immutable value 'sessions' was never used; consider replacing with '_' or removing it [#no-usage]
+ 50 |     @Test func revokedSessionIsDeniedAndAudited() async throws {
+ 51 |         let clock = TestClock()
+ 52 |         let (service, sessions, audit, _, _) = AgentTestMocks.makeService(clock: clock)
+    |                       `- warning: immutable value 'sessions' was never used; consider replacing with '_' or removing it [#no-usage]
+ 53 |         let session = try await AgentTestMocks.makeSession(
+ 54 |             service: service,
+
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/AgentRedactionTests.swift:186:27: warning: 'as' test is always true
+184 |             _ = try await service.readTransactions(sessionID: session.id, request: .init())
+185 |             Issue.record("Expected redactionFailed error")
+186 |         } catch let error as AgentAccessError {
+    |                           `- warning: 'as' test is always true
+187 |             #expect(error == .redactionFailed)
+188 |         }
+[34/79] Compiling CashRunwayCoreTests CurrencyFoundationTests.swift
+[35/79] Compiling CashRunwayCoreTests DataProtectionTests.swift
+[36/79] Compiling CashRunwayCoreTests DatabaseBackupTests.swift
+[37/79] Compiling CashRunwayCoreTests DatabaseConcurrencyTests.swift
+[38/79] Compiling CashRunwayCoreTests DatabaseCrashSimulationTests.swift
+[39/79] Compiling CashRunwayCoreTests DatabaseKeyMismatchTests.swift
+[40/84] Compiling CashRunwayCoreTests TimelineComparisonTests.swift
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/TimelineSnapshotTests.swift:56:34: warning: immutable value 'expenseCategory' was never used; consider replacing with '_' or removing it [#no-usage]
+ 54 | 
+ 55 |     @Test func futureDatedRecordsExcludedFromCurrentActuals() throws {
+ 56 |         let (repository, wallet, expenseCategory, incomeCategory) = try makeSeededRepository()
+    |                                  `- warning: immutable value 'expenseCategory' was never used; consider replacing with '_' or removing it [#no-usage]
+ 57 |         let now = date(2026, 7, 11)
+ 58 |         try repository.saveTransaction(
+
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/TimelineSnapshotTests.swift:92:28: warning: no calls to throwing functions occur within 'try' expression
+ 90 |         let (repository, wallet, expenseCategory, incomeCategory) = try makeSeededRepository()
+ 91 |         let now = date(2026, 7, 11)
+ 92 |         let secondWallet = try WalletBuilder()
+    |                            `- warning: no calls to throwing functions occur within 'try' expression
+ 93 |             .with(currencyCode: .uah)
+ 94 |             .build()
+
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/WalletCategoryTests.swift:352:33: warning: result of call to 'validate' is unused [#no-usage]
+350 | 
+351 |         do {
+352 |             try BackupValidator.validate(backup)
+    |                                 `- warning: result of call to 'validate' is unused [#no-usage]
+353 |             Issue.record("Expected backup validation to throw brokenReference error.")
+354 |         } catch let error as BackupError {
+[41/84] Compiling CashRunwayCoreTests TimelineSnapshotTests.swift
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/TimelineSnapshotTests.swift:56:34: warning: immutable value 'expenseCategory' was never used; consider replacing with '_' or removing it [#no-usage]
+ 54 | 
+ 55 |     @Test func futureDatedRecordsExcludedFromCurrentActuals() throws {
+ 56 |         let (repository, wallet, expenseCategory, incomeCategory) = try makeSeededRepository()
+    |                                  `- warning: immutable value 'expenseCategory' was never used; consider replacing with '_' or removing it [#no-usage]
+ 57 |         let now = date(2026, 7, 11)
+ 58 |         try repository.saveTransaction(
+
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/TimelineSnapshotTests.swift:92:28: warning: no calls to throwing functions occur within 'try' expression
+ 90 |         let (repository, wallet, expenseCategory, incomeCategory) = try makeSeededRepository()
+ 91 |         let now = date(2026, 7, 11)
+ 92 |         let secondWallet = try WalletBuilder()
+    |                            `- warning: no calls to throwing functions occur within 'try' expression
+ 93 |             .with(currencyCode: .uah)
+ 94 |             .build()
+
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/WalletCategoryTests.swift:352:33: warning: result of call to 'validate' is unused [#no-usage]
+350 | 
+351 |         do {
+352 |             try BackupValidator.validate(backup)
+    |                                 `- warning: result of call to 'validate' is unused [#no-usage]
+353 |             Issue.record("Expected backup validation to throw brokenReference error.")
+354 |         } catch let error as BackupError {
+[42/84] Compiling CashRunwayCoreTests UtilityAndModelTests.swift
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/TimelineSnapshotTests.swift:56:34: warning: immutable value 'expenseCategory' was never used; consider replacing with '_' or removing it [#no-usage]
+ 54 | 
+ 55 |     @Test func futureDatedRecordsExcludedFromCurrentActuals() throws {
+ 56 |         let (repository, wallet, expenseCategory, incomeCategory) = try makeSeededRepository()
+    |                                  `- warning: immutable value 'expenseCategory' was never used; consider replacing with '_' or removing it [#no-usage]
+ 57 |         let now = date(2026, 7, 11)
+ 58 |         try repository.saveTransaction(
+
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/TimelineSnapshotTests.swift:92:28: warning: no calls to throwing functions occur within 'try' expression
+ 90 |         let (repository, wallet, expenseCategory, incomeCategory) = try makeSeededRepository()
+ 91 |         let now = date(2026, 7, 11)
+ 92 |         let secondWallet = try WalletBuilder()
+    |                            `- warning: no calls to throwing functions occur within 'try' expression
+ 93 |             .with(currencyCode: .uah)
+ 94 |             .build()
+
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/WalletCategoryTests.swift:352:33: warning: result of call to 'validate' is unused [#no-usage]
+350 | 
+351 |         do {
+352 |             try BackupValidator.validate(backup)
+    |                                 `- warning: result of call to 'validate' is unused [#no-usage]
+353 |             Issue.record("Expected backup validation to throw brokenReference error.")
+354 |         } catch let error as BackupError {
+[43/84] Compiling CashRunwayCoreTests WalletCategoryTests.swift
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/TimelineSnapshotTests.swift:56:34: warning: immutable value 'expenseCategory' was never used; consider replacing with '_' or removing it [#no-usage]
+ 54 | 
+ 55 |     @Test func futureDatedRecordsExcludedFromCurrentActuals() throws {
+ 56 |         let (repository, wallet, expenseCategory, incomeCategory) = try makeSeededRepository()
+    |                                  `- warning: immutable value 'expenseCategory' was never used; consider replacing with '_' or removing it [#no-usage]
+ 57 |         let now = date(2026, 7, 11)
+ 58 |         try repository.saveTransaction(
+
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/TimelineSnapshotTests.swift:92:28: warning: no calls to throwing functions occur within 'try' expression
+ 90 |         let (repository, wallet, expenseCategory, incomeCategory) = try makeSeededRepository()
+ 91 |         let now = date(2026, 7, 11)
+ 92 |         let secondWallet = try WalletBuilder()
+    |                            `- warning: no calls to throwing functions occur within 'try' expression
+ 93 |             .with(currencyCode: .uah)
+ 94 |             .build()
+
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/WalletCategoryTests.swift:352:33: warning: result of call to 'validate' is unused [#no-usage]
+350 | 
+351 |         do {
+352 |             try BackupValidator.validate(backup)
+    |                                 `- warning: result of call to 'validate' is unused [#no-usage]
+353 |             Issue.record("Expected backup validation to throw brokenReference error.")
+354 |         } catch let error as BackupError {
+[44/84] Compiling CashRunwayCoreTests WalletValueProjectionServiceTests.swift
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/TimelineSnapshotTests.swift:56:34: warning: immutable value 'expenseCategory' was never used; consider replacing with '_' or removing it [#no-usage]
+ 54 | 
+ 55 |     @Test func futureDatedRecordsExcludedFromCurrentActuals() throws {
+ 56 |         let (repository, wallet, expenseCategory, incomeCategory) = try makeSeededRepository()
+    |                                  `- warning: immutable value 'expenseCategory' was never used; consider replacing with '_' or removing it [#no-usage]
+ 57 |         let now = date(2026, 7, 11)
+ 58 |         try repository.saveTransaction(
+
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/TimelineSnapshotTests.swift:92:28: warning: no calls to throwing functions occur within 'try' expression
+ 90 |         let (repository, wallet, expenseCategory, incomeCategory) = try makeSeededRepository()
+ 91 |         let now = date(2026, 7, 11)
+ 92 |         let secondWallet = try WalletBuilder()
+    |                            `- warning: no calls to throwing functions occur within 'try' expression
+ 93 |             .with(currencyCode: .uah)
+ 94 |             .build()
+
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/WalletCategoryTests.swift:352:33: warning: result of call to 'validate' is unused [#no-usage]
+350 | 
+351 |         do {
+352 |             try BackupValidator.validate(backup)
+    |                                 `- warning: result of call to 'validate' is unused [#no-usage]
+353 |             Issue.record("Expected backup validation to throw brokenReference error.")
+354 |         } catch let error as BackupError {
+[45/84] Compiling CashRunwayCoreTests ImportConcurrencyRecoveryTests.swift
+[46/84] Compiling CashRunwayCoreTests LedgerInvariantPropertyTests.swift
+[47/84] Compiling CashRunwayCoreTests LedgerInvariantTests.swift
+[48/84] Compiling CashRunwayCoreTests LocalizationCoreTests.swift
+[49/84] Compiling CashRunwayCoreTests MCCCategoryMappingTests.swift
+[50/84] Compiling CashRunwayCoreTests MigrationIntegrityTests.swift
+[51/84] Compiling CashRunwayCoreTests ModelSerializationTests.swift
+[52/84] Compiling CashRunwayCoreTests MonobankCSVImportTests.swift
+[53/84] Compiling CashRunwayCoreTests MonobankImportRollbackTests.swift
+[54/84] Compiling CashRunwayCoreTests MonobankSyncRuleTests.swift
+[55/84] Compiling CashRunwayCoreTests DatabaseKeyStartupMatrixTests.swift
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/FullBackupTests.swift:353:21: warning: result of call to 'restore' is unused [#no-usage]
+351 |         let service = BackupService(repository: target, bankTokenStore: tokenStore)
+352 | 
+353 |         try service.restore(backup)
+    |                     `- warning: result of call to 'restore' is unused [#no-usage]
+354 | 
+355 |         #expect(keychain.item(account: tokenAccount) == nil)
+[56/84] Compiling CashRunwayCoreTests DatabaseLifecycleTests.swift
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/FullBackupTests.swift:353:21: warning: result of call to 'restore' is unused [#no-usage]
+351 |         let service = BackupService(repository: target, bankTokenStore: tokenStore)
+352 | 
+353 |         try service.restore(backup)
+    |                     `- warning: result of call to 'restore' is unused [#no-usage]
+354 | 
+355 |         #expect(keychain.item(account: tokenAccount) == nil)
+[57/84] Compiling CashRunwayCoreTests DatabaseTransactionSafetyTests.swift
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/FullBackupTests.swift:353:21: warning: result of call to 'restore' is unused [#no-usage]
+351 |         let service = BackupService(repository: target, bankTokenStore: tokenStore)
+352 | 
+353 |         try service.restore(backup)
+    |                     `- warning: result of call to 'restore' is unused [#no-usage]
+354 | 
+355 |         #expect(keychain.item(account: tokenAccount) == nil)
+[58/84] Compiling CashRunwayCoreTests DatabaseWALTests.swift
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/FullBackupTests.swift:353:21: warning: result of call to 'restore' is unused [#no-usage]
+351 |         let service = BackupService(repository: target, bankTokenStore: tokenStore)
+352 | 
+353 |         try service.restore(backup)
+    |                     `- warning: result of call to 'restore' is unused [#no-usage]
+354 | 
+355 |         #expect(keychain.item(account: tokenAccount) == nil)
+[59/84] Compiling CashRunwayCoreTests FullBackupTests.swift
+/Users/openclaw/projects/cash-runway-ev124/Tests/CashRunwayCoreTests/FullBackupTests.swift:353:21: warning: result of call to 'restore' is unused [#no-usage]
+351 |         let service = BackupService(repository: target, bankTokenStore: tokenStore)
+352 | 
+353 |         try service.restore(backup)
+    |                     `- warning: result of call to 'restore' is unused [#no-usage]
+354 | 
+355 |         #expect(keychain.item(account: tokenAccount) == nil)
+[60/84] Compiling CashRunwayCoreTests RecurringIdempotencyTests.swift
+[61/84] Compiling CashRunwayCoreTests ReportIssueTests.swift
+[62/84] Compiling CashRunwayCoreTests RepositoryCRUDTests.swift
+[63/84] Compiling CashRunwayCoreTests RepositoryUncoveredTests.swift
+[64/84] Compiling CashRunwayCoreTests TestDataBuilders.swift
+[65/84] Compiling CashRunwayCoreTests AppModelTimelineLoadingTests.swift
+[66/84] Compiling CashRunwayCoreTests BankCategoryMapperTests.swift
+[67/84] Compiling CashRunwayCoreTests BankCategoryNameMappingTests.swift
+[68/84] Compiling CashRunwayCoreTests BankConnectionServiceTests.swift
+[69/84] Compiling CashRunwayCoreTests BankSyncImportTests.swift
+[70/84] Compiling CashRunwayCoreTests BankSyncSchemaTests.swift
+[71/84] Emitting module CashRunwayCoreTests
+[72/84] Compiling CashRunwayCoreTests PropertyStyleQueryTests.swift
+[73/84] Compiling CashRunwayCoreTests ProtectedDataCacheTests.swift
+[74/84] Compiling CashRunwayCoreTests PublicExchangeRateClientTests.swift
+[75/84] Compiling CashRunwayCoreTests RawPayloadPurgeTests.swift
+[76/84] Compiling CashRunwayCoreTests RecurringCalendarBoundaryTests.swift
+[77/84] Compiling CashRunwayCoreTests CashRunwayCoreTests.swift
+[78/84] Compiling CashRunwayCoreTests CashRunwayPerformanceTests.swift
+[79/84] Compiling CashRunwayCoreTests CashRunwayRepositoryingTests.swift
+[80/84] Compiling CashRunwayCoreTests CategoryIntegrityTests.swift
+[81/84] Compiling CashRunwayCoreTests ChunkedLabelQueryTests.swift
+[82/84] Compiling CashRunwayCoreTests CompositeBankMidpointRateProviderTests.swift
+[83/86] Emitting module CashRunwayWorkspacePackageTests
+[84/86] Compiling CashRunwayWorkspacePackageTests runner.swift
+[84/86] Write Objects.LinkFileList
+warning: input verification failed
+note: while processing /Users/openclaw/projects/cash-runway-ev124/.build-toolchain/x86_64-apple-macosx/debug/CashRunwayUIVM.build/BackupViewModel.swift.o
+warning: input verification failed
+note: while processing /Users/openclaw/projects/cash-runway-ev124/.build-toolchain/x86_64-apple-macosx/debug/CashRunwayUIVM.build/BankSyncViewModel.swift.o
+warning: input verification failed
+note: while processing /Users/openclaw/projects/cash-runway-ev124/.build-toolchain/x86_64-apple-macosx/debug/CashRunwayUIVM.build/ImportViewModel.swift.o
+[85/86] Linking CashRunwayWorkspacePackageTests
+Build complete! (71.93s)
+◇ Test run started.
+↳ Testing Library Version: 6.2.4 (5ee435b15ad40ec)
+↳ Target Platform: x86_64-apple-macosx
+◇ Suite MonthlyRetrospectiveExportTests started.
+◇ Test noDataThrows() started.
+✔ Test noDataThrows() passed after 0.001 seconds.
+◇ Test escapesQuotesAndCommas() started.
+✔ Test escapesQuotesAndCommas() passed after 0.001 seconds.
+◇ Test headerAlwaysPresentEvenWithNoRows() started.
+✔ Test headerAlwaysPresentEvenWithNoRows() passed after 0.001 seconds.
+◇ Test groupsByMonthAndCurrencySumsWallets() started.
+✔ Test groupsByMonthAndCurrencySumsWallets() passed after 0.007 seconds.
+◇ Test unconvertedRowLeavesUSDColumnsEmpty() started.
+✔ Test unconvertedRowLeavesUSDColumnsEmpty() passed after 0.001 seconds.
+◇ Test convertedRowCarriesRateMetadataAndApproximate() started.
+✔ Test convertedRowCarriesRateMetadataAndApproximate() passed after 0.001 seconds.
+◇ Test approximateFlagFromAnyWalletInGroup() started.
+✔ Test approximateFlagFromAnyWalletInGroup() passed after 0.001 seconds.
+◇ Test partialConversionRendersWholeGroupUnconverted() started.
+✔ Test partialConversionRendersWholeGroupUnconverted() passed after 0.001 seconds.
+◇ Test mixedCurrenciesProduceSeparateRows() started.
+✔ Test mixedCurrenciesProduceSeparateRows() passed after 0.002 seconds.
+◇ Test majorUnitsTwoDecimals() started.
+✔ Test majorUnitsTwoDecimals() passed after 0.001 seconds.
+◇ Test monthAndDateFormatting() started.
+✔ Test monthAndDateFormatting() passed after 0.001 seconds.
+◇ Test fileNameRangeFormatting() started.
+✔ Test fileNameRangeFormatting() passed after 0.001 seconds.
+✔ Suite MonthlyRetrospectiveExportTests passed after 0.020 seconds.
+✔ Test run with 12 tests in 1 suite passed after 0.020 seconds.
