@@ -92,6 +92,7 @@ private final class MockRepository: CashRunwayRepositorying, @unchecked Sendable
         )
     }
     func runMaintenance() throws {}
+    func refreshDirtyUSDSnapshots() async {}
     func refreshRecurringInstances() throws {}
     func postRecurringInstance(id: UUID, on date: Date) throws { postRecurringInstanceCalled = true }
     func skipRecurringInstance(id: UUID) throws {}
@@ -111,6 +112,24 @@ private final class MockRepository: CashRunwayRepositorying, @unchecked Sendable
         maxStaleness: TimeInterval
     ) throws -> ExchangeRate? { nil }
     func saveExchangeRates(_ rates: [ExchangeRate]) throws {}
+    func historicalMonthKeys() throws -> [Int] { [] }
+    func monthlyCashflow(monthKey: Int) throws -> [MonthlyWalletCashflowRow] { [] }
+    func historicalExchangeRate(
+        from sourceCurrency: CurrencyCode,
+        to targetCurrency: CurrencyCode,
+        on date: Date
+    ) throws -> ExchangeRate? { nil }
+    func nearestHistoricalExchangeRate(
+        from sourceCurrency: CurrencyCode,
+        to targetCurrency: CurrencyCode,
+        onOrBefore date: Date,
+        maxLookbackDays: Int
+    ) throws -> ExchangeRate? { nil }
+    func monthlyUSDSnapshots(monthKeys: [Int]) throws -> [MonthlyUSDSnapshot] { [] }
+    func allMonthlyUSDSnapshots() throws -> [MonthlyUSDSnapshot] { [] }
+    func monthlyUSDMonthAggregates() throws -> [MonthlyUSDSnapshot.MonthAggregate] { [] }
+    func saveMonthlyUSDSnapshot(_ snapshot: MonthlyUSDSnapshot) throws {}
+    func refreshRetrospectiveUSDSnapshots(monthKeys: Set<Int>?) async {}
     func exportFullBackup() throws -> CashRunwayBackup {
         CashRunwayBackup(
             metadata: CashRunwayBackupMetadata(format: "cash-runway-backup", version: 2, createdAt: Date(), appVersion: "test", currency: "UAH"),

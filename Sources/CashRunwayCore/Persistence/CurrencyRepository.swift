@@ -1,6 +1,33 @@
 import Foundation
 import GRDB
 
+/// Raw per-wallet monthly cashflow totals as stored in `monthly_wallet_cashflow`
+/// (native currency minor units; transfers included separately).
+public struct MonthlyWalletCashflowRow: Hashable, Sendable {
+    public let walletID: UUID
+    public let monthKey: Int
+    public let incomeMinor: Int64
+    public let expenseMinor: Int64
+    public let transferInMinor: Int64
+    public let transferOutMinor: Int64
+
+    public init(
+        walletID: UUID,
+        monthKey: Int,
+        incomeMinor: Int64,
+        expenseMinor: Int64,
+        transferInMinor: Int64,
+        transferOutMinor: Int64
+    ) {
+        self.walletID = walletID
+        self.monthKey = monthKey
+        self.incomeMinor = incomeMinor
+        self.expenseMinor = expenseMinor
+        self.transferInMinor = transferInMinor
+        self.transferOutMinor = transferOutMinor
+    }
+}
+
 extension CashRunwayRepository {
     public func currencyPreferences() throws -> CurrencyPreferences {
         try databaseManager.dbQueue.read { db in
@@ -118,6 +145,286 @@ extension CashRunwayRepository {
                         effectiveDate,
                         fetchedAt,
                     ]
+                )
+            }
+        }
+    }
+
+    // MARK: - Issue #121: retrospective monthly USD snapshots
+
+    /// Historical month keys that have cashflow aggregate data, ascending.
+    /// Backfills rely on the same sources as `rebuildMonths` (the aggregates are
+    /// full-month totals maintained from transactions).
+    public func historicalMonthKeys() throws -> [Int] {
+        try databaseManager.dbQueue.read { db in
+            try Int.fetchAll(
+                db,
+                sql: "SELECT DISTINCT local_month_key FROM transactions WHERE is_deleted = 0 AND local_month_key IS NOT NULL ORDER BY local_month_key"
+            )
+        }
+    }
+
+    /// Per-wallet monthly cashflow totals (native currency minor units) as
+    /// maintained by `AggregateMaintenance` in `monthly_wallet_cashflow`.
+    public func monthlyCashflow(monthKey: Int) throws -> [MonthlyWalletCashflowRow] {
+        try databaseManager.dbQueue.read { db in
+            try Row.fetchAll(
+                db,
+                sql: """
+                SELECT wallet_id, month_key, income_minor, expense_minor, transfer_in_minor, transfer_out_minor
+                FROM monthly_wallet_cashflow
+                WHERE month_key = ?
+                """,
+                arguments: [monthKey]
+            ).map { row in
+                MonthlyWalletCashflowRow(
+                    walletID: UUID(uuidString: row["wallet_id"]) ?? UUID(),
+                    monthKey: row["month_key"],
+                    incomeMinor: row["income_minor"] as Int64,
+                    expenseMinor: row["expense_minor"] as Int64,
+                    transferInMinor: row["transfer_in_minor"] as Int64,
+                    transferOutMinor: row["transfer_out_minor"] as Int64
+                )
+            }
+        }
+    }
+
+    /// Exact-date exchange-rate lookup over the persisted `exchange_rates` table
+    /// (no staleness check — historical rates never expire).
+    public func historicalExchangeRate(
+        from sourceCurrency: CurrencyCode,
+        to targetCurrency: CurrencyCode,
+        on date: Date
+    ) throws -> ExchangeRate? {
+        let effectiveDate = DateKeys.calendar.startOfDay(for: date)
+        return try databaseManager.dbQueue.read { db in
+            guard let row = try Row.fetchOne(
+                db,
+                sql: """
+                SELECT source, base_currency_code, quote_currency_code, rate_decimal, effective_date
+                FROM exchange_rates
+                WHERE base_currency_code = ?
+                AND quote_currency_code = ?
+                AND effective_date = ?
+                ORDER BY fetched_at DESC
+                LIMIT 1
+                """,
+                arguments: [sourceCurrency.rawValue, targetCurrency.rawValue, effectiveDate]
+            ) else {
+                return nil
+            }
+
+            return ExchangeRate(
+                sourceCurrencyCode: try CurrencyCode(validating: row["base_currency_code"]),
+                targetCurrencyCode: try CurrencyCode(validating: row["quote_currency_code"]),
+                rateDecimal: row["rate_decimal"],
+                effectiveDate: row["effective_date"],
+                source: row["source"]
+            )
+        }
+    }
+
+    /// Nearest-available fallback for a historical rate: the latest row strictly
+    /// at or before the requested month-end date, optionally within a lookback
+    /// window. `nil` when nothing is stored in the window.
+    public func nearestHistoricalExchangeRate(
+        from sourceCurrency: CurrencyCode,
+        to targetCurrency: CurrencyCode,
+        onOrBefore date: Date,
+        maxLookbackDays: Int
+    ) throws -> ExchangeRate? {
+        let endDate = DateKeys.calendar.startOfDay(for: date)
+        let startDate = DateKeys.calendar.date(byAdding: .day, value: -maxLookbackDays, to: endDate) ?? endDate
+        return try databaseManager.dbQueue.read { db in
+            guard let row = try Row.fetchOne(
+                db,
+                sql: """
+                SELECT source, base_currency_code, quote_currency_code, rate_decimal, effective_date
+                FROM exchange_rates
+                WHERE base_currency_code = ?
+                AND quote_currency_code = ?
+                AND effective_date >= ?
+                AND effective_date <= ?
+                ORDER BY effective_date DESC, fetched_at DESC
+                LIMIT 1
+                """,
+                arguments: [sourceCurrency.rawValue, targetCurrency.rawValue, startDate, endDate]
+            ) else {
+                return nil
+            }
+
+            return ExchangeRate(
+                sourceCurrencyCode: try CurrencyCode(validating: row["base_currency_code"]),
+                targetCurrencyCode: try CurrencyCode(validating: row["quote_currency_code"]),
+                rateDecimal: row["rate_decimal"],
+                effectiveDate: row["effective_date"],
+                source: row["source"]
+            )
+        }
+    }
+
+    /// Raw stored snapshots for the given months, one row per (wallet, currency, month).
+    public func monthlyUSDSnapshots(monthKeys: [Int]) throws -> [MonthlyUSDSnapshot] {
+        guard !monthKeys.isEmpty else { return [] }
+        return try databaseManager.dbQueue.read { db in
+            let placeholders = monthKeys.enumerated().map { ":month\($0.offset)" }.joined(separator: ", ")
+            var arguments: [String: any DatabaseValueConvertible] = [:]
+            for (index, monthKey) in monthKeys.enumerated() {
+                arguments["month\(index)"] = monthKey
+            }
+            let rows = try Row.fetchAll(
+                db,
+                sql: """
+                SELECT * FROM monthly_usd_snapshot
+                WHERE month_key IN (\(placeholders))
+                ORDER BY month_key DESC
+                """,
+                arguments: StatementArguments(arguments)
+            )
+            return try rows.map(Self.monthlyUSDSnapshot(from:))
+        }
+    }
+
+    /// All stored snapshots (full retrospective, newest month first).
+    public func allMonthlyUSDSnapshots() throws -> [MonthlyUSDSnapshot] {
+        try databaseManager.dbQueue.read { db in
+            let rows = try Row.fetchAll(db, sql: "SELECT * FROM monthly_usd_snapshot ORDER BY month_key DESC")
+            return try rows.map(Self.monthlyUSDSnapshot(from:))
+        }
+    }
+
+    /// Month aggregates across wallets for the retrospective UI, newest month first.
+    public func monthlyUSDMonthAggregates() throws -> [MonthlyUSDSnapshot.MonthAggregate] {
+        let rows = try allMonthlyUSDSnapshots()
+        let byMonth = Dictionary(grouping: rows) { $0.monthKey }
+        return byMonth
+            .map { MonthlyUSDSnapshot.MonthAggregate(rows: $0.value) }
+            .sorted { $0.monthKey > $1.monthKey }
+    }
+
+    /// Builds a GRDB row mapper bound to the `monthly_usd_snapshot` schema
+    /// (v9_monthly_usd_snapshot). `base_currency_code` defaults to USD for
+    /// defense against rows written before that column carried a real value.
+    /// Reads `wallet_id` from a snapshot row via Row's public (column, value)
+    /// collection, which yields the raw DatabaseValue. The typed `Row[String]`
+    /// path fatal-traps when a BLOB-backed column is forced through the String
+    /// decoder — and a decoding inconsistency must never take the app down.
+    /// TEXT and BLOB-16 both decode; corruption falls back to a random UUID.
+    private static func readWalletID(from row: Row) -> UUID {
+        for (column, value) in row where column.lowercased() == "wallet_id" {
+            switch value.storage {
+            case .string(let text):
+                return UUID(uuidString: text) ?? UUID()
+            case .blob(let blob) where blob.count == 16:
+                let u: uuid_t = blob.withUnsafeBytes { (raw: UnsafeRawBufferPointer) -> uuid_t in
+                    raw.loadUnaligned(as: uuid_t.self)
+                }
+                return UUID(uuid: u)
+            default:
+                return UUID()
+            }
+        }
+        return UUID()
+    }
+
+    static func monthlyUSDSnapshot(from row: Row) throws -> MonthlyUSDSnapshot {
+        let walletID: UUID = readWalletID(from: row)
+        return MonthlyUSDSnapshot(
+            id: row["id"],
+            monthKey: row["month_key"],
+            walletID: walletID,
+            currencyCode: try CurrencyCode(validating: row["currency_code"]),
+            incomeMinor: row["income_minor"],
+            expenseMinor: row["expense_minor"],
+            savedMinor: row["saved_minor"],
+            baseCurrencyCode: (try? CurrencyCode(validating: row["base_currency_code"])) ?? .usd,
+            incomeBaseMinor: row["income_base_minor"],
+            expenseBaseMinor: row["expense_base_minor"],
+            savedBaseMinor: row["saved_base_minor"],
+            rateDecimal: row["rate_decimal"],
+            rateEffectiveDate: row["rate_effective_date"],
+            rateSource: row["rate_source"],
+            isApproximate: row["is_approximate"],
+            updatedAt: row["updated_at"]
+        )
+    }
+
+    /// Stores one snapshot. Store-once semantics per the issue: an existing row is
+    /// rewritten only when the underlying native minor totals changed, or the
+    /// previously stored conversion targets a different base currency, or the row
+    /// has no conversion and we now have one ("never rewrite already-stored rows
+    /// unless the underlying minor totals changed" — a never-converted row carries
+    /// no rate history, so filling it is not a rewrite of rate history).
+    public func saveMonthlyUSDSnapshot(_ snapshot: MonthlyUSDSnapshot) throws {
+        try databaseManager.dbQueue.write { db in
+            let existing = try Row.fetchOne(
+                db,
+                sql: """
+                SELECT id, income_minor, expense_minor, saved_minor, base_currency_code,
+                       rate_decimal, is_approximate
+                FROM monthly_usd_snapshot
+                WHERE month_key = ? AND wallet_id = ? AND currency_code = ?
+                """,
+                arguments: [snapshot.monthKey, snapshot.walletID.uuidString, snapshot.currencyCode.rawValue]
+            )
+
+            if let existing {
+                let storedIncome: Int64 = existing["income_minor"]
+                let storedExpense: Int64 = existing["expense_minor"]
+                let storedSaved: Int64 = existing["saved_minor"]
+                let storedBaseCurrency: String = existing["base_currency_code"]
+                let storedRate: String? = existing["rate_decimal"]
+                let storedIsApproximate: Bool = existing["is_approximate"]
+
+                let totalsUnchanged = storedIncome == snapshot.incomeMinor
+                    && storedExpense == snapshot.expenseMinor
+                    && storedSaved == snapshot.savedMinor
+                let baseCurrencyMatches = (try? CurrencyCode(validating: storedBaseCurrency)) == snapshot.baseCurrencyCode
+                let hasExistingConversion = !(storedRate ?? "").isEmpty
+                // An already-stored approximate row may be upgraded to exact when
+                // the rate itself did not change (same rate value, now on the
+                // exact month-end date). Never rewrites rate history otherwise.
+                let upgradeApproximation = storedIsApproximate
+                    && !snapshot.isApproximate
+                    && snapshot.rateDecimal == storedRate
+
+                if totalsUnchanged, baseCurrencyMatches, hasExistingConversion, !upgradeApproximation {
+                    return
+                }
+                // Rewrite in place: reuse the STORED row id (the service mints a
+                // fresh snapshot id every pass; updating against it would match
+                // no rows and silently keep stale totals).
+                var mutated = snapshot
+                let storedID: String? = existing["id"]
+                if let storedID, !storedID.isEmpty {
+                    mutated.id = storedID
+                }
+                _ = try mutated.update(db)
+                // wallet_id hygiene (rewrite path): the rowid-keyed trailing
+                // hygiene UPDATE previously ran here too, but `last_insert_rowid()`
+                // is stale when no insert happened in this call — with GRDB's
+                // shared connection it can name an unrelated row inserted by an
+                // earlier transaction, corrupting that snapshot's identity and
+                // breaking the unique key. Key on the row's own TEXT id instead.
+                try db.execute(
+                    sql: "UPDATE monthly_usd_snapshot SET wallet_id = ? WHERE id = ?",
+                    arguments: [snapshot.walletID.uuidString, mutated.id]
+                )
+            } else {
+                var insert = snapshot
+                insert.id = snapshot.id.isEmpty ? UUID().uuidString : snapshot.id
+                _ = try insert.insert(db)
+                // wallet_id hygiene (insert path): this column is TEXT; Codable
+                // persists UUID as a BLOB, and SQLite storage-class comparison
+                // then miss-matches for every TEXT-bound lookup (lookups AND the
+                // unique key). Rewrite the just-inserted row's wallet_id as its
+                // canonical TEXT UUID; the v10_monthly_usd_snapshot_text_uuid
+                // migration normalizes legacy rows once. Keyed on the row's own
+                // id — `last_insert_rowid()` would also match here after a
+                // concurrent-table insert left a colliding rowid behind.
+                try db.execute(
+                    sql: "UPDATE monthly_usd_snapshot SET wallet_id = ? WHERE id = ?",
+                    arguments: [snapshot.walletID.uuidString, insert.id]
                 )
             }
         }

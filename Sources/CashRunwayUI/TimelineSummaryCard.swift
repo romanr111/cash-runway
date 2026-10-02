@@ -171,6 +171,7 @@ struct TimelineSummaryCard: View {
             metricCard(
                 label: L10n.string("timeline.summary.income"),
                 value: presentation.incomeText,
+                secondaryValue: presentation.incomeUSDText,
                 indicatorColor: CashRunwayTheme.accent,
                 iconName: "arrow.down.left",
                 identifier: CashRunwayAccessibilityID.timelineIncomeValue
@@ -178,16 +179,43 @@ struct TimelineSummaryCard: View {
             metricCard(
                 label: L10n.string("timeline.summary.expense"),
                 value: presentation.expenseText,
+                secondaryValue: presentation.expenseUSDText,
                 indicatorColor: CashRunwayTheme.negative,
                 iconName: "arrow.up.right",
                 identifier: CashRunwayAccessibilityID.timelineExpenseValue
             )
+            // Issue #121: cash saved (income − expenses) with its persisted USD
+            // equivalent at that month's end rate. Shown only when the USD
+            // snapshot row exists (never computed in the view layer).
+            if let savedUSDText = presentation.savedUSDText {
+                metricCard(
+                    label: localizedSummaryString("timeline.summary.saved", fallback: "Saved"),
+                    value: savedPresentationText,
+                    secondaryValue: savedUSDText,
+                    indicatorColor: CashRunwayTheme.textSecondary.opacity(0.55),
+                    iconName: "archivebox",
+                    identifier: CashRunwayAccessibilityID.timelineSavedValue
+                )
+            }
         }
+    }
+
+    /// The saved row leads with the persisted USD figure (the feature's purpose:
+    /// how much cash was saved, in dollars); the native amount stays secondary.
+    private var savedPresentationText: String {
+        guard let savedUSDText = presentation.savedUSDText else { return presentation.netText }
+        return savedUSDText
+    }
+
+    /// L10n with an inline fallback (the .strings tables may not carry the new key).
+    private func localizedSummaryString(_ key: String, fallback: String) -> String {
+        let value = L10n.string(key)
+        return value == key ? fallback : value
     }
 
     // Tinted card with a full-height rounded accent bar on the leading edge, matching
     // the reference (green for income, red for expenses).
-    private func metricCard(label: String, value: String, indicatorColor: Color, iconName: String, identifier: String) -> some View {
+    private func metricCard(label: String, value: String, secondaryValue: String?, indicatorColor: Color, iconName: String, identifier: String) -> some View {
         HStack(spacing: 10) {
             RoundedRectangle(cornerRadius: 2.5, style: .continuous)
                 .fill(indicatorColor)
@@ -212,6 +240,16 @@ struct TimelineSummaryCard: View {
                     .foregroundStyle(CashRunwayTheme.textPrimary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
+                // Issue #121: optional USD equivalent line under the native total
+                // (or under the USD figure itself on the saved card). `≈` prefix
+                // marks nearest-available-rate approximations.
+                if let secondaryValue {
+                    Text(secondaryValue)
+                        .font(.system(size: 12, weight: .semibold).monospacedDigit())
+                        .foregroundStyle(CashRunwayTheme.textSecondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, 8)
@@ -224,6 +262,7 @@ struct TimelineSummaryCard: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(indicatorColor.opacity(0.16), lineWidth: 1)
         )
+        .accessibilityElement(children: .combine)
         .accessibilityIdentifier(identifier)
     }
 

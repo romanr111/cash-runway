@@ -103,6 +103,11 @@ public protocol SettingsRepositorying: Sendable {
 /// CSV import commit, and expired-payload purge.
 public protocol MaintenanceRepositorying: Sendable {
     func runMaintenance() throws
+    /// Issue #121: monthly-USD snapshot refresh (dirty months only). Async and
+    /// non-blocking on every thread — the service must NEVER run behind the
+    /// synchronous `runMaintenance` bridge, which blocked callers on a semaphore
+    /// for the full historical backfill.
+    func refreshDirtyUSDSnapshots() async
     func refreshRecurringInstances() throws
     func commitCSVImport(
         fileName: String,
@@ -131,6 +136,30 @@ public protocol CurrencyRepositorying: Sendable {
         maxStaleness: TimeInterval
     ) throws -> ExchangeRate?
     func saveExchangeRates(_ rates: [ExchangeRate]) throws
+    // MARK: Issue #121: retrospective monthly USD snapshots
+    func historicalMonthKeys() throws -> [Int]
+    func monthlyCashflow(monthKey: Int) throws -> [MonthlyWalletCashflowRow]
+    func historicalExchangeRate(
+        from sourceCurrency: CurrencyCode,
+        to targetCurrency: CurrencyCode,
+        on date: Date
+    ) throws -> ExchangeRate?
+    func nearestHistoricalExchangeRate(
+        from sourceCurrency: CurrencyCode,
+        to targetCurrency: CurrencyCode,
+        onOrBefore date: Date,
+        maxLookbackDays: Int
+    ) throws -> ExchangeRate?
+    func monthlyUSDSnapshots(monthKeys: [Int]) throws -> [MonthlyUSDSnapshot]
+    func allMonthlyUSDSnapshots() throws -> [MonthlyUSDSnapshot]
+    func monthlyUSDMonthAggregates() throws -> [MonthlyUSDSnapshot.MonthAggregate]
+    func saveMonthlyUSDSnapshot(_ snapshot: MonthlyUSDSnapshot) throws
+    /// Issue #121: non-blocking refresh of persisted retrospective snapshots for
+    /// the given months (or all history when nil). Runs the service to completion
+    /// off the calling thread — the former synchronous variant blocked callers on
+    /// a semaphore (`awaitBridge`) and froze the UI when reached from the main
+    /// actor.
+    func refreshRetrospectiveUSDSnapshots(monthKeys: Set<Int>?) async
 }
 
 public extension CurrencyRepositorying {
