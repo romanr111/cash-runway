@@ -2417,6 +2417,10 @@ extension CashRunwayRepository {
     /// from `runMaintenance`, which runs on a background queue — never the main thread.
     /// The box is a thread-safe handoff from the detached task back to this thread.
     private final class ResultBox<T>: @unchecked Sendable {
+        // Sendable justified: the handoff is fenced by the awaitBridge semaphore.
+        // The detached task writes `value` exactly once before signaling; the
+        // waiting thread reads it only after `wait` returns — no unsynchronized
+        // access exists on this box at any time.
         var value: Result<T, Error>?
     }
 
