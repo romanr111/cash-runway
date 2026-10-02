@@ -272,8 +272,7 @@ public final class CashRunwayAppModel {
     /// values until the next run.
     public func refreshRetrospectiveUSDSnapshots() async {
         let repository = self.repository
-        let loaded: [RetrospectiveMonthlyUSDMetric]? = await Task.detached(priority: .utility) { [weak repository] () -> [RetrospectiveMonthlyUSDMetric]? in
-            guard let repository else { return nil }
+        let loaded: [RetrospectiveMonthlyUSDMetric]? = await Task.detached(priority: .utility) { () -> [RetrospectiveMonthlyUSDMetric]? in
             let provider = CachingExchangeRateProvider(
                 upstream: HistoricalOfficialRateProvider(),
                 repository: repository,
@@ -290,7 +289,25 @@ public final class CashRunwayAppModel {
     /// Reloads only the STORED retrospective metrics (no network). Called on
     /// every snapshot reload so fresh conversions appear immediately.
     public func reloadStoredRetrospectiveUSDMetrics() {
-        retrospectiveMonthlyUSDMetrics = (try? repository.monthlyUSDMonthAggregates().map(RetrospectiveMonthlyUSDMetric.init(aggregate:))) ?? retrospectiveMonthlyUSDMetrics
+        let aggregates = (try? repository.monthlyUSDMonthAggregates()) ?? []
+        retrospectiveMonthlyUSDMetrics = aggregates.map {
+            RetrospectiveMonthlyUSDMetric(
+                aggregate: $0,
+                monthKey: $0.monthKey,
+                currencyCode: $0.currencyCode,
+                baseCurrencyCode: $0.baseCurrencyCode,
+                incomeMinor: $0.incomeMinor,
+                expenseMinor: $0.expenseMinor,
+                savedMinor: $0.savedMinor,
+                incomeBaseMinor: $0.incomeBaseMinor,
+                expenseBaseMinor: $0.expenseBaseMinor,
+                savedBaseMinor: $0.savedBaseMinor,
+                rateDecimal: $0.rateDecimal,
+                rateEffectiveDate: $0.rateEffectiveDate,
+                rateSource: $0.rateSource,
+                isApproximate: $0.isApproximate
+            )
+        }
     }
 
     @discardableResult

@@ -31,6 +31,39 @@ public struct RetrospectiveMonthlyUSDMetric: Hashable, Sendable {
         self.rateSource = aggregate.rateSource
         self.isApproximate = aggregate.isApproximate
     }
+
+    /// Public memberwise converter so cross-module reloads can map stored
+    /// aggregates without exposing the aggregate type's own initializer.
+    public init(
+        aggregate: MonthlyUSDSnapshot.MonthAggregate,
+        monthKey: Int,
+        currencyCode: CurrencyCode,
+        baseCurrencyCode: CurrencyCode,
+        incomeMinor: Int64,
+        expenseMinor: Int64,
+        savedMinor: Int64,
+        incomeBaseMinor: Int64?,
+        expenseBaseMinor: Int64?,
+        savedBaseMinor: Int64?,
+        rateDecimal: String?,
+        rateEffectiveDate: Date?,
+        rateSource: String?,
+        isApproximate: Bool
+    ) {
+        self.monthKey = monthKey
+        self.currencyCode = currencyCode
+        self.baseCurrencyCode = baseCurrencyCode
+        self.incomeMinor = incomeMinor
+        self.expenseMinor = expenseMinor
+        self.savedMinor = savedMinor
+        self.incomeBaseMinor = incomeBaseMinor
+        self.expenseBaseMinor = expenseBaseMinor
+        self.savedBaseMinor = savedBaseMinor
+        self.rateDecimal = rateDecimal
+        self.rateEffectiveDate = rateEffectiveDate
+        self.rateSource = rateSource
+        self.isApproximate = isApproximate
+    }
 }
 
 /// Issue #121: retrospective monthly metrics in the reporting currency (USD).
