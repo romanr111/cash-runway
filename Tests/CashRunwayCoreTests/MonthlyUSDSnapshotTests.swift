@@ -195,10 +195,10 @@ struct MonthlyUSDSnapshotTests {
 
         // Second pass: the fetched rate is already stored → no re-fetch,
         // and the stored USD figure is not recomputed.
-        try repository.databaseManager.dbQueue.write { db in
+        try await repository.databaseManager.dbQueue.write { db in
             try db.execute(sql: "UPDATE monthly_usd_snapshot SET rate_effective_date = NULL")
         }
-        try repository.databaseManager.dbQueue.write { db in
+        try await repository.databaseManager.dbQueue.write { db in
             try db.execute(sql: "DELETE FROM monthly_usd_snapshot")
         }
         // (Re-run exercises the fetch→persist→reuse cycle from scratch.)

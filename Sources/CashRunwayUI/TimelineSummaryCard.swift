@@ -215,7 +215,7 @@ struct TimelineSummaryCard: View {
 
     // Tinted card with a full-height rounded accent bar on the leading edge, matching
     // the reference (green for income, red for expenses).
-    private func metricCard(label: String, value: String, secondaryValue: String?, secondaryIsLeader: Bool, indicatorColor: Color, iconName: String, identifier: String) -> some View {
+    private func metricCard(label: String, value: String, secondaryValue: String?, indicatorColor: Color, iconName: String, identifier: String) -> some View {
         HStack(spacing: 10) {
             RoundedRectangle(cornerRadius: 2.5, style: .continuous)
                 .fill(indicatorColor)
