@@ -1023,6 +1023,28 @@ public final class DatabaseManager: @unchecked Sendable {
                     columns: ["month_key"]
                 )
             }),
+            ("v10_monthly_usd_snapshot_text_uuid", { db in
+                // Issue #121 follow-up: the wallet_id column is declared TEXT,
+                // but rows written through Codable persistence carry UUIDs as
+                // 16-byte BLOBs. SQLite compares storage classes, so those rows
+                // never matched TEXT-bound lookups (and broke the unique key).
+                // Normalize all legacy rows to their canonical TEXT UUID form;
+                // idempotent (newer rows are already TEXT).
+                let rows = try Row.fetchAll(
+                    db,
+                    sql: "SELECT rowid, wallet_id FROM monthly_usd_snapshot WHERE typeof(wallet_id) = 'blob' AND length(wallet_id) = 16"
+                )
+                for row in rows {
+                    let blob: Data = row["wallet_id"]
+                    let u: uuid_t = blob.withUnsafeBytes { (raw: UnsafeRawBufferPointer) -> uuid_t in
+                        raw.loadUnaligned(as: uuid_t.self)
+                    }
+                    try db.execute(
+                        sql: "UPDATE monthly_usd_snapshot SET wallet_id = ? WHERE rowid = ?",
+                        arguments: [UUID(uuid: u).uuidString, row["rowid"]]
+                    )
+                }
+            }),
         ]
     }
 

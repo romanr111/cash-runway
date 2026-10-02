@@ -211,27 +211,37 @@ public final class MonthlyRetrospectiveUSDSnapshotService: @unchecked Sendable {
                 expenseBase = entry.expense
                 savedBase = savedMinor
             } else {
-                let conversion = try await conversionRate(
+                // A failed rate lookup must not starve the whole month: the row
+                // is still stored with native totals and a nil conversion, and
+                // the next maintenance run fills it (store-once rules allow
+                // filling never-converted rows).
+                let conversion = try? await conversionRate(
                     original: entry.currency,
                     base: baseCurrency,
                     monthEnd: monthEnd
                 )
-                if let factor = conversion.factor {
+                if let conversion, let factor = conversion.factor {
                     incomeBase = try? Self.convertMinor(entry.income, factor: factor)
                     expenseBase = try? Self.convertMinor(entry.expense, factor: factor)
                     savedBase = try? Self.convertMinor(savedMinor, factor: factor)
                     rateDecimal = factor.description
-                } else {
-                    // Identity conversion surfaced by the resolver (original == base
-                    // races are impossible here, but stay defensive).
+                } else if let conversion {
+                    // Resolver pass-through (original == base races are
+                    // impossible here, but stay defensive).
                     incomeBase = entry.income
                     expenseBase = entry.expense
                     savedBase = savedMinor
                     rateDecimal = "1"
+                } else {
+                    // Conversion unresolved (rate fetch failed this pass):
+                    // store the native row unconverted; do not invent a rate.
+                    rateEffectiveDate = nil
+                    rateSource = nil
+                    isApproximate = false
                 }
-                rateEffectiveDate = conversion.rateRow?.effectiveDate
-                rateSource = conversion.rateRow?.source
-                isApproximate = conversion.isApproximate
+                rateEffectiveDate = conversion?.rateRow?.effectiveDate
+                rateSource = conversion?.rateRow?.source
+                isApproximate = conversion?.isApproximate ?? false
             }
 
             let snapshot = MonthlyUSDSnapshot(
