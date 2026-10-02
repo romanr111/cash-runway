@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 import CoreXLSX
+import ZIPFoundation
 @testable import CashRunwayCore
 
 /// Issue #123: the emitted XLSX must be a REAL spreadsheet — round-tripped
@@ -57,8 +58,46 @@ struct MonthlyRetrospectiveXLSXTests {
         #expect(values[11] == "say \"hi\" <&>")
     }
 
-    /// CoreXLSX decode: numerics land in `cell.value`, inline strings in
-    /// `cell.inlineString.text`; missing cells pad with "" so columns align.
+    /// CoreXLSX leniency masked the missing cell type: CoreXLSX reads inline
+    /// strings even without `t="inlineStr"`, but per ECMA-376 part 1 §18.3.1.4
+    /// the `t` attribute of `<c>` defaults to `"number"`, so strict readers
+    /// (real Excel, openpyxl) saw every text cell as empty. Assert the raw
+    /// sheet XML directly so CoreXLSX's leniency cannot hide a regression.
+    @Test func textCellsCarryInlineStrTypeInRawXML() throws {
+        // Verify against the RAW sheet1.xml bytes: CoreXLSX is lenient about
+        // the missing `t` attribute, strict readers (Excel, openpyxl) are not.
+        let data = try MonthlyRetrospectiveXLSX.export(csvRows: [Self.header, Self.dataRow])
+        let archiveURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("pr124-raw-\(UUID().uuidString).xlsx")
+        try data.write(to: archiveURL)
+        defer { try? FileManager.default.removeItem(at: archiveURL) }
+        let archive = try Archive(url: archiveURL, accessMode: .read)
+        guard let entry = archive.first(where: { $0.path == "xl/worksheets/sheet1.xml" }) else {
+            Issue.record("sheet1.xml missing from the export archive")
+            return
+        }
+        var xmlData = Data()
+        _ = try archive.extract(entry, bufferSize: 65536) { chunk in
+            xmlData.append(chunk)
+        }
+        let raw = String(decoding: xmlData, as: UTF8.self)
+
+        // Structural sanity: both cell kinds are represented in the fixture.
+        #expect(raw.contains("<is><t>"))
+        #expect(raw.contains("<v>"))
+
+        // Invariant: a cell whose body has inline-string markup must carry
+        // t="inlineStr"; a `<v>` (numeric) cell must NOT.
+        let inlineStrCell = /<c r="[A-Z]+\d+" t="inlineStr"><is><t>/
+        let typedStringCells = raw.matches(of: inlineStrCell).count
+        let stringCells = raw.components(separatedBy: "<is><t>").count - 1
+        #expect(typedStringCells == stringCells,
+                "every <is><t> cell must be typed t=\"inlineStr\" (\(typedStringCells)/\(stringCells))")
+
+        let numericTyped = raw.matches(of: /<c [^>]*t="inlineStr"[^>]*><v>/).count
+        #expect(numericTyped == 0, "t=\"inlineStr\" must not wrap a numeric `<v>` cell")
+    }
+
     private func text(cells: [Cell]) -> [String] {
         // ColumnReference is Comparable only against itself (not Int) — pad
         // missing columns by advancing a cursor reference from "A".

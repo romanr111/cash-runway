@@ -73,6 +73,52 @@ struct MonthlyRetrospectiveExportTests {
         #expect(csv.contains("Month") && csv.contains("Approximate"))
     }
 
+    /// Formula injection (OWASP Spreadsheet Injection): a cell whose first
+    /// character is `=`, `+`, `-`, `@`, tab, or CR must be neutralized with a
+    /// leading apostrophe after quote-doubling, or spreadsheet apps execute it
+    /// as a formula on open.
+    @Test func formulaInjectionNeutralized() throws {
+        func cell(_ value: String) -> String {
+            MonthlyRetrospectiveExport.escape(value)
+        }
+        #expect(cell("=SUM(1+1)").hasPrefix("'"))
+        #expect(cell("+1+2").hasPrefix("'"))
+        #expect(cell("-1+2").hasPrefix("'"))
+        #expect(cell("@import").hasPrefix("'"))
+        #expect(cell("\tSUM(1+1)").hasPrefix("'"))
+        #expect(cell("\rSUM(1+1)").hasPrefix("'"))
+        // Neutralized cell = apostrophe + quoted-and-doubled content.
+        #expect(cell("=SUM(1+1)") == "'\"=SUM(1+1)\"")
+        // Benign cells are untouched (no apostrophe added).
+        #expect(cell("41250.00") == "\"41250.00\"")
+        #expect(cell("2026-06") == "\"2026-06\"") // leading digit, not '-'
+        #expect(cell("nbu-official") == "\"nbu-official\"")
+        #expect(cell("") == "\"\"")
+        #expect(cell("say \"hi\"") == "\"say \"\"hi\"\"\"")
+    }
+
+    /// End-to-end: hostile values flowing through the full CSV export land in
+    /// the emitted data rows prefixed with an apostrophe.
+    @Test func csvDataRowsNeutralizeFormulaLikeCells() throws {
+        let row = MonthlyRetrospectiveExport.Row(
+            month: "2026-06", baseCurrency: "=SUM(1+1)", currency: "+1+2",
+            income: "41,250.00", expenses: "-1+2", saved: "@import",
+            incomeUSD: "1000", expensesUSD: "2", savedUSD: "998",
+            rate: "0.0242", rateEffectiveDate: "2026-06-30",
+            rateSource: "\tnbu", approximate: false
+        )
+        let csv = MonthlyRetrospectiveExport.csv(rows: [row])
+        let dataLine = csv.split(separator: "\n").dropFirst().first.map(String.init) ?? ""
+        #expect(dataLine.contains("'\"=SUM(1+1)\""))
+        #expect(dataLine.contains("'\"+1+2\""))
+        #expect(dataLine.contains("'\"-1+2\""))
+        #expect(dataLine.contains("'\"@import\""))
+        #expect(dataLine.contains("'\"\tnbu\""))
+        // Header is benign — no neutralization there.
+        let headerLine = csv.split(separator: "\n").first.map(String.init) ?? ""
+        #expect(!headerLine.hasPrefix("'"))
+    }
+
     @Test func groupsByMonthAndCurrencySumsWallets() throws {
         let rows = try MonthlyRetrospectiveExport.rows(from: [
             snapshot(monthKey: 202606, currency: .uah, income: 1_000_000, expense: 500_000),

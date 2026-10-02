@@ -5,6 +5,9 @@ import CoreXLSX
 /// Issue #123: XLSX export of the retrospective via a minimal OOXML archive.
 /// Inline strings only (no sharedStrings, no styles) — opens in Excel, Numbers,
 /// Google Sheets, and round-trips through CoreXLSX (CI test asserts that).
+/// Per ECMA-376 part 1 §18.3.1.4 the `t` attribute of `<c>` defaults to
+/// `"number"`, so text cells carry an explicit `t="inlineStr"` — strict readers
+/// (real Excel, openpyxl) otherwise treat the `<is>` body as an empty number.
 public enum MonthlyRetrospectiveXLSX {
     // Minimal fixed OOXML parts. Sheet named "Retrospective".
     private static let contentTypes = """
@@ -46,8 +49,16 @@ public enum MonthlyRetrospectiveXLSX {
     static func rowCells(_ values: [String], rowIndex: Int) -> String {
         values.enumerated().map { index, value in
             let reference = "\(columnLetter(index))\(rowIndex + 1)"
-            return "<c r=\"\(reference)\">\(cellBody(value))</c>"
+            let body = cellBody(value)
+            return "<c r=\"\(reference)\"\(cellTypeAttribute(body))>\(body)</c>"
         }.joined()
+    }
+
+    /// `t="inlineStr"` for string cells (ECMA-376 defaults `t` to `number`,
+    /// which real Excel, openpyxl, and other strict readers require). Numeric
+    /// cells stay a plain `<v>`, empty cells are empty inline strings.
+    static func cellTypeAttribute(_ body: String) -> String {
+        body.contains("<is><t>") ? " t=\"inlineStr\"" : ""
     }
 
     static func cellBody(_ value: String) -> String {

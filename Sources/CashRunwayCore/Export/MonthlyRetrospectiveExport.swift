@@ -105,7 +105,10 @@ public enum MonthlyRetrospectiveExport {
             }
     }
 
-    /// RFC-4180 CSV: every field quoted, quotes doubled. Header always present.
+    /// CSV for spreadsheet apps: every field quoted, quotes doubled. Header
+    /// always present. Rows are joined with `\n`, not CRLF (apps accept both);
+    /// formula-injection neutralization in `escape` below is the deliberate
+    /// deviation from a plain RFC-4180 serialization.
     public static func csv(rows: [Row]) -> String {
         let body = rows.map { $0.cells.map(escape).joined(separator: ",") }
         return ([Row.header.map(escape).joined(separator: ",")] + body).joined(separator: "\n")
@@ -146,8 +149,15 @@ public enum MonthlyRetrospectiveExport {
         return values.compactMap { $0 }.reduce(0, +)
     }
 
+    /// Quoted CSV field; quotes doubled per RFC-4180. Formula injection (OWASP
+    /// Spreadsheet Injection): a cell whose first character is `=`, `+`, `-`,
+    /// `@`, tab, or CR is neutralized — spreadsheet apps (Excel, Sheets) would
+    /// otherwise execute the text as a formula on open. Prefixing `'` is the
+    /// standard mitigation; Excel shows the leading apostrophe as a text escape.
     static func escape(_ value: String) -> String {
-        "\"\(value.replacingOccurrences(of: "\"", with: "\"\""))\""
+        let quoted = "\"\(value.replacingOccurrences(of: "\"", with: "\"\""))\""
+        guard let first = value.first, "=+-@\t\r".contains(first) else { return quoted }
+        return "'\(quoted)"
     }
 }
 
