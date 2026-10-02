@@ -44,15 +44,14 @@ struct MonthlyRetrospectiveExportTests {
         return formatter.date(from: string)!
     }
 
-    @Test func noDataThrows()
+    @Test func noDataThrows() throws
     {
         #expect(throws: MonthlyRetrospectiveExportError.self) {
             try MonthlyRetrospectiveExport.rows(from: [])
         }
     }
 
-    @Test func escapesQuotesAndCommas()
-    {
+    @Test func escapesQuotesAndCommas() {
         let csv = MonthlyRetrospectiveExport.csv(rows: [
             MonthlyRetrospectiveExport.Row(
                 month: "2026-06", baseCurrency: "USD", currency: "UAH",
@@ -69,16 +68,14 @@ struct MonthlyRetrospectiveExportTests {
         #expect(firstLine.contains("\"Rate (Currency→USD)\""))
     }
 
-    @Test func headerAlwaysPresentEvenWithNoRows()
-    {
+    @Test func headerAlwaysPresentEvenWithNoRows() {
         let csv = MonthlyRetrospectiveExport.csv(rows: [])
         #expect(csv.split(separator: "\n").count == 1)
         #expect(csv.contains("Month") && csv.contains("Approximate"))
     }
 
-    @Test func groupsByMonthAndCurrencySumsWallets()
-    {
-        let rows = try! MonthlyRetrospectiveExport.rows(from: [
+    @Test func groupsByMonthAndCurrencySumsWallets() {
+        let rows = try MonthlyRetrospectiveExport.rows(from: [
             snapshot(monthKey: 202606, currency: .uah, income: 1_000_000, expense: 500_000),
             snapshot(monthKey: 202606, currency: .uah, income: 2_000_000, expense: 600_000),
             snapshot(monthKey: 202605, currency: .uah, income: 1, expense: 1),
@@ -91,9 +88,8 @@ struct MonthlyRetrospectiveExportTests {
         #expect(rows[1].saved == "19000.00")
     }
 
-    @Test func unconvertedRowLeavesUSDColumnsEmpty()
-    {
-        let rows = try! MonthlyRetrospectiveExport.rows(from: [
+    @Test func unconvertedRowLeavesUSDColumnsEmpty() {
+        let rows = try MonthlyRetrospectiveExport.rows(from: [
             snapshot(monthKey: 202606, currency: .uah, income: 4_125_000, expense: 100_000, rate: nil, source: nil),
         ])
         let row = rows[0]
@@ -110,10 +106,9 @@ struct MonthlyRetrospectiveExportTests {
         #expect(csv.contains(",,")) // consecutive empty cells
     }
 
-    @Test func convertedRowCarriesRateMetadataAndApproximate()
-    {
+    @Test func convertedRowCarriesRateMetadataAndApproximate() {
         let juneEnd = isoDate("2026-06-30T00:00:00Z")
-        let rows = try! MonthlyRetrospectiveExport.rows(from: [
+        let rows = try MonthlyRetrospectiveExport.rows(from: [
             snapshot(monthKey: 202606, currency: .uah, income: 4_125_000, expense: 500_000, incomeBase: 100_000, expenseBase: 12_121, effectiveDate: juneEnd, approximate: true),
         ])
         let row = rows[0]
@@ -126,9 +121,8 @@ struct MonthlyRetrospectiveExportTests {
         #expect(row.cells[12] == "yes")
     }
 
-    @Test func approximateFlagFromAnyWalletInGroup()
-    {
-        let rows = try! MonthlyRetrospectiveExport.rows(from: [
+    @Test func approximateFlagFromAnyWalletInGroup() {
+        let rows = try MonthlyRetrospectiveExport.rows(from: [
             snapshot(monthKey: 202606, currency: .uah, income: 1_000, expense: 0, incomeBase: 24, expenseBase: 0, approximate: false),
             snapshot(monthKey: 202606, currency: .uah, income: 2_000, expense: 0, incomeBase: 48, expenseBase: 0, approximate: true),
         ])
@@ -136,9 +130,8 @@ struct MonthlyRetrospectiveExportTests {
         #expect(rows[0].approximate == true)
     }
 
-    @Test func partialConversionRendersWholeGroupUnconverted()
-    {
-        let rows = try! MonthlyRetrospectiveExport.rows(from: [
+    @Test func partialConversionRendersWholeGroupUnconverted() {
+        let rows = try MonthlyRetrospectiveExport.rows(from: [
             snapshot(monthKey: 202606, currency: .uah, income: 1_000, expense: 0, incomeBase: 24, expenseBase: 0),
             snapshot(monthKey: 202606, currency: .uah, income: 2_000, expense: 0, incomeBase: nil, expenseBase: nil, rate: nil, source: nil),
         ])
@@ -147,9 +140,8 @@ struct MonthlyRetrospectiveExportTests {
         #expect(rows[0].rate == nil)
     }
 
-    @Test func mixedCurrenciesProduceSeparateRows()
-    {
-        let rows = try! MonthlyRetrospectiveExport.rows(from: [
+    @Test func mixedCurrenciesProduceSeparateRows() {
+        let rows = try MonthlyRetrospectiveExport.rows(from: [
             snapshot(monthKey: 202606, currency: .uah, income: 1_000, expense: 0),
             snapshot(monthKey: 202606, currency: .usd, income: 5_000, expense: 1_000,
                      incomeBase: 5_000, expenseBase: 1_000, rate: "1", source: "identity"),
@@ -159,8 +151,7 @@ struct MonthlyRetrospectiveExportTests {
         #expect(rows[1].currency == "USD")
     }
 
-    @Test func majorUnitsTwoDecimals()
-    {
+    @Test func majorUnitsTwoDecimals() {
         #expect(MonthlyRetrospectiveExport.major2(4_125_000) == "41250.00")
         #expect(MonthlyRetrospectiveExport.major2(41_250) == "412.50")
         #expect(MonthlyRetrospectiveExport.major2(41_251) == "412.51")
@@ -169,16 +160,14 @@ struct MonthlyRetrospectiveExportTests {
         #expect(MonthlyRetrospectiveExport.major2(-250_000) == "-2500.00")
     }
 
-    @Test func monthAndDateFormatting()
-    {
+    @Test func monthAndDateFormatting() {
         #expect(MonthlyRetrospectiveExport.monthString(202606) == "2026-06")
         #expect(MonthlyRetrospectiveExport.monthString(203001) == "2030-01")
         #expect(MonthlyRetrospectiveExport.monthString(99912) == "0999-12")
         #expect(MonthlyRetrospectiveExport.dateString(isoDate("2026-06-30T19:00:00Z")) == "2026-06-30")
     }
 
-    @Test func fileNameRangeFormatting()
-    {
+    @Test func fileNameRangeFormatting() {
         // Filename convention helper: cash-runway-retrospective-<first>-<last>
         #expect(MonthlyRetrospectiveExport.ExportFile.name(from: "2026-04", to: "2026-06", format: .xlsx) == "cash-runway-retrospective-2026-04-2026-06.xlsx")
         #expect(MonthlyRetrospectiveExport.ExportFile.name(from: "2026-06", to: "2026-06", format: .csv) == "cash-runway-retrospective-2026-06.csv")
