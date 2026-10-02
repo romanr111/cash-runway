@@ -102,7 +102,7 @@ struct MonthlyRetrospectiveExportTests {
         #expect(row.approximate == false)
         #expect(row.cells[6] == "") // Income USD cell empty in CSV
         let csv = MonthlyRetrospectiveExport.csv(rows: rows)
-        #expect(csv.contains("\"\"\"\"")) // empty field renders as quoted-empty ""
+        #expect(csv.contains(",\"\",\"\",\"\",\"\",\"\",\"no\"")) // trailing empty fields then Approximate
     }
 
     @Test func convertedRowCarriesRateMetadataAndApproximate() throws {
