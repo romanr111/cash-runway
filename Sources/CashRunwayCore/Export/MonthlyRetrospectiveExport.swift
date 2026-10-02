@@ -74,7 +74,7 @@ public enum MonthlyRetrospectiveExport {
             MonthCurrencyKey(monthKey: snapshot.monthKey, currency: snapshot.currencyCode.rawValue)
         }
         return byGroup
-            .sorted { $0.key.monthKey < $1.key.monthKey }
+            .sorted { ($0.key.monthKey, $0.key.currency) < ($1.key.monthKey, $1.key.currency) }
             .map { key, group -> Row in
                 let first = group[0]
                 let income = group.reduce(Int64(0)) { $0 + $1.incomeMinor }
