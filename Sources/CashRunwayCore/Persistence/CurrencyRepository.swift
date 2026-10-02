@@ -305,11 +305,34 @@ extension CashRunwayRepository {
     /// Builds a GRDB row mapper bound to the `monthly_usd_snapshot` schema
     /// (v9_monthly_usd_snapshot). `base_currency_code` defaults to USD for
     /// defense against rows written before that column carried a real value.
+    /// Reads `wallet_id` from a snapshot row via Row's public (column, value)
+    /// collection, which yields the raw DatabaseValue. The typed `Row[String]`
+    /// path fatal-traps when a BLOB-backed column is forced through the String
+    /// decoder — and a decoding inconsistency must never take the app down.
+    /// TEXT and BLOB-16 both decode; corruption falls back to a random UUID.
+    private static func readWalletID(from row: Row) -> UUID {
+        for (column, value) in row where column.lowercased() == "wallet_id" {
+            switch value.storage {
+            case .string(let text):
+                return UUID(uuidString: text) ?? UUID()
+            case .blob(let blob) where blob.count == 16:
+                let u: uuid_t = blob.withUnsafeBytes { (raw: UnsafeRawBufferPointer) -> uuid_t in
+                    raw.loadUnaligned(as: uuid_t.self)
+                }
+                return UUID(uuid: u)
+            default:
+                return UUID()
+            }
+        }
+        return UUID()
+    }
+
     static func monthlyUSDSnapshot(from row: Row) throws -> MonthlyUSDSnapshot {
-        MonthlyUSDSnapshot(
+        let walletID: UUID = readWalletID(from: row)
+        return MonthlyUSDSnapshot(
             id: row["id"],
             monthKey: row["month_key"],
-            walletID: UUID(uuidString: row["wallet_id"]) ?? UUID(),
+            walletID: walletID,
             currencyCode: try CurrencyCode(validating: row["currency_code"]),
             incomeMinor: row["income_minor"],
             expenseMinor: row["expense_minor"],
