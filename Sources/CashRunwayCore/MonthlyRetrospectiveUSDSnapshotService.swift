@@ -133,11 +133,11 @@ public final class MonthlyRetrospectiveUSDSnapshotService: @unchecked Sendable {
         let targetMonths: [Int]
         if let monthKeys {
             targetMonths = monthKeys
-                .filter { Self.monthEndDate(for: $0) <= now }
+                .filter { Self.isMonthComplete($0, now: now) }
                 .sorted()
         } else {
             targetMonths = try repository.historicalMonthKeys()
-                .filter { Self.monthEndDate(for: $0) <= now }
+                .filter { Self.isMonthComplete($0, now: now) }
         }
         guard !targetMonths.isEmpty else { return [] }
 
@@ -270,6 +270,16 @@ public final class MonthlyRetrospectiveUSDSnapshotService: @unchecked Sendable {
             throw MoneyError.invalidAmount(factor.description)
         }
         return result
+    }
+
+    /// A month is complete once the month itself has fully passed: its first day
+    /// lies before `now`'s day. Compared at day granularity so a mid-month
+    /// `now` (e.g. June 30 noon) still sees June as complete for lookups keyed
+    /// to the month's end date; the rate resolution below only needs the last
+    /// DAY of the month, which exists from that midnight onward.
+    static func isMonthComplete(_ monthKey: Int, now: Date) -> Bool {
+        let start = DateKeys.startOfMonth(for: monthKey)
+        return DateKeys.calendar.startOfDay(for: start) < DateKeys.calendar.startOfDay(for: now)
     }
 
     /// The historical month's end instant (last second of the month, local
