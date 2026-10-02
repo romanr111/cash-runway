@@ -131,6 +131,24 @@ public protocol CurrencyRepositorying: Sendable {
         maxStaleness: TimeInterval
     ) throws -> ExchangeRate?
     func saveExchangeRates(_ rates: [ExchangeRate]) throws
+    // MARK: Issue #121: retrospective monthly USD snapshots
+    func historicalMonthKeys() throws -> [Int]
+    func monthlyCashflow(monthKey: Int) throws -> [MonthlyWalletCashflowRow]
+    func historicalExchangeRate(
+        from sourceCurrency: CurrencyCode,
+        to targetCurrency: CurrencyCode,
+        on date: Date
+    ) throws -> ExchangeRate?
+    func nearestHistoricalExchangeRate(
+        from sourceCurrency: CurrencyCode,
+        to targetCurrency: CurrencyCode,
+        onOrBefore date: Date,
+        maxLookbackDays: Int
+    ) throws -> ExchangeRate?
+    func monthlyUSDSnapshots(monthKeys: [Int]) throws -> [MonthlyUSDSnapshot]
+    func allMonthlyUSDSnapshots() throws -> [MonthlyUSDSnapshot]
+    func monthlyUSDMonthAggregates() throws -> [MonthlyUSDSnapshot.MonthAggregate]
+    func saveMonthlyUSDSnapshot(_ snapshot: MonthlyUSDSnapshot) throws
 }
 
 public extension CurrencyRepositorying {

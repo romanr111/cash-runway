@@ -21,7 +21,8 @@ struct DashboardView: View {
             snapshot: model.timelineSnapshot,
             allBars: model.allBars,
             currencyCode: model.aggregateCurrencyCode,
-            locale: L10n.locale
+            locale: L10n.locale,
+            usdMetrics: model.retrospectiveMonthlyUSDMetrics
         )
     }
 

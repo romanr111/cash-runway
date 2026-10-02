@@ -44,6 +44,8 @@ enum CashRunwayAccessibilityID {
     static let timelineSummaryCard = "timeline.summaryCard"
     static let timelineIncomeValue = "timeline.incomeValue"
     static let timelineExpenseValue = "timeline.expenseValue"
+    // Issue #121: retrospective cash-saved card (income − expenses, USD-led).
+    static let timelineSavedValue = "timeline.savedValue"
     static let timelineComparison = "timeline.comparison"
 
     static func timelineChartPoint(_ periodKey: Int) -> String {

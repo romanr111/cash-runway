@@ -50,6 +50,10 @@ public final class CashRunwayAppModel {
     public var overviewSnapshot: OverviewSnapshot?
     public var allBars: [TimelineBarPoint] = []
     public var categoryDetailTransactions: [TransactionListItem] = []
+    // Issue #121: stored retrospective monthly USD metrics (newest month first),
+    // loaded from the persisted snapshot table on bootstrap/reload. Never
+    // recomputed in the view layer.
+    public private(set) var retrospectiveMonthlyUSDMetrics: [RetrospectiveMonthlyUSDMetric] = []
 
     public var selectedMonthKey = DateKeys.monthKey(for: .now)
     public var selectedWalletID: UUID?
@@ -249,6 +253,7 @@ public final class CashRunwayAppModel {
             try repository.seedIfNeeded()
             try repository.runMaintenance()
             try repository.refreshRecurringInstances()
+            await refreshRetrospectiveUSDSnapshots()
             await reloadAll()
             hasBootstrapped = true
             // LEGACY_DISABLED_APP_LOCK:
@@ -259,6 +264,33 @@ public final class CashRunwayAppModel {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    /// Issue #121: backfills + reloads persisted retrospective monthly USD
+    /// snapshots (historical month-end rates). Runs off the main actor; failures
+    /// are non-fatal — the retrospective simply keeps its previously stored
+    /// values until the next run.
+    public func refreshRetrospectiveUSDSnapshots() async {
+        let repository = self.repository
+        let loaded: [RetrospectiveMonthlyUSDMetric]? = await Task.detached(priority: .utility) { [weak repository] () -> [RetrospectiveMonthlyUSDMetric]? in
+            guard let repository else { return nil }
+            let provider = CachingExchangeRateProvider(
+                upstream: HistoricalOfficialRateProvider(),
+                repository: repository,
+                maxStaleness: .infinity
+            )
+            let service = MonthlyRetrospectiveUSDSnapshotService(repository: repository, rateProvider: provider)
+            return try? await service.refreshSnapshots()
+        }.value
+        if let loaded {
+            retrospectiveMonthlyUSDMetrics = loaded
+        }
+    }
+
+    /// Reloads only the STORED retrospective metrics (no network). Called on
+    /// every snapshot reload so fresh conversions appear immediately.
+    public func reloadStoredRetrospectiveUSDMetrics() {
+        retrospectiveMonthlyUSDMetrics = (try? repository.monthlyUSDMonthAggregates().map(RetrospectiveMonthlyUSDMetric.init(aggregate:))) ?? retrospectiveMonthlyUSDMetrics
     }
 
     @discardableResult
@@ -288,6 +320,7 @@ public final class CashRunwayAppModel {
             self.transactionQuery.walletID = effectiveWalletID
             self.allBars = bars
             self.apply(snapshot)
+            self.reloadStoredRetrospectiveUSDMetrics()
             self.latestTransactionMonthKey = try? repository.latestTransactionMonthKey()
             if let overview = snapshot.overviewSnapshot {
                 self.setCachedOverview(overview, monthKey: overview.selectedMonthKey, walletID: overview.walletFilterID)
@@ -648,6 +681,12 @@ public final class CashRunwayAppModel {
         runMutation {
             try repository.saveCurrencyPreferences(preferences)
         }
+    }
+
+    /// The full stored preferences (or the struct default when storage fails) —
+    /// used by settings screens that patch a single field without dropping the rest.
+    public func storedCurrencyPreferences() -> CurrencyPreferences {
+        (try? repository.currencyPreferences()) ?? .default
     }
 
     // DEPRECATED — Budgets feature is de-prioritized. Work stopped; do not modify or add tests until resumed.

@@ -761,9 +761,14 @@ private struct CurrencySettingsView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Save") {
-                        var preferences = CurrencyPreferences()
+                        var preferences = model.storedCurrencyPreferences()
                         preferences.defaultCurrencyCode = selectedCurrency
-                        preferences.reportingCurrencyCode = model.reportingCurrencyCode
+                        // Issue #121: USD is the retrospective base currency. A
+                        // reporting preference that is still the pre-feature seed
+                        // (UAH, "unset") flips to USD so the persisted snapshots
+                        // target USD; an explicit user choice is respected.
+                        let currentReporting = preferences.reportingCurrencyCode
+                        preferences.reportingCurrencyCode = currentReporting == .uah ? .usd : currentReporting
                         model.saveCurrencyPreferences(preferences)
                         dismiss()
                     }
