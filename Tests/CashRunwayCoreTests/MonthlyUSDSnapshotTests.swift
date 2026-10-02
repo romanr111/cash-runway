@@ -12,6 +12,7 @@ struct MonthlyUSDSnapshotTests {
 
     private let junEnd = DateKeys.calendar.date(from: DateComponents(year: 2026, month: 6, day: 30, hour: 12))!
     private let may27 = DateKeys.calendar.date(from: DateComponents(year: 2026, month: 5, day: 27, hour: 12))!
+    private let jun20 = DateKeys.calendar.date(from: DateComponents(year: 2026, month: 6, day: 20, hour: 12))!
 
     private func makeRepository() throws -> CashRunwayRepository {
         let repository = try TestSupport.makeRepository()
@@ -153,8 +154,8 @@ struct MonthlyUSDSnapshotTests {
 
         let metrics = try await service.refreshSnapshots(monthKeys: [202606], now: junEnd)
         let june = try #require(metrics.first { $0.monthKey == 202606 })
-        // 1000.00 UAH / 41.00 = 24.39 USD (rounded half-up to 2439 minor)
-        #expect(june.expenseBaseMinor == 2_439)
+        // Fixture: 40_000.00 UAH / 41.00 = 975.609… → 976 USD minor (round half-up).
+        #expect(june.expenseBaseMinor == 976)
         #expect(june.rateSource == "nbu-official")
         #expect(!june.isApproximate)
         #expect(provider.callCount == 0)
@@ -165,15 +166,16 @@ struct MonthlyUSDSnapshotTests {
         let service = try makeService(repository, provider: CountingRateProvider(rate: nil))
         let wallet = try makeWallet(repository)
         try seedCashflow(repository, walletID: wallet.id, monthKey: 202606, incomeMinor: 0, expenseMinor: 4_100_000)
-        // No June 30 rate; May 27 exists within the 10-day lookback → approximate.
+        // No June 30 rate; June 20 exists within the 10-day lookback (June 30
+        // minus 10 days = June 20) → stored fallback, flagged approximate.
         try repository.saveExchangeRates([
-            ExchangeRate(sourceCurrencyCode: .usd, targetCurrencyCode: .uah, rateDecimal: "41.00", effectiveDate: may27, source: "nbu-official"),
+            ExchangeRate(sourceCurrencyCode: .usd, targetCurrencyCode: .uah, rateDecimal: "41.00", effectiveDate: jun20, source: "nbu-official"),
         ])
 
         let metrics = try await service.refreshSnapshots(monthKeys: [202606], now: junEnd)
         let june = try #require(metrics.first { $0.monthKey == 202606 })
         #expect(june.isApproximate)
-        #expect(june.rateEffectiveDate == DateKeys.calendar.startOfDay(for: may27))
+        #expect(june.rateEffectiveDate == DateKeys.calendar.startOfDay(for: jun20))
         // 41_000.00 UAH / 41.00 = 1000.00 USD
         #expect(june.expenseBaseMinor == 100_000)
     }
@@ -184,7 +186,15 @@ struct MonthlyUSDSnapshotTests {
             sourceCurrencyCode: .usd, targetCurrencyCode: .uah,
             rateDecimal: "42.00", effectiveDate: junEnd, source: "nbu-official"
         ))
-        let service = try makeService(repository, provider: provider)
+        // Production wiring: fetches flow through the caching provider, which
+        // persists the fetched rate into `exchange_rates` (service itself never
+        // writes rates). The test asserts the same cycle through the real cache.
+        let cachingProvider = CachingExchangeRateProvider(
+            upstream: provider,
+            repository: repository,
+            maxStaleness: .infinity
+        )
+        let service = try makeService(repository, provider: cachingProvider)
         let wallet = try makeWallet(repository)
         try seedCashflow(repository, walletID: wallet.id, monthKey: 202606, incomeMinor: 0, expenseMinor: 4_200_000)
 
@@ -193,19 +203,17 @@ struct MonthlyUSDSnapshotTests {
         #expect(june.expenseBaseMinor == 100_000)
         #expect(try exchangeRateCount(in: repository) == 1)
 
-        // Second pass: the fetched rate is already stored → no re-fetch,
-        // and the stored USD figure is not recomputed.
-        try await repository.databaseManager.dbQueue.write { db in
-            try db.execute(sql: "UPDATE monthly_usd_snapshot SET rate_effective_date = NULL")
-        }
+        // Second pass: the fetched rate is already stored → the service consults
+        // the DB first (upstream not polled again), deletes the snapshot row and
+        // verifies the fetch→persist→reuse cycle rebuilt it identically.
         try await repository.databaseManager.dbQueue.write { db in
             try db.execute(sql: "DELETE FROM monthly_usd_snapshot")
         }
-        // (Re-run exercises the fetch→persist→reuse cycle from scratch.)
         let second = try await service.refreshSnapshots(monthKeys: [202606], now: junEnd)
         let juneAgain = try #require(second.first { $0.monthKey == 202606 })
         #expect(juneAgain.expenseBaseMinor == 100_000)
         #expect(try exchangeRateCount(in: repository) == 1)
+        #expect(provider.callCount == 1, "Second pass must reuse the persisted rate, not re-fetch")
     }
 
     // MARK: - Store-once semantics
