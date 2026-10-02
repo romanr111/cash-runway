@@ -319,13 +319,14 @@ struct MonthlyUSDSnapshotTests {
         // seed a real transaction in 2026-06. (The 2030 month exists only as an
         // aggregate row with no transactions, so the backfill never sees it —
         // and even if a month end is in the future, it is skipped by date.)
+        let expenseCategory = try repository.categories(kind: .expense).first
         try repository.saveTransaction(TransactionDraft(
             kind: .expense,
             walletID: wallet.id,
             amountMinor: 1_000,
             currencyCode: .uah,
             occurredAt: junEnd,
-            categoryID: WalletCategory.builtIn(byKind: .expense).id
+            categoryID: expenseCategory?.id
         ))
         try seedCashflow(repository, walletID: wallet.id, monthKey: 202606, incomeMinor: 0, expenseMinor: 1_000)
         try seedCashflow(repository, walletID: wallet.id, monthKey: 203001, incomeMinor: 0, expenseMinor: 1_000)
