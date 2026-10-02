@@ -336,6 +336,71 @@ struct MonthlyUSDSnapshotTests {
         #expect(!stored.contains { $0.monthKey == 203001 }, "A month whose end is in the future has no month-end rate yet")
         #expect(stored.contains { $0.monthKey == 202606 })
     }
+
+    // MARK: - wallet_id hygiene across insert + rewrite passes
+
+    @Test func mixedWalletPassKeepsEachSnapshotWalletIDCorrect() async throws {
+        let repository = try makeRepository()
+        let service = try makeService(repository, provider: CountingRateProvider(rate: nil))
+        let cash = try makeWallet(repository, currencyCode: .uah)
+        let bank = try makeWallet(repository, currencyCode: .uah)
+        try seedCashflow(repository, walletID: cash.id, monthKey: 202606, incomeMinor: 10_000, expenseMinor: 2_000)
+        try seedCashflow(repository, walletID: bank.id, monthKey: 202606, incomeMinor: 30_000, expenseMinor: 5_000)
+        try repository.saveExchangeRates([
+            ExchangeRate(sourceCurrencyCode: .usd, targetCurrencyCode: .uah, rateDecimal: "41.25", effectiveDate: junEnd, source: "nbu-official"),
+        ])
+
+        // First pass: both wallets INSERT (no existing rows).
+        _ = try await service.refreshSnapshots(monthKeys: [202606], now: junEnd)
+        var stored = try repository.allMonthlyUSDSnapshots()
+        #expect(stored.count == 2)
+        #expect(Set(stored.map(\.walletID)) == [cash.id, bank.id], "Insert pass must keep each row's own wallet_id")
+
+        // Ledger edit on ONE wallet → next pass REWRITES its row while the other
+        // row already exists (store-once early-returns). This is the pass where a
+        // stale `last_insert_rowid()` on the shared connection used to overwrite
+        // the OTHER wallet's wallet_id, collapsing identity and breaking the
+        // unique key.
+        try seedCashflow(repository, walletID: cash.id, monthKey: 202606, incomeMinor: 20_000, expenseMinor: 2_000)
+        _ = try await service.refreshSnapshots(monthKeys: [202606], now: junEnd)
+
+        stored = try repository.allMonthlyUSDSnapshots()
+        #expect(stored.count == 2, "Both rows must survive the mixed insert/rewrite pass")
+        #expect(Set(stored.map(\.walletID)) == [cash.id, bank.id])
+        #expect(stored.first { $0.walletID == cash.id }?.incomeMinor == 20_000, "Rewritten row keeps its identity and gains new totals")
+        #expect(stored.first { $0.walletID == bank.id }?.incomeMinor == 30_000, "Untouched row must not absorb another wallet's identity")
+    }
+
+    @Test func deleteWalletPurgesItsUSDSnapshotRows() async throws {
+        let repository = try makeRepository()
+        let service = try makeService(repository, provider: CountingRateProvider(rate: nil))
+        let cash = try makeWallet(repository, currencyCode: .uah)
+        let bank = try makeWallet(repository, currencyCode: .uah)
+        try seedCashflow(repository, walletID: cash.id, monthKey: 202606, incomeMinor: 10_000, expenseMinor: 2_000)
+        try seedCashflow(repository, walletID: bank.id, monthKey: 202606, incomeMinor: 30_000, expenseMinor: 5_000)
+        try repository.saveExchangeRates([
+            ExchangeRate(sourceCurrencyCode: .usd, targetCurrencyCode: .uah, rateDecimal: "41.25", effectiveDate: junEnd, source: "nbu-official"),
+        ])
+        _ = try await service.refreshSnapshots(monthKeys: [202606], now: junEnd)
+        #expect(try snapshotCount(in: repository) == 2)
+
+        try repository.deleteWallet(id: cash.id)
+
+        let remaining = try repository.allMonthlyUSDSnapshots()
+        #expect(!remaining.contains { $0.walletID == cash.id }, "Deleting a wallet must purge its persisted USD snapshots")
+        #expect(remaining.first { $0.walletID == bank.id } != nil, "Other wallets' snapshots are untouched")
+        #expect(try snapshotCount(in: repository) == 1)
+
+        // The affected month re-detects as dirty (cashflow updated after the
+        // snapshot pass) and re-snapshots from the remaining active wallets —
+        // nothing resurrects the deleted wallet's USD row.
+        await repository.refreshDirtyUSDSnapshots()
+        let afterRefresh = try repository.allMonthlyUSDSnapshots()
+        #expect(!afterRefresh.contains { $0.walletID == cash.id })
+        #expect(afterRefresh.count == 1)
+        #expect(afterRefresh.first?.walletID == bank.id)
+        #expect(afterRefresh.first?.monthKey == 202606)
+    }
 }
 
 /// Rate stub recording calls; `rate = nil` makes the fetch path throw.

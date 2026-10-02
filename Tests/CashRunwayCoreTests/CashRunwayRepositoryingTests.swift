@@ -92,6 +92,7 @@ private final class MockRepository: CashRunwayRepositorying, @unchecked Sendable
         )
     }
     func runMaintenance() throws {}
+    func refreshDirtyUSDSnapshots() async {}
     func refreshRecurringInstances() throws {}
     func postRecurringInstance(id: UUID, on date: Date) throws { postRecurringInstanceCalled = true }
     func skipRecurringInstance(id: UUID) throws {}
@@ -128,6 +129,7 @@ private final class MockRepository: CashRunwayRepositorying, @unchecked Sendable
     func allMonthlyUSDSnapshots() throws -> [MonthlyUSDSnapshot] { [] }
     func monthlyUSDMonthAggregates() throws -> [MonthlyUSDSnapshot.MonthAggregate] { [] }
     func saveMonthlyUSDSnapshot(_ snapshot: MonthlyUSDSnapshot) throws {}
+    func refreshRetrospectiveUSDSnapshots(monthKeys: Set<Int>?) async {}
     func exportFullBackup() throws -> CashRunwayBackup {
         CashRunwayBackup(
             metadata: CashRunwayBackupMetadata(format: "cash-runway-backup", version: 2, createdAt: Date(), appVersion: "test", currency: "UAH"),
