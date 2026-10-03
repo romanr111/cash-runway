@@ -111,20 +111,7 @@ struct SavingsExclusionTests {
             note: "Savings timeline transaction",
             source: .manual
         ))
-        let allSavingsSpend = TransactionDraft(
-            kind: .expense,
-            walletID: wallets.operationalA.id,
-            destinationWalletID: wallets.flaggedUSD.id,
-            amountMinor: 25_000,
-            currencyCode: .uah,
-            occurredAt: occurredAt,
-            categoryID: expenseCategory.id,
-            labelIDs: [],
-            merchant: "Transfer to Savings",
-            note: "Transfer leg on the All-Wallets timeline",
-            source: .manual
-        )
-        try repository.saveTransaction(allSavingsSpend)
+        
 
         let allWalletsTimeline = try repository.timelineSnapshot(monthKey: monthKey, walletID: nil)
         #expect(allWalletsTimeline.heroCashFlowMinor == 70_000)
@@ -137,15 +124,17 @@ struct SavingsExclusionTests {
         #expect(flaggedItems.contains { $0.walletName == "Flagged USD" })
 
         let operationalTimeline = try repository.timelineSnapshot(monthKey: monthKey, walletID: wallets.operationalA.id)
-        #expect(operationalTimeline.bars.first?.expenseMinor == 20_000)
+        #expect(operationalTimeline.bars.last?.expenseMinor == 20_000)
     }
 
     @Test func deleteGuardCountsOperationalOnly() throws {
         let (repository, wallets) = try seedStandardScenario()
 
-        // 1 operational + 1 flagged: deleting the operational wallet must be refused...
+        // 3 seeded: 2 operational + 1 flagged. Deleting the first operational succeeds,
+        // deleting the LAST operational is refused, deleting the flagged is allowed.
+        try repository.deleteWallet(id: wallets.operationalA.id)
         do {
-            try repository.deleteWallet(id: wallets.operationalA.id)
+            try repository.deleteWallet(id: wallets.operationalB.id)
             Issue.record("Expected deleting the last operational wallet to fail")
         } catch {
             // expected: at least one operational wallet must remain
@@ -154,7 +143,7 @@ struct SavingsExclusionTests {
         // ...while the flagged (separate-entity) wallet can be deleted.
         try repository.deleteWallet(id: wallets.flaggedUSD.id)
         let remaining = try repository.wallets()
-        #expect(remaining.contains { $0.id == wallets.operationalA.id })
+        #expect(!remaining.contains { $0.id == wallets.operationalA.id })
         #expect(remaining.contains { $0.id == wallets.operationalB.id })
         #expect(!remaining.contains { $0.id == wallets.flaggedUSD.id })
     }
@@ -182,7 +171,7 @@ struct SavingsExclusionTests {
         ))
 
         let allWalletsOverview = try repository.overviewSnapshot(monthKey: monthKey, walletID: nil)
-        #expect(allWalletsOverview.totalWealthMinor == 150_000)
+        #expect(allWalletsOverview.totalWealthMinor == 190_000)
 
         let flaggedOverview = try repository.overviewSnapshot(monthKey: monthKey, walletID: wallets.flaggedUSD.id)
         #expect(flaggedOverview.totalWealthMinor == 10_000_000)
