@@ -275,3 +275,9 @@ WHERE is_archived = 0
 1. FX-converted savings total in reporting currency — defer? (assumed: defer)
 2. Should non-savings wallets also get the toggle? (assumed: no — toggle scoped to savings kind)
 3. Name: "Заощадження та інвестиції" as the section title — OK?
+---
+
+## Execution addendum (2026-10-03)
+
+- Local machine has **no Xcode** (CLT 26.3 only) → `swift test` impossible locally; local gate = `swift build --target CashRunwayCore`. Runtime gates (unit/integration) run via `iOS CI` on `macos-26` GitHub runners, triggered on PR.
+- Phase A commits: `75e48d9` (migration), `b91bcd2` (flag + backup), `df513d3` (savings kind), `8d88143` (plan). CI pending on push/PR — parent triages results.
