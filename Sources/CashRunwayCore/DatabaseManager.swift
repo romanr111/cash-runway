@@ -1001,7 +1001,7 @@ public final class DatabaseManager: @unchecked Sendable {
                             """,
                             arguments: [
                                 category.id.uuidString, category.name, category.kind.rawValue,
-                                true, Date(), Date(),
+                                true, Date(timeIntervalSince1970: 0), Date(timeIntervalSince1970: 0),
                             ]
                         )
                     }

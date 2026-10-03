@@ -703,13 +703,32 @@ extension CashRunwayRepository {
     }
 
     public func deleteWallet(id: UUID) throws {
-        let activeCount = try databaseManager.dbQueue.read { db in
-            try Int.fetchOne(
+        let (operationalCount, targetIsFlagged) = try databaseManager.dbQueue.read { db in
+            let operationalPredicate = try Self.operationalWalletScopePredicate(db: db)
+            let count = try Int.fetchOne(
                 db,
-                sql: "SELECT COUNT(*) FROM wallets WHERE \(try Self.operationalWalletScopePredicate(db: db))"
+                sql: "SELECT COUNT(*) FROM wallets WHERE \(operationalPredicate)"
             ) ?? 0
+            // On pre-v9 (partial-schema) databases the flag column does not
+            // exist; there are no flagged wallets there.
+            let hasFlagColumn = try Self.tableHasColumn(db, table: "wallets", column: "is_excluded_from_summary")
+            let targetFlagged: Bool
+            if hasFlagColumn {
+                targetFlagged = try Bool.fetchOne(
+                    db,
+                    sql: "SELECT is_excluded_from_summary FROM wallets WHERE id = ? AND is_archived = 0",
+                    arguments: [id.uuidString]
+                ) ?? false
+            } else {
+                targetFlagged = false
+            }
+            return (count, targetFlagged)
         }
-        guard activeCount > 1 else {
+        // Deleting a separate-entity (flagged) wallet does not reduce the
+        // operational set, so it is allowed while at least one operational
+        // wallet remains. Deleting an operational wallet requires one to remain.
+        let remainingOperationalAfterDelete = targetIsFlagged ? operationalCount : operationalCount - 1
+        guard remainingOperationalAfterDelete >= 1 else {
             throw CashRunwayError.validation(L10n.string("At least one active wallet must remain."))
         }
 
@@ -1588,7 +1607,7 @@ extension CashRunwayRepository {
                 JOIN monthly_label_spend m
                   ON m.label_id = l.id
                  AND m.month_key = ?
-                 \(walletID == nil ? "" : "AND m.wallet_id = ?")
+                 \(walletID == nil ? try "AND m.wallet_id IN (\(Self.operationalWalletScopeSubquery(db: db)))" : "AND m.wallet_id = ?")
                 GROUP BY l.id, m.kind
                 HAVING label_minor > 0
                 ORDER BY m.kind, label_minor DESC, l.name
