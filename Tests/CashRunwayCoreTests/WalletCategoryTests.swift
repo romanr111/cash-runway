@@ -16,7 +16,7 @@ struct WalletCategoryTests {
         #expect(kinds.contains(.card))
         #expect(kinds.contains(.account))
         #expect(kinds.contains(.other))
-        #expect(categories.filter(\.isSystem).count == 4)
+        #expect(categories.filter(\.isSystem).count == 5)
     }
 
     @Test func migrationMapsEachExistingWalletKindToBuiltInCategory() throws {

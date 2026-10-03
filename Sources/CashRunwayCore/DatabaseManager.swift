@@ -988,6 +988,25 @@ public final class DatabaseManager: @unchecked Sendable {
                 }
             }),
             ("v9_savings_wallets", { db in
+                let walletCategoriesExist = try Bool.fetchOne(db, sql: "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'wallet_categories'") != nil
+                if walletCategoriesExist {
+                    // Backfill the savings system category for databases that ran
+                    // v5 before `WalletKind.savings` existed; idempotent on fresh installs.
+                    for category in WalletCategory.allBuiltIn {
+                        try db.execute(
+                            sql: """
+                            INSERT INTO wallet_categories (id, name, kind, is_system, created_at, updated_at)
+                            VALUES (?, ?, ?, ?, ?, ?)
+                            ON CONFLICT(id) DO NOTHING
+                            """,
+                            arguments: [
+                                category.id.uuidString, category.name, category.kind.rawValue,
+                                true, Date(), Date(),
+                            ]
+                        )
+                    }
+                }
+
                 let walletsExist = try Bool.fetchOne(db, sql: "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'wallets'") != nil
                 guard walletsExist else { return }
                 let columnPresent = try Row.fetchAll(db, sql: "PRAGMA table_info(wallets)")
