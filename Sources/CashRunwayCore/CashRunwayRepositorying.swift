@@ -174,7 +174,7 @@ public extension DashboardRepositorying {
         if wallets.contains(where: { $0.id == selectedWalletID }) {
             return selectedWalletID
         }
-        return wallets.first(where: { !$0.isArchived && !$0.isExcludedFromSummary })?.id ?? wallets.first?.id
+        return wallets.first(where: { !$0.isArchived && !$0.isExcludedFromSummary })?.id
     }
 }
 
