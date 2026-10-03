@@ -87,7 +87,7 @@ struct DashboardView: View {
 
     private var addButton: some View {
         Button {
-            if let walletID = model.wallets.first?.id {
+            if let walletID = model.wallets.contains(where: { $0.id == model.selectedWalletID }) ? model.selectedWalletID : model.operationalWallets.first?.id {
                 draft = TransactionDraft(
                     kind: .expense,
                     walletID: walletID,
@@ -277,7 +277,7 @@ struct DashboardView: View {
                     .font(.system(size: 16, weight: .bold, design: .rounded))
                     .foregroundStyle(CashRunwayTheme.warning)
             } else {
-                Text(L10n.string("Savings Mixed"))
+                Text(L10n.string("Savings currencies differ"))
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(CashRunwayTheme.textMuted)
             }

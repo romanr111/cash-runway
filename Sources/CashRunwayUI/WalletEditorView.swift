@@ -10,6 +10,7 @@ struct WalletEditorView: View {
     @State private var showsDeleteConfirmation = false
     @State private var isNewCategorySheetPresented = false
     @State private var previousCategoryID: UUID?
+    @State private var hasAutoDefaultedExclusionFlag = false
 
     var body: some View {
         NavigationStack {
@@ -65,7 +66,7 @@ struct WalletEditorView: View {
                                     .font(.system(size: 13, weight: .medium))
                                     .foregroundStyle(CashRunwayTheme.textMuted)
                             }
-                            if wallet.kind == .savings {
+                            if wallet.kind == .savings || wallet.isExcludedFromSummary {
                                 Toggle(L10n.string("Separate Entity"), isOn: $wallet.isExcludedFromSummary)
                                     .accessibilityIdentifier(CashRunwayAccessibilityID.walletSeparateEntityToggle)
                                 Text(L10n.string("Savings Excluded Hint"))
@@ -155,11 +156,19 @@ struct WalletEditorView: View {
     }
 
     /// New savings wallets default to "separate entity"; switching a brand-new
-    /// wallet back to an operational kind resets the flag. Existing wallets keep
-    /// their persisted flag regardless of kind switches.
+    /// wallet back to an operational kind resets the flag. The default is applied
+    /// only on the FIRST transition into the savings kind so a manually-toggled-off
+    /// flag survives subsequent category picks. Existing wallets keep their
+    /// persisted flag regardless of kind switches.
     private func syncExclusionFlagForNewWallet(kind: WalletKind) {
         guard !model.wallets.contains(where: { $0.id == wallet.id }) else { return }
-        wallet.isExcludedFromSummary = (kind == .savings)
+        if kind == .savings, !hasAutoDefaultedExclusionFlag {
+            wallet.isExcludedFromSummary = true
+            hasAutoDefaultedExclusionFlag = true
+        } else if kind != .savings {
+            wallet.isExcludedFromSummary = false
+            hasAutoDefaultedExclusionFlag = false
+        }
     }
 
     private var canChangeCurrency: Bool {

@@ -34,23 +34,19 @@ public final class CashRunwayAppModel {
 
     /// Active, shared-aggregate wallets (excludes separate-entity savings wallets).
     public var operationalWallets: [Wallet] {
-        wallets.filter { !$0.isExcludedFromSummary }
+        SavingsSplitPresentation.operationalWallets(in: wallets)
     }
 
     /// Separate-entity savings wallets ("Окремі заощадження").
     public var savingsWallets: [Wallet] {
-        wallets.filter { $0.isExcludedFromSummary }
+        SavingsSplitPresentation.savingsWallets(in: wallets)
     }
 
     /// Sums the separate-entity savings wallets when they all share one currency;
     /// `nil` when mixed currencies make a single total unsafe or when there are no
     /// savings wallets at all (the UI hides the savings strip).
     public var savingsTotalMinor: Int64? {
-        let savings = savingsWallets
-        guard !savings.isEmpty else { return nil }
-        let currencyCodes = Set(savings.map(\.currencyCode))
-        guard currencyCodes.count == 1 else { return nil }
-        return savings.reduce(Int64.zero) { $0 + $1.currentBalanceMinor }
+        SavingsSplitPresentation.savingsTotalMinor(in: wallets)
     }
 
     /// The shared currency of the savings wallets, or `nil` for mixed currencies.
@@ -643,7 +639,14 @@ public final class CashRunwayAppModel {
     }
 
     public func deleteWallet(id: UUID) {
-        guard operationalWallets.count > 1 else {
+        let targetIsFlagged = wallets.first { $0.id == id }?.isExcludedFromSummary ?? false
+        // Deleting a separate-entity wallet keeps the operational set intact;
+        // deleting an operational wallet must leave at least one operational.
+        let remainingOperationalAfterDelete = targetIsFlagged
+            ? operationalWallets.count
+            : operationalWallets.count - 1
+        let targetExists = wallets.contains { $0.id == id }
+        guard targetExists, remainingOperationalAfterDelete >= 1 else {
             errorMessage = L10n.string("At least one active wallet must remain.")
             return
         }

@@ -92,7 +92,10 @@ struct WalletManagementView: View {
             }
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            if model.wallets.count > 1 {
+            let canDelete = wallet.isExcludedFromSummary
+                ? model.operationalWallets.count >= 1
+                : model.operationalWallets.count > 1
+            if canDelete {
                 Button(role: .destructive) {
                     model.deleteWallet(id: wallet.id)
                 } label: {
