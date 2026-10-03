@@ -841,7 +841,7 @@ public final class CashRunwayAppModel {
         if wallets.contains(where: { $0.id == selectedWalletID }) {
             return selectedWalletID
         }
-        return wallets.first { !$0.isArchived }?.id
+        return wallets.first { !$0.isArchived && !$0.isExcludedFromSummary }?.id
     }
 
     @discardableResult

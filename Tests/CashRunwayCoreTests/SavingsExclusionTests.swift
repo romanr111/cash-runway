@@ -197,6 +197,20 @@ struct SavingsExclusionTests {
         }
         #expect(uahOperational.aggregateCurrencyCode(selectedWalletID: nil) == .uah)
         #expect(walletsList.aggregateCurrencyCode(selectedWalletID: nil) == .uah)
+        #expect(walletsList.aggregateCurrencyCode(selectedWalletID: nil) != nil)
         #expect(walletsList.aggregateCurrencyCode(selectedWalletID: wallets.flaggedUSD.id) == .usd)
+    }
+
+    @Test func normalizedWalletIDForAggregatesSkipsFlaggedWallets() throws {
+        let (repository, wallets) = try seedStandardScenario()
+
+        let staleID = UUID()
+        let effectiveID = try #require(try repository.normalizedWalletIDForAggregates(selectedWalletID: staleID))
+        #expect(effectiveID == wallets.operationalA.id || effectiveID == wallets.operationalB.id)
+        #expect(effectiveID != wallets.flaggedUSD.id)
+
+        // An explicitly selected flagged wallet remains a valid selection.
+        let selectedFlagged = try repository.normalizedWalletIDForAggregates(selectedWalletID: wallets.flaggedUSD.id)
+        #expect(selectedFlagged == wallets.flaggedUSD.id)
     }
 }
