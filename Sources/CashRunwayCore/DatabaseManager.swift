@@ -987,6 +987,16 @@ public final class DatabaseManager: @unchecked Sendable {
                     table.uniqueKey(["source", "base_currency_code", "quote_currency_code", "effective_date"])
                 }
             }),
+            ("v9_savings_wallets", { db in
+                let walletsExist = try Bool.fetchOne(db, sql: "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'wallets'") != nil
+                guard walletsExist else { return }
+                let columnPresent = try Row.fetchAll(db, sql: "PRAGMA table_info(wallets)")
+                    .contains { ($0["name"] as String?) == "is_excluded_from_summary" }
+                guard !columnPresent else { return }
+                try db.alter(table: "wallets") { table in
+                    table.add(column: "is_excluded_from_summary", .boolean).notNull().defaults(to: false)
+                }
+            }),
         ]
     }
 
