@@ -704,7 +704,10 @@ extension CashRunwayRepository {
 
     public func deleteWallet(id: UUID) throws {
         let activeCount = try databaseManager.dbQueue.read { db in
-            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM wallets WHERE is_archived = 0") ?? 0
+            try Int.fetchOne(
+                db,
+                sql: "SELECT COUNT(*) FROM wallets WHERE \(try Self.operationalWalletScopePredicate(db:))"
+            ) ?? 0
         }
         guard activeCount > 1 else {
             throw CashRunwayError.validation(L10n.string("At least one active wallet must remain."))

@@ -643,7 +643,7 @@ public final class CashRunwayAppModel {
     }
 
     public func deleteWallet(id: UUID) {
-        guard wallets.count > 1 else {
+        guard operationalWallets.count > 1 else {
             errorMessage = L10n.string("At least one active wallet must remain.")
             return
         }
