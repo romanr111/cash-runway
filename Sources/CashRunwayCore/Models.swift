@@ -4,6 +4,7 @@ public enum WalletKind: String, CaseIterable, Codable, Sendable {
     case cash
     case card
     case account
+    case savings
     case other
 }
 
@@ -67,8 +68,17 @@ public struct WalletCategory: Identifiable, Codable, Hashable, Sendable {
         updatedAt: Date(timeIntervalSince1970: 0)
     )
 
+    public static let savings = WalletCategory(
+        id: UUID(uuidString: "22222222-2222-2222-2222-222222222226")!,
+        name: "walletKind.savings",
+        kind: .savings,
+        isSystem: true,
+        createdAt: Date(timeIntervalSince1970: 0),
+        updatedAt: Date(timeIntervalSince1970: 0)
+    )
+
     public static var allBuiltIn: [WalletCategory] {
-        [cash, card, account, other]
+        [cash, card, account, savings, other]
     }
 
     public static func builtIn(byID id: UUID) -> WalletCategory? {

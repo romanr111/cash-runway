@@ -129,7 +129,8 @@ extension CashRunwayRepository {
                                 WHEN 'cash' THEN 0
                                 WHEN 'card' THEN 1
                                 WHEN 'account' THEN 2
-                                ELSE 3
+                                WHEN 'savings' THEN 3
+                                ELSE 4
                             END
                         ELSE LOWER(name)
                     END
