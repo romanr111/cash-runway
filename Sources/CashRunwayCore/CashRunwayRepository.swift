@@ -609,8 +609,8 @@ extension CashRunwayRepository {
             if try walletTableHasCategoryID(db), try Self.tableHasColumn(db, table: "wallets", column: "currency_code") {
                 try db.execute(
                     sql: """
-                    INSERT INTO wallets (id, name, kind, category_id, color_hex, icon_name, starting_balance_minor, current_balance_minor, currency_code, is_archived, sort_order, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO wallets (id, name, kind, category_id, color_hex, icon_name, starting_balance_minor, current_balance_minor, currency_code, is_archived, is_excluded_from_summary, sort_order, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(id) DO UPDATE SET
                         name = excluded.name,
                         kind = excluded.kind,
@@ -621,13 +621,14 @@ extension CashRunwayRepository {
                         current_balance_minor = excluded.current_balance_minor,
                         currency_code = excluded.currency_code,
                         is_archived = excluded.is_archived,
+                        is_excluded_from_summary = excluded.is_excluded_from_summary,
                         sort_order = excluded.sort_order,
                         updated_at = excluded.updated_at
                     """,
                     arguments: [
                         wallet.id.uuidString, wallet.name, wallet.kind.rawValue, wallet.categoryID.uuidString,
                         wallet.colorHex, wallet.iconName,
-                        wallet.startingBalanceMinor, wallet.currentBalanceMinor, wallet.currencyCode.rawValue, wallet.isArchived, wallet.sortOrder,
+                        wallet.startingBalanceMinor, wallet.currentBalanceMinor, wallet.currencyCode.rawValue, wallet.isArchived, wallet.isExcludedFromSummary, wallet.sortOrder,
                         wallet.createdAt, wallet.updatedAt,
                     ]
                 )
