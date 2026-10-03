@@ -648,6 +648,6 @@ struct FullBackupTests {
 
         let restored = try #require(target.wallets().first { $0.id == savings.id })
         #expect(restored.isExcludedFromSummary == true)
-        #expect(target.walletCategories().contains { $0.kind == .savings })
+        #expect(try target.walletCategories().contains { $0.kind == .savings })
     }
 }
