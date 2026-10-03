@@ -1,12 +1,12 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "Savings Mixed": {
+    "Savings currencies differ" : {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Savings Mixed"
+            "value": "Savings currencies differ"
           }
         },
         "uk": {
@@ -17,6 +17,7 @@
         }
       }
     },
+
     "Savings Total": {
       "localizations": {
         "en": {

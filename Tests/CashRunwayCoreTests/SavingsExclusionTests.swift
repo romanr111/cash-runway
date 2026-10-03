@@ -111,7 +111,6 @@ struct SavingsExclusionTests {
             note: "Savings timeline transaction",
             source: .manual
         ))
-        
 
         let allWalletsTimeline = try repository.timelineSnapshot(monthKey: monthKey, walletID: nil)
         #expect(allWalletsTimeline.heroCashFlowMinor == 70_000)
@@ -130,21 +129,22 @@ struct SavingsExclusionTests {
     @Test func deleteGuardCountsOperationalOnly() throws {
         let (repository, wallets) = try seedStandardScenario()
 
-        // 3 seeded: 2 operational + 1 flagged. Deleting the flagged wallet is allowed
-        // while 2 operational wallets remain; then deleting an operational succeeds
-        // while one operational remains; the LAST operational is refused.
-        try repository.deleteWallet(id: wallets.flaggedUSD.id)
+        // 3 seeded: 2 operational + 1 flagged.
+        // 1. Flagged wallet is deletable whenever at least one operational remains —
+        //    even though the guard previously refused this when ops were counted pre-delete.
         try repository.deleteWallet(id: wallets.operationalA.id)
+        // 2. Now 1 operational + 1 flagged: deleting the FLAGGED wallet is allowed
+        //    (operational set unchanged), while deleting the LAST OPERATIONAL is refused.
         do {
             try repository.deleteWallet(id: wallets.operationalB.id)
             Issue.record("Expected deleting the last operational wallet to fail")
         } catch {
             // expected: at least one operational wallet must remain
         }
+        try repository.deleteWallet(id: wallets.flaggedUSD.id)
         let remaining = try repository.wallets()
-        #expect(!remaining.contains { $0.id == wallets.flaggedUSD.id })
-        #expect(!remaining.contains { $0.id == wallets.operationalA.id })
         #expect(remaining.contains { $0.id == wallets.operationalB.id })
+        #expect(!remaining.contains { $0.id == wallets.flaggedUSD.id })
     }
 
     @Test func overviewWealthExcludesSavings() throws {
@@ -200,5 +200,53 @@ struct SavingsExclusionTests {
         // An explicitly selected flagged wallet remains a valid selection.
         let selectedFlagged = try repository.normalizedWalletIDForAggregates(selectedWalletID: wallets.flaggedUSD.id)
         #expect(selectedFlagged == wallets.flaggedUSD.id)
+    }
+
+    @Test func overviewLabelsExcludeFlaggedWalletsInAllWalletsScope() throws {
+        let (repository, wallets) = try seedStandardScenario()
+        let monthKey = DateKeys.monthKey(for: .now)
+        let monthStart = DateKeys.startOfMonth(for: monthKey)
+        let occurredAt = monthStart.addingTimeInterval(3600)
+        let incomeCategory = try #require(try repository.categories(kind: .income).first)
+
+        let opsLabel = Label(id: UUID(), name: "Ops Label", colorHex: nil, createdAt: .now, updatedAt: .now)
+        let savingsLabel = Label(id: UUID(), name: "Savings Label", colorHex: nil, createdAt: .now, updatedAt: .now)
+        try repository.saveLabel(opsLabel)
+        try repository.saveLabel(savingsLabel)
+
+        try repository.saveTransaction(TransactionDraft(
+            kind: .income,
+            walletID: wallets.operationalA.id,
+            destinationWalletID: nil,
+            amountMinor: 90_000,
+            currencyCode: .uah,
+            occurredAt: occurredAt,
+            categoryID: incomeCategory.id,
+            labelIDs: [opsLabel.id],
+            merchant: "Salary",
+            note: "Operational income",
+            source: .manual
+        ))
+        try repository.saveTransaction(TransactionDraft(
+            kind: .income,
+            walletID: wallets.flaggedUSD.id,
+            destinationWalletID: nil,
+            amountMinor: 500_000,
+            currencyCode: .usd,
+            occurredAt: occurredAt,
+            categoryID: incomeCategory.id,
+            labelIDs: [savingsLabel.id],
+            merchant: "Investment Sale",
+            note: "Savings income",
+            source: .manual
+        ))
+
+        let allWalletsOverview = try repository.overviewSnapshot(monthKey: monthKey, walletID: nil)
+        let allLabelNames = allWalletsOverview.labels.map(\.name)
+        #expect(allLabelNames.contains("Ops Label"))
+        #expect(!allLabelNames.contains("Savings Label"))
+
+        let flaggedOverview = try repository.overviewSnapshot(monthKey: monthKey, walletID: wallets.flaggedUSD.id)
+        #expect(flaggedOverview.labels.map(\.name).contains("Savings Label"))
     }
 }
