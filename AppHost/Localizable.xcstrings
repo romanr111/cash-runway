@@ -1,6 +1,38 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Savings Mixed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Savings Mixed"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Різні валюти"
+          }
+        }
+      }
+    },
+    "Savings Total": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Savings Total"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Заощадження"
+          }
+        }
+      }
+    },
     "Savings Section": {
       "localizations": {
         "en": {

@@ -97,6 +97,7 @@ enum CashRunwayAccessibilityID {
     static let categoryManagementScreen = "categoryManagement.screen"
     static let walletManagementScreen = "walletManagement.screen"
     static let walletSeparateEntityToggle = "wallet.editor.separateEntityToggle"
+    static let savingsStrip = "dashboard.savingsStrip"
     static let labelManagementScreen = "labelManagement.screen"
     static let scheduledTransactionsScreen = "scheduledTransactions.screen"
     static let backupImportScreen = "backupImport.screen"

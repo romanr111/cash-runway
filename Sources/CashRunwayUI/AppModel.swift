@@ -41,6 +41,23 @@ public final class CashRunwayAppModel {
     public var savingsWallets: [Wallet] {
         wallets.filter { $0.isExcludedFromSummary }
     }
+
+    /// Sums the separate-entity savings wallets when they all share one currency;
+    /// `nil` when mixed currencies make a single total unsafe or when there are no
+    /// savings wallets at all (the UI hides the savings strip).
+    public var savingsTotalMinor: Int64? {
+        let savings = savingsWallets
+        guard !savings.isEmpty else { return nil }
+        let currencyCodes = Set(savings.map(\.currencyCode))
+        guard currencyCodes.count == 1 else { return nil }
+        return savings.reduce(Int64.zero) { $0 + $1.currentBalanceMinor }
+    }
+
+    /// The shared currency of the savings wallets, or `nil` for mixed currencies.
+    public var savingsCurrencyCode: CurrencyCode? {
+        let currencyCodes = Set(savingsWallets.map(\.currencyCode))
+        return currencyCodes.count == 1 ? currencyCodes.first : nil
+    }
     public var expenseCategories: [CashRunwayCategory] = []
     public var incomeCategories: [CashRunwayCategory] = []
     public var labels: [CashRunwayLabel] = []
