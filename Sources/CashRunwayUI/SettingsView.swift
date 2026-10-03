@@ -93,10 +93,15 @@ struct SettingsView: View {
                             }
                             .accessibilityIdentifier(CashRunwayAccessibilityID.settingsLanguageRow)
                             rowDivider
-                            moreRow(icon: "wallet.pass.fill", tint: "#60788A", title: "Manual Wallets", subtitle: L10n.walletCount(model.wallets.count)) {
+                            moreRow(icon: "wallet.pass.fill", tint: "#60788A", title: "Manual Wallets", subtitle: L10n.walletCount(model.wallets.filter { !$0.isExcludedFromSummary }.count)) {
                                 isWalletsPresented = true
                             }
                             .accessibilityIdentifier(CashRunwayAccessibilityID.settingsWalletsRow)
+                            rowDivider
+                            moreRow(icon: "chart.line.uptrend.xyaxis", tint: "#E99A31", title: "Savings Section", subtitle: L10n.walletCount(model.savingsWallets.count)) {
+                                isWalletsPresented = true
+                            }
+                            .accessibilityIdentifier(CashRunwayAccessibilityID.settingsSavingsRow)
                             rowDivider
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)

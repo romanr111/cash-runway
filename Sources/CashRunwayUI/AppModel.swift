@@ -31,6 +31,16 @@ public final class CashRunwayAppModel {
 
     public var wallets: [Wallet] = []
     public var walletCategories: [WalletCategory] = []
+
+    /// Active, shared-aggregate wallets (excludes separate-entity savings wallets).
+    public var operationalWallets: [Wallet] {
+        wallets.filter { !$0.isExcludedFromSummary }
+    }
+
+    /// Separate-entity savings wallets ("Окремі заощадження").
+    public var savingsWallets: [Wallet] {
+        wallets.filter { $0.isExcludedFromSummary }
+    }
     public var expenseCategories: [CashRunwayCategory] = []
     public var incomeCategories: [CashRunwayCategory] = []
     public var labels: [CashRunwayLabel] = []

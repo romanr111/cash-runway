@@ -79,6 +79,7 @@ enum CashRunwayAccessibilityID {
     static let settingsMainCurrencyRow = "settings.mainCurrency.row"
     static let settingsLanguageRow = "settings.language.row"
     static let settingsWalletsRow = "settings.wallets.row"
+    static let settingsSavingsRow = "settings.savings.row"
     static let settingsImportCSVRow = "settings.importCSV.row"
     static let settingsExportCSVRow = "settings.exportCSV.row"
     static let settingsImportBackupRow = "settings.importBackup.row"
