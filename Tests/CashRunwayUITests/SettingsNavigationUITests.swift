@@ -127,11 +127,11 @@ final class SettingsNavigationUITests: CashRunwayUITestCase {
     // lifetime .keepAlways so `xcrun xcresulttool export attachments` (CI step)
     // can pull the PNG files out of the .xcresult bundle.
 
-    /// Exports `image` as a named PNG attachment that survives result-bundle
-    /// pruning and is exported by the CI post-test step.
+    /// Exports a screenshot of `screen` as a named PNG attachment that survives
+    /// result-bundle pruning and is exported by the CI post-test step.
     @discardableResult
-    private func attachScreenshot(name: String, image: XCUIScreen) -> XCTAttachment {
-        let attachment = XCTAttachment(screenshot: image)
+    private func attachScreenshot(name: String, screen: XCUIScreen) -> XCTAttachment {
+        let attachment = XCTAttachment(screenshot: screen.screenshot())
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
@@ -196,7 +196,7 @@ final class SettingsNavigationUITests: CashRunwayUITestCase {
         prepareSharedApp()
         // The Timeline tab is shared-app root; settle animation before capture.
         XCTAssertTrue(app.buttons[CashRunwayUITestIdentifiers.transactionAddButton].waitForExistence(timeout: 3))
-        attachScreenshot(name: "pr124-dashboard", image: XCUIScreen.main)
+        attachScreenshot(name: "pr124-dashboard", screen: XCUIScreen.main)
         returnToRoot()
     }
 
@@ -206,7 +206,7 @@ final class SettingsNavigationUITests: CashRunwayUITestCase {
     func testPR124SettingsDataSectionScreenshot() throws {
         prepareSharedApp()
         _ = hittableRetrospectiveExportRow()
-        attachScreenshot(name: "pr124-settings-data-export-row", image: XCUIScreen.main)
+        attachScreenshot(name: "pr124-settings-data-export-row", screen: XCUIScreen.main)
         returnToRoot()
     }
 
@@ -215,7 +215,7 @@ final class SettingsNavigationUITests: CashRunwayUITestCase {
     func testPR124RetrospectiveFormatPickerScreenshot() throws {
         prepareSharedApp()
         _ = openRetrospectiveFormatPicker()
-        attachScreenshot(name: "pr124-format-picker", image: XCUIScreen.main)
+        attachScreenshot(name: "pr124-format-picker", screen: XCUIScreen.main)
         dismissFormatPicker()
         returnToRoot()
     }
