@@ -75,6 +75,24 @@ public final class CashRunwayRepository: CashRunwayRepositorying, @unchecked Sen
         walletsHasCategoryIDColumn = has
         return has
     }
+
+    /// Predicate identifying "operational" wallets for shared aggregates: active
+    /// and NOT flagged as a separate savings entity. The savings exclusion is
+    /// NULL-safe for pre-v9 databases once the column exists; partial-schema
+    /// databases (tests) are guarded by checking the column first.
+    static func operationalWalletScopePredicate(db: Database) throws -> String {
+        guard try tableHasColumn(db, table: "wallets", column: "is_excluded_from_summary") else {
+            return "is_archived = 0"
+        }
+        return "is_archived = 0 AND (is_excluded_from_summary = 0 OR is_excluded_from_summary IS NULL)"
+    }
+
+    /// Subquery selecting the operational wallet IDs for aggregate scoping.
+    /// Uses `operationalWalletScopePredicate(db:)`, so it is safe on
+    /// partial-schema databases where the v9 column does not exist yet.
+    static func operationalWalletScopeSubquery(db: Database) throws -> String {
+        "SELECT id FROM wallets WHERE \(try operationalWalletScopePredicate(db:))"
+    }
 }
 
 extension CashRunwayRepository {
@@ -911,13 +929,19 @@ extension CashRunwayRepository {
     public func dashboard(monthKey: Int, walletID: UUID? = nil) throws -> DashboardSnapshot {
         try databaseManager.dbQueue.read { db in
             try rejectMixedCurrencyAllWalletSnapshot(db, walletID: walletID)
-            let cashflowScope = Self.activeWalletScope(walletID)
-            let categoryScope = Self.activeWalletScope(walletID, column: "m.wallet_id")
+            let cashflowScope = try Self.activeWalletScope(db: db, walletID)
+            let categoryScope = try Self.activeWalletScope(db: db, walletID, column: "m.wallet_id")
             let totalBalanceMinor: Int64
             if let walletID {
                 totalBalanceMinor = try Int64.fetchOne(db, sql: "SELECT current_balance_minor FROM wallets WHERE id = ?", arguments: [walletID.uuidString]) ?? 0
             } else {
-                totalBalanceMinor = try Int64.fetchOne(db, sql: "SELECT COALESCE(SUM(current_balance_minor), 0) FROM wallets WHERE is_archived = 0") ?? 0
+                totalBalanceMinor = try Int64.fetchOne(
+                    db,
+                    sql: """
+                    SELECT COALESCE(SUM(current_balance_minor), 0) FROM wallets
+                    WHERE \(try Self.operationalWalletScopePredicate(db:))
+                    """
+                ) ?? 0
             }
 
             let monthCashflowRows = try Row.fetchAll(
@@ -1083,7 +1107,7 @@ extension CashRunwayRepository {
             walletScope = "AND wallet_id = ?"
             walletArguments = [walletID.uuidString]
         } else {
-            walletScope = "AND wallet_id IN (SELECT id FROM wallets WHERE is_archived = 0)"
+            walletScope = "AND wallet_id IN (\(try Self.operationalWalletScopeSubquery(db:)))"
             walletArguments = []
         }
         let row = try Row.fetchOne(
@@ -1111,7 +1135,7 @@ extension CashRunwayRepository {
             walletScope = "AND wallet_id = ?"
             walletArguments = [walletID.uuidString]
         } else {
-            walletScope = "AND wallet_id IN (SELECT id FROM wallets WHERE is_archived = 0)"
+            walletScope = "AND wallet_id IN (\(try Self.operationalWalletScopeSubquery(db:)))"
             walletArguments = []
         }
         let value = try Int64.fetchOne(
@@ -1205,24 +1229,27 @@ extension CashRunwayRepository {
     }
 
     /// SQL fragment + arguments restricting wallet-owned rows to the selected wallet,
-    /// or to all active (non-archived) wallets when `walletID` is nil
-    /// (All Wallets). Archived wallets hold historical aggregate rows that must not
-    /// leak into the All-Wallets scope the UI defines.
+    /// or to all operational wallets when `walletID` is nil (All Wallets) — active
+    /// wallets that are NOT flagged as a separate savings entity. Archived wallets
+    /// hold historical aggregate rows that must not leak into the All-Wallets scope
+    /// the UI defines; separate-entity savings wallets are excluded for the same
+    /// reason and stay reachable by selecting them explicitly.
     static func activeWalletScope(
+        db: Database,
         _ walletID: UUID?,
         column: String = "wallet_id"
-    ) -> (fragment: String, arguments: [any DatabaseValueConvertible]) {
+    ) throws -> (fragment: String, arguments: [any DatabaseValueConvertible]) {
         if let walletID {
             return ("\(column) = ?", [walletID.uuidString])
         }
-        return ("\(column) IN (SELECT id FROM wallets WHERE is_archived = 0)", [])
+        return ("\(column) IN (\(try operationalWalletScopeSubquery(db:)))", [])
     }
 
     private static func loadMonthlyBars(_ db: Database, monthKey: Int, walletID: UUID?) throws -> [TimelineBarPoint] {
         let months = Self.monthWindow(endingAt: monthKey, count: 6)
         var conditions = ["month_key BETWEEN ? AND ?"]
         var arguments: [any DatabaseValueConvertible] = [months.first ?? monthKey, months.last ?? monthKey]
-        let scope = Self.activeWalletScope(walletID)
+        let scope = try Self.activeWalletScope(db: db, walletID)
         conditions.append(scope.fragment)
         arguments.append(contentsOf: scope.arguments)
         let rows = try Row.fetchAll(
@@ -1262,7 +1289,7 @@ extension CashRunwayRepository {
         let endMonth = year * 100 + 12
         var conditions = ["month_key BETWEEN ? AND ?"]
         var arguments: [any DatabaseValueConvertible] = [startMonth, endMonth]
-        let scope = Self.activeWalletScope(walletID)
+        let scope = try Self.activeWalletScope(db: db, walletID)
         conditions.append(scope.fragment)
         arguments.append(contentsOf: scope.arguments)
         let rows = try Row.fetchAll(
@@ -1311,7 +1338,7 @@ extension CashRunwayRepository {
     }
 
     private static func loadAllMonthlyBars(_ db: Database, walletID: UUID?) throws -> [TimelineBarPoint] {
-        let scope = Self.activeWalletScope(walletID)
+        let scope = try Self.activeWalletScope(db: db, walletID)
         let whereClause = "WHERE \(scope.fragment)"
 
         let minMaxRow = try Row.fetchOne(db, sql: """
@@ -1369,7 +1396,7 @@ extension CashRunwayRepository {
     }
 
     private static func loadAllYearlyBars(_ db: Database, walletID: UUID?) throws -> [TimelineBarPoint] {
-        let scope = Self.activeWalletScope(walletID)
+        let scope = try Self.activeWalletScope(db: db, walletID)
         let whereClause = "WHERE \(scope.fragment)"
 
         let minMaxRow = try Row.fetchOne(db, sql: """
@@ -1463,8 +1490,8 @@ extension CashRunwayRepository {
     public func overviewSnapshot(monthKey: Int, walletID: UUID? = nil) throws -> OverviewSnapshot {
         try databaseManager.dbQueue.read { db in
             try rejectMixedCurrencyAllWalletSnapshot(db, walletID: walletID)
-            let cashflowScope = Self.activeWalletScope(walletID)
-            let categoryScope = Self.activeWalletScope(walletID, column: "m.wallet_id")
+            let cashflowScope = try Self.activeWalletScope(db: db, walletID)
+            let categoryScope = try Self.activeWalletScope(db: db, walletID, column: "m.wallet_id")
             let months = Self.monthWindow(endingAt: monthKey, count: 6)
             let cashflowRows = try Row.fetchAll(
                 db,
@@ -2766,7 +2793,10 @@ extension CashRunwayRepository {
         }
         let activeCurrencyCount = try Int.fetchOne(
             db,
-            sql: "SELECT COUNT(DISTINCT currency_code) FROM wallets WHERE is_archived = 0"
+            sql: """
+            SELECT COUNT(DISTINCT currency_code) FROM wallets
+            WHERE \(try Self.operationalWalletScopePredicate(db:))
+            """
         ) ?? 0
         guard activeCurrencyCount <= 1 else {
             throw CashRunwayError.validation(L10n.string("All-wallet totals require a single wallet currency until currency conversion is available."))

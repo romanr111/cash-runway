@@ -18,6 +18,7 @@
 - Shared aggregates that must skip flagged wallets:
   - All-wallet total: `CashRunwayRepository.swift:918` (`SUM(current_balance_minor) WHERE is_archived = 0`).
   - `activeWalletScope` (`:1209-1218`) → used by `dashboard`, monthly bars, `boundedSums` (`:1078`), `baselineExpense` (`:1099`), two inline scopes at `:1084`/`:1112`.
+- `activeWalletScope` (now `activeWalletScope(db:_:column:)`) → used by `dashboard`, overview, monthly/yearly bars, `listTransactions`; separate-entity savings wallets are excluded via `operationalWalletScopePredicate`/`operationalWalletScopeSubquery` (PRAGMA-guarded for partial-schema DBs).
   - `aggregateCurrencyCode(selectedWalletID:)` — `WalletCurrencyAggregation.swift:8-21` (guards mixed-currency All-Wallets mode).
   - `rejectMixedCurrencyAllWalletSnapshot` call sites: `:911`, `:1012`, `:1301`.
 - Balance recomputation: `AggregateMaintenance.recomputeWalletBalances` (`Persistence/Aggregates/AggregateMaintenance.swift:685`) and `mutateAggregate`'s per-wallet balance update (`:241`) are per-wallet — unaffected by exclusion.
