@@ -91,7 +91,7 @@ public final class CashRunwayRepository: CashRunwayRepositorying, @unchecked Sen
     /// Uses `operationalWalletScopePredicate(db:)`, so it is safe on
     /// partial-schema databases where the v9 column does not exist yet.
     static func operationalWalletScopeSubquery(db: Database) throws -> String {
-        "SELECT id FROM wallets WHERE \(try operationalWalletScopePredicate(db:))"
+        "SELECT id FROM wallets WHERE \(try operationalWalletScopePredicate(db: db))"
     }
 }
 
@@ -706,7 +706,7 @@ extension CashRunwayRepository {
         let activeCount = try databaseManager.dbQueue.read { db in
             try Int.fetchOne(
                 db,
-                sql: "SELECT COUNT(*) FROM wallets WHERE \(try Self.operationalWalletScopePredicate(db:))"
+                sql: "SELECT COUNT(*) FROM wallets WHERE \(try Self.operationalWalletScopePredicate(db: db))"
             ) ?? 0
         }
         guard activeCount > 1 else {
@@ -942,7 +942,7 @@ extension CashRunwayRepository {
                     db,
                     sql: """
                     SELECT COALESCE(SUM(current_balance_minor), 0) FROM wallets
-                    WHERE \(try Self.operationalWalletScopePredicate(db:))
+                    WHERE \(try Self.operationalWalletScopePredicate(db: db))
                     """
                 ) ?? 0
             }
@@ -1110,7 +1110,7 @@ extension CashRunwayRepository {
             walletScope = "AND wallet_id = ?"
             walletArguments = [walletID.uuidString]
         } else {
-            walletScope = "AND wallet_id IN (\(try Self.operationalWalletScopeSubquery(db:)))"
+            walletScope = "AND wallet_id IN (\(try Self.operationalWalletScopeSubquery(db: db)))"
             walletArguments = []
         }
         let row = try Row.fetchOne(
@@ -1138,7 +1138,7 @@ extension CashRunwayRepository {
             walletScope = "AND wallet_id = ?"
             walletArguments = [walletID.uuidString]
         } else {
-            walletScope = "AND wallet_id IN (\(try Self.operationalWalletScopeSubquery(db:)))"
+            walletScope = "AND wallet_id IN (\(try Self.operationalWalletScopeSubquery(db: db)))"
             walletArguments = []
         }
         let value = try Int64.fetchOne(
@@ -1245,7 +1245,7 @@ extension CashRunwayRepository {
         if let walletID {
             return ("\(column) = ?", [walletID.uuidString])
         }
-        return ("\(column) IN (\(try operationalWalletScopeSubquery(db:)))", [])
+        return ("\(column) IN (\(try operationalWalletScopeSubquery(db: db)))", [])
     }
 
     private static func loadMonthlyBars(_ db: Database, monthKey: Int, walletID: UUID?) throws -> [TimelineBarPoint] {
@@ -2798,7 +2798,7 @@ extension CashRunwayRepository {
             db,
             sql: """
             SELECT COUNT(DISTINCT currency_code) FROM wallets
-            WHERE \(try Self.operationalWalletScopePredicate(db:))
+            WHERE \(try Self.operationalWalletScopePredicate(db: db))
             """
         ) ?? 0
         guard activeCurrencyCount <= 1 else {

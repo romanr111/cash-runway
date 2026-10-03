@@ -446,7 +446,7 @@ extension CashRunwayRepository {
             db,
             sql: """
             SELECT COALESCE(SUM(starting_balance_minor), 0) FROM wallets
-            WHERE \(try CashRunwayRepository.operationalWalletScopePredicate(db:))
+            WHERE \(try CashRunwayRepository.operationalWalletScopePredicate(db: db))
             """
         ) ?? 0
         let netDelta = try Int64.fetchOne(
@@ -456,7 +456,7 @@ extension CashRunwayRepository {
             FROM transactions t
             WHERE t.is_deleted = 0
               AND t.occurred_at <= ?
-              AND t.wallet_id IN (\(try CashRunwayRepository.operationalWalletScopeSubquery(db:)))
+              AND t.wallet_id IN (\(try CashRunwayRepository.operationalWalletScopeSubquery(db: db)))
             """,
             arguments: [monthEnd]
         ) ?? 0
@@ -483,7 +483,7 @@ extension CashRunwayRepository {
                 db,
                 sql: """
                 SELECT COALESCE(SUM(starting_balance_minor), 0) FROM wallets
-                WHERE \(try CashRunwayRepository.operationalWalletScopePredicate(db:))
+                WHERE \(try CashRunwayRepository.operationalWalletScopePredicate(db: db))
                 """
             ) ?? 0
         }
