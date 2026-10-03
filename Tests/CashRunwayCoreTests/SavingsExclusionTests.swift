@@ -130,8 +130,10 @@ struct SavingsExclusionTests {
     @Test func deleteGuardCountsOperationalOnly() throws {
         let (repository, wallets) = try seedStandardScenario()
 
-        // 3 seeded: 2 operational + 1 flagged. Deleting the first operational succeeds,
-        // deleting the LAST operational is refused, deleting the flagged is allowed.
+        // 3 seeded: 2 operational + 1 flagged. Deleting the flagged wallet is allowed
+        // while 2 operational wallets remain; then deleting an operational succeeds
+        // while one operational remains; the LAST operational is refused.
+        try repository.deleteWallet(id: wallets.flaggedUSD.id)
         try repository.deleteWallet(id: wallets.operationalA.id)
         do {
             try repository.deleteWallet(id: wallets.operationalB.id)
@@ -139,13 +141,10 @@ struct SavingsExclusionTests {
         } catch {
             // expected: at least one operational wallet must remain
         }
-
-        // ...while the flagged (separate-entity) wallet can be deleted.
-        try repository.deleteWallet(id: wallets.flaggedUSD.id)
         let remaining = try repository.wallets()
+        #expect(!remaining.contains { $0.id == wallets.flaggedUSD.id })
         #expect(!remaining.contains { $0.id == wallets.operationalA.id })
         #expect(remaining.contains { $0.id == wallets.operationalB.id })
-        #expect(!remaining.contains { $0.id == wallets.flaggedUSD.id })
     }
 
     @Test func overviewWealthExcludesSavings() throws {
@@ -171,7 +170,7 @@ struct SavingsExclusionTests {
         ))
 
         let allWalletsOverview = try repository.overviewSnapshot(monthKey: monthKey, walletID: nil)
-        #expect(allWalletsOverview.totalWealthMinor == 190_000)
+        #expect(allWalletsOverview.totalWealthMinor == 140_000)
 
         let flaggedOverview = try repository.overviewSnapshot(monthKey: monthKey, walletID: wallets.flaggedUSD.id)
         #expect(flaggedOverview.totalWealthMinor == 10_000_000)

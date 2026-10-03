@@ -16,8 +16,8 @@ struct WalletExclusionFlagTests {
             "currentBalanceMinor": 10000,
             "isArchived": false,
             "sortOrder": 0,
-            "createdAt": "2026-01-01T00:00:00Z",
-            "updatedAt": "2026-01-01T00:00:00Z"
+            "createdAt": 788918400.0,
+            "updatedAt": 788918400.0
         }
         """
         let decoded = try JSONDecoder().decode(BackupWallet.self, from: Data(json.utf8))
@@ -36,8 +36,8 @@ struct WalletExclusionFlagTests {
             "currentBalanceMinor": 10000,
             "isArchived": false,
             "sortOrder": 0,
-            "createdAt": "2026-01-01T00:00:00Z",
-            "updatedAt": "2026-01-01T00:00:00Z"
+            "createdAt": 788918400.0,
+            "updatedAt": 788918400.0
         }
         """
         let decoded = try JSONDecoder().decode(BackupWallet.self, from: Data(json.utf8))
