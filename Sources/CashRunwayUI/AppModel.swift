@@ -780,6 +780,13 @@ public final class CashRunwayAppModel {
         try await backgroundWork.exportCSV(query: query)
     }
 
+    /// Issue #123: builds the retrospective CSV/XLSX file from the STORED
+    /// snapshots (no rate fetches, no recompute) and returns a protected temp
+    /// file URL for the share sheet.
+    public func exportMonthlyRetrospective(format: MonthlyRetrospectiveExportFormat) async throws -> URL {
+        try await backgroundWork.exportMonthlyRetrospective(format: format)
+    }
+
     public func handleForegroundResume() {
         // LEGACY_DISABLED_APP_LOCK:
         // guard !isLocked else { return }
@@ -1070,6 +1077,31 @@ private actor BackgroundWork {
 
     func exportCSV(query: TransactionQuery) throws -> String {
         try csvService.exportCSV(query: query)
+    }
+
+    /// Issue #123: assemble the retrospective export file off the main actor.
+    /// Renders the persisted snapshot rows only — never fetches rates or
+    /// recomputes conversions (store-once data is authoritative).
+    func exportMonthlyRetrospective(format: MonthlyRetrospectiveExportFormat) throws -> URL {
+        let snapshots = try repository.allMonthlyUSDSnapshots()
+        let rows = try MonthlyRetrospectiveExport.rows(from: snapshots)
+        guard let firstMonth = rows.first?.month, let lastMonth = rows.last?.month else {
+            throw MonthlyRetrospectiveExportError.noData
+        }
+        let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+            ExportFile.name(from: firstMonth, to: lastMonth, format: format)
+        )
+        switch format {
+        case .csv:
+            let text = MonthlyRetrospectiveExport.csv(rows: rows)
+            try text.write(to: fileURL, atomically: true, encoding: .utf8)
+        case .xlsx:
+            let csvRows = [MonthlyRetrospectiveExport.Row.header] + rows.map { $0.cells }
+            let data = try MonthlyRetrospectiveXLSX.export(csvRows: csvRows)
+            try data.write(to: fileURL, options: .atomic)
+        }
+        FileProtectionService().protect(fileURL)
+        return fileURL
     }
 }
 
