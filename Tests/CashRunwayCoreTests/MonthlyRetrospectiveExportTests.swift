@@ -185,6 +185,26 @@ struct MonthlyRetrospectiveExportTests {
         #expect(rows[0].rate == nil)
     }
 
+    /// Rows in one (month, currency) group converted to DIFFERENT base
+    /// currencies (a reporting-currency switch, e.g. via a restored backup)
+    /// must not be summed — same guard as `MonthAggregate.sumBase`; a mixed
+    /// USD/EUR base sum would be a meaningless number. Native sums are
+    /// unaffected because they share the wallet currency.
+    @Test func mixedBaseCurrenciesRenderGroupUnconverted() throws {
+        let rows = try MonthlyRetrospectiveExport.rows(from: [
+            snapshot(monthKey: 202606, currency: .uah, income: 1_000, expense: 0,
+                     baseCurrency: .usd, incomeBase: 24, expenseBase: 0),
+            snapshot(monthKey: 202606, currency: .uah, income: 2_000, expense: 0,
+                     baseCurrency: .eur, incomeBase: 18, expenseBase: 0),
+        ])
+        #expect(rows.count == 1)
+        #expect(rows[0].incomeUSD == nil)
+        #expect(rows[0].expensesUSD == nil)
+        #expect(rows[0].savedUSD == nil)
+        #expect(rows[0].rate == nil)
+        #expect(rows[0].income == "30.00") // native totals still aggregate
+    }
+
     @Test func mixedCurrenciesProduceSeparateRows() throws {
         let rows = try MonthlyRetrospectiveExport.rows(from: [
             snapshot(monthKey: 202606, currency: .uah, income: 1_000, expense: 0),

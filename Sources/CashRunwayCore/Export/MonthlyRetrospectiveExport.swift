@@ -83,9 +83,9 @@ public enum MonthlyRetrospectiveExport {
                 // A group with ANY unconverted wallet renders as unconverted —
                 // a partial USD sum would read as a misleadingly small total
                 // (same rule as `MonthlyUSDSnapshot.MonthAggregate.sumBase`).
-                let incomeUSD = sumBase(group.map { $0.incomeBaseMinor })
-                let expenseUSD = sumBase(group.map { $0.expenseBaseMinor })
-                let savedUSD = sumBase(group.map { $0.savedBaseMinor })
+                let incomeUSD = sumBase(group, keyPath: \.incomeBaseMinor)
+                let expenseUSD = sumBase(group, keyPath: \.expenseBaseMinor)
+                let savedUSD = sumBase(group, keyPath: \.savedBaseMinor)
                 let converted = incomeUSD != nil
                 return Row(
                     month: monthString(key.monthKey),
@@ -144,9 +144,19 @@ public enum MonthlyRetrospectiveExport {
 
     /// Partial conversions (some wallets converted, some without a rate) would
     /// render a misleadingly small USD total; treated as unconverted (`nil`).
-    static func sumBase(_ values: [Int64?]) -> Int64? {
-        guard !values.isEmpty, values.allSatisfy({ $0 != nil }) else { return nil }
-        return values.compactMap { $0 }.reduce(0, +)
+    /// Rows in one group converted to DIFFERENT base currencies (a reporting-
+    /// currency switch, e.g. via a restored backup) must not be summed either —
+    /// same guard as `MonthlyUSDSnapshot.MonthAggregate.sumBase`.
+    static func sumBase(
+        _ rows: [MonthlyUSDSnapshot],
+        keyPath: KeyPath<MonthlyUSDSnapshot, Int64?>
+    ) -> Int64? {
+        guard
+            !rows.isEmpty,
+            Set(rows.map(\.baseCurrencyCode)).count == 1,
+            rows.allSatisfy({ $0[keyPath: keyPath] != nil })
+        else { return nil }
+        return rows.compactMap { $0[keyPath: keyPath] }.reduce(0, +)
     }
 
     /// Quoted CSV field; quotes doubled per RFC-4180. Formula injection (OWASP
