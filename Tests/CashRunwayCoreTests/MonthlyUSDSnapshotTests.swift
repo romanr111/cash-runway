@@ -337,6 +337,67 @@ struct MonthlyUSDSnapshotTests {
         #expect(stored.contains { $0.monthKey == 202606 })
     }
 
+    // MARK: - Aggregate scopes
+
+    @Test func walletScopedAggregateMatchesTheFilter() async throws {
+        let repository = try makeRepository()
+        let service = try makeService(repository, provider: CountingRateProvider(rate: nil))
+        let cash = try makeWallet(repository, currencyCode: .uah)
+        let bank = try makeWallet(repository, currencyCode: .uah)
+        try seedCashflow(repository, walletID: cash.id, monthKey: 202606, incomeMinor: 80_000, expenseMinor: 0)
+        try seedCashflow(repository, walletID: bank.id, monthKey: 202606, incomeMinor: 20_000, expenseMinor: 0)
+        try repository.saveExchangeRates([
+            ExchangeRate(sourceCurrencyCode: .usd, targetCurrencyCode: .uah, rateDecimal: "50.00", effectiveDate: junEnd, source: "nbu-official"),
+        ])
+        _ = try await service.refreshSnapshots(monthKeys: [202606], now: junEnd)
+
+        // The wallet filter must aggregate ONLY that wallet's rows so the summary
+        // card's USD lines share the scope of the wallet-filtered native figures.
+        let cashOnly = try #require(try repository.monthlyUSDMonthAggregates(walletID: cash.id).first)
+        #expect(cashOnly.monthKey == 202606)
+        #expect(cashOnly.incomeMinor == 80_000)
+        #expect(cashOnly.expenseMinor == 0)
+        // 80_000.00 UAH / 50.00 = 1_600 USD minor.
+        #expect(cashOnly.savedBaseMinor == 1_600)
+
+        let bankOnly = try #require(try repository.monthlyUSDMonthAggregates(walletID: bank.id).first)
+        #expect(bankOnly.incomeMinor == 20_000)
+        #expect(bankOnly.savedBaseMinor == 400)
+
+        // The nil scope stays the all-wallet aggregate.
+        let all = try #require(try repository.monthlyUSDMonthAggregates(walletID: nil).first)
+        #expect(all.incomeMinor == 100_000)
+    }
+
+    @Test func mixedBaseCurrencyMonthAggregatesAsUnconverted() async throws {
+        let repository = try makeRepository()
+        let service = try makeService(repository, provider: CountingRateProvider(rate: nil))
+        let uahWallet = try makeWallet(repository, currencyCode: .uah)
+        let usdWallet = try makeWallet(repository, currencyCode: .usd)
+        try seedCashflow(repository, walletID: uahWallet.id, monthKey: 202606, incomeMinor: 10_000, expenseMinor: 0)
+        try seedCashflow(repository, walletID: usdWallet.id, monthKey: 202606, incomeMinor: 0, expenseMinor: 500)
+        try repository.saveExchangeRates([
+            ExchangeRate(sourceCurrencyCode: .usd, targetCurrencyCode: .uah, rateDecimal: "41.25", effectiveDate: junEnd, source: "nbu-official"),
+        ])
+        _ = try await service.refreshSnapshots(monthKeys: [202606], now: junEnd)
+
+        // A reporting-currency switch (e.g. via a restored backup) can leave a
+        // month holding rows converted to different base currencies. Summing those
+        // minor units into one total would corrupt the USD figure; the aggregate
+        // must read as unconverted instead.
+        try await repository.databaseManager.dbQueue.write { db in
+            try db.execute(
+                sql: "UPDATE monthly_usd_snapshot SET base_currency_code = 'EUR' WHERE wallet_id = ?",
+                arguments: [usdWallet.id.uuidString]
+            )
+        }
+
+        let june = try #require(try repository.monthlyUSDMonthAggregates().first { $0.monthKey == 202606 })
+        #expect(june.incomeBaseMinor == nil)
+        #expect(june.expenseBaseMinor == nil)
+        #expect(june.savedBaseMinor == nil)
+    }
+
     // MARK: - wallet_id hygiene across insert + rewrite passes
 
     @Test func mixedWalletPassKeepsEachSnapshotWalletIDCorrect() async throws {

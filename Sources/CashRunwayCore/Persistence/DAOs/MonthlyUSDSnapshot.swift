@@ -123,9 +123,9 @@ public struct MonthlyUSDSnapshot: Codable, Hashable, Sendable, FetchableRecord, 
             self.incomeMinor = rows.reduce(0) { $0 + $1.incomeMinor }
             self.expenseMinor = rows.reduce(0) { $0 + $1.expenseMinor }
             self.savedMinor = rows.reduce(0) { $0 + $1.savedMinor }
-            self.incomeBaseMinor = Self.sumBase(rows.map { $0.incomeBaseMinor })
-            self.expenseBaseMinor = Self.sumBase(rows.map { $0.expenseBaseMinor })
-            self.savedBaseMinor = Self.sumBase(rows.map { $0.savedBaseMinor })
+            self.incomeBaseMinor = Self.sumBase(rows, keyPath: \.incomeBaseMinor)
+            self.expenseBaseMinor = Self.sumBase(rows, keyPath: \.expenseBaseMinor)
+            self.savedBaseMinor = Self.sumBase(rows, keyPath: \.savedBaseMinor)
             self.rateDecimal = rows.first?.rateDecimal
             self.rateEffectiveDate = rows.first?.rateEffectiveDate
             self.rateSource = rows.first?.rateSource
@@ -134,9 +134,20 @@ public struct MonthlyUSDSnapshot: Codable, Hashable, Sendable, FetchableRecord, 
 
         /// Partial conversions (some wallets converted, some without a rate)
         /// would render a misleadingly small USD total; treat as unconverted.
-        private static func sumBase(_ values: [Int64?]) -> Int64? {
-            guard !values.isEmpty, values.allSatisfy({ $0 != nil }) else { return nil }
-            return values.compactMap { $0 }.reduce(0, +)
+        /// Rows converted to DIFFERENT base currencies must not be summed either
+        /// (a reporting-currency switch, e.g. via a restored backup, can leave a
+        /// month holding both); the aggregate reads as unconverted and the full
+        /// refresh pass rewrites every row to the current base currency.
+        private static func sumBase(
+            _ rows: [MonthlyUSDSnapshot],
+            keyPath: KeyPath<MonthlyUSDSnapshot, Int64?>
+        ) -> Int64? {
+            guard
+                !rows.isEmpty,
+                Set(rows.map(\.baseCurrencyCode)).count == 1,
+                rows.allSatisfy({ $0[keyPath: keyPath] != nil })
+            else { return nil }
+            return rows.compactMap { $0[keyPath: keyPath] }.reduce(0, +)
         }
     }
 }
