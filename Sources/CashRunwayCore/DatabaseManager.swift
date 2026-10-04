@@ -987,7 +987,41 @@ public final class DatabaseManager: @unchecked Sendable {
                     table.uniqueKey(["source", "base_currency_code", "quote_currency_code", "effective_date"])
                 }
             }),
+            ("v9_savings_wallets", { db in
+                try applySavingsWalletsMigration(db)
+            }),
         ]
+    }
+
+    /// v9 body, extracted out of `allMigrations()` for lint complexity.
+    private static func applySavingsWalletsMigration(_ db: Database) throws {
+        let walletCategoriesExist = try Bool.fetchOne(db, sql: "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'wallet_categories'") != nil
+        if walletCategoriesExist {
+            // Backfill the savings system category for databases that ran
+            // v5 before `WalletKind.savings` existed; idempotent on fresh installs.
+            for category in WalletCategory.allBuiltIn {
+                try db.execute(
+                    sql: """
+                    INSERT INTO wallet_categories (id, name, kind, is_system, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(id) DO NOTHING
+                    """,
+                    arguments: [
+                        category.id.uuidString, category.name, category.kind.rawValue,
+                        true, Date(timeIntervalSince1970: 0), Date(timeIntervalSince1970: 0),
+                    ]
+                )
+            }
+        }
+
+        let walletsExist = try Bool.fetchOne(db, sql: "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'wallets'") != nil
+        guard walletsExist else { return }
+        let columnPresent = try Row.fetchAll(db, sql: "PRAGMA table_info(wallets)")
+            .contains { ($0["name"] as String?) == "is_excluded_from_summary" }
+        guard !columnPresent else { return }
+        try db.alter(table: "wallets") { table in
+            table.add(column: "is_excluded_from_summary", .boolean).notNull().defaults(to: false)
+        }
     }
 
     private static func makeMigrator() -> DatabaseMigrator {

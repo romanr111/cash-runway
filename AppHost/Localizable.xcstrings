@@ -1,6 +1,103 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Savings currencies differ" : {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Savings currencies differ"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Різні валюти"
+          }
+        }
+      }
+    },
+    "Savings Total": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Savings Total"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Заощадження"
+          }
+        }
+      }
+    },
+    "Savings Section": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Savings Section"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Заощадження та інвестиції"
+          }
+        }
+      }
+    },
+    "Savings Excluded Hint": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Savings Excluded Hint"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не враховується в загальній сумі та даних «Усі гаманці»."
+          }
+        }
+      }
+    },
+    "Separate Entity": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Separate Entity"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Окрема сутність (не враховувати в підсумках)"
+          }
+        }
+      }
+    },
+    "walletKind.savings" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Savings"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Заощадження"
+          }
+        }
+      }
+    },
     "·" : {
       "localizations" : {
         "en" : {

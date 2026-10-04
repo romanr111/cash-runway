@@ -31,6 +31,29 @@ public final class CashRunwayAppModel {
 
     public var wallets: [Wallet] = []
     public var walletCategories: [WalletCategory] = []
+
+    /// Active, shared-aggregate wallets (excludes separate-entity savings wallets).
+    public var operationalWallets: [Wallet] {
+        SavingsSplitPresentation.operationalWallets(in: wallets)
+    }
+
+    /// Separate-entity savings wallets ("Окремі заощадження").
+    public var savingsWallets: [Wallet] {
+        SavingsSplitPresentation.savingsWallets(in: wallets)
+    }
+
+    /// Sums the separate-entity savings wallets when they all share one currency;
+    /// `nil` when mixed currencies make a single total unsafe or when there are no
+    /// savings wallets at all (the UI hides the savings strip).
+    public var savingsTotalMinor: Int64? {
+        SavingsSplitPresentation.savingsTotalMinor(in: wallets)
+    }
+
+    /// The shared currency of the savings wallets, or `nil` for mixed currencies.
+    public var savingsCurrencyCode: CurrencyCode? {
+        let currencyCodes = Set(savingsWallets.map(\.currencyCode))
+        return currencyCodes.count == 1 ? currencyCodes.first : nil
+    }
     public var expenseCategories: [CashRunwayCategory] = []
     public var incomeCategories: [CashRunwayCategory] = []
     public var labels: [CashRunwayLabel] = []
@@ -616,7 +639,14 @@ public final class CashRunwayAppModel {
     }
 
     public func deleteWallet(id: UUID) {
-        guard wallets.count > 1 else {
+        let targetIsFlagged = wallets.first { $0.id == id }?.isExcludedFromSummary ?? false
+        // Deleting a separate-entity wallet keeps the operational set intact;
+        // deleting an operational wallet must leave at least one operational.
+        let remainingOperationalAfterDelete = targetIsFlagged
+            ? operationalWallets.count
+            : operationalWallets.count - 1
+        let targetExists = wallets.contains { $0.id == id }
+        guard targetExists, remainingOperationalAfterDelete >= 1 else {
             errorMessage = L10n.string("At least one active wallet must remain.")
             return
         }
@@ -841,7 +871,7 @@ public final class CashRunwayAppModel {
         if wallets.contains(where: { $0.id == selectedWalletID }) {
             return selectedWalletID
         }
-        return wallets.first { !$0.isArchived }?.id
+        return wallets.first { !$0.isArchived && !$0.isExcludedFromSummary }?.id
     }
 
     @discardableResult

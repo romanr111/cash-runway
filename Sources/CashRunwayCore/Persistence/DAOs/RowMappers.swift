@@ -11,6 +11,9 @@ extension CashRunwayRepository {
         let kind: WalletKind = WalletKind(rawValue: row["kind"]) ?? .other
         let categoryID = (row["category_id"] as String?).flatMap(UUID.init(uuidString:))
             ?? WalletCategory.builtIn(byKind: kind).id
+        let isExcludedFromSummary = row.hasColumn("is_excluded_from_summary")
+            ? ((row["is_excluded_from_summary"] as Bool?) ?? false)
+            : false
         return Wallet(
             id: UUID(uuidString: row["id"])!,
             name: row["name"],
@@ -22,6 +25,7 @@ extension CashRunwayRepository {
             currentBalanceMinor: row["current_balance_minor"],
             currencyCode: try rowCurrencyCode(row),
             isArchived: row["is_archived"],
+            isExcludedFromSummary: isExcludedFromSummary,
             sortOrder: row["sort_order"],
             createdAt: row["created_at"],
             updatedAt: row["updated_at"]
@@ -42,6 +46,9 @@ extension CashRunwayRepository {
     static func backupWallet(_ row: Row) throws -> BackupWallet {
         let kind: WalletKind = WalletKind(rawValue: row["kind"]) ?? .other
         let categoryID = (row["category_id"] as String?).flatMap(UUID.init(uuidString:))
+        let isExcludedFromSummary = row.hasColumn("is_excluded_from_summary")
+            ? ((row["is_excluded_from_summary"] as Bool?) ?? false)
+            : false
         return BackupWallet(
             id: UUID(uuidString: row["id"])!,
             name: row["name"],
@@ -53,6 +60,7 @@ extension CashRunwayRepository {
             currentBalanceMinor: row["current_balance_minor"],
             currencyCode: try rowCurrencyCode(row),
             isArchived: row["is_archived"],
+            isExcludedFromSummary: isExcludedFromSummary,
             sortOrder: row["sort_order"],
             createdAt: row["created_at"],
             updatedAt: row["updated_at"]

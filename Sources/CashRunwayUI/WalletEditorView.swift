@@ -10,6 +10,7 @@ struct WalletEditorView: View {
     @State private var showsDeleteConfirmation = false
     @State private var isNewCategorySheetPresented = false
     @State private var previousCategoryID: UUID?
+    @State private var hasAutoDefaultedExclusionFlag = false
 
     var body: some View {
         NavigationStack {
@@ -51,6 +52,7 @@ struct WalletEditorView: View {
                                     isNewCategorySheetPresented = true
                                 } else if let category = model.walletCategories.first(where: { $0.id == newValue }) {
                                     wallet.kind = category.kind
+                                    syncExclusionFlagForNewWallet(kind: category.kind)
                                 }
                             }
                             Picker(L10n.string("Currency"), selection: $wallet.currencyCode) {
@@ -63,6 +65,14 @@ struct WalletEditorView: View {
                                 Text(L10n.string("Currency cannot be changed after ledger or bank data exists."))
                                     .font(.system(size: 13, weight: .medium))
                                     .foregroundStyle(CashRunwayTheme.textMuted)
+                            }
+                            if wallet.kind == .savings || wallet.isExcludedFromSummary {
+                                Toggle(L10n.string("Separate Entity"), isOn: $wallet.isExcludedFromSummary)
+                                    .accessibilityIdentifier(CashRunwayAccessibilityID.walletSeparateEntityToggle)
+                                Text(L10n.string("Savings Excluded Hint"))
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundStyle(CashRunwayTheme.textMuted)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
                             TextField(L10n.string("Starting Balance"), text: $balanceText)
                                 .keyboardType(.decimalPad)
@@ -143,6 +153,22 @@ struct WalletEditorView: View {
     private var walletCategoryDisplayName: String {
         model.walletCategories.first { $0.id == wallet.categoryID }?.displayName
             ?? L10n.walletKind(wallet.kind)
+    }
+
+    /// New savings wallets default to "separate entity"; switching a brand-new
+    /// wallet back to an operational kind resets the flag. The default is applied
+    /// only on the FIRST transition into the savings kind so a manually-toggled-off
+    /// flag survives subsequent category picks. Existing wallets keep their
+    /// persisted flag regardless of kind switches.
+    private func syncExclusionFlagForNewWallet(kind: WalletKind) {
+        guard !model.wallets.contains(where: { $0.id == wallet.id }) else { return }
+        if kind == .savings, !hasAutoDefaultedExclusionFlag {
+            wallet.isExcludedFromSummary = true
+            hasAutoDefaultedExclusionFlag = true
+        } else if kind != .savings {
+            wallet.isExcludedFromSummary = false
+            hasAutoDefaultedExclusionFlag = false
+        }
     }
 
     private var canChangeCurrency: Bool {

@@ -16,7 +16,7 @@ struct WalletCategoryTests {
         #expect(kinds.contains(.card))
         #expect(kinds.contains(.account))
         #expect(kinds.contains(.other))
-        #expect(categories.filter(\.isSystem).count == 4)
+        #expect(categories.filter(\.isSystem).count == 5)
     }
 
     @Test func migrationMapsEachExistingWalletKindToBuiltInCategory() throws {
@@ -358,5 +358,22 @@ struct WalletCategoryTests {
                 Issue.record("Expected brokenReference error, got \(error).")
             }
         }
+    }
+
+    @Test func savingsKindHasBuiltInSystemCategory() throws {
+        let savings = WalletCategory.builtIn(byKind: .savings)
+
+        #expect(savings.isSystem)
+        #expect(savings.id == UUID(uuidString: "22222222-2222-2222-2222-222222222226"))
+        #expect(savings.kind == .savings)
+        #expect(savings.createdAt == Date(timeIntervalSince1970: 0))
+        #expect(savings.updatedAt == Date(timeIntervalSince1970: 0))
+    }
+
+    @Test func allBuiltInWalletCategoriesContainSavings() throws {
+        let categories = WalletCategory.allBuiltIn
+
+        #expect(categories.count == 5)
+        #expect(categories.contains(where: { $0.kind == .savings }))
     }
 }

@@ -38,6 +38,9 @@ struct DashboardView: View {
                     } else {
                         timelineHeader
                         summaryCard
+                        if !model.savingsWallets.isEmpty {
+                            savingsStrip
+                        }
                         filters
                         transactionFeed
                     }
@@ -84,7 +87,7 @@ struct DashboardView: View {
 
     private var addButton: some View {
         Button {
-            if let walletID = model.wallets.first?.id {
+            if let walletID = model.wallets.contains(where: { $0.id == model.selectedWalletID }) ? model.selectedWalletID : model.operationalWallets.first?.id {
                 draft = TransactionDraft(
                     kind: .expense,
                     walletID: walletID,
@@ -254,6 +257,39 @@ struct DashboardView: View {
         .accessibilityIdentifier(CashRunwayAccessibilityID.overviewOpenButton)
     }
 
+    // Compact single-line card showing the separate-entity savings total. Rendered
+    // only when savings wallets exist; shows the shared-currency sum or a
+    // "mixed currencies" indicator. Global aggregates exclude these wallets via the
+    // Core scopes — no UI math is involved here.
+    private var savingsStrip: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "chart.line.uptrend.xyaxis")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(CashRunwayTheme.warning)
+            Text(L10n.string("Savings Total"))
+                .font(.system(size: 15, weight: .bold, design: .rounded))
+                .foregroundStyle(CashRunwayTheme.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Spacer(minLength: 8)
+            if let total = model.savingsTotalMinor, let currency = model.savingsCurrencyCode {
+                Text(MoneyFormatter.string(from: total, currencyCode: currency))
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .foregroundStyle(CashRunwayTheme.warning)
+            } else {
+                Text(L10n.string("Savings currencies differ"))
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(CashRunwayTheme.textMuted)
+            }
+        }
+        .padding(.horizontal, 16)
+        .frame(minHeight: 46)
+        .background(CashRunwayTheme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(CashRunwayTheme.line, lineWidth: 1).allowsHitTesting(false))
+        .accessibilityElement(children: .ignore)
+        .accessibilityIdentifier(CashRunwayAccessibilityID.savingsStrip)
+    }
+
     // The three controls must fit one non-scrolling row without clipping in any
     // language. ViewThatFits picks the largest pill font whose row actually fits the
     // available width (Ukrainian labels are longer than English), degrading on narrow
@@ -288,12 +324,30 @@ struct DashboardView: View {
                 }
                 .accessibilityIdentifier(CashRunwayAccessibilityID.timelineWallet("All Wallets"))
             }
-            ForEach(model.wallets) { wallet in
+            ForEach(model.operationalWallets) { wallet in
                 Button(wallet.name) {
                     collapsedDayKeys.removeAll()
                     Task { await model.selectWallet(wallet.id) }
                 }
                 .accessibilityIdentifier(CashRunwayAccessibilityID.timelineWallet(wallet.name))
+            }
+            if !model.savingsWallets.isEmpty {
+                SwiftUI.Section(L10n.string("Savings Section")) {
+                    ForEach(model.savingsWallets) { wallet in
+                        Button {
+                            collapsedDayKeys.removeAll()
+                            Task { await model.selectWallet(wallet.id) }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Text(wallet.name)
+                                Image(systemName: "chart.line.uptrend.xyaxis")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(CashRunwayTheme.warning)
+                            }
+                        }
+                        .accessibilityIdentifier(CashRunwayAccessibilityID.timelineWallet(wallet.name))
+                    }
+                }
             }
         } label: {
             pillLabel(

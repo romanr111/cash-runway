@@ -79,6 +79,7 @@ enum CashRunwayAccessibilityID {
     static let settingsMainCurrencyRow = "settings.mainCurrency.row"
     static let settingsLanguageRow = "settings.language.row"
     static let settingsWalletsRow = "settings.wallets.row"
+    static let settingsSavingsRow = "settings.savings.row"
     static let settingsImportCSVRow = "settings.importCSV.row"
     static let settingsExportCSVRow = "settings.exportCSV.row"
     static let settingsImportBackupRow = "settings.importBackup.row"
@@ -95,6 +96,8 @@ enum CashRunwayAccessibilityID {
 
     static let categoryManagementScreen = "categoryManagement.screen"
     static let walletManagementScreen = "walletManagement.screen"
+    static let walletSeparateEntityToggle = "wallet.editor.separateEntityToggle"
+    static let savingsStrip = "dashboard.savingsStrip"
     static let labelManagementScreen = "labelManagement.screen"
     static let scheduledTransactionsScreen = "scheduledTransactions.screen"
     static let backupImportScreen = "backupImport.screen"
