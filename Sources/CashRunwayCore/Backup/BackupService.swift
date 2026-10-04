@@ -115,6 +115,24 @@ extension CashRunwayRepository {
         return tokenAccounts
     }
 
+    /// Idempotent re-insertion of the built-in system wallet categories so older
+    /// backups (pre-savings) still surface every built-in kind after a restore.
+    static func backfillBuiltInWalletCategories(_ db: Database) throws {
+        for category in WalletCategory.allBuiltIn {
+            try db.execute(
+                sql: """
+                INSERT INTO wallet_categories (id, name, kind, is_system, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO NOTHING
+                """,
+                arguments: [
+                    category.id.uuidString, category.name, category.kind.rawValue,
+                    true, category.createdAt, category.updatedAt,
+                ]
+            )
+        }
+    }
+
     func insertBackupSourceData(_ backup: CashRunwayBackup, into db: Database) throws {
         let preferences = backup.currencyPreferences ?? .default
         try db.execute(
@@ -152,19 +170,7 @@ extension CashRunwayRepository {
         }
         // Backfill built-in system categories so restores of older backups
         // (pre-savings) still surface every built-in kind in the picker.
-        for category in WalletCategory.allBuiltIn {
-            try db.execute(
-                sql: """
-                INSERT INTO wallet_categories (id, name, kind, is_system, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?)
-                ON CONFLICT(id) DO NOTHING
-                """,
-                arguments: [
-                    category.id.uuidString, category.name, category.kind.rawValue,
-                    true, category.createdAt, category.updatedAt,
-                ]
-            )
-        }
+        try Self.backfillBuiltInWalletCategories(db)
 
         for wallet in backup.wallets {
             let categoryID = wallet.categoryID ?? WalletCategory.builtIn(byKind: wallet.kind).id
