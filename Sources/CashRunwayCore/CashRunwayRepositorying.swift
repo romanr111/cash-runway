@@ -172,6 +172,19 @@ public extension CurrencyRepositorying {
     ) throws -> ExchangeRate? {
         try cachedExchangeRate(from: sourceCurrency, to: targetCurrency, on: date, source: source)
     }
+
+    /// Issue #121: month aggregates scoped to ONE wallet, for wallet-filtered
+    /// retrospective views (the summary card's USD lines must match the wallet
+    /// scope the native figures were rendered with). `nil` returns the all-wallet
+    /// aggregates unchanged.
+    func monthlyUSDMonthAggregates(walletID: UUID?) throws -> [MonthlyUSDSnapshot.MonthAggregate] {
+        guard let walletID else { return try monthlyUSDMonthAggregates() }
+        let rows = try allMonthlyUSDSnapshots().filter { $0.walletID == walletID }
+        let byMonth = Dictionary(grouping: rows) { $0.monthKey }
+        return byMonth
+            .map { MonthlyUSDSnapshot.MonthAggregate(rows: $0.value) }
+            .sorted { $0.monthKey > $1.monthKey }
+    }
 }
 
 // MARK: - Composed repository abstraction

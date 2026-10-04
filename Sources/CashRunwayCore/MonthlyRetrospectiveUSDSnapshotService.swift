@@ -32,10 +32,10 @@ public struct RetrospectiveMonthlyUSDMetric: Hashable, Sendable {
         self.isApproximate = aggregate.isApproximate
     }
 
-    /// Public memberwise converter so cross-module reloads can map stored
-    /// aggregates without exposing the aggregate type's own initializer.
+    /// Public memberwise initializer so cross-module consumers (AppModel reloads,
+    /// presentation tests) can build stored metrics without exposing the aggregate
+    /// type's internal init.
     public init(
-        aggregate: MonthlyUSDSnapshot.MonthAggregate,
         monthKey: Int,
         currencyCode: CurrencyCode,
         baseCurrencyCode: CurrencyCode,

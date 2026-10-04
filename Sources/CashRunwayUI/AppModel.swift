@@ -285,36 +285,27 @@ public final class CashRunwayAppModel {
     public func refreshRetrospectiveUSDSnapshots() async {
         let repository = self.repository
         await repository.refreshRetrospectiveUSDSnapshots(monthKeys: nil)
-        // Reload stored metrics only when the read succeeds: on failure keep the
-        // previously stored values until the next run (non-fatal contract).
-        guard let aggregates = try? repository.monthlyUSDMonthAggregates() else { return }
-        retrospectiveMonthlyUSDMetrics = aggregates.map {
-            RetrospectiveMonthlyUSDMetric(
-                aggregate: $0,
-                monthKey: $0.monthKey,
-                currencyCode: $0.currencyCode,
-                baseCurrencyCode: $0.baseCurrencyCode,
-                incomeMinor: $0.incomeMinor,
-                expenseMinor: $0.expenseMinor,
-                savedMinor: $0.savedMinor,
-                incomeBaseMinor: $0.incomeBaseMinor,
-                expenseBaseMinor: $0.expenseBaseMinor,
-                savedBaseMinor: $0.savedBaseMinor,
-                rateDecimal: $0.rateDecimal,
-                rateEffectiveDate: $0.rateEffectiveDate,
-                rateSource: $0.rateSource,
-                isApproximate: $0.isApproximate
-            )
-        }
+        // Re-read the wallet scope after the await: the user may have switched
+        // wallets (or the scope may have been normalized) while the backfill ran.
+        reloadStoredRetrospectiveUSDMetrics()
     }
 
     /// Reloads only the STORED retrospective metrics (no network). Called on
-    /// every snapshot reload so fresh conversions appear immediately.
+    /// every snapshot reload so fresh conversions appear immediately. The list is
+    /// scoped to the current wallet filter so the USD lines always share the
+    /// scope of the native figures rendered beside them.
     public func reloadStoredRetrospectiveUSDMetrics() {
-        let aggregates = (try? repository.monthlyUSDMonthAggregates()) ?? []
-        retrospectiveMonthlyUSDMetrics = aggregates.map {
+        guard let metrics = try? scopedRetrospectiveUSDMetrics() else {
+            // Read failure: keep the previously stored values until the next run
+            // (non-fatal contract; the retrospective is never blanked mid-session).
+            return
+        }
+        retrospectiveMonthlyUSDMetrics = metrics
+    }
+
+    private func scopedRetrospectiveUSDMetrics() throws -> [RetrospectiveMonthlyUSDMetric] {
+        try repository.monthlyUSDMonthAggregates(walletID: selectedWalletID).map {
             RetrospectiveMonthlyUSDMetric(
-                aggregate: $0,
                 monthKey: $0.monthKey,
                 currencyCode: $0.currencyCode,
                 baseCurrencyCode: $0.baseCurrencyCode,
@@ -820,6 +811,11 @@ public final class CashRunwayAppModel {
                     return
                 }
                 self.apply(snapshot)
+                // The foreground reload runs the incremental USD-snapshot refresh
+                // first (`refreshDirtyUSDSnapshots`), so re-read the stored
+                // retrospective metrics too or the just-filled conversions stay
+                // invisible until the next full reload.
+                self.reloadStoredRetrospectiveUSDMetrics()
                 self.latestTransactionMonthKey = try? self.repository.latestTransactionMonthKey()
                 if let overview = snapshot.overviewSnapshot {
                     self.setCachedOverview(overview, monthKey: overview.selectedMonthKey, walletID: overview.walletFilterID)
