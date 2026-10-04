@@ -50,6 +50,10 @@ public final class CashRunwayAppModel {
     public var overviewSnapshot: OverviewSnapshot?
     public var allBars: [TimelineBarPoint] = []
     public var categoryDetailTransactions: [TransactionListItem] = []
+    // Issue #121: stored retrospective monthly USD metrics (newest month first),
+    // loaded from the persisted snapshot table on bootstrap/reload. Never
+    // recomputed in the view layer.
+    public private(set) var retrospectiveMonthlyUSDMetrics: [RetrospectiveMonthlyUSDMetric] = []
 
     public var selectedMonthKey = DateKeys.monthKey(for: .now)
     public var selectedWalletID: UUID?
@@ -247,8 +251,18 @@ public final class CashRunwayAppModel {
     public func bootstrap() async {
         do {
             try repository.seedIfNeeded()
-            try repository.runMaintenance()
+            // Maintenance must NOT run inline on the main actor: it rebuilds the
+            // full historical aggregate backfill (sequential per-month DB work),
+            // which would freeze the UI for that entire span. Run it detached;
+            // the single USD-snapshot backfill happens in the awaited refresh
+            // below (already off-main), and the UI reloads again whenever this
+            // detached pass lands.
+            let repository = self.repository
+            Task.detached(priority: .utility) {
+                try? repository.runMaintenance()
+            }
             try repository.refreshRecurringInstances()
+            await refreshRetrospectiveUSDSnapshots()
             await reloadAll()
             hasBootstrapped = true
             // LEGACY_DISABLED_APP_LOCK:
@@ -258,6 +272,54 @@ public final class CashRunwayAppModel {
             // }
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Issue #121: backfills + reloads persisted retrospective monthly USD
+    /// snapshots (historical month-end rates). Delegates to the repository's
+    /// non-blocking engine (service runs on a detached task); failures are
+    /// non-fatal — the retrospective simply keeps its previously stored values
+    /// until the next run. This is the app's single full snapshot backfill on
+    /// bootstrap: synchronous maintenance no longer runs a snapshot pass of its
+    /// own.
+    public func refreshRetrospectiveUSDSnapshots() async {
+        let repository = self.repository
+        await repository.refreshRetrospectiveUSDSnapshots(monthKeys: nil)
+        // Re-read the wallet scope after the await: the user may have switched
+        // wallets (or the scope may have been normalized) while the backfill ran.
+        reloadStoredRetrospectiveUSDMetrics()
+    }
+
+    /// Reloads only the STORED retrospective metrics (no network). Called on
+    /// every snapshot reload so fresh conversions appear immediately. The list is
+    /// scoped to the current wallet filter so the USD lines always share the
+    /// scope of the native figures rendered beside them.
+    public func reloadStoredRetrospectiveUSDMetrics() {
+        guard let metrics = try? scopedRetrospectiveUSDMetrics() else {
+            // Read failure: keep the previously stored values until the next run
+            // (non-fatal contract; the retrospective is never blanked mid-session).
+            return
+        }
+        retrospectiveMonthlyUSDMetrics = metrics
+    }
+
+    private func scopedRetrospectiveUSDMetrics() throws -> [RetrospectiveMonthlyUSDMetric] {
+        try repository.monthlyUSDMonthAggregates(walletID: selectedWalletID).map {
+            RetrospectiveMonthlyUSDMetric(
+                monthKey: $0.monthKey,
+                currencyCode: $0.currencyCode,
+                baseCurrencyCode: $0.baseCurrencyCode,
+                incomeMinor: $0.incomeMinor,
+                expenseMinor: $0.expenseMinor,
+                savedMinor: $0.savedMinor,
+                incomeBaseMinor: $0.incomeBaseMinor,
+                expenseBaseMinor: $0.expenseBaseMinor,
+                savedBaseMinor: $0.savedBaseMinor,
+                rateDecimal: $0.rateDecimal,
+                rateEffectiveDate: $0.rateEffectiveDate,
+                rateSource: $0.rateSource,
+                isApproximate: $0.isApproximate
+            )
         }
     }
 
@@ -288,6 +350,7 @@ public final class CashRunwayAppModel {
             self.transactionQuery.walletID = effectiveWalletID
             self.allBars = bars
             self.apply(snapshot)
+            self.reloadStoredRetrospectiveUSDMetrics()
             self.latestTransactionMonthKey = try? repository.latestTransactionMonthKey()
             if let overview = snapshot.overviewSnapshot {
                 self.setCachedOverview(overview, monthKey: overview.selectedMonthKey, walletID: overview.walletFilterID)
@@ -650,6 +713,12 @@ public final class CashRunwayAppModel {
         }
     }
 
+    /// The full stored preferences (or the struct default when storage fails) —
+    /// used by settings screens that patch a single field without dropping the rest.
+    public func storedCurrencyPreferences() -> CurrencyPreferences {
+        (try? repository.currencyPreferences()) ?? .default
+    }
+
     // DEPRECATED — Budgets feature is de-prioritized. Work stopped; do not modify or add tests until resumed.
     public func archiveBudget(_ budget: Budget) {
         var archived = budget
@@ -742,6 +811,11 @@ public final class CashRunwayAppModel {
                     return
                 }
                 self.apply(snapshot)
+                // The foreground reload runs the incremental USD-snapshot refresh
+                // first (`refreshDirtyUSDSnapshots`), so re-read the stored
+                // retrospective metrics too or the just-filled conversions stay
+                // invisible until the next full reload.
+                self.reloadStoredRetrospectiveUSDMetrics()
                 self.latestTransactionMonthKey = try? self.repository.latestTransactionMonthKey()
                 if let overview = snapshot.overviewSnapshot {
                     self.setCachedOverview(overview, monthKey: overview.selectedMonthKey, walletID: overview.walletFilterID)
@@ -979,6 +1053,11 @@ private actor BackgroundWork {
         }
         try repository.runMaintenance()
         try repository.refreshRecurringInstances()
+        // Issue #121: the snapshot pass no longer runs inside the synchronous
+        // maintenance (it blocked the calling thread on `awaitBridge` for the
+        // full backfill). Restore the incremental dirty-month refresh here,
+        // non-blocking and off-main.
+        await repository.refreshDirtyUSDSnapshots()
         let snapshot = try CashRunwayAppModel.loadSnapshot(
             repository: repository,
             selectedMonthKey: selectedMonthKey,

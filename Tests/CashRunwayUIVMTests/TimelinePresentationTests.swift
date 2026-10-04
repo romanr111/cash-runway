@@ -440,4 +440,94 @@ struct TimelinePresentationTests {
         #expect(label != "202607")
         #expect(label.contains("\n"))
     }
+
+    // MARK: - Issue #121: USD secondary lines
+
+    private func usdMetric(
+        monthKey: Int,
+        baseCurrencyCode: CurrencyCode = .usd,
+        incomeBaseMinor: Int64? = nil,
+        expenseBaseMinor: Int64? = nil,
+        savedBaseMinor: Int64? = nil,
+        isApproximate: Bool = false
+    ) -> RetrospectiveMonthlyUSDMetric {
+        RetrospectiveMonthlyUSDMetric(
+            monthKey: monthKey,
+            currencyCode: .uah,
+            baseCurrencyCode: baseCurrencyCode,
+            incomeMinor: 0,
+            expenseMinor: 0,
+            savedMinor: 0,
+            incomeBaseMinor: incomeBaseMinor,
+            expenseBaseMinor: expenseBaseMinor,
+            savedBaseMinor: savedBaseMinor,
+            rateDecimal: nil,
+            rateEffectiveDate: nil,
+            rateSource: nil,
+            isApproximate: isApproximate
+        )
+    }
+
+    private func monthPresentation(usdMetrics: [RetrospectiveMonthlyUSDMetric]) -> TimelinePresentation {
+        let monthSnapshot = snapshot(anchorMonthKey: 202606, period: .month, heroCashFlowMinor: 0, bars: [bar(periodKey: 202606, incomeMinor: 200_000, expenseMinor: 100_000)])
+        return TimelinePresentation(
+            snapshot: monthSnapshot,
+            allBars: [],
+            currencyCode: .uah,
+            locale: english,
+            usdMetrics: usdMetrics
+        )
+    }
+
+    @Test("month metric renders USD secondary lines from the persisted snapshot")
+    func usdSecondaryLinesRenderPersistedTotals() {
+        let presentation = monthPresentation(
+            usdMetrics: [usdMetric(monthKey: 202606, incomeBaseMinor: 500_000, expenseBaseMinor: 240_000, savedBaseMinor: 260_000)]
+        )
+
+        #expect(presentation.incomeUSDText == "$5,000")
+        #expect(presentation.expenseUSDText == "$2,400")
+        #expect(presentation.savedUSDText == "$2,600")
+    }
+
+    @Test("approximate fallback rate renders the ≈ marker, exact rate does not")
+    func approximateRateRendersMarker() {
+        let presentation = monthPresentation(
+            usdMetrics: [usdMetric(monthKey: 202606, incomeBaseMinor: 500_000, expenseBaseMinor: nil, savedBaseMinor: nil, isApproximate: true)]
+        )
+
+        #expect(presentation.incomeUSDText == "≈ $5,000")
+        #expect(presentation.expenseUSDText == nil)
+        #expect(presentation.savedUSDText == nil)
+
+        let exact = monthPresentation(
+            usdMetrics: [usdMetric(monthKey: 202606, incomeBaseMinor: 500_000, expenseBaseMinor: nil, savedBaseMinor: nil, isApproximate: false)]
+        )
+        #expect(exact.incomeUSDText == "$5,000")
+    }
+
+    @Test("months without a persisted metric render no USD lines")
+    func missingMetricRendersNoUSDLines() {
+        let presentation = monthPresentation(usdMetrics: [usdMetric(monthKey: 202607, incomeBaseMinor: 500_000)])
+
+        #expect(presentation.incomeUSDText == nil)
+        #expect(presentation.expenseUSDText == nil)
+        #expect(presentation.savedUSDText == nil)
+    }
+
+    @Test("year mode renders no USD lines (retrospective is per-month)")
+    func yearModeRendersNoUSDLines() {
+        let yearSnapshot = snapshot(anchorMonthKey: 202607, period: .year, heroCashFlowMinor: 0, bars: [bar(periodKey: 2026, incomeMinor: 200_000, expenseMinor: 100_000)])
+        let presentation = TimelinePresentation(
+            snapshot: yearSnapshot,
+            allBars: [],
+            currencyCode: .uah,
+            locale: english,
+            usdMetrics: [usdMetric(monthKey: 2026, incomeBaseMinor: 500_000)]
+        )
+
+        #expect(presentation.incomeUSDText == nil)
+        #expect(presentation.expenseUSDText == nil)
+        #expect(presentation.savedUSDText == nil)
+    }
 }
