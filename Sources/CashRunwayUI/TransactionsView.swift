@@ -179,8 +179,20 @@ struct TransactionRow: View {
         .accessibilityLabel(accessibilitySummary)
     }
 
-    private var primaryTitle: String {
+    private var rawPrimaryTitle: String {
         item.merchant.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? item.displayTitle : item.merchant
+    }
+
+    private var maskedCardIdentifier: MaskedCardIdentifier? {
+        MaskedCardIdentifier.parse(rawPrimaryTitle)
+    }
+
+    private var primaryTitle: String {
+        maskedCardIdentifier?.displayText ?? rawPrimaryTitle
+    }
+
+    private var accessibilityPrimaryTitle: String {
+        maskedCardIdentifier?.accessibilityLabel ?? item.displayTitle
     }
 
     private var localizedCategoryName: String? {
@@ -192,7 +204,7 @@ struct TransactionRow: View {
 
     private var secondaryTitle: String {
         let merchantIsEmpty = item.merchant.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        if let localized = localizedCategoryName, !(merchantIsEmpty && localized == primaryTitle) {
+        if let localized = localizedCategoryName, !(merchantIsEmpty && localized == rawPrimaryTitle) {
             return "\(localized) · \(item.walletName)"
         }
         return item.walletName
@@ -213,7 +225,7 @@ struct TransactionRow: View {
     }
 
     private var accessibilitySummary: String {
-        var components = [item.displayTitle, MoneyFormatter.string(from: item.amountMinor, currencyCode: item.currencyCode), item.walletName]
+        var components = [accessibilityPrimaryTitle, MoneyFormatter.string(from: item.amountMinor, currencyCode: item.currencyCode), item.walletName]
         if !note.isEmpty {
             components.append(note)
         }
