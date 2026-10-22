@@ -27,6 +27,7 @@ struct MigrationIntegrityTests {
             "v7_monthly_label_spend_wallet",
             "v8_currency_foundation",
             "v9_masked_card_search_privacy",
+            "v9_monthly_usd_snapshot", "v10_monthly_usd_snapshot_text_uuid",
         ])
     }
 

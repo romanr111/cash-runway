@@ -730,6 +730,13 @@ extension CashRunwayRepository {
 
             try db.execute(sql: "DELETE FROM monthly_wallet_cashflow WHERE wallet_id = ?", arguments: [id.uuidString])
             try db.execute(sql: "DELETE FROM daily_wallet_balance_delta WHERE wallet_id = ?", arguments: [id.uuidString])
+            // Issue #121: purge this wallet's monthly USD snapshots too. Without
+            // this the deleted wallet's persisted USD totals would survive every
+            // purge that drops its UAH cashflow and balance deltas, and the
+            // retrospective would report it forever. The affected months
+            // re-detect as dirty afterwards and are re-snapshotted from the
+            // remaining active wallets on the next pass.
+            try db.execute(sql: "DELETE FROM monthly_usd_snapshot WHERE wallet_id = ?", arguments: [id.uuidString])
             try db.execute(sql: "DELETE FROM wallets WHERE id = ?", arguments: [id.uuidString])
             try rebuildFTS(db)
         }
@@ -2368,6 +2375,65 @@ extension CashRunwayRepository {
             try processPendingAggregateRebuilds(db)
             try purgeExpiredRawJSON(db)
         }
+        // Issue #121: the monthly-USD snapshot refresh deliberately does NOT run
+        // inside this synchronous method. Its former snapshot pass blocked the
+        // calling thread on `awaitBridge`'s semaphore for the full historical
+        // backfill (sequential per-month DB reads plus potential NBU fetches) —
+        // freezing the UI whenever `runMaintenance` ran on the main actor, and
+        // re-running the same backfill `AppModel.refreshRetrospectiveUSDSnapshots()`
+        // was already about to perform. The async engine below re-detects dirty
+        // months itself, so callers keep the incremental behavior by awaiting
+        // `refreshDirtyUSDSnapshots()`.
+    }
+
+    /// Issue #121: refresh persisted retrospective USD snapshots for the given
+    /// months (or all history when nil). Runs the service to COMPLETION without
+    /// blocking the calling thread: the former synchronous variant parked the
+    /// caller on `awaitBridge`'s semaphore for the whole backfill, which froze
+    /// the UI whenever it ran on the main actor. Schedules the service on a
+    /// detached task with a fresh provider chain; never rethrows a month's rate
+    /// failure.
+    public func refreshRetrospectiveUSDSnapshots(monthKeys: Set<Int>? = nil) async {
+        let provider = CachingExchangeRateProvider(
+            upstream: HistoricalOfficialRateProvider(),
+            repository: self,
+            maxStaleness: .infinity
+        )
+        let service = MonthlyRetrospectiveUSDSnapshotService(repository: self, rateProvider: provider)
+        _ = try? await Task.detached(priority: .utility) {
+            try await service.refreshSnapshots(monthKeys: monthKeys.map(Set.init))
+        }.value
+    }
+
+    /// Issue #121: refresh only the months whose cashflow aggregates changed
+    /// since the last snapshot pass (`updated_at` newer than the snapshot's, or
+    /// no snapshot yet). Non-blocking; dirty months are re-detected here so
+    /// synchronous maintenance paths that no longer carry the snapshot pass
+    /// keep the same incremental behavior.
+    public func refreshDirtyUSDSnapshots() async {
+        let dirtyMonths = try? await databaseManager.dbQueue.read { db in
+            try pendingSnapshotMonthKeys(db: db)
+        }
+        await refreshRetrospectiveUSDSnapshots(monthKeys: dirtyMonths)
+    }
+
+    /// Months whose cashflow aggregates changed since the last snapshot pass:
+    /// rebuilt months whose `monthly_wallet_cashflow.updated_at` is newer than the
+    /// matching `monthly_usd_snapshot.updated_at` (or that have no snapshot yet).
+    private func pendingSnapshotMonthKeys(db: Database) throws -> Set<Int> {
+        let rows = try Row.fetchAll(
+            db,
+            sql: """
+            SELECT c.month_key AS month_key
+            FROM monthly_wallet_cashflow c
+            LEFT JOIN monthly_usd_snapshot s
+              ON s.month_key = c.month_key
+             AND s.wallet_id = c.wallet_id
+            WHERE s.id IS NULL
+               OR s.updated_at < c.updated_at
+            """
+        )
+        return Set(rows.compactMap { $0["month_key"] as Int? })
     }
 
     public func refreshRecurringInstances() throws {
