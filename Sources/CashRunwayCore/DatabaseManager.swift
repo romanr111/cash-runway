@@ -989,6 +989,7 @@ public final class DatabaseManager: @unchecked Sendable {
             }),
             ("v9_masked_card_search_privacy", { db in
                 try Self.migrateMaskedCardSearchPrivacy(db)
+            }),
 
             // Issue #121: retrospective monthly USD snapshot. Persists per-month
             // income/expense/saved totals (minor units, in the wallet's original
