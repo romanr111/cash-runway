@@ -68,6 +68,11 @@ public final class CashRunwayAppModel {
     public var isLoading = false
     public private(set) var isTimelineLoading = false
     public private(set) var hasBootstrapped = false
+    /// Issue #125: `true` while a retrospective USD-snapshot backfill is running
+    /// (bootstrap full pass or foreground dirty-month refresh). Drives the
+    /// dashboard's "updating historical rates" status line; never set by the
+    /// passive stored-metrics reloads.
+    public private(set) var isRetrospectiveBackfilling = false
     public private(set) var latestTransactionMonthKey: Int?
     private var foregroundRefreshTask: Task<Void, Never>?
     private var timelineReloadState = TimelineReloadState()
@@ -284,6 +289,8 @@ public final class CashRunwayAppModel {
     /// own.
     public func refreshRetrospectiveUSDSnapshots() async {
         let repository = self.repository
+        isRetrospectiveBackfilling = true
+        defer { isRetrospectiveBackfilling = false }
         await repository.refreshRetrospectiveUSDSnapshots(monthKeys: nil)
         // Re-read the wallet scope after the await: the user may have switched
         // wallets (or the scope may have been normalized) while the backfill ran.
@@ -1057,7 +1064,13 @@ private actor BackgroundWork {
         // maintenance (it blocked the calling thread on `awaitBridge` for the
         // full backfill). Restore the incremental dirty-month refresh here,
         // non-blocking and off-main.
-        await repository.refreshDirtyUSDSnapshots()
+        // Issue #125: scoped flag so an early throw of later steps can't leave
+        // the backfill status stuck on-screen.
+        do {
+            isRetrospectiveBackfilling = true
+            defer { isRetrospectiveBackfilling = false }
+            await repository.refreshDirtyUSDSnapshots()
+        } catch {}
         let snapshot = try CashRunwayAppModel.loadSnapshot(
             repository: repository,
             selectedMonthKey: selectedMonthKey,
