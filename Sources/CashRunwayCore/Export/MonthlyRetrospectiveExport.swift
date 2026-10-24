@@ -107,18 +107,22 @@ public enum MonthlyRetrospectiveExport {
             }
         // Issue: yearly retrospective. A year summarizes ONLY when all 12 of its
         // months are present — a partial year would read as a complete one.
-        let completeYears = Dictionary(grouping: Array(byGroup.keys)) { $0.monthKey / 100 }
-            .filter { Set($0.value.map(\.monthKey)).count == 12 }
-        let yearly: [Row] = completeYears
+        // The rule is PER (year, currency): a currency present in fewer than 12
+        // months of the year gets no yearly row (a 1-month total labeled
+        // "<year> (year)" would misread as a full-year span).
+        let keysByYear = Dictionary(grouping: Array(byGroup.keys)) { $0.monthKey / 100 }
+        let yearly: [Row] = keysByYear
             .sorted { $0.key < $1.key }
-            .flatMap { (year: Int, keys: [MonthCurrencyKey]) in
-                // Each currency of the year gets its own yearly row (mirrors the
-                // monthly grouping; multi-currency years stay decomposed).
-                let currencies = Set(keys.map { (key: MonthCurrencyKey) in key.currency }).sorted()
-                return currencies.map { currency in
-                    let group = snapshots
-                        .filter { $0.monthKey / 100 == year && $0.currencyCode.rawValue == currency }
-                    let first = group[0]
+            .flatMap { (year: Int, keys: [MonthCurrencyKey]) -> [Row] in
+                let currencyGroups = Dictionary(grouping: keys) { $0.currency }
+                return currencyGroups
+                    .sorted { $0.key < $1.key }
+                    .compactMap { (currency: String, currencyKeys: [MonthCurrencyKey]) -> Row? in
+                        guard Set(currencyKeys.map(\.monthKey)).count == 12 else { return nil }
+                        let group = snapshots.filter {
+                            $0.monthKey / 100 == year && $0.currencyCode.rawValue == currency
+                        }
+                        let first = group[0]
                     let income = group.reduce(Int64(0)) { $0 + $1.incomeMinor }
                     let expense = group.reduce(Int64(0)) { $0 + $1.expenseMinor }
                     let saved = group.reduce(Int64(0)) { $0 + $1.savedMinor }

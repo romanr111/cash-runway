@@ -355,16 +355,29 @@ struct MonthlyRetrospectiveExportTests {
 
     @Test func multiCurrencyYearsStayDecomposed() throws {
         var months = fullYear(2026)
-        months.append(snapshoot(monthKey: 202612, currency: .usd))
+        months.append(extraCurrency(monthKey: 202612, currency: .usd))
         let rows = try MonthlyRetrospectiveExport.rows(from: months)
 
-        // UAH yearly row + USD yearly row (December's USD wallet).
+        // Completeness is per (year, currency): UAH covers 12 months → yearly
+        // row; USD exists only in December (1 month) → NO yearly row.
+        let yearRows = rows.filter { $0.month == "2026 (year)" }
+        #expect(yearRows.map(\.currency) == ["UAH"])
+    }
+
+    @Test func multiCurrencyYearWithAllTwelveMonthsEachGetsYearlyRow() throws {
+        var months = fullYear(2026)
+        // A second currency also present in all 12 months of the year.
+        for month in 1...12 {
+            months.append(extraCurrency(monthKey: 202600 + month, currency: .usd))
+        }
+        let rows = try MonthlyRetrospectiveExport.rows(from: months)
+
         let yearRows = rows.filter { $0.month == "2026 (year)" }
         #expect(yearRows.map(\.currency) == ["UAH", "USD"])
     }
 
-    /// USD-currency helper for the decomposition test.
-    private func snapshoot(monthKey: Int, currency: CurrencyCode) -> MonthlyUSDSnapshot {
+    /// Extra-currency helper for the decomposition test.
+    private func extraCurrency(monthKey: Int, currency: CurrencyCode) -> MonthlyUSDSnapshot {
         snapshot(
             monthKey: monthKey,
             currency: currency,
