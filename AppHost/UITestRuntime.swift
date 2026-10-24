@@ -559,7 +559,6 @@ private struct RetrospectiveQAUITestSeeder {
         // pass resolves from storage on both local and CI runs.
         let previousMidMonth = monthsBack(1)
         let previousMonthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: previousMidMonth)) ?? previousMidMonth
-        let previousMonthKey = DateKeys.monthKey(for: previousMidMonth)
         let previousMonthEnd = lastSecond(of: previousMonthStart)
         let twoBackMonthStart = calendar.date(byAdding: .month, value: -1, to: previousMonthStart) ?? previousMonthStart
         let twoBackMonthEnd = lastSecond(of: twoBackMonthStart)
@@ -579,7 +578,6 @@ private struct RetrospectiveQAUITestSeeder {
                 source: "nbu-official"
             ),
         ])
-        _ = previousMonthKey
 
         try repository.runMaintenance()
         try repository.refreshRecurringInstances()
