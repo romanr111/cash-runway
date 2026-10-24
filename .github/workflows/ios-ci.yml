@@ -272,7 +272,102 @@ jobs:
             -sdk iphonesimulator \
             -destination "${{ steps.simulator.outputs.destination }}" \
             -only-testing:CashRunwayUITests \
+            -resultBundlePath ui-e2e.xcresult \
             2>&1 | tee ui-e2e-test.log
+
+      # PR 124: export the named screenshot attachments (.keepAlways lifetime)
+      # recorded by the UI tests so they can be published as PR evidence. The
+      # modern `export attachments` subcommand ships in Xcode 16+; fall back to
+      # the legacy plist manifest walk on older toolchains.
+      - name: Export screenshot attachments from result bundle
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ui-screenshots
+          STAGING="$(mktemp -d)"
+          export STAGING
+          if xcrun xcresulttool export attachments \
+              --path ui-e2e.xcresult \
+              --output-path "$STAGING"; then
+            echo "Exported via xcresulttool export attachments"
+            # The command dumps SHA-named files plus a manifest.json mapping
+            # each to its XCTAttachment name; copy the pr124-* PNGs out under
+            # their human-readable names.
+            python3 - <<'PY'
+          import json, os, shutil
+
+          staging = os.environ["STAGING"]
+          with open(os.path.join(staging, "manifest.json")) as fh:
+              manifest = json.load(fh)
+          entries = manifest if isinstance(manifest, list) else manifest.get("testEntries", [])
+          for entry in entries:
+              if not isinstance(entry, dict):
+                  continue
+              for attachment in entry.get("attachments", []):
+                  name = attachment.get("suggestedHumanReadableName", "")
+                  exported = attachment.get("exportedFileName", "")
+                  stem, ext = os.path.splitext(name.split(":", 1)[-1])
+                  if not stem.startswith("pr124-") or ext.lower() not in (".png", ".jpeg", ".jpg"):
+                      continue
+                  source = os.path.join(staging, exported)
+                  if not os.path.exists(source):
+                      continue
+                  destination = os.path.join("ui-screenshots", f"{stem}.png")
+                  shutil.copyfile(source, destination)
+                  print("exported", destination)
+          PY
+          else
+            echo "Export attachments unavailable; falling back to manifest walk"
+            xcrun xcresulttool get --legacy --path ui-e2e.xcresult \
+              --format json > ui-e2e-manifest.json
+            python3 - <<'PY'
+          import json, os, shutil
+
+          with open("ui-e2e-manifest.json") as fh:
+              manifest = json.load(fh)
+          for action in manifest.get("actions", {}).get("_values", []):
+              result = action.get("actionResult", {})
+              attachments = result.get("attachments", {}).get("_values", [])
+              for attachment in attachments:
+                  name = attachment.get("suggestedHumanReadableName", "")
+                  exported = attachment.get("exportedFileName", "")
+                  if not name or "pr124-" not in name:
+                      continue
+                  source = os.path.join("ui-e2e.xcresult", exported)
+                  if not os.path.exists(source):
+                      continue
+                  target = name.split(":", 1)[-1]
+                  stem, _ = os.path.splitext(target)
+                  destination = os.path.join("ui-screenshots", f"{stem}.png")
+                  shutil.copyfile(source, destination)
+                  print("exported", destination)
+          PY
+          fi
+          rm -rf "$STAGING"
+          ls -la ui-screenshots
+
+      - name: Validate exported screenshots
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in pr124-dashboard pr124-settings-data-export-row pr124-format-picker; do
+            file="ui-screenshots/${name}.png"
+            if [[ ! -f "${file}" ]]; then
+              echo "::warning::Expected screenshot missing: ${file}"
+              continue
+            fi
+            sips -g pixelWidth -g pixelHeight "${file}"
+          done
+
+      - name: Upload UI screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pr124-ui-screenshots
+          path: ui-screenshots/*.png
+          if-no-files-found: warn
 
       - name: Upload UI E2E test logs
         if: failure()
