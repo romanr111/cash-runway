@@ -805,6 +805,10 @@ public final class CashRunwayAppModel {
             defer {
                 self?.foregroundRefreshTask = nil
             }
+            // Issue #125: honest backfill status while the incremental
+            // USD-snapshot refresh runs inside the foreground pass.
+            self?.isRetrospectiveBackfilling = true
+            defer { self?.isRetrospectiveBackfilling = false }
             do {
                 let (snapshot, bankSyncMessage) = try await backgroundWork.refreshForegroundSnapshot(
                     selectedMonthKey: selectedMonthKey,
@@ -1063,14 +1067,10 @@ private actor BackgroundWork {
         // Issue #121: the snapshot pass no longer runs inside the synchronous
         // maintenance (it blocked the calling thread on `awaitBridge` for the
         // full backfill). Restore the incremental dirty-month refresh here,
-        // non-blocking and off-main.
-        // Issue #125: scoped flag so an early throw of later steps can't leave
-        // the backfill status stuck on-screen.
-        do {
-            isRetrospectiveBackfilling = true
-            defer { isRetrospectiveBackfilling = false }
-            await repository.refreshDirtyUSDSnapshots()
-        } catch {}
+        // non-blocking and off-main. The in-progress flag lives on the main
+        // actor (AppModel), so the actor body itself stays state-free — the
+        // caller flips it around this call.
+        await repository.refreshDirtyUSDSnapshots()
         let snapshot = try CashRunwayAppModel.loadSnapshot(
             repository: repository,
             selectedMonthKey: selectedMonthKey,
