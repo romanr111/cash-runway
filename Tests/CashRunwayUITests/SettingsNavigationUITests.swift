@@ -122,10 +122,10 @@ final class SettingsNavigationUITests: CashRunwayUITestCase {
 
     // MARK: - PR 124: retrospective export screenshot evidence
     //
-    // These tests capture real screenshots of the Issue #123 export flow for
-    // docs/evidence. Captures go through XCUIScreen and are stored with
+    // These tests capture real screenshots of the Issue #123 export flow.
+    // Captures go through XCUIScreen and are stored with
     // lifetime .keepAlways so `xcrun xcresulttool export attachments` (CI step)
-    // can pull the PNG files out of the .xcresult bundle.
+    // can publish them as the `pr124-ui-screenshots` CI artifact.
 
     /// Exports a screenshot of `screen` as a named PNG attachment that survives
     /// result-bundle pruning and is exported by the CI post-test step.
