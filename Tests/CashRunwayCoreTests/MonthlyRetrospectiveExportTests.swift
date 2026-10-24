@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import CoreXLSX
 @testable import CashRunwayCore
 
 /// Issue #123: export rendering of stored retrospective snapshots.
@@ -236,5 +237,190 @@ struct MonthlyRetrospectiveExportTests {
         // Filename convention helper: cash-runway-retrospective-<first>-<last>
         #expect(ExportFile.name(from: "2026-04", to: "2026-06", format: .xlsx) == "cash-runway-retrospective-2026-04-2026-06.xlsx")
         #expect(ExportFile.name(from: "2026-06", to: "2026-06", format: .csv) == "cash-runway-retrospective-2026-06.csv")
+    }
+
+    // MARK: - Yearly retrospective (Issue: yearly totals when all 12 months exist)
+
+    /// `month1..<month13` (exclusive upper bound) — 12 monthly snapshots of one
+    /// currency for the year `year`.
+    private func fullYear(
+        _ year: Int,
+        currency: CurrencyCode = .uah,
+        incomePerMonth: Int64 = 1_000_000,
+        expensePerMonth: Int64 = 400_000,
+        incomeBasePerMonth: Int64 = 24_242,
+        expenseBasePerMonth: Int64 = 9_697,
+        baseCurrency: CurrencyCode = .usd,
+        rate: String? = "0.024242424242424242424242424242424242"
+    ) -> [MonthlyUSDSnapshot] {
+        (1...12).map { month in
+            snapshot(
+                monthKey: year * 100 + month,
+                currency: currency,
+                income: incomePerMonth,
+                expense: expensePerMonth,
+                baseCurrency: baseCurrency,
+                incomeBase: incomeBasePerMonth,
+                expenseBase: expenseBasePerMonth,
+                rate: rate
+            )
+        }
+    }
+
+    @Test func completeYearAppendsYearlyRowAfterItsMonths() throws {
+        let rows = try MonthlyRetrospectiveExport.rows(from: fullYear(2025) + fullYear(2026))
+
+        // Ordering: all 24 monthly rows ascending, then yearly rows (by year) at the end.
+        #expect(rows.count == 26)
+        #expect(rows[23].month == "2026-12")
+        #expect(rows[24].month == "2025 (year)")
+        #expect(rows[25].month == "2026 (year)")
+        // Yearly row = the sum of its 12 monthly groups: 12 × 1,000,000 minor income.
+        #expect(rows[25].income == "120000.00")
+        #expect(rows[25].expenses == "48000.00")
+        #expect(rows[25].saved == "72000.00")
+        #expect(rows[25].currency == "UAH")
+        #expect(rows[25].baseCurrency == "USD")
+    }
+
+    @Test func partialYearProducesNoYearlyRow() throws {
+        // 11 months of 2025 + full 2026: only 2026 gets a yearly row.
+        let rows = try MonthlyRetrospectiveExport.rows(from: fullYear(2025, incomePerMonth: 1).dropLast() + fullYear(2026))
+
+        #expect(rows.count == 24)
+        #expect(!rows.contains { $0.month.contains("(year)") && $0.month.hasPrefix("2025") })
+        #expect(rows.contains { $0.month == "2026 (year)" })
+    }
+
+    @Test func yearlyRowCarriesNoSingleRateEvenWhenConverted() throws {
+        let rows = try MonthlyRetrospectiveExport.rows(from: fullYear(2026))
+        let yearRow = try #require(rows.last { $0.month == "2026 (year)" })
+
+        // USD columns sum; a year has no single rate — rate metadata stays empty.
+        #expect(yearRow.incomeUSD == "2909.04") // 12 × 24,242 minor → 242.42 × 12
+        #expect(yearRow.rate == nil)
+        #expect(yearRow.rateEffectiveDate == nil)
+        #expect(yearRow.rateSource == nil)
+        #expect(yearRow.approximate == false)
+    }
+
+    @Test func yearlyRowUnconvertedWhenAnyMonthUnconverted() throws {
+        var months = fullYear(2026)
+        months[7] = snapshot( // one unconverted month poisons the year's USD sum
+            monthKey: 202608,
+            currency: .uah,
+            income: 1_000_000,
+            expense: 400_000,
+            incomeBase: nil,
+            expenseBase: nil,
+            rate: nil,
+            source: nil
+        )
+        let rows = try MonthlyRetrospectiveExport.rows(from: months)
+        let yearRow = try #require(rows.last { $0.month == "2026 (year)" })
+
+        // Native totals still sum all 12 months; USD cells empty (same guard as monthly).
+        #expect(yearRow.income == "120000.00")
+        #expect(yearRow.incomeUSD == nil)
+        #expect(yearRow.expensesUSD == nil)
+        #expect(yearRow.savedUSD == nil)
+    }
+
+    @Test func yearlyMixedBaseCurrenciesRenderUnconverted() throws {
+        var months = fullYear(2026)
+        months[0] = snapshot( // one row converted to a different reporting currency
+            monthKey: 202601,
+            currency: .uah,
+            income: 1_000_000,
+            expense: 400_000,
+            baseCurrency: .eur,
+            incomeBase: 20_000,
+            expenseBase: 8_000
+        )
+        let rows = try MonthlyRetrospectiveExport.rows(from: months)
+        let yearRow = try #require(rows.last { $0.month == "2026 (year)" })
+
+        #expect(yearRow.incomeUSD == nil)
+        #expect(yearRow.expensesUSD == nil)
+        #expect(yearRow.savedUSD == nil)
+    }
+
+    @Test func yearlyRowApproximateWhenAnyMonthApproximate() throws {
+        var months = fullYear(2026)
+        months[3].isApproximate = true
+        let rows = try MonthlyRetrospectiveExport.rows(from: months)
+        let yearRow = try #require(rows.last { $0.month == "2026 (year)" })
+        #expect(yearRow.approximate == true)
+    }
+
+    @Test func multiCurrencyYearsStayDecomposed() throws {
+        var months = fullYear(2026)
+        months.append(extraCurrency(monthKey: 202612, currency: .usd))
+        let rows = try MonthlyRetrospectiveExport.rows(from: months)
+
+        // Completeness is per (year, currency): UAH covers 12 months → yearly
+        // row; USD exists only in December (1 month) → NO yearly row.
+        let yearRows = rows.filter { $0.month == "2026 (year)" }
+        #expect(yearRows.map(\.currency) == ["UAH"])
+    }
+
+    @Test func multiCurrencyYearWithAllTwelveMonthsEachGetsYearlyRow() throws {
+        var months = fullYear(2026)
+        // A second currency also present in all 12 months of the year.
+        for month in 1...12 {
+            months.append(extraCurrency(monthKey: 202600 + month, currency: .usd))
+        }
+        let rows = try MonthlyRetrospectiveExport.rows(from: months)
+
+        let yearRows = rows.filter { $0.month == "2026 (year)" }
+        #expect(yearRows.map(\.currency) == ["UAH", "USD"])
+    }
+
+    /// Extra-currency helper for the decomposition test.
+    private func extraCurrency(monthKey: Int, currency: CurrencyCode) -> MonthlyUSDSnapshot {
+        snapshot(
+            monthKey: monthKey,
+            currency: currency,
+            income: 1,
+            expense: 1,
+            incomeBase: 1,
+            expenseBase: 1
+        )
+    }
+
+    @Test func xlsxRoundTripWithYearlyRow() throws {
+        let rows = try MonthlyRetrospectiveExport.rows(from: fullYear(2026))
+        let data = try MonthlyRetrospectiveXLSX.export(csvRows: [MonthlyRetrospectiveExport.Row.header] + rows.map(\.cells))
+
+        let file = try XLSXFile(data: data)
+        let workbooks = try file.parseWorkbooks()
+        let sheets = try file.parseWorksheetPathsAndNames(workbook: workbooks[0])
+        let worksheet = try file.parseWorksheet(at: sheets[0].path)
+        let sheetRows = worksheet.data?.rows ?? []
+        // Header + 12 monthly + 1 yearly.
+        #expect(sheetRows.count == 14)
+        let yearlyValues = text(cells: sheetRows[13].cells)
+        #expect(yearlyValues[0] == "2026 (year)")
+        #expect(yearlyValues[3] == "120000.00") // 12 × 1,000,000 minor
+    }
+
+    /// ColumnReference-padded text extraction (same as the XLSX suite helpers).
+    private func text(cells: [Cell]) -> [String] {
+        var result: [String] = []
+        guard var cursor = ColumnReference("A") else { return [] }
+        let sorted = cells.sorted { $0.reference.column < $1.reference.column }
+        for cell in sorted {
+            while cursor < cell.reference.column {
+                result.append("")
+                cursor = cursor.advanced(by: 1)
+            }
+            if let inline = cell.inlineString {
+                result.append(inline.text ?? "")
+            } else {
+                result.append(cell.value ?? "")
+            }
+            cursor = cursor.advanced(by: 1)
+        }
+        return result
     }
 }

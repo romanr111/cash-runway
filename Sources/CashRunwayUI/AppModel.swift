@@ -1086,7 +1086,12 @@ private actor BackgroundWork {
     func exportMonthlyRetrospective(format: MonthlyRetrospectiveExportFormat) throws -> URL {
         let snapshots = try repository.allMonthlyUSDSnapshots()
         let rows = try MonthlyRetrospectiveExport.rows(from: snapshots)
-        guard let firstMonth = rows.first?.month, let lastMonth = rows.last?.month else {
+        // Filename bounds derive from MONTHLY rows only — yearly rows ("2026 (year)")
+        // carry a non-month label and would corrupt the file name.
+        let monthlyMonths = rows
+            .map { $0.month }
+            .filter { !$0.contains("(year)") }
+        guard let firstMonth = monthlyMonths.first, let lastMonth = monthlyMonths.last else {
             throw MonthlyRetrospectiveExportError.noData
         }
         let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent(

@@ -67,13 +67,15 @@ public enum MonthlyRetrospectiveExport {
     }
 
     /// Groups stored snapshots by (month, currency) and sums across wallets.
-    /// Throws `.noData` when there is nothing stored at all.
+    /// Throws `.noData` when there is nothing stored at all. A year with ALL 12
+    /// completed months present additionally yields one `"<year> (year)"` row
+    /// per currency — the sum of its 12 monthly groups (Issue: yearly retrospective).
     public static func rows(from snapshots: [MonthlyUSDSnapshot]) throws -> [Row] {
         guard !snapshots.isEmpty else { throw MonthlyRetrospectiveExportError.noData }
         let byGroup = Dictionary(grouping: snapshots) { snapshot in
             MonthCurrencyKey(monthKey: snapshot.monthKey, currency: snapshot.currencyCode.rawValue)
         }
-        return byGroup
+        let monthly = byGroup
             .sorted { ($0.key.monthKey, $0.key.currency) < ($1.key.monthKey, $1.key.currency) }
             .map { key, group -> Row in
                 let first = group[0]
@@ -103,6 +105,52 @@ public enum MonthlyRetrospectiveExport {
                     approximate: group.contains { $0.isApproximate }
                 )
             }
+        // Issue: yearly retrospective. A year summarizes ONLY when all 12 of its
+        // months are present — a partial year would read as a complete one.
+        // The rule is PER (year, currency): a currency present in fewer than 12
+        // months of the year gets no yearly row (a 1-month total labeled
+        // "<year> (year)" would misread as a full-year span).
+        let keysByYear = Dictionary(grouping: Array(byGroup.keys)) { $0.monthKey / 100 }
+        let yearly: [Row] = keysByYear
+            .sorted { $0.key < $1.key }
+            .flatMap { (year: Int, keys: [MonthCurrencyKey]) -> [Row] in
+                let currencyGroups = Dictionary(grouping: keys) { $0.currency }
+                return currencyGroups
+                    .sorted { $0.key < $1.key }
+                    .compactMap { (currency: String, currencyKeys: [MonthCurrencyKey]) -> Row? in
+                        guard Set(currencyKeys.map(\.monthKey)).count == 12 else { return nil }
+                        let group = snapshots.filter {
+                            $0.monthKey / 100 == year && $0.currencyCode.rawValue == currency
+                        }
+                        let first = group[0]
+                    let income = group.reduce(Int64(0)) { $0 + $1.incomeMinor }
+                    let expense = group.reduce(Int64(0)) { $0 + $1.expenseMinor }
+                    let saved = group.reduce(Int64(0)) { $0 + $1.savedMinor }
+                    // Same uniformity guards as a monthly group: single base
+                    // currency + every row converted, else the USD cells stay
+                    // empty. A year has no single "yearly rate" — the rate
+                    // columns stay nil even when converted.
+                    let incomeUSD = sumBase(group, keyPath: \.incomeBaseMinor)
+                    let expenseUSD = sumBase(group, keyPath: \.expenseBaseMinor)
+                    let savedUSD = sumBase(group, keyPath: \.savedBaseMinor)
+                    return Row(
+                        month: "\(year) (year)",
+                        baseCurrency: first.baseCurrencyCode.rawValue,
+                        currency: currency,
+                        income: major2(income),
+                        expenses: major2(expense),
+                        saved: major2(saved),
+                        incomeUSD: incomeUSD.map(major2),
+                        expensesUSD: expenseUSD.map(major2),
+                        savedUSD: savedUSD.map(major2),
+                        rate: nil,
+                        rateEffectiveDate: nil,
+                        rateSource: nil,
+                        approximate: group.contains { $0.isApproximate }
+                    )
+                }
+            }
+        return monthly + yearly
     }
 
     /// CSV for spreadsheet apps: every field quoted, quotes doubled. Header
