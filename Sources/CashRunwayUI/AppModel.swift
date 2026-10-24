@@ -276,7 +276,6 @@ public final class CashRunwayAppModel {
     }
 
     /// Issue #121: backfills + reloads persisted retrospective monthly USD
-<<<<<<< HEAD
     /// snapshots (historical month-end rates). Delegates to the repository's
     /// non-blocking engine (service runs on a detached task); failures are
     /// non-fatal — the retrospective simply keeps its previously stored values
