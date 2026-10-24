@@ -215,7 +215,8 @@ struct DashboardView: View {
                         model.selectedMonthKey = newMonthKey
                         collapsedDayKeys.removeAll()
                         model.reloadTimeline()
-                    }
+                    },
+                    usdBackfillInProgress: model.isRetrospectiveBackfilling
                 )
 
                 spendingOverviewButton

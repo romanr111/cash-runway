@@ -530,4 +530,45 @@ struct TimelinePresentationTests {
         #expect(presentation.expenseUSDText == nil)
         #expect(presentation.savedUSDText == nil)
     }
+
+    // MARK: - Issue #125: backfill-in-progress flag
+
+    @Test("backfill flag defaults to false and round-trips into the presentation")
+    func usdBackfillInProgressRoundTrip() {
+        let monthSnapshot = snapshot(anchorMonthKey: 202606, period: .month, heroCashFlowMinor: 0, bars: [bar(periodKey: 202606, incomeMinor: 200_000, expenseMinor: 100_000)])
+
+        let idle = TimelinePresentation(
+            snapshot: monthSnapshot,
+            allBars: [],
+            currencyCode: .uah,
+            locale: english,
+            usdMetrics: [usdMetric(monthKey: 202606, incomeBaseMinor: 500_000)]
+        )
+        #expect(idle.usdBackfillInProgress == false)
+
+        let running = TimelinePresentation(
+            snapshot: monthSnapshot,
+            allBars: [],
+            currencyCode: .uah,
+            locale: english,
+            usdMetrics: [usdMetric(monthKey: 202606, incomeBaseMinor: nil)],
+            usdBackfillInProgress: true
+        )
+        #expect(running.usdBackfillInProgress == true)
+
+        // Equatable carries the flag (state flips regenerate the presentation).
+        #expect(idle != running)
+    }
+
+    @Test("legacy init keeps the flag false")
+    func legacyInitDefaultsBackfillFlagToFalse() {
+        let monthSnapshot = snapshot(anchorMonthKey: 202606, period: .month, heroCashFlowMinor: 0, bars: [bar(periodKey: 202606, incomeMinor: 200_000, expenseMinor: 100_000)])
+        let presentation = TimelinePresentation(
+            snapshot: monthSnapshot,
+            allBars: [],
+            currencyCode: .uah,
+            locale: english
+        )
+        #expect(presentation.usdBackfillInProgress == false)
+    }
 }
