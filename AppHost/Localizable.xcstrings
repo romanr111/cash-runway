@@ -1,6 +1,54 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Current month is not converted yet": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current month is not converted yet"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Поточний місяць ще не конвертований"
+          }
+        }
+      }
+    },
+    "Some months have no rate yet — USD columns will be empty": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Some months have no rate yet — USD columns will be empty"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Частини місяців ще без курсу — USD-колонки будуть порожні"
+          }
+        }
+      }
+    },
+    "Updating historical rates…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Updating historical rates…"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Оновлюємо історичні курси…"
+          }
+        }
+      }
+    },
     "·" : {
       "localizations" : {
         "en" : {

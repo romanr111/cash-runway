@@ -7,6 +7,9 @@ struct TimelineSummaryCard: View {
     let period: TimelinePeriod
     let locale: Locale
     let onSelectPeriod: (Int) -> Void
+    /// Issue #125: `true` while the retrospective USD-snapshot backfill runs —
+    /// renders an honest "updating historical rates" status under the cards.
+    var usdBackfillInProgress: Bool = false
 
     private let pageHorizontalPadding: CGFloat = 16
     private let cardCornerRadius: CGFloat = 22
@@ -17,6 +20,9 @@ struct TimelineSummaryCard: View {
         VStack(alignment: .leading, spacing: internalSpacing) {
             topRow
             mainRow
+            if usdBackfillInProgress {
+                usdBackfillStatus
+            }
         }
         .padding(cardPadding)
         .frame(maxWidth: .infinity)
@@ -24,6 +30,24 @@ struct TimelineSummaryCard: View {
         .shadow(color: CashRunwayTheme.softShadow, radius: 14, y: 6)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(CashRunwayAccessibilityID.timelineSummaryCard)
+    }
+
+    // MARK: - Issue #125: USD backfill status
+
+    /// One-line honest status while the snapshot backfill is running.
+    private var usdBackfillStatus: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "clock.arrow.circlepath")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(CashRunwayTheme.textSecondary)
+            Text(localizedSummaryString("dashboard.usd.backfilling", fallback: "Updating historical rates…"))
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(CashRunwayTheme.textSecondary)
+                .lineLimit(1)
+            Spacer(minLength: 0)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier(CashRunwayAccessibilityID.dashboardRetrospectiveBackfillStatus)
     }
 
     // MARK: - Top row
