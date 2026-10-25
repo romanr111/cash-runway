@@ -47,6 +47,9 @@ public struct TimelinePresentation: Equatable, Sendable {
     public let allChartPoints: [TimelineBarPoint]
     public let accessibilitySummary: String
     public let currencyCode: CurrencyCode?
+    /// Issue #125: `true` while a retrospective USD-snapshot backfill is running;
+    /// the dashboard shows a status line instead of silently-missing USD lines.
+    public let usdBackfillInProgress: Bool
 
     /// Creates a deterministic presentation value for the current Timeline screen.
     /// - Parameters:
@@ -71,6 +74,7 @@ public struct TimelinePresentation: Equatable, Sendable {
             currencyCode: currencyCode,
             locale: locale,
             usdMetrics: [],
+            usdBackfillInProgress: false,
             now: now
         )
     }
@@ -84,6 +88,7 @@ public struct TimelinePresentation: Equatable, Sendable {
         currencyCode: CurrencyCode?,
         locale: Locale,
         usdMetrics: [RetrospectiveMonthlyUSDMetric],
+        usdBackfillInProgress: Bool = false,
         now: Date = Date()
     ) {
         let period = snapshot?.period ?? .month
@@ -106,6 +111,7 @@ public struct TimelinePresentation: Equatable, Sendable {
         self.incomeUSDText = Self.usdSecondaryLine(metric: Self.usdMetric(for: selectedPeriodKey, period: period, in: usdMetrics), baseMinor: { $0.incomeBaseMinor }, locale: locale)
         self.expenseUSDText = Self.usdSecondaryLine(metric: Self.usdMetric(for: selectedPeriodKey, period: period, in: usdMetrics), baseMinor: { $0.expenseBaseMinor }, locale: locale)
         self.savedUSDText = Self.usdSecondaryLine(metric: Self.usdMetric(for: selectedPeriodKey, period: period, in: usdMetrics), baseMinor: { $0.savedBaseMinor }, locale: locale)
+        self.usdBackfillInProgress = usdBackfillInProgress
         self.comparison = snapshot?.comparison.map { Self.comparisonPresentation($0, period: period, locale: locale) }
         self.chartPoints = Self.chartPoints(allBars: allBars, selectedBar: selectedBar, selectedPeriodKey: selectedPeriodKey)
         self.allChartPoints = Self.allChartPoints(allBars: allBars, selectedBar: selectedBar)
