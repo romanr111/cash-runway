@@ -73,6 +73,10 @@ public final class CashRunwayAppModel {
     public var overviewSnapshot: OverviewSnapshot?
     public var allBars: [TimelineBarPoint] = []
     public var categoryDetailTransactions: [TransactionListItem] = []
+    // Issue #121: stored retrospective monthly USD metrics (newest month first),
+    // loaded from the persisted snapshot table on bootstrap/reload. Never
+    // recomputed in the view layer.
+    public private(set) var retrospectiveMonthlyUSDMetrics: [RetrospectiveMonthlyUSDMetric] = []
 
     public var selectedMonthKey = DateKeys.monthKey(for: .now)
     public var selectedWalletID: UUID?
@@ -87,6 +91,11 @@ public final class CashRunwayAppModel {
     public var isLoading = false
     public private(set) var isTimelineLoading = false
     public private(set) var hasBootstrapped = false
+    /// Issue #125: `true` while a retrospective USD-snapshot backfill is running
+    /// (bootstrap full pass or foreground dirty-month refresh). Drives the
+    /// dashboard's "updating historical rates" status line; never set by the
+    /// passive stored-metrics reloads.
+    public private(set) var isRetrospectiveBackfilling = false
     public private(set) var latestTransactionMonthKey: Int?
     private var foregroundRefreshTask: Task<Void, Never>?
     private var timelineReloadState = TimelineReloadState()
@@ -270,8 +279,18 @@ public final class CashRunwayAppModel {
     public func bootstrap() async {
         do {
             try repository.seedIfNeeded()
-            try repository.runMaintenance()
+            // Maintenance must NOT run inline on the main actor: it rebuilds the
+            // full historical aggregate backfill (sequential per-month DB work),
+            // which would freeze the UI for that entire span. Run it detached;
+            // the single USD-snapshot backfill happens in the awaited refresh
+            // below (already off-main), and the UI reloads again whenever this
+            // detached pass lands.
+            let repository = self.repository
+            Task.detached(priority: .utility) {
+                try? repository.runMaintenance()
+            }
             try repository.refreshRecurringInstances()
+            await refreshRetrospectiveUSDSnapshots()
             await reloadAll()
             hasBootstrapped = true
             // LEGACY_DISABLED_APP_LOCK:
@@ -281,6 +300,57 @@ public final class CashRunwayAppModel {
             // }
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Issue #121: backfills + reloads persisted retrospective monthly USD
+    /// snapshots (historical month-end rates). Delegates to the repository's
+    /// non-blocking engine (service runs on a detached task); failures are
+    /// non-fatal — the retrospective simply keeps its previously stored values
+    /// until the next run. This is the app's single full snapshot backfill on
+    /// bootstrap: synchronous maintenance no longer runs a snapshot pass of its
+    /// own.
+    public func refreshRetrospectiveUSDSnapshots() async {
+        let repository = self.repository
+        isRetrospectiveBackfilling = true
+        defer { isRetrospectiveBackfilling = false }
+        await repository.refreshRetrospectiveUSDSnapshots(monthKeys: nil)
+        // Re-read the wallet scope after the await: the user may have switched
+        // wallets (or the scope may have been normalized) while the backfill ran.
+        reloadStoredRetrospectiveUSDMetrics()
+    }
+
+    /// Reloads only the STORED retrospective metrics (no network). Called on
+    /// every snapshot reload so fresh conversions appear immediately. The list is
+    /// scoped to the current wallet filter so the USD lines always share the
+    /// scope of the native figures rendered beside them.
+    public func reloadStoredRetrospectiveUSDMetrics() {
+        guard let metrics = try? scopedRetrospectiveUSDMetrics() else {
+            // Read failure: keep the previously stored values until the next run
+            // (non-fatal contract; the retrospective is never blanked mid-session).
+            return
+        }
+        retrospectiveMonthlyUSDMetrics = metrics
+    }
+
+    private func scopedRetrospectiveUSDMetrics() throws -> [RetrospectiveMonthlyUSDMetric] {
+        try repository.monthlyUSDMonthAggregates(walletID: selectedWalletID).map {
+            RetrospectiveMonthlyUSDMetric(
+
+                monthKey: $0.monthKey,
+                currencyCode: $0.currencyCode,
+                baseCurrencyCode: $0.baseCurrencyCode,
+                incomeMinor: $0.incomeMinor,
+                expenseMinor: $0.expenseMinor,
+                savedMinor: $0.savedMinor,
+                incomeBaseMinor: $0.incomeBaseMinor,
+                expenseBaseMinor: $0.expenseBaseMinor,
+                savedBaseMinor: $0.savedBaseMinor,
+                rateDecimal: $0.rateDecimal,
+                rateEffectiveDate: $0.rateEffectiveDate,
+                rateSource: $0.rateSource,
+                isApproximate: $0.isApproximate
+            )
         }
     }
 
@@ -311,6 +381,7 @@ public final class CashRunwayAppModel {
             self.transactionQuery.walletID = effectiveWalletID
             self.allBars = bars
             self.apply(snapshot)
+            self.reloadStoredRetrospectiveUSDMetrics()
             self.latestTransactionMonthKey = try? repository.latestTransactionMonthKey()
             if let overview = snapshot.overviewSnapshot {
                 self.setCachedOverview(overview, monthKey: overview.selectedMonthKey, walletID: overview.walletFilterID)
@@ -680,6 +751,12 @@ public final class CashRunwayAppModel {
         }
     }
 
+    /// The full stored preferences (or the struct default when storage fails) —
+    /// used by settings screens that patch a single field without dropping the rest.
+    public func storedCurrencyPreferences() -> CurrencyPreferences {
+        (try? repository.currencyPreferences()) ?? .default
+    }
+
     // DEPRECATED — Budgets feature is de-prioritized. Work stopped; do not modify or add tests until resumed.
     public func archiveBudget(_ budget: Budget) {
         var archived = budget
@@ -741,6 +818,13 @@ public final class CashRunwayAppModel {
         try await backgroundWork.exportCSV(query: query)
     }
 
+    /// Issue #123: builds the retrospective CSV/XLSX file from the STORED
+    /// snapshots (no rate fetches, no recompute) and returns a protected temp
+    /// file URL for the share sheet.
+    public func exportMonthlyRetrospective(format: MonthlyRetrospectiveExportFormat) async throws -> URL {
+        try await backgroundWork.exportMonthlyRetrospective(format: format)
+    }
+
     public func handleForegroundResume() {
         // LEGACY_DISABLED_APP_LOCK:
         // guard !isLocked else { return }
@@ -759,6 +843,10 @@ public final class CashRunwayAppModel {
             defer {
                 self?.foregroundRefreshTask = nil
             }
+            // Issue #125: honest backfill status while the incremental
+            // USD-snapshot refresh runs inside the foreground pass.
+            self?.isRetrospectiveBackfilling = true
+            defer { self?.isRetrospectiveBackfilling = false }
             do {
                 let (snapshot, bankSyncMessage) = try await backgroundWork.refreshForegroundSnapshot(
                     selectedMonthKey: selectedMonthKey,
@@ -772,6 +860,11 @@ public final class CashRunwayAppModel {
                     return
                 }
                 self.apply(snapshot)
+                // The foreground reload runs the incremental USD-snapshot refresh
+                // first (`refreshDirtyUSDSnapshots`), so re-read the stored
+                // retrospective metrics too or the just-filled conversions stay
+                // invisible until the next full reload.
+                self.reloadStoredRetrospectiveUSDMetrics()
                 self.latestTransactionMonthKey = try? self.repository.latestTransactionMonthKey()
                 if let overview = snapshot.overviewSnapshot {
                     self.setCachedOverview(overview, monthKey: overview.selectedMonthKey, walletID: overview.walletFilterID)
@@ -1009,6 +1102,13 @@ private actor BackgroundWork {
         }
         try repository.runMaintenance()
         try repository.refreshRecurringInstances()
+        // Issue #121: the snapshot pass no longer runs inside the synchronous
+        // maintenance (it blocked the calling thread on `awaitBridge` for the
+        // full backfill). Restore the incremental dirty-month refresh here,
+        // non-blocking and off-main. The in-progress flag lives on the main
+        // actor (AppModel), so the actor body itself stays state-free — the
+        // caller flips it around this call.
+        await repository.refreshDirtyUSDSnapshots()
         let snapshot = try CashRunwayAppModel.loadSnapshot(
             repository: repository,
             selectedMonthKey: selectedMonthKey,
@@ -1021,6 +1121,36 @@ private actor BackgroundWork {
 
     func exportCSV(query: TransactionQuery) throws -> String {
         try csvService.exportCSV(query: query)
+    }
+
+    /// Issue #123: assemble the retrospective export file off the main actor.
+    /// Renders the persisted snapshot rows only — never fetches rates or
+    /// recomputes conversions (store-once data is authoritative).
+    func exportMonthlyRetrospective(format: MonthlyRetrospectiveExportFormat) throws -> URL {
+        let snapshots = try repository.allMonthlyUSDSnapshots()
+        let rows = try MonthlyRetrospectiveExport.rows(from: snapshots)
+        // Filename bounds derive from MONTHLY rows only — yearly rows ("2026 (year)")
+        // carry a non-month label and would corrupt the file name.
+        let monthlyMonths = rows
+            .map { $0.month }
+            .filter { !$0.contains("(year)") }
+        guard let firstMonth = monthlyMonths.first, let lastMonth = monthlyMonths.last else {
+            throw MonthlyRetrospectiveExportError.noData
+        }
+        let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+            ExportFile.name(from: firstMonth, to: lastMonth, format: format)
+        )
+        switch format {
+        case .csv:
+            let text = MonthlyRetrospectiveExport.csv(rows: rows)
+            try text.write(to: fileURL, atomically: true, encoding: .utf8)
+        case .xlsx:
+            let csvRows = [MonthlyRetrospectiveExport.Row.header] + rows.map { $0.cells }
+            let data = try MonthlyRetrospectiveXLSX.export(csvRows: csvRows)
+            try data.write(to: fileURL, options: .atomic)
+        }
+        FileProtectionService().protect(fileURL)
+        return fileURL
     }
 }
 

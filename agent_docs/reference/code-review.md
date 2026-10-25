@@ -21,9 +21,8 @@ general code-review skill with Cash-Runway-specific checks.
 Before changing the signature of a helper, shared component, or public method,
 verify the impact:
 
-1. **Find all call sites.** Use CodeGraph or grep:
+1. **Find all call sites.** Use `rg`:
    ```bash
-   mcp__codegraph__codegraph_callers symbol:moreRow
    rg "moreRow\\(" Sources/
    ```
 2. **Check at least one caller** to confirm the parameter type is compatible.

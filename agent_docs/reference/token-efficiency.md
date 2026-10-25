@@ -153,20 +153,10 @@ Read(path: "Sources/CashRunwayUI/SettingsView.swift",
      line_offset: 360, n_lines: 50)
 ```
 
-### Use CodeGraph for symbol-specific reads
+### Use `rg` plus bounded reads for symbol-specific inspection
 
-Instead of opening a whole file to inspect one function:
-
-```
-mcp__codegraph__codegraph_node symbol:moreRow
-  file:SettingsView.swift includeCode:true
-```
-
-For broader context:
-
-```
-mcp__codegraph__codegraph_explore query: FeedbackReportView submitState
-```
+Find the symbol with `rg`, then read only the relevant line range rather than
+opening an entire file.
 
 ### Batch reads in parallel
 

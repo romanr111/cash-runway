@@ -31,6 +31,12 @@ public struct TimelinePresentation: Equatable, Sendable {
     public let netText: String
     public let incomeText: String
     public let expenseText: String
+    /// Issue #121: USD secondary lines for the metric cards (converted at that
+    /// historical month's end rate, from the persisted snapshot — `nil` when no
+    /// snapshot row exists yet; prefix includes the `≈` marker when approximate).
+    public let incomeUSDText: String?
+    public let expenseUSDText: String?
+    public let savedUSDText: String?
     public let netStyle: AmountStyle
     public let comparison: Comparison?
     /// The four-point visible window ending at the selected period.
@@ -41,6 +47,9 @@ public struct TimelinePresentation: Equatable, Sendable {
     public let allChartPoints: [TimelineBarPoint]
     public let accessibilitySummary: String
     public let currencyCode: CurrencyCode?
+    /// Issue #125: `true` while a retrospective USD-snapshot backfill is running;
+    /// the dashboard shows a status line instead of silently-missing USD lines.
+    public let usdBackfillInProgress: Bool
 
     /// Creates a deterministic presentation value for the current Timeline screen.
     /// - Parameters:
@@ -57,6 +66,29 @@ public struct TimelinePresentation: Equatable, Sendable {
         allBars: [TimelineBarPoint],
         currencyCode: CurrencyCode?,
         locale: Locale,
+        now: Date = Date()
+    ) {
+        self.init(
+            snapshot: snapshot,
+            allBars: allBars,
+            currencyCode: currencyCode,
+            locale: locale,
+            usdMetrics: [],
+            usdBackfillInProgress: false,
+            now: now
+        )
+    }
+
+    /// Issue #121 overload: pass the STORED retrospective monthly USD metrics so
+    /// the selected period's cards render a secondary `≈ $X` line under the
+    /// original-currency totals (income / expenses / saved).
+    public init(
+        snapshot: TimelineSnapshot?,
+        allBars: [TimelineBarPoint],
+        currencyCode: CurrencyCode?,
+        locale: Locale,
+        usdMetrics: [RetrospectiveMonthlyUSDMetric],
+        usdBackfillInProgress: Bool = false,
         now: Date = Date()
     ) {
         let period = snapshot?.period ?? .month
@@ -76,6 +108,10 @@ public struct TimelinePresentation: Equatable, Sendable {
         // a glance and the hero already reads as a rounded figure.
         self.incomeText = Self.formattedMoney(minorUnits: incomeMinor, currencyCode: currencyCode, locale: locale, fractionDigits: 0)
         self.expenseText = Self.formattedMoney(minorUnits: -Int64(expenseMinor), currencyCode: currencyCode, locale: locale, fractionDigits: 0)
+        self.incomeUSDText = Self.usdSecondaryLine(metric: Self.usdMetric(for: selectedPeriodKey, period: period, in: usdMetrics), baseMinor: { $0.incomeBaseMinor }, locale: locale)
+        self.expenseUSDText = Self.usdSecondaryLine(metric: Self.usdMetric(for: selectedPeriodKey, period: period, in: usdMetrics), baseMinor: { $0.expenseBaseMinor }, locale: locale)
+        self.savedUSDText = Self.usdSecondaryLine(metric: Self.usdMetric(for: selectedPeriodKey, period: period, in: usdMetrics), baseMinor: { $0.savedBaseMinor }, locale: locale)
+        self.usdBackfillInProgress = usdBackfillInProgress
         self.comparison = snapshot?.comparison.map { Self.comparisonPresentation($0, period: period, locale: locale) }
         self.chartPoints = Self.chartPoints(allBars: allBars, selectedBar: selectedBar, selectedPeriodKey: selectedPeriodKey)
         self.allChartPoints = Self.allChartPoints(allBars: allBars, selectedBar: selectedBar)
@@ -86,6 +122,33 @@ public struct TimelinePresentation: Equatable, Sendable {
             expenseText: expenseText,
             comparison: self.comparison
         )
+    }
+
+    // MARK: - Issue #121: USD secondary lines
+
+    private static func usdMetric(
+        for selectedPeriodKey: Int,
+        period: TimelinePeriod,
+        in metrics: [RetrospectiveMonthlyUSDMetric]
+    ) -> RetrospectiveMonthlyUSDMetric? {
+        guard period == .month else { return nil }
+        return metrics.first(where: { $0.monthKey == selectedPeriodKey })
+    }
+
+    /// `≈ $X` secondary text, or `nil` when the month has no persisted conversion.
+    private static func usdSecondaryLine(
+        metric: RetrospectiveMonthlyUSDMetric?,
+        baseMinor: (RetrospectiveMonthlyUSDMetric) -> Int64?,
+        locale: Locale
+    ) -> String? {
+        guard let metric, let baseMinorValue = baseMinor(metric) else { return nil }
+        let amount = MoneyFormatter.string(
+            from: baseMinorValue,
+            currencyCode: metric.baseCurrencyCode,
+            locale: locale,
+            fractionDigits: 0
+        )
+        return metric.isApproximate ? "≈ \(amount)" : amount
     }
 
     // MARK: - Selected bar resolution

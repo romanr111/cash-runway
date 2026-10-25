@@ -18,6 +18,9 @@ struct SettingsView: View {
     @State private var isCSVExporterPresented = false
     @State private var exportFileURL: URL?
     @State private var isExporting = false
+    @State private var isRetrospectiveExporting = false
+    @State private var isRetrospectiveFormatPickerPresented = false
+    @State private var isRetrospectiveExporterPresented = false
     @State private var backupImportFlow = BackupImportFlowState()
     @State private var isBackupExportWarningPresented = false
     @State private var isBackupExporterPresented = false
@@ -150,6 +153,14 @@ struct SettingsView: View {
                             }
                             .accessibilityIdentifier(CashRunwayAccessibilityID.settingsExportCSVRow)
                             rowDivider
+                            // Issue #123: retrospective month × currency totals
+                            // (native + USD at month-end NBU rate) as CSV/XLSX.
+                            moreRow(icon: "tablecells", tint: "#3FA98E", title: "Export Monthly Retrospective", subtitle: isRetrospectiveExporting ? L10n.string("Exporting…") : L10n.string("Monthly income, expenses and savings with USD at each month-end rate")) {
+                                guard !isRetrospectiveExporting else { return }
+                                isRetrospectiveFormatPickerPresented = true
+                            }
+                            .accessibilityIdentifier(CashRunwayAccessibilityID.settingsExportRetrospectiveRow)
+                            rowDivider
                         moreRow(icon: "externaldrive.fill", tint: "#4A80C1", title: "Import Full Backup", subtitle: L10n.string("Replace data from JSON")) {
                             backupImportFlow.beginImport()
                         }
@@ -267,6 +278,23 @@ struct SettingsView: View {
                     #endif
                 }
             }
+            // Issue #123: format picker + shared exportFileURL sheet.
+            .confirmationDialog("Export Monthly Retrospective", isPresented: $isRetrospectiveFormatPickerPresented, titleVisibility: .visible) {
+                Button("Spreadsheet (.xlsx)") { exportRetrospective(format: .xlsx) }
+                Button("CSV (.csv)") { exportRetrospective(format: .csv) }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Monthly income, expenses and savings with USD converted at each month's end-of-month rate.")
+            }
+            .sheet(isPresented: $isRetrospectiveExporterPresented) {
+                if let url = exportFileURL {
+                    #if canImport(UIKit)
+                    ActivityView(activityItems: [url])
+                    #else
+                    Text("Export is unavailable on this platform.")
+                    #endif
+                }
+            }
             .sheet(isPresented: $isCSVImporterPresented) {
                 #if canImport(UIKit)
                 DocumentPicker(allowedContentTypes: [.commaSeparatedText, .plainText, UTType(filenameExtension: "xlsx") ?? .spreadsheet]) { result in
@@ -325,6 +353,28 @@ struct SettingsView: View {
                 return
             }
             model.errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Issue #123: builds the retrospective export off the model's background
+    /// work and presents the share sheet via the shared exportFileURL plumbing.
+    private func exportRetrospective(format: MonthlyRetrospectiveExportFormat) {
+        guard !isRetrospectiveExporting else { return }
+        isRetrospectiveExporting = true
+        Task {
+            do {
+                let url = try await model.exportMonthlyRetrospective(format: format)
+                await MainActor.run {
+                    exportFileURL = url
+                    isRetrospectiveExporterPresented = true
+                    isRetrospectiveExporting = false
+                }
+            } catch {
+                await MainActor.run {
+                    model.errorMessage = error.localizedDescription
+                    isRetrospectiveExporting = false
+                }
+            }
         }
     }
 
@@ -766,9 +816,14 @@ private struct CurrencySettingsView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Save") {
-                        var preferences = CurrencyPreferences()
+                        var preferences = model.storedCurrencyPreferences()
                         preferences.defaultCurrencyCode = selectedCurrency
-                        preferences.reportingCurrencyCode = model.reportingCurrencyCode
+                        // Issue #121: USD is the retrospective base currency. A
+                        // reporting preference that is still the pre-feature seed
+                        // (UAH, "unset") flips to USD so the persisted snapshots
+                        // target USD; an explicit user choice is respected.
+                        let currentReporting = preferences.reportingCurrencyCode
+                        preferences.reportingCurrencyCode = currentReporting == .uah ? .usd : currentReporting
                         model.saveCurrencyPreferences(preferences)
                         dismiss()
                     }
