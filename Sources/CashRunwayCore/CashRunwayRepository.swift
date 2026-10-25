@@ -625,7 +625,8 @@ extension CashRunwayRepository {
     public func saveWallet(_ wallet: Wallet) throws {
         try databaseManager.dbQueue.write { db in
             try validateWalletCurrencyChange(db, wallet: wallet)
-            if try walletTableHasCategoryID(db), try Self.tableHasColumn(db, table: "wallets", column: "currency_code") {
+            if try walletTableHasCategoryID(db), try Self.tableHasColumn(db, table: "wallets", column: "currency_code"),
+                  try Self.tableHasColumn(db, table: "wallets", column: "is_excluded_from_summary") {
                 try db.execute(
                     sql: """
                     INSERT INTO wallets (id, name, kind, category_id, color_hex, icon_name, starting_balance_minor, current_balance_minor, currency_code, is_archived, is_excluded_from_summary, sort_order, created_at, updated_at)
