@@ -1,18 +1,18 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "Current month is not converted yet": {
+    "Updating historical rates…": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Current month is not converted yet"
+            "value": "Updating historical rates…"
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Поточний місяць ще не конвертований"
+            "value": "Оновлюємо історичні курси…"
           }
         }
       }
@@ -33,18 +33,98 @@
         }
       }
     },
-    "Updating historical rates…": {
+    "Current month is not converted yet": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Updating historical rates…"
+            "value": "Current month is not converted yet"
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "Оновлюємо історичні курси…"
+            "value": "Поточний місяць ще не конвертований"
+          }
+        }
+      }
+    },
+    "Monthly income, expenses and savings with USD converted at each month's end-of-month rate.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monthly income, expenses and savings with USD converted at each month's end-of-month rate."
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Місячні доходи, витрати й заощадження з USD за курсом на кінець кожного місяця."
+          }
+        }
+      }
+    },
+    "Monthly income, expenses and savings with USD at each month-end rate": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monthly income, expenses and savings with USD at each month-end rate"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Місячні доходи, витрати й заощадження з USD за курсом на кінець кожного місяця"
+          }
+        }
+      }
+    },
+    "CSV (.csv)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CSV (.csv)"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CSV (.csv)"
+          }
+        }
+      }
+    },
+    "Spreadsheet (.xlsx)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spreadsheet (.xlsx)"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Таблиця (.xlsx)"
+          }
+        }
+      }
+    },
+    "Export Monthly Retrospective": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export Monthly Retrospective"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Експорт місячної ретроспективи"
           }
         }
       }
