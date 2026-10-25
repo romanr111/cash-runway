@@ -630,4 +630,24 @@ struct FullBackupTests {
             try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM \(table)") ?? 0
         }
     }
+
+    @Test func fullBackupPreservesSavingsExclusionFlag() throws {
+        let (repository, _) = try makePopulatedRepository()
+        let wallets = try repository.wallets()
+        var savings = try #require(wallets.first)
+        savings.kind = .savings
+        savings.isExcludedFromSummary = true
+        try repository.saveWallet(savings)
+
+        let backup = try repository.exportFullBackup()
+        #expect(backup.wallets.first { $0.id == savings.id }?.isExcludedFromSummary == true)
+        #expect(backup.walletCategories.contains { $0.kind == .savings })
+
+        let target = try TestSupport.makeRepository()
+        try target.restoreFullBackup(backup)
+
+        let restored = try #require(target.wallets().first { $0.id == savings.id })
+        #expect(restored.isExcludedFromSummary == true)
+        #expect(try target.walletCategories().contains { $0.kind == .savings })
+    }
 }

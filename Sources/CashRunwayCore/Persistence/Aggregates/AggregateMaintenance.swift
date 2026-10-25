@@ -303,7 +303,7 @@ extension CashRunwayRepository {
         var arguments: [String: any DatabaseValueConvertible] = [:]
 
         if query.walletID == nil {
-            conditions.append(Self.activeWalletScope(nil, column: "w.id").fragment)
+            conditions.append(try Self.activeWalletScope(db: db, nil, column: "w.id").fragment)
         }
 
         if let walletID = query.walletID {
@@ -444,7 +444,10 @@ extension CashRunwayRepository {
 
         let startingBalance = try Int64.fetchOne(
             db,
-            sql: "SELECT COALESCE(SUM(starting_balance_minor), 0) FROM wallets WHERE is_archived = 0"
+            sql: """
+            SELECT COALESCE(SUM(starting_balance_minor), 0) FROM wallets
+            WHERE \(try CashRunwayRepository.operationalWalletScopePredicate(db: db))
+            """
         ) ?? 0
         let netDelta = try Int64.fetchOne(
             db,
@@ -453,6 +456,7 @@ extension CashRunwayRepository {
             FROM transactions t
             WHERE t.is_deleted = 0
               AND t.occurred_at <= ?
+              AND t.wallet_id IN (\(try CashRunwayRepository.operationalWalletScopeSubquery(db: db)))
             """,
             arguments: [monthEnd]
         ) ?? 0
@@ -465,7 +469,7 @@ extension CashRunwayRepository {
         guard !months.isEmpty else { return [:] }
         let sortedMonths = Set(months).sorted()
         let latest = sortedMonths.last!
-        let scope = Self.activeWalletScope(walletID)
+        let scope = try Self.activeWalletScope(db: db, walletID)
 
         let startingBalance: Int64
         if let walletID {
@@ -477,7 +481,10 @@ extension CashRunwayRepository {
         } else {
             startingBalance = try Int64.fetchOne(
                 db,
-                sql: "SELECT COALESCE(SUM(starting_balance_minor), 0) FROM wallets WHERE is_archived = 0"
+                sql: """
+                SELECT COALESCE(SUM(starting_balance_minor), 0) FROM wallets
+                WHERE \(try CashRunwayRepository.operationalWalletScopePredicate(db: db))
+                """
             ) ?? 0
         }
 

@@ -100,6 +100,7 @@ public enum L10n {
         case .cash: string("walletKind.cash")
         case .card: string("walletKind.card")
         case .account: string("walletKind.account")
+        case .savings: string("walletKind.savings")
         case .other: string("walletKind.other")
         }
     }

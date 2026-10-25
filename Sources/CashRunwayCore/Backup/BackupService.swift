@@ -115,6 +115,24 @@ extension CashRunwayRepository {
         return tokenAccounts
     }
 
+    /// Idempotent re-insertion of the built-in system wallet categories so older
+    /// backups (pre-savings) still surface every built-in kind after a restore.
+    static func backfillBuiltInWalletCategories(_ db: Database) throws {
+        for category in WalletCategory.allBuiltIn {
+            try db.execute(
+                sql: """
+                INSERT INTO wallet_categories (id, name, kind, is_system, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO NOTHING
+                """,
+                arguments: [
+                    category.id.uuidString, category.name, category.kind.rawValue,
+                    true, category.createdAt, category.updatedAt,
+                ]
+            )
+        }
+    }
+
     func insertBackupSourceData(_ backup: CashRunwayBackup, into db: Database) throws {
         let preferences = backup.currencyPreferences ?? .default
         try db.execute(
@@ -150,18 +168,21 @@ extension CashRunwayRepository {
                 ]
             )
         }
+        // Backfill built-in system categories so restores of older backups
+        // (pre-savings) still surface every built-in kind in the picker.
+        try Self.backfillBuiltInWalletCategories(db)
 
         for wallet in backup.wallets {
             let categoryID = wallet.categoryID ?? WalletCategory.builtIn(byKind: wallet.kind).id
             try db.execute(
                 sql: """
-                    INSERT INTO wallets (id, name, kind, category_id, color_hex, icon_name, starting_balance_minor, current_balance_minor, currency_code, is_archived, sort_order, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO wallets (id, name, kind, category_id, color_hex, icon_name, starting_balance_minor, current_balance_minor, currency_code, is_archived, is_excluded_from_summary, sort_order, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 arguments: [
                     wallet.id.uuidString, wallet.name, wallet.kind.rawValue, categoryID.uuidString,
                     wallet.colorHex, wallet.iconName,
-                    wallet.startingBalanceMinor, wallet.startingBalanceMinor, wallet.currencyCode.rawValue, wallet.isArchived, wallet.sortOrder,
+                    wallet.startingBalanceMinor, wallet.startingBalanceMinor, wallet.currencyCode.rawValue, wallet.isArchived, wallet.isExcludedFromSummary, wallet.sortOrder,
                     wallet.createdAt, wallet.updatedAt,
                 ]
             )

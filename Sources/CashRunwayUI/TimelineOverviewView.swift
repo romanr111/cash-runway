@@ -679,11 +679,11 @@ private struct CategoryDetailOverviewView: View {
         self.category = category
         _selectedMonthKey = State(initialValue: monthKey)
         _selectedWalletID = State(initialValue: walletID)
-        let walletID = model.wallets.first?.id ?? UUID()
-        let currencyCode = model.wallets.first(where: { $0.id == walletID })?.currencyCode ?? model.defaultCurrencyCode
+        let draftWalletID = walletID ?? model.operationalWallets.first?.id ?? UUID()
+        let currencyCode = model.wallets.first(where: { $0.id == draftWalletID })?.currencyCode ?? model.defaultCurrencyCode
         _draft = State(initialValue: TransactionDraft(
             kind: category.kind == .income ? .income : .expense,
-            walletID: walletID,
+            walletID: draftWalletID,
             amountMinor: 0,
             currencyCode: currencyCode,
             occurredAt: .now,

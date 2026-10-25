@@ -26,6 +26,7 @@ struct MigrationIntegrityTests {
             "v7_monthly_category_spend_wallet_kind_income",
             "v7_monthly_label_spend_wallet",
             "v8_currency_foundation",
+            "v9_savings_wallets",
             "v9_masked_card_search_privacy",
             "v9_monthly_usd_snapshot", "v10_monthly_usd_snapshot_text_uuid",
         ])
@@ -219,7 +220,7 @@ struct MigrationIntegrityTests {
         #expect(appliedVersions.contains("v7_monthly_label_spend_wallet"))
 
         let walletCategories = try repo.walletCategories()
-        #expect(walletCategories.filter(\.isSystem).count == 4)
+        #expect(walletCategories.filter(\.isSystem).count == 5)
 
         for wallet in try repo.wallets() {
             #expect(wallet.categoryID == WalletCategory.builtIn(byKind: wallet.kind).id)
